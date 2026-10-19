@@ -1,0 +1,192 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------------------------
+   Design tokens. Components use semantic names (bg-surface, text-muted, ...) so dark
+   mode is just a second set of values here, not a `dark:` prefix on every element.
+   ------------------------------------------------------------------------------------ */
+:root {
+  color-scheme: light;
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --surface-2: #faf9f7;
+  --line: #ebe8e3;
+  --line-strong: #d9d5ce;
+  --ink: #1c1a18;
+  --ink-2: #46423d;
+  --muted: #7a746d;
+
+  /* Chicago Booth maroon, used sparingly as the accent. */
+  --accent: #800000;
+  --accent-hover: #660000;
+  --accent-ink: #ffffff;
+  --accent-soft: #f7ecec;
+  --accent-text: #800000;
+
+  --good: #0e8a5f;
+  --warn: #c27a0a;
+  --bad: #c7364a;
+  --good-soft: #e7f5ee;
+  --warn-soft: #fcf1de;
+  --bad-soft: #fbe9ec;
+
+  --track: #ece9e4;
+  --bar: #9c948a;
+  --chart-grid: #ebe8e3;
+  --chart-axis: #8b857d;
+  --shadow-card: 0 1px 2px rgb(28 26 24 / 0.04), 0 6px 20px -10px rgb(28 26 24 / 0.1);
+  --shadow-pop: 0 10px 40px -8px rgb(28 26 24 / 0.22), 0 2px 6px rgb(28 26 24 / 0.08);
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #121110;
+  --surface: #1b1a18;
+  --surface-2: #211f1d;
+  --line: #2d2a27;
+  --line-strong: #3d3935;
+  --ink: #f4f2ef;
+  --ink-2: #d5d1cb;
+  --muted: #9d968e;
+
+  --accent: #a83232;
+  --accent-hover: #bd4141;
+  --accent-ink: #ffffff;
+  --accent-soft: #2b1b1b;
+  --accent-text: #ea8f8f;
+
+  --good: #36d399;
+  --warn: #f5b942;
+  --bad: #fb7185;
+  --good-soft: #14291f;
+  --warn-soft: #2b2212;
+  --bad-soft: #301a1f;
+
+  --track: #2b2825;
+  --bar: #8a8279;
+  --chart-grid: #2d2a27;
+  --chart-axis: #9d968e;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.5);
+  --shadow-pop: 0 14px 44px -8px rgb(0 0 0 / 0.65), 0 2px 6px rgb(0 0 0 / 0.4);
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-good-soft: var(--good-soft);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad-soft: var(--bad-soft);
+  --color-track: var(--track);
+  --color-bar: var(--bar);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+
+  --animate-rise: rise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade: fade 0.2s ease-out both;
+  --animate-sheet: sheet 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-drawer: drawer 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px) scale(0.99); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes sheet {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes drawer {
+    from { opacity: 0; transform: translateX(32px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv11", "ss03";
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+  }
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  textarea {
+    resize: vertical;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-line bg-surface shadow-card;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink transition;
+    @apply placeholder:text-muted/70 hover:border-muted/60;
+    @apply focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/10;
+  }
+  .field[aria-invalid="true"] {
+    @apply border-bad focus:ring-bad/10;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-semibold tracking-wide text-ink-2;
+  }
+
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted;
+  }
+}
