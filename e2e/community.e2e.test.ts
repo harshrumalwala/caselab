@@ -5,7 +5,7 @@
 // your own account. Rows are titled "ZZ CaseLab e2e ..." and removed afterwards.
 import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { SHARED_COLUMNS } from '../src/data/community';
 import { SupabaseCommunity } from '../src/data/supabaseCommunity';
 import { SupabaseRepository } from '../src/data/supabaseRepository';
@@ -53,6 +53,11 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     await communityB.saveProfile(profile({ displayName: 'E2E Viewer B' }));
     await cleanup(a.client);
     await cleanup(b.client);
+  });
+
+  // Every test starts from "A has no test cases", so rows left by an earlier test can't show up in the next.
+  beforeEach(async () => {
+    await cleanup(a.client);
   });
 
   afterAll(async () => {
