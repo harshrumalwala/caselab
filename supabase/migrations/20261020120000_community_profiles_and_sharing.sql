@@ -100,7 +100,11 @@ create trigger profiles_touch_updated_at
 -- A row exists only if the case is shared. The score/feedback/notes columns are null unless the
 -- owner shares them for that case. Maintained exclusively by the triggers below.
 create table public.shared_cases (
+  -- case_id links back to the private case for the triggers and the cascade; members are never
+  -- granted access to this column, so they cannot learn (or probe) the private table's ids.
   case_id          uuid primary key references public.cases (id) on delete cascade,
+  -- share_id is the random public handle members see for a shared case.
+  share_id         uuid not null unique default gen_random_uuid(),
   owner_id         uuid not null references public.profiles (user_id) on delete cascade,
 
   -- case history
@@ -115,9 +119,8 @@ create table public.shared_cases (
   skill_scores     jsonb,   -- { "framework": 4, ... } ratings only
   feedback         jsonb,   -- { "overall": "...", "skills": { "framework": "..." } }
   improvement_area text,
-  notes            jsonb,   -- { "went_well": "...", "struggled": "...", "concepts": "...", "next_focus": "..." }
-
-  updated_at       timestamptz not null default now()
+  notes            jsonb    -- { "went_well": "...", "struggled": "...", "concepts": "...", "next_focus": "..." }
+  -- Deliberately no timestamps: they would reveal when private fields were edited.
 );
 
 comment on table public.shared_cases is 'Owner-approved projection of cases for other members. Written only by triggers; never contains private fields.';
@@ -176,7 +179,10 @@ begin
     return;
   end if;
 
-  select * into p from public.profiles where user_id = c.user_id;
+  -- Lock the profile row while we read it. A concurrent profile change (unlisting, a switch) and a case
+  -- change then run one after the other, each seeing the other's committed result, so a stale shared
+  -- row can't be left behind by a race.
+  select * into p from public.profiles where user_id = c.user_id for share;
   v_has_profile := found;
   v_full := c.share_mode = 'full';
   v_prof := c.share_mode = 'profile';
@@ -192,7 +198,7 @@ begin
 
   insert into public.shared_cases
     (case_id, owner_id, case_date, title, source, case_type, industry,
-     overall, skill_scores, feedback, improvement_area, notes, updated_at)
+     overall, skill_scores, feedback, improvement_area, notes)
   values (
     c.id, c.user_id, c.case_date, c.title, c.source, c.case_type, c.industry,
     case when v_full or (v_prof and p.share_overall)     then c.overall end,
@@ -206,8 +212,7 @@ begin
         'concepts',   nullif(btrim(coalesce(c.concepts, '')), ''),
         'next_focus', nullif(btrim(coalesce(c.next_focus, '')), '')
       )), '{}'::jsonb)
-    end,
-    now()
+    end
   )
   on conflict (case_id) do update set
     owner_id         = excluded.owner_id,
@@ -220,8 +225,16 @@ begin
     skill_scores     = excluded.skill_scores,
     feedback         = excluded.feedback,
     improvement_area = excluded.improvement_area,
-    notes            = excluded.notes,
-    updated_at       = excluded.updated_at;
+    notes            = excluded.notes
+  -- Only rewrite the row when something members can see actually changed.
+  where (public.shared_cases.owner_id, public.shared_cases.case_date, public.shared_cases.title,
+         public.shared_cases.source, public.shared_cases.case_type, public.shared_cases.industry,
+         public.shared_cases.overall, public.shared_cases.skill_scores, public.shared_cases.feedback,
+         public.shared_cases.improvement_area, public.shared_cases.notes)
+        is distinct from
+        (excluded.owner_id, excluded.case_date, excluded.title, excluded.source, excluded.case_type,
+         excluded.industry, excluded.overall, excluded.skill_scores, excluded.feedback,
+         excluded.improvement_area, excluded.notes);
 end;
 $$;
 
@@ -297,9 +310,16 @@ create policy "profiles: owner updates own" on public.profiles
 
 -- shared_cases: read-only for verified members. No insert/update/delete policy or privilege exists,
 -- so the only writer is the trigger code above.
+-- The owner must also still be listed: even if a stale row were ever left behind, it could not be served.
 create policy "shared_cases: members read" on public.shared_cases
   for select to authenticated
-  using ((select public.is_member()));
+  using (
+    (select public.is_member())
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = shared_cases.owner_id and p.listed
+    )
+  );
 
 -- ---------------------------------------------------------------------------------------
 -- Privileges: least privilege, and nothing for the anonymous role
@@ -310,7 +330,10 @@ create policy "shared_cases: members read" on public.shared_cases
 revoke all on public.profiles from anon, authenticated;
 revoke all on public.shared_cases from anon, authenticated;
 grant select, insert, update on public.profiles to authenticated;   -- no delete: profile goes with the account
-grant select on public.shared_cases to authenticated;               -- read only
+-- Read-only, and only these columns: not case_id (the private table's id).
+grant select (share_id, owner_id, case_date, title, source, case_type, industry,
+              overall, skill_scores, feedback, improvement_area, notes)
+  on public.shared_cases to authenticated;
 
 -- Same tightening for the personal tables created earlier (privileges only; no data or policy changes).
 revoke all on public.cases from authenticated;

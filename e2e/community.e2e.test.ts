@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { SHARED_COLUMNS } from '../src/data/community';
 import { SupabaseCommunity } from '../src/data/supabaseCommunity';
 import { SupabaseRepository } from '../src/data/supabaseRepository';
 import { NO_SHARING, type ProfileInput, type SharingPrefs } from '../src/domain/community';
@@ -177,7 +178,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
 
     const rawProfile = await b.client.from('profiles').select('*').eq('user_id', a.userId).single();
     expect(Object.keys(rawProfile.data ?? {}).some((k) => /email|phone|password/i.test(k))).toBe(false);
-    const rawShared = await b.client.from('shared_cases').select('*').eq('owner_id', a.userId);
+    const rawShared = await b.client.from('shared_cases').select(SHARED_COLUMNS).eq('owner_id', a.userId);
     expect(JSON.stringify(rawShared.data)).not.toMatch(/@/);
   });
 
@@ -185,9 +186,9 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     await repoA.insertCase(testCase({ overall: 5 }));
     await communityA.saveProfile(profile({ sharing: sharing('cases') })); // scores NOT shared
 
-    const byScore = await b.client.from('shared_cases').select('*').eq('owner_id', a.userId).eq('overall', 5);
+    const byScore = await b.client.from('shared_cases').select('share_id').eq('owner_id', a.userId).eq('overall', 5);
     expect(byScore.data).toEqual([]);
-    const count = await b.client.from('shared_cases').select('*', { count: 'exact', head: true }).eq('owner_id', a.userId);
+    const count = await b.client.from('shared_cases').select('share_id', { count: 'exact', head: true }).eq('owner_id', a.userId);
     expect(count.count).toBe((await communityB.getSharedCases(a.userId)).length);
 
     const anon = newClient();
@@ -195,6 +196,18 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     expect((await anon.from('profiles').select('*')).error).not.toBeNull();
     const bare = await fetch(`${SUPABASE_URL}/rest/v1/shared_cases?select=*`, { headers: { apikey: SUPABASE_KEY } });
     expect(bare.status).toBe(401);
+  });
+
+  it('does not let members read the private case id, so it cannot be probed', async () => {
+    const c = testCase();
+    await repoA.insertCase(c);
+    await communityA.saveProfile(profile({ sharing: sharing('cases') }));
+    const readId = await b.client.from('shared_cases').select('case_id').eq('owner_id', a.userId);
+    expect(readId.error).not.toBeNull();
+    const star = await b.client.from('shared_cases').select('*').eq('owner_id', a.userId);
+    expect(star.error).not.toBeNull();
+    const seen = await b.client.from('shared_cases').select('share_id').eq('owner_id', a.userId);
+    expect(JSON.stringify(seen.data)).not.toContain(c.id);
   });
 
   it('removes shared data when the case is deleted', async () => {

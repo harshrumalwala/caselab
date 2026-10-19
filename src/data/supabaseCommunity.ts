@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Profile, ProfileInput, SharedCase } from '../domain/community';
 import {
+  SHARED_COLUMNS,
   profileToRow,
   rowToProfile,
   rowToSharedCase,
@@ -57,10 +58,10 @@ export class SupabaseCommunity implements CommunityRepository {
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await this.client
         .from('shared_cases')
-        .select('*')
+        .select(SHARED_COLUMNS)
         .eq('owner_id', ownerId)
         .order('case_date', { ascending: false })
-        .order('case_id', { ascending: true })
+        .order('share_id', { ascending: true })
         .range(from, from + PAGE - 1);
       if (error) throw error;
       const rows = (data ?? []) as SharedRow[];

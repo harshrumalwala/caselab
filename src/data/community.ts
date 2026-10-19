@@ -60,8 +60,12 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
   };
 }
 
+/** The columns members may read from shared_cases. `case_id` (the private table's id) is deliberately not one of them. */
+export const SHARED_COLUMNS =
+  'share_id, owner_id, case_date, title, source, case_type, industry, overall, skill_scores, feedback, improvement_area, notes';
+
 export interface SharedRow {
-  case_id: string;
+  share_id: string;
   owner_id: string;
   case_date: string;
   title: string;
@@ -77,7 +81,7 @@ export interface SharedRow {
 
 export function rowToSharedCase(r: SharedRow): SharedCase {
   return {
-    caseId: r.case_id,
+    caseId: r.share_id,
     ownerId: r.owner_id,
     date: r.case_date,
     title: r.title,

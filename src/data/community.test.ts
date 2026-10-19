@@ -21,6 +21,7 @@ beforeEach(async () => {
 });
 
 type Row = Record<string, unknown>;
+const COLS = 'share_id, owner_id, case_date, title, source, case_type, industry, overall, skill_scores, feedback, improvement_area, notes';
 const PREFS = ['share_cases', 'share_overall', 'share_skills', 'share_feedback', 'share_improvement', 'share_notes'] as const;
 type Pref = (typeof PREFS)[number];
 
@@ -72,7 +73,7 @@ async function addCase(uid: string, over: Record<string, unknown> = {}): Promise
 
 const sharedAs = async (viewer: string): Promise<Row[]> => {
   await as(db, 'authenticated', viewer);
-  return (await db.query<Row>('select * from public.shared_cases order by title')).rows;
+  return (await db.query<Row>(`select ${COLS} from public.shared_cases order by title`)).rows;
 };
 
 const HISTORY = ['case_date', 'title', 'source', 'case_type', 'industry'];
@@ -122,12 +123,12 @@ describe('profiles and the member directory', () => {
 
     await as(db, 'authenticated', DAVE); // signed up, email not verified
     expect((await db.query('select * from public.profiles')).rows).toEqual([]);
-    expect((await db.query('select * from public.shared_cases')).rows).toEqual([]);
+    expect((await db.query(`select ${COLS} from public.shared_cases`)).rows).toEqual([]);
     expect(await fails(`insert into public.profiles (user_id, display_name) values ($1, 'Dave')`, [DAVE])).toMatch(/row-level security/);
 
     await as(db, 'anon');
     expect(await fails('select * from public.profiles')).toMatch(/permission denied/);
-    expect(await fails('select * from public.shared_cases')).toMatch(/permission denied/);
+    expect(await fails(`select ${COLS} from public.shared_cases`)).toMatch(/permission denied/);
   });
 
   it('validates names and class', async () => {
@@ -230,7 +231,7 @@ describe('changes take effect immediately and leave nothing behind', () => {
     expect((await sharedAs(BOB))[0].overall).toBe(5); // other switches unaffected
 
     await as(db, 'postgres');
-    expect(JSON.stringify((await db.query('select * from public.shared_cases')).rows)).not.toContain('Excellent structure overall');
+    expect(JSON.stringify((await db.query(`select ${COLS} from public.shared_cases`)).rows)).not.toContain('Excellent structure overall');
   });
 
   it('turning case-history sharing off hides every case immediately', async () => {
@@ -241,7 +242,7 @@ describe('changes take effect immediately and leave nothing behind', () => {
     await setPrefs(ALICE, { share_cases: false });
     expect(await sharedAs(BOB)).toEqual([]);
     await as(db, 'postgres');
-    expect((await db.query('select * from public.shared_cases')).rows).toEqual([]);
+    expect((await db.query(`select ${COLS} from public.shared_cases`)).rows).toEqual([]);
   });
 
   it('unlisting hides a member entirely, and relisting restores only what they had chosen', async () => {
@@ -273,7 +274,7 @@ describe('changes take effect immediately and leave nothing behind', () => {
     await addCase(ALICE);
     await as(db, 'postgres');
     await db.query('delete from auth.users where id = $1', [ALICE]);
-    expect((await db.query('select * from public.shared_cases')).rows).toEqual([]);
+    expect((await db.query(`select ${COLS} from public.shared_cases`)).rows).toEqual([]);
     expect((await db.query('select * from public.profiles')).rows).toEqual([]);
   });
 });
@@ -351,7 +352,13 @@ describe('bypassing the interface does not help', () => {
     expect(await granted('cases')).toEqual(['SELECT', 'INSERT', 'UPDATE', 'DELETE']);
     expect(await granted('opportunities')).toEqual(['SELECT', 'INSERT', 'UPDATE', 'DELETE']);
     expect(await granted('profiles')).toEqual(['SELECT', 'INSERT', 'UPDATE']);
-    expect(await granted('shared_cases')).toEqual(['SELECT']);
+    expect(await granted('shared_cases')).toEqual([]); // no table-level rights; read access is per column (below)
+    await as(db, 'postgres');
+    const colPriv = async (col: string) =>
+      (await db.query<{ ok: boolean }>(`select has_column_privilege('authenticated', 'public.shared_cases', $1, 'SELECT') as ok`, [col])).rows[0].ok;
+    expect(await colPriv('title')).toBe(true);
+    expect(await colPriv('share_id')).toBe(true);
+    expect(await colPriv('case_id')).toBe(false); // the private table's id is never readable by members
     for (const table of ['cases', 'opportunities', 'profiles', 'shared_cases']) {
       await as(db, 'postgres');
       const { rows } = await db.query<{ ok: boolean }>(`select has_table_privilege('anon', $1, 'SELECT') as ok`, [`public.${table}`]);
@@ -382,11 +389,11 @@ describe('bypassing the interface does not help', () => {
     await addCase(ALICE, { title: 'Private', overall: 1, share_mode: 'private' });
 
     await as(db, 'authenticated', BOB);
-    expect((await db.query('select * from public.shared_cases where overall = 5')).rows).toEqual([]); // not in the table
-    expect((await db.query('select * from public.shared_cases where overall is not null')).rows).toEqual([]);
+    expect((await db.query(`select ${COLS} from public.shared_cases where overall = 5`)).rows).toEqual([]); // not in the table
+    expect((await db.query(`select ${COLS} from public.shared_cases where overall is not null`)).rows).toEqual([]);
     expect((await db.query<{ n: string }>('select count(*)::text as n from public.shared_cases where owner_id = $1', [ALICE])).rows[0].n).toBe('1'); // counts only what is shared
     expect((await db.query<{ n: string }>('select count(*)::text as n from public.cases')).rows[0].n).toBe('0'); // Bob owns none
-    expect((await db.query('select * from public.shared_cases where title = $1', ['Private'])).rows).toEqual([]);
+    expect((await db.query(`select ${COLS} from public.shared_cases where title = $1`, ['Private'])).rows).toEqual([]);
   });
 
   it('keeps each member’s personal data and shared view separate', async () => {
@@ -401,5 +408,73 @@ describe('bypassing the interface does not help', () => {
     // ...and the shared table shows each person's rows with their own settings.
     const bySeen = (await sharedAs(ALICE)).map((r) => [r.title, r.overall]);
     expect(bySeen).toEqual([['Alice case', 5], ['Bob case', null]]);
+  });
+});
+
+describe('hardening from the independent security review', () => {
+  it('keeps the private case id unreadable and unprobeable for other members', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases']);
+    const caseId = await addCase(ALICE);
+
+    await as(db, 'authenticated', BOB);
+    for (const sql of [
+      'select case_id from public.shared_cases',
+      'select * from public.shared_cases',
+      'select title from public.shared_cases where case_id is not null',
+      'select title from public.shared_cases order by case_id',
+    ]) {
+      expect(await fails(sql), sql).toMatch(/permission denied/);
+    }
+
+    const { rows } = await db.query<{ share_id: string }>('select share_id from public.shared_cases');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].share_id).not.toBe(caseId); // the public handle is unrelated to the private id
+    // So what Bob can see tells him nothing about which case ids exist.
+    expect(await fails(`insert into public.cases (id, title, case_type) values ($1, 'probe', 'Revenue')`, [rows[0].share_id])).toBe('');
+    // ...and the private id is just as unprobeable even after the case stops being shared.
+    await as(db, 'authenticated', ALICE);
+    await db.query(`update public.cases set share_mode = 'private' where id = $1`, [caseId]);
+    await as(db, 'authenticated', BOB);
+    expect((await db.query('select share_id from public.shared_cases')).rows).toEqual([]);
+  });
+
+  it('carries no timestamps that would reveal edits to private fields', async () => {
+    const cols = (await db.query<{ column_name: string }>(`select column_name from information_schema.columns where table_name = 'shared_cases'`)).rows.map((c) => c.column_name);
+    expect(cols).not.toContain('updated_at');
+    expect(cols).not.toContain('created_at');
+  });
+
+  it('rewrites a shared row only when something members can see changes', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases']); // scores, feedback and notes are NOT shared
+    const id = await addCase(ALICE);
+    const version = async () => {
+      await as(db, 'postgres');
+      return (await db.query<{ v: string }>('select xmin::text as v from public.shared_cases where case_id = $1', [id])).rows[0].v;
+    };
+    const before = await version();
+
+    // Edit only private things: other notes, score, feedback, notes.
+    await as(db, 'authenticated', ALICE);
+    await db.query(`update public.cases set other_notes = 'more secret', overall = 1, overall_feedback = 'new feedback', went_well = 'x' where id = $1`, [id]);
+    expect(await version()).toBe(before); // untouched: nothing observable changed
+
+    await as(db, 'authenticated', ALICE);
+    await db.query(`update public.cases set title = 'A new visible title' where id = $1`, [id]);
+    expect(await version()).not.toBe(before);
+  });
+
+  it('never serves a stale shared row for a member who is no longer listed', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases']);
+    await addCase(ALICE);
+    expect(await sharedAs(BOB)).toHaveLength(1);
+
+    // Simulate what a race could leave behind: the profile is unlisted but the shared row survived.
+    await as(db, 'postgres');
+    await db.exec('alter table public.profiles disable trigger profiles_refresh_shared');
+    await db.query('update public.profiles set listed = false where user_id = $1', [ALICE]);
+    await db.exec('alter table public.profiles enable trigger profiles_refresh_shared');
+    expect((await db.query('select 1 from public.shared_cases')).rows).toHaveLength(1); // the stale row exists...
+
+    expect(await sharedAs(BOB)).toEqual([]); // ...but the read policy refuses to serve it
   });
 });

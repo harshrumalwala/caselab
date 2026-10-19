@@ -46,7 +46,7 @@ production, set these in the Supabase dashboard:
 
 | Where | Setting | Why |
 | --- | --- | --- |
-| Authentication → Sign In / Providers → Email | **Allow new users to sign up: on. Confirm email: on.** | Open registration with verified addresses. The database also refuses members whose email isn't confirmed |
+| Authentication → Sign In / Providers → Email | **Allow new users to sign up: on. Confirm email: ON (required).** | Open registration with verified addresses. "Verified" is only meaningful with Confirm email on: with it off, Supabase marks every new address as confirmed immediately and anyone could join |
 | Authentication → URL Configuration | **Site URL** = your deployed address. **Redirect URLs** add `https://<your-domain>/**` and `http://localhost:5173/**` | Verification and password-reset links return to the app. Wrong values give "link invalid" errors |
 | Authentication → Emails → **SMTP Settings** | **A custom SMTP sender** (Resend, Postmark, SendGrid, Amazon SES...), with your sending domain's DNS records set up | **The important one.** Supabase's built-in email sender is for testing: it only delivers to members of your own Supabase team and is heavily rate-limited, so real classmates would never receive their verification email |
 | Authentication → Emails → Templates | Optional: customise the *Confirm signup* and *Reset password* wording | Friendlier emails |
@@ -353,5 +353,6 @@ sharing switches, then restore them to listed with nothing shared.
 - Edits made on two devices at the same moment aren't merged: the last save wins (fine for one person).
 - Case matching is by title only, so very different spellings of the same case can be missed, and different cases that share
   most of their words can be flagged as "might overlap". It never decides for you.
+- Member names aren't verified: anyone with a verified email can choose any display name, and no email is shown to check it. Restricting sign-up to Booth addresses (see Set it up, step 2) is the fix if impersonation becomes a concern.
 - The People directory shows listed members alphabetically (first 50 per search); there is no pagination or profile photo.
 - CAPTCHA is recommended for public sign-up but isn't wired in yet (see Set it up, step 2).
