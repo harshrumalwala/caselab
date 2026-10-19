@@ -2,14 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Banners } from './components/layout/Banners';
 import { BottomNav } from './components/layout/BottomNav';
 import { Header } from './components/layout/Header';
+import { createSupabaseBackend, type Backend, type BackendResult } from './data/backend';
 import type { CaseInput } from './domain/types';
-import { formatTimestamp } from './domain/dates';
 import { CaseDetail } from './features/caselog/CaseDetail';
 import { CaseLog } from './features/caselog/CaseLog';
+import { ConfigProblem, LoadFailed, Splash } from './features/auth/StatusScreens';
+import { LoginScreen } from './features/auth/LoginScreen';
 import { Dashboard } from './features/dashboard/Dashboard';
 import { ImprovementAreas } from './features/improvement/ImprovementAreas';
 import { LogCaseDialog } from './features/logcase/LogCaseDialog';
 import { SettingsDialog } from './features/settings/SettingsDialog';
+import { AuthProvider, useAuth, useSession } from './state/AuthProvider';
 import { DataProvider, useData } from './state/DataProvider';
 import { useRoute } from './state/route';
 import { ThemeProvider } from './state/theme';
@@ -29,7 +32,9 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 function Shell() {
-  const { ready, mode, data } = useData();
+  const { status, loadError, reload, mode } = useData();
+  const { signOut } = useAuth();
+  const session = useSession();
   const [route, navigate] = useRoute();
   const [logState, setLogState] = useState<LogState | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
@@ -66,11 +71,14 @@ function Shell() {
     return () => document.removeEventListener('keydown', onKey);
   }, [ui]);
 
-  if (!ready) {
+  if (status === 'loading') return <Splash label="Loading your cases…" />;
+  if (status === 'error') {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted" role="status">
-        Loading your cases…
-      </div>
+      <LoadFailed
+        message={loadError ?? 'Something went wrong loading your cases.'}
+        onRetry={() => void reload()}
+        onSignOut={() => void signOut()}
+      />
     );
   }
 
@@ -85,10 +93,10 @@ function Shell() {
           {route === 'improve' && <ImprovementAreas />}
         </main>
         <footer className="hidden border-t border-line px-6 py-5 text-center text-xs text-muted md:block">
-          Your cases are saved in this browser only and don't sync between devices. Last backup:{' '}
-          {formatTimestamp(data.lastExportAt)}.{' '}
+          Saved to your account{session.email ? ` (${session.email})` : ''} and available on every device you sign in
+          on.{' '}
           <button type="button" className="font-semibold text-accent-text hover:underline" onClick={ui.openSettings}>
-            Back up in Settings
+            Settings
           </button>
         </footer>
         <BottomNav />
@@ -108,13 +116,43 @@ function Shell() {
   );
 }
 
-export function App() {
+/** Splits the app into: not signed in, signed in. Your data is only requested after sign-in. */
+function AuthGate({ backend }: { backend: Backend }) {
+  const { state } = useAuth();
+  const userId = state.status === 'signedIn' ? state.session.userId : null;
+  // One repository per signed-in user; a different user never reuses another's.
+  const repository = useMemo(() => (userId ? backend.createRepository() : null), [backend, userId]);
+
+  if (state.status === 'loading') return <Splash label="Checking your session…" />;
+  if (state.status === 'signedOut' || !repository) return <LoginScreen />;
+  return (
+    <DataProvider key={state.session.userId} repository={repository}>
+      <Shell />
+    </DataProvider>
+  );
+}
+
+// Built once per page load from the VITE_SUPABASE_* settings.
+let defaultBackend: ReturnType<typeof createSupabaseBackend> | null = null;
+
+/** `backend` is injectable so tests can run the whole app against fakes. */
+export function App({ backend }: { backend?: BackendResult } = {}) {
+  const resolved = useMemo(() => {
+    if (backend) return backend;
+    defaultBackend ??= createSupabaseBackend();
+    return defaultBackend;
+  }, [backend]);
+
   return (
     <ThemeProvider>
       <ToastProvider>
-        <DataProvider>
-          <Shell />
-        </DataProvider>
+        {'problem' in resolved ? (
+          <ConfigProblem problem={resolved.problem} />
+        ) : (
+          <AuthProvider auth={resolved.backend.auth}>
+            <AuthGate backend={resolved.backend} />
+          </AuthProvider>
+        )}
       </ToastProvider>
     </ThemeProvider>
   );

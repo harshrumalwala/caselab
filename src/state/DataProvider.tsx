@@ -10,252 +10,332 @@ import {
 } from 'react';
 import { mergeAppData } from '../data/backup';
 import { buildDemoData } from '../data/demoData';
-import { createLocalStorageAdapter, DEMO_KEY, parseAppData, REAL_KEY, type CaseLabStorage } from '../data/storage';
+import { describeError, toDataError } from '../data/errors';
+import { withUuidIds } from '../data/mapping';
+import { createMemoryRepository } from '../data/memoryRepository';
+import { deriveCustomIndustries, parseAppData } from '../data/parse';
+import type { CaseLabData, CaseLabRepository } from '../data/repository';
 import { cleanInput, emptyAppData, newId } from '../domain/factory';
 import { canonicalIndustry } from '../domain/stats';
-import { INDUSTRIES } from '../domain/constants';
-import type { AppData, CaseInput, CaseRecord, OpportunityItem } from '../domain/types';
+import { SCHEMA_VERSION, type AppData, type CaseInput, type CaseRecord, type OpportunityItem } from '../domain/types';
+import { DRAFT_KEY, MODE_KEY } from './storageKeys';
 
+export { DRAFT_KEY };
 export type DataMode = 'real' | 'demo';
+export type LoadStatus = 'loading' | 'ready' | 'error';
 
-const MODE_KEY = 'caselab:v1:mode';
-export const DRAFT_KEY = 'caselab:v1:draft';
-
-function readMode(): DataMode {
+function readDemoFlag(): boolean {
   try {
-    return window.sessionStorage.getItem(MODE_KEY) === 'demo' ? 'demo' : 'real';
+    return window.sessionStorage.getItem(MODE_KEY) === 'demo';
   } catch {
-    return 'real';
+    return false;
   }
 }
 
-function writeMode(mode: DataMode) {
+function writeDemoFlag(on: boolean) {
   try {
-    if (mode === 'demo') window.sessionStorage.setItem(MODE_KEY, 'demo');
+    if (on) window.sessionStorage.setItem(MODE_KEY, 'demo');
     else window.sessionStorage.removeItem(MODE_KEY);
   } catch {
     /* ignore */
   }
 }
 
+const assemble = (cases: CaseRecord[], opportunities: OpportunityItem[]): AppData => ({
+  schemaVersion: SCHEMA_VERSION,
+  cases,
+  opportunities,
+  customIndustries: deriveCustomIndustries(cases),
+});
+
 export interface DataContextValue {
-  ready: boolean;
+  status: LoadStatus;
+  /** Why the first load failed; the app shows this with a Retry instead of an empty dashboard. */
+  loadError: string | null;
+  /** A background refresh failed; the data on screen may be out of date. */
+  refreshError: string | null;
   mode: DataMode;
   data: AppData;
   cases: CaseRecord[];
-  /** False when the browser blocked storage and nothing will survive a refresh. */
-  persistent: boolean;
-  loadWarning: string | null;
-  saveError: string | null;
 
-  addCase(input: CaseInput): CaseRecord;
-  updateCase(id: string, input: CaseInput): void;
-  deleteCase(id: string): void;
-  addOpportunity(kind: OpportunityItem['kind'], text: string): void;
-  removeOpportunity(id: string): void;
+  /** Try the initial load (or a refresh) again. */
+  reload(): Promise<void>;
 
-  replaceAll(data: AppData): void;
-  mergeIn(data: AppData): void;
+  // Every write waits for the database. It resolves only after the change is stored, and
+  // rejects with a DataError (a message fit to show the user) otherwise. State is never
+  // updated ahead of the database, so the screen can't claim something was saved when it wasn't.
+  addCase(input: CaseInput): Promise<CaseRecord>;
+  updateCase(id: string, input: CaseInput): Promise<void>;
+  deleteCase(id: string): Promise<void>;
+  addOpportunity(kind: OpportunityItem['kind'], text: string): Promise<void>;
+  removeOpportunity(id: string): Promise<void>;
+
+  replaceAll(data: AppData): Promise<void>;
+  mergeIn(data: AppData): Promise<void>;
   /** Add imported cases, skipping any whose date + title already exist. */
-  importCases(cases: CaseRecord[]): { added: number; skipped: number };
-  markExported(): void;
+  importCases(cases: CaseRecord[]): Promise<{ added: number; skipped: number }>;
   clearAll(): Promise<void>;
 
-  enterDemo(): Promise<void>;
-  exitDemo(): Promise<void>;
+  enterDemo(): void;
+  exitDemo(): void;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
 
 interface Props {
   children: ReactNode;
-  /** Injection points for tests, or for a future cloud-backed storage. */
-  realStorage?: CaseLabStorage;
-  demoStorage?: CaseLabStorage;
+  /** Where your real data lives (Supabase in production, in-memory in tests). */
+  repository: CaseLabRepository;
 }
 
-export function DataProvider({ children, realStorage, demoStorage }: Props) {
-  const real = useMemo(() => realStorage ?? createLocalStorageAdapter(REAL_KEY), [realStorage]);
-  const demo = useMemo(() => demoStorage ?? createLocalStorageAdapter(DEMO_KEY), [demoStorage]);
-
-  const [mode, setMode] = useState<DataMode>(readMode);
-  const storage = mode === 'demo' ? demo : real;
+export function DataProvider({ children, repository }: Props) {
+  // Demo data comes from its own in-memory repository: it can never reach the real database.
+  const [demoRepo, setDemoRepo] = useState<CaseLabRepository | null>(() =>
+    readDemoFlag() ? createMemoryRepository(buildDemoData()) : null,
+  );
+  const repo = demoRepo ?? repository;
+  const mode: DataMode = demoRepo ? 'demo' : 'real';
 
   const [data, setData] = useState<AppData>(emptyAppData);
   const dataRef = useRef<AppData>(data);
-  const storageRef = useRef<CaseLabStorage>(storage);
-  storageRef.current = storage;
+  const repoRef = useRef(repo);
+  repoRef.current = repo;
+  const inflight = useRef(0);
 
-  const [ready, setReady] = useState(false);
-  const [loadWarning, setLoadWarning] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [status, setStatus] = useState<LoadStatus>('loading');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
-  // Load whenever the active storage changes (first render, entering/leaving demo mode).
+  const setAll = useCallback((next: CaseLabData) => {
+    const assembled = assemble(next.cases, next.opportunities);
+    dataRef.current = assembled;
+    setData(assembled);
+  }, []);
+
+  const load = useCallback(
+    async (silent: boolean) => {
+      const target = repoRef.current;
+      if (!silent) {
+        setStatus('loading');
+        setLoadError(null);
+      }
+      try {
+        const loaded = await target.loadAll();
+        if (repoRef.current !== target) return; // switched to/from demo mode while loading
+        setAll(loaded);
+        setStatus('ready');
+        setLoadError(null);
+        setRefreshError(null);
+      } catch (e) {
+        if (repoRef.current !== target) return;
+        if (silent) setRefreshError(describeError(e));
+        else {
+          setLoadError(describeError(e));
+          setStatus('error');
+        }
+      }
+    },
+    [setAll],
+  );
+
+  // Load on first render and whenever the data source changes (entering/leaving demo mode).
   useEffect(() => {
-    let cancelled = false;
-    setReady(false);
-    storage.load().then((res) => {
-      if (cancelled) return;
-      dataRef.current = res.data;
-      setData(res.data);
-      setLoadWarning(res.warning);
-      setReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [storage]);
+    dataRef.current = emptyAppData();
+    setData(dataRef.current);
+    void load(false);
+  }, [repo, load]);
 
-  // Pick up changes made in another tab of the same browser.
+  // Pick up changes made on another device when you come back to this tab.
   useEffect(() => {
     if (mode !== 'real') return;
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== REAL_KEY) return;
-      real.load().then((res) => {
-        dataRef.current = res.data;
-        setData(res.data);
-      });
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && inflight.current === 0) void load(true);
     };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, [mode, real]);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [mode, load]);
 
-  const commit = useCallback((next: AppData) => {
-    dataRef.current = next;
-    setData(next);
-    storageRef.current
-      .save(next)
-      .then(() => setSaveError(null))
-      .catch(() =>
-        setSaveError('CaseLab could not save to this browser (storage may be full or blocked). Export a backup now.'),
-      );
-  }, []);
+  /** Run a database write; apply its result to the screen only if it succeeded and still applies. */
+  const write = useCallback(
+    async <T,>(operation: (target: CaseLabRepository) => Promise<T>, apply: (result: T) => void): Promise<T> => {
+      const target = repoRef.current;
+      inflight.current += 1;
+      try {
+        const result = await operation(target);
+        if (repoRef.current === target) apply(result);
+        return result;
+      } catch (e) {
+        throw toDataError(e);
+      } finally {
+        inflight.current -= 1;
+      }
+    },
+    [],
+  );
 
-  /** Keep custom industries tidy: reuse existing casing, remember genuinely new names. */
-  const withIndustry = useCallback((current: AppData, input: CaseInput) => {
+  const current = () => dataRef.current;
+  const patch = (fn: (d: AppData) => CaseLabData) => setAll(fn(dataRef.current));
+
+  const prepare = (input: CaseInput): CaseInput => {
     const cleaned = cleanInput(input);
-    const industry = canonicalIndustry(cleaned.industry, current.customIndustries);
-    const isKnown = (INDUSTRIES as readonly string[]).includes(industry) || current.customIndustries.includes(industry);
-    return {
-      cleaned: { ...cleaned, industry },
-      customIndustries: industry && !isKnown ? [...current.customIndustries, industry] : current.customIndustries,
-    };
-  }, []);
+    // Reuse the existing spelling/casing of an industry the user already has.
+    return { ...cleaned, industry: canonicalIndustry(cleaned.industry, dataRef.current.customIndustries) };
+  };
 
   const addCase = useCallback<DataContextValue['addCase']>(
     (input) => {
-      const current = dataRef.current;
-      const { cleaned, customIndustries } = withIndustry(current, input);
       const stamp = new Date().toISOString();
-      const record: CaseRecord = { ...cleaned, id: newId(), createdAt: stamp, updatedAt: stamp };
-      commit({ ...current, cases: [...current.cases, record], customIndustries });
-      return record;
+      const record: CaseRecord = { ...prepare(input), id: newId(), createdAt: stamp, updatedAt: stamp };
+      return write(
+        (r) => r.insertCase(record),
+        (saved) => patch((d) => ({ cases: [...d.cases, saved], opportunities: d.opportunities })),
+      );
     },
-    [commit, withIndustry],
+    [write],
   );
 
   const updateCase = useCallback<DataContextValue['updateCase']>(
-    (id, input) => {
-      const current = dataRef.current;
-      const { cleaned, customIndustries } = withIndustry(current, input);
-      const cases = current.cases.map((c) =>
-        c.id === id ? { ...cleaned, id, createdAt: c.createdAt, updatedAt: new Date().toISOString() } : c,
+    async (id, input) => {
+      const existing = current().cases.find((c) => c.id === id);
+      if (!existing) throw toDataError(new Error('That case no longer exists.'));
+      const record: CaseRecord = {
+        ...prepare(input),
+        id,
+        createdAt: existing.createdAt,
+        updatedAt: new Date().toISOString(),
+      };
+      await write(
+        (r) => r.updateCase(record),
+        (saved) =>
+          patch((d) => ({ cases: d.cases.map((c) => (c.id === id ? saved : c)), opportunities: d.opportunities })),
       );
-      commit({ ...current, cases, customIndustries });
     },
-    [commit, withIndustry],
+    [write],
   );
 
   const deleteCase = useCallback<DataContextValue['deleteCase']>(
-    (id) => {
-      const current = dataRef.current;
-      commit({ ...current, cases: current.cases.filter((c) => c.id !== id) });
+    async (id) => {
+      await write(
+        (r) => r.deleteCase(id),
+        () => patch((d) => ({ cases: d.cases.filter((c) => c.id !== id), opportunities: d.opportunities })),
+      );
     },
-    [commit],
+    [write],
   );
 
   const addOpportunity = useCallback<DataContextValue['addOpportunity']>(
-    (kind, text) => {
+    async (kind, text) => {
       const trimmed = text.trim();
-      const current = dataRef.current;
       if (!trimmed) return;
-      if (current.opportunities.some((o) => o.kind === kind && o.text.toLowerCase() === trimmed.toLowerCase())) return;
+      if (current().opportunities.some((o) => o.kind === kind && o.text.toLowerCase() === trimmed.toLowerCase())) return;
       const item: OpportunityItem = { id: newId(), kind, text: trimmed, createdAt: new Date().toISOString() };
-      commit({ ...current, opportunities: [...current.opportunities, item] });
+      await write(
+        (r) => r.insertOpportunity(item),
+        (saved) => patch((d) => ({ cases: d.cases, opportunities: [...d.opportunities, saved] })),
+      );
     },
-    [commit],
+    [write],
   );
 
   const removeOpportunity = useCallback<DataContextValue['removeOpportunity']>(
-    (id) => {
-      const current = dataRef.current;
-      commit({ ...current, opportunities: current.opportunities.filter((o) => o.id !== id) });
+    async (id) => {
+      await write(
+        (r) => r.deleteOpportunity(id),
+        () => patch((d) => ({ cases: d.cases, opportunities: d.opportunities.filter((o) => o.id !== id) })),
+      );
     },
-    [commit],
+    [write],
   );
 
-  const replaceAll = useCallback<DataContextValue['replaceAll']>((next) => commit(parseAppData(next)), [commit]);
+  const replaceAll = useCallback<DataContextValue['replaceAll']>(
+    async (incoming) => {
+      const parsed = parseAppData(incoming);
+      const next: CaseLabData = {
+        cases: withUuidIds(parsed.cases),
+        opportunities: withUuidIds(parsed.opportunities),
+      };
+      await write((r) => r.replaceAll(next), () => setAll(next));
+    },
+    [write, setAll],
+  );
 
   const mergeIn = useCallback<DataContextValue['mergeIn']>(
-    (incoming) => commit(mergeAppData(dataRef.current, incoming)),
-    [commit],
+    async (incoming) => {
+      const before = dataRef.current;
+      const merged = mergeAppData(before, {
+        ...incoming,
+        cases: withUuidIds(incoming.cases),
+        opportunities: withUuidIds(incoming.opportunities),
+      });
+      const changedCases = merged.cases.filter(
+        (c) => before.cases.find((x) => x.id === c.id)?.updatedAt !== c.updatedAt,
+      );
+      const newOpportunities = merged.opportunities.filter((o) => !before.opportunities.some((x) => x.id === o.id));
+      await write(
+        (r) => r.upsertMany({ cases: changedCases, opportunities: newOpportunities }),
+        () => setAll({ cases: merged.cases, opportunities: merged.opportunities }),
+      );
+    },
+    [write, setAll],
   );
 
   const importCases = useCallback<DataContextValue['importCases']>(
-    (incoming) => {
-      const current = dataRef.current;
+    async (incoming) => {
+      const before = dataRef.current;
       const key = (c: CaseRecord) => `${c.date}|${c.title.trim().toLowerCase()}`;
-      const seen = new Set(current.cases.map(key));
+      const seen = new Set(before.cases.map(key));
       const fresh: CaseRecord[] = [];
-      for (const c of incoming) {
+      for (const c of withUuidIds(incoming)) {
         if (seen.has(key(c))) continue;
         seen.add(key(c));
         fresh.push(c);
       }
-      if (fresh.length > 0) commit({ ...current, cases: [...current.cases, ...fresh] });
+      if (fresh.length > 0) {
+        await write(
+          (r) => r.upsertMany({ cases: fresh, opportunities: [] }),
+          () => setAll({ cases: [...before.cases, ...fresh], opportunities: before.opportunities }),
+        );
+      }
       return { added: fresh.length, skipped: incoming.length - fresh.length };
     },
-    [commit],
+    [write, setAll],
   );
 
-  const markExported = useCallback(() => {
-    commit({ ...dataRef.current, lastExportAt: new Date().toISOString() });
-  }, [commit]);
+  const clearAll = useCallback<DataContextValue['clearAll']>(async () => {
+    await write(
+      (r) => r.clearAll(),
+      () => {
+        setAll({ cases: [], opportunities: [] });
+        try {
+          window.localStorage.removeItem(DRAFT_KEY);
+        } catch {
+          /* ignore */
+        }
+      },
+    );
+  }, [write, setAll]);
 
-  const clearAll = useCallback(async () => {
-    await storageRef.current.clear();
-    try {
-      window.localStorage.removeItem(DRAFT_KEY);
-    } catch {
-      /* ignore */
-    }
-    const empty = emptyAppData();
-    dataRef.current = empty;
-    setData(empty);
-    setSaveError(null);
+  const enterDemo = useCallback(() => {
+    writeDemoFlag(true);
+    setDemoRepo(createMemoryRepository(buildDemoData()));
   }, []);
 
-  const enterDemo = useCallback(async () => {
-    await demo.save(buildDemoData());
-    writeMode('demo');
-    setMode('demo');
-  }, [demo]);
+  const exitDemo = useCallback(() => {
+    writeDemoFlag(false);
+    setDemoRepo(null);
+  }, []);
 
-  const exitDemo = useCallback(async () => {
-    await demo.clear();
-    writeMode('real');
-    setMode('real');
-  }, [demo]);
+  const reload = useCallback(() => load(status !== 'error' && status !== 'loading'), [load, status]);
 
   const value = useMemo<DataContextValue>(
     () => ({
-      ready,
+      status,
+      loadError,
+      refreshError,
       mode,
       data,
       cases: data.cases,
-      persistent: storage.persistent,
-      loadWarning,
-      saveError,
+      reload,
       addCase,
       updateCase,
       deleteCase,
@@ -264,18 +344,17 @@ export function DataProvider({ children, realStorage, demoStorage }: Props) {
       replaceAll,
       mergeIn,
       importCases,
-      markExported,
       clearAll,
       enterDemo,
       exitDemo,
     }),
     [
-      ready,
+      status,
+      loadError,
+      refreshError,
       mode,
       data,
-      storage.persistent,
-      loadWarning,
-      saveError,
+      reload,
       addCase,
       updateCase,
       deleteCase,
@@ -284,7 +363,6 @@ export function DataProvider({ children, realStorage, demoStorage }: Props) {
       replaceAll,
       mergeIn,
       importCases,
-      markExported,
       clearAll,
       enterDemo,
       exitDemo,

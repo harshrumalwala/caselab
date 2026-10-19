@@ -1,11 +1,11 @@
 import { useRef, useState, type ReactNode } from 'react';
 import {
-  AlertTriangle,
-  Database,
+  Cloud,
   Download,
   FileJson,
   FileSpreadsheet,
   FlaskConical,
+  LogOut,
   Table2,
   Trash2,
   Upload,
@@ -13,11 +13,12 @@ import {
 import { backupToJSON, ImportError, parseBackup, type ParsedBackup } from '../../data/backup';
 import { casesToCSV } from '../../data/csv';
 import { backupFilename, downloadText } from '../../data/download';
+import { describeError } from '../../data/errors';
 import { readMcgWorkbook } from '../../data/mcgImport';
-import { formatTimestamp } from '../../domain/dates';
 import { Button } from '../../components/ui/Button';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Dialog } from '../../components/ui/Dialog';
+import { useAuth, useSession } from '../../state/AuthProvider';
 import { useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
 
@@ -35,19 +36,9 @@ function Section({ title, icon, children }: { title: string; icon: ReactNode; ch
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
-  const {
-    data,
-    cases,
-    mode,
-    persistent,
-    replaceAll,
-    mergeIn,
-    importCases,
-    markExported,
-    clearAll,
-    enterDemo,
-    exitDemo,
-  } = useData();
+  const { data, cases, mode, replaceAll, mergeIn, importCases, clearAll, enterDemo, exitDemo } = useData();
+  const { signOut } = useAuth();
+  const session = useSession();
   const toast = useToast();
   const jsonInput = useRef<HTMLInputElement>(null);
   const xlsxInput = useRef<HTMLInputElement>(null);
@@ -59,7 +50,6 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
   const exportJSON = () => {
     downloadText(backupFilename('caselab-backup', 'json'), backupToJSON(data), 'application/json');
-    markExported();
     toast({ title: 'Backup downloaded', body: `${plural(cases.length, 'case', 'cases')} saved to a JSON file.` });
   };
 
@@ -90,7 +80,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         toast({ kind: 'info', title: 'No cases found', body: 'The Log sheet has no filled-in rows.' });
         return;
       }
-      const { added, skipped } = importCases(result.cases);
+      const { added, skipped } = await importCases(result.cases);
       toast({
         title: `Imported ${plural(added, 'case', 'cases')}`,
         body:
@@ -101,27 +91,57 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       toast({
         kind: 'error',
         title: "Couldn't import that workbook",
-        body: e instanceof ImportError ? e.message : 'Is it the MCG case log (.xlsx)?',
+        body: e instanceof ImportError ? e.message : describeError(e),
       });
     } finally {
       setBusy(false);
     }
   };
 
-  const restore = (how: 'merge' | 'replace') => {
+  const restore = async (how: 'merge' | 'replace') => {
     if (!pendingBackup) return;
-    if (how === 'merge') mergeIn(pendingBackup.data);
-    else replaceAll(pendingBackup.data);
-    toast({
-      title: how === 'merge' ? 'Backup merged' : 'Backup restored',
-      body: `${plural(pendingBackup.caseCount, 'case', 'cases')} from the file.`,
-    });
-    setPendingBackup(null);
+    setBusy(true);
+    try {
+      if (how === 'merge') await mergeIn(pendingBackup.data);
+      else await replaceAll(pendingBackup.data);
+      toast({
+        title: how === 'merge' ? 'Backup merged' : 'Backup restored',
+        body: `${plural(pendingBackup.caseCount, 'case', 'cases')} from the file.`,
+      });
+    } catch (e) {
+      toast({ kind: 'error', title: 'Restore failed', body: describeError(e) });
+    } finally {
+      setBusy(false);
+      setPendingBackup(null);
+    }
+  };
+
+  const clear = async () => {
+    setBusy(true);
+    try {
+      await clearAll();
+      toast({ title: 'All data cleared', body: 'CaseLab is back to a clean slate.' });
+      setConfirmClear(false);
+      onClose();
+    } catch (e) {
+      toast({ kind: 'error', title: 'Nothing was deleted', body: describeError(e) });
+      setConfirmClear(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const leave = async () => {
+    try {
+      await signOut();
+    } catch (e) {
+      toast({ kind: 'error', title: "Couldn't sign out", body: describeError(e) });
+    }
   };
 
   return (
     <>
-      <Dialog open onClose={onClose} title="Data & settings" description="Your data, backups and demo mode" width="lg">
+      <Dialog open onClose={onClose} title="Data & settings" description="Your account, backups and demo mode" width="lg">
         <div className="space-y-4">
           {demo && (
             <div className="flex items-start gap-3 rounded-xl bg-warn-soft px-4 py-3 text-sm text-ink">
@@ -133,41 +153,38 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          <Section title="Where your data lives" icon={<Database className="size-4" />}>
+          <Section title="Your account" icon={<Cloud className="size-4" />}>
             <p className="text-sm leading-relaxed text-ink-2">
-              Cases are saved in <strong className="font-semibold text-ink">this browser on this device</strong>. They
-              survive refreshes and restarts, but they do not sync to your phone or other browsers, and clearing site data
-              erases them. Download a JSON backup now and then; it restores everything.
+              Cases are saved to your CaseLab account in Supabase, so they're the same on your laptop and phone. Signed in
+              as <strong className="font-semibold text-ink">{session.email || 'your account'}</strong>.
             </p>
-            <p className="num mt-2 text-xs text-muted">
-              {plural(cases.length, 'case', 'cases')} stored · last backup: {formatTimestamp(data.lastExportAt)}
-            </p>
-            {!persistent && (
-              <p className="mt-3 flex items-start gap-2 rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm text-bad">
-                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                This browser is blocking storage, so nothing will survive a refresh. Export a backup before closing the tab.
-              </p>
-            )}
+            <p className="num mt-2 text-xs text-muted">{plural(cases.length, 'case', 'cases')} stored</p>
+            <div className="mt-3">
+              <Button onClick={() => void leave()}>
+                <LogOut className="size-4" /> Sign out
+              </Button>
+            </div>
           </Section>
 
-          <Section title="Back up and restore" icon={<FileJson className="size-4" />}>
+          <Section title="Download and import" icon={<FileJson className="size-4" />}>
             <div className="grid gap-2 sm:grid-cols-2">
               <Button onClick={exportJSON} disabled={demo}>
-                <Download className="size-4" /> Export backup (JSON)
+                <Download className="size-4" /> Download backup (JSON)
               </Button>
-              <Button onClick={() => jsonInput.current?.click()} disabled={demo}>
+              <Button onClick={() => jsonInput.current?.click()} disabled={demo || busy}>
                 <Upload className="size-4" /> Import backup (JSON)
               </Button>
               <Button onClick={exportCSV} disabled={demo || cases.length === 0}>
                 <Table2 className="size-4" /> Export cases (CSV)
               </Button>
               <Button onClick={() => xlsxInput.current?.click()} disabled={demo || busy}>
-                <FileSpreadsheet className="size-4" /> {busy ? 'Reading…' : 'Import MCG Excel log'}
+                <FileSpreadsheet className="size-4" /> {busy ? 'Working…' : 'Import MCG Excel log'}
               </Button>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-muted">
-              JSON holds everything: every case, rating, feedback note, learning and your lists. CSV is a one-row-per-case
-              spreadsheet for viewing. The Excel import reads the “Log” sheet of the MCG template.
+              Your data already lives in your account; a JSON download is an extra copy that contains everything (every
+              case, rating, feedback note, learning and list item) and can be restored here. CSV is a one-row-per-case
+              spreadsheet. The Excel import reads the “Log” sheet of the MCG template.
             </p>
             <input
               ref={jsonInput}
@@ -195,22 +212,35 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
           <Section title="Demo mode" icon={<FlaskConical className="size-4" />}>
             <p className="text-sm leading-relaxed text-ink-2">
-              Explore the dashboard with clearly labeled sample cases. Demo data is kept completely separate and is never
-              mixed into your real cases.
+              Explore the dashboard with clearly labeled sample cases. Demo data lives only in this tab's memory, is never
+              sent to your account, and is never mixed into your real cases.
             </p>
             <div className="mt-3">
               {demo ? (
-                <Button variant="primary" onClick={() => void exitDemo().then(onClose)}>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    exitDemo();
+                    onClose();
+                  }}
+                >
                   Exit demo mode
                 </Button>
               ) : (
-                <Button onClick={() => void enterDemo().then(onClose)}>Try demo mode</Button>
+                <Button
+                  onClick={() => {
+                    enterDemo();
+                    onClose();
+                  }}
+                >
+                  Try demo mode
+                </Button>
               )}
             </div>
           </Section>
 
           <Section title="Danger zone" icon={<Trash2 className="size-4 text-bad" />}>
-            <p className="text-sm text-ink-2">Permanently delete every case and list in this browser.</p>
+            <p className="text-sm text-ink-2">Permanently delete every case and list in your account.</p>
             <div className="mt-3">
               <Button variant="danger" onClick={() => setConfirmClear(true)} disabled={demo}>
                 <Trash2 className="size-4" /> Clear all data…
@@ -224,8 +254,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         open={pendingBackup !== null}
         title="Restore this backup?"
         confirmLabel="Replace everything"
+        busy={busy}
         onCancel={() => setPendingBackup(null)}
-        onConfirm={() => restore('replace')}
+        onConfirm={() => void restore('replace')}
       >
         <p>
           The file contains <strong className="text-ink">{plural(pendingBackup?.caseCount ?? 0, 'case', 'cases')}</strong>.
@@ -235,7 +266,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           <strong className="text-ink">Merge</strong> adds the file's cases to yours (newer edits win, nothing is
           deleted). <strong className="text-ink">Replace everything</strong> swaps your current data for the file.
         </p>
-        <Button className="w-full" variant="primary" onClick={() => restore('merge')}>
+        <Button className="w-full" variant="primary" disabled={busy} onClick={() => void restore('merge')}>
           Merge with current data
         </Button>
       </ConfirmDialog>
@@ -245,18 +276,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         title="Delete all data?"
         confirmLabel="Delete everything"
         requireText="DELETE"
+        busy={busy}
         onCancel={() => setConfirmClear(false)}
-        onConfirm={() => {
-          setConfirmClear(false);
-          void clearAll().then(() => {
-            toast({ title: 'All data cleared', body: 'CaseLab is back to a clean slate.' });
-            onClose();
-          });
-        }}
+        onConfirm={() => void clear()}
       >
         <p>
           This permanently removes all {plural(cases.length, 'case', 'cases')}, your lists and your learning history from
-          this browser. It can't be undone unless you have a JSON backup.
+          your account, on every device. It can't be undone unless you have a JSON backup.
         </p>
       </ConfirmDialog>
     </>

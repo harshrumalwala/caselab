@@ -26,7 +26,9 @@ import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { TONE, type Tone } from '../../components/ui/tones';
+import { describeError } from '../../data/errors';
 import { useData } from '../../state/DataProvider';
+import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 
 // ---------------------------------------------------------------------------------------
@@ -88,15 +90,30 @@ function ManualList({
   title: string;
   placeholder: string;
   items: OpportunityItem[];
-  onAdd: (text: string) => void;
-  onRemove: (id: string) => void;
+  onAdd: (text: string) => Promise<void>;
+  onRemove: (id: string) => Promise<void>;
 }) {
+  const toast = useToast();
   const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Waits for the database; on failure the text stays in the box and the error is shown.
+  const run = async (action: () => Promise<void>, failure: string, onDone?: () => void) => {
+    setBusy(true);
+    try {
+      await action();
+      onDone?.();
+    } catch (e) {
+      toast({ kind: 'error', title: failure, body: describeError(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
-    onAdd(text);
-    setText('');
+    if (!text.trim() || busy) return;
+    void run(() => onAdd(text), 'Not saved', () => setText(''));
   };
   return (
     <div className="mt-6 border-t border-line pt-5">
@@ -108,9 +125,10 @@ function ManualList({
               <span className="min-w-0 break-words">{o.text}</span>
               <button
                 type="button"
-                onClick={() => onRemove(o.id)}
+                onClick={() => void run(() => onRemove(o.id), 'Not removed')}
+                disabled={busy}
                 aria-label={`Remove "${o.text}"`}
-                className="shrink-0 rounded-lg p-1 text-muted transition hover:bg-surface hover:text-bad"
+                className="shrink-0 rounded-lg p-1 text-muted transition hover:bg-surface hover:text-bad disabled:opacity-50"
               >
                 <X className="size-4" />
               </button>
@@ -126,7 +144,7 @@ function ManualList({
           placeholder={placeholder}
           aria-label={title}
         />
-        <Button type="submit" disabled={!text.trim()}>
+        <Button type="submit" disabled={!text.trim() || busy}>
           <Plus className="size-4" /> Add
         </Button>
       </form>
