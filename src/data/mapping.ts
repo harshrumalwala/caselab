@@ -21,6 +21,7 @@ export interface CaseRow {
   next_focus: string | null;
   improvement_area: string | null;
   other_notes: string | null;
+  share_mode?: string;
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +57,7 @@ export function caseToRow(c: CaseRecord): CaseRow {
     next_focus: blankToNull(c.nextFocus),
     improvement_area: c.improvementArea,
     other_notes: blankToNull(c.otherNotes),
+    share_mode: c.shareMode,
     created_at: c.createdAt,
     updated_at: c.updatedAt,
   };
@@ -79,6 +81,7 @@ export function rowToCase(row: CaseRow): CaseRecord {
     nextFocus: row.next_focus ?? '',
     improvementArea: row.improvement_area,
     otherNotes: row.other_notes ?? '',
+    shareMode: row.share_mode,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -105,6 +108,7 @@ function emptyRecord(id: string): CaseRecord {
     nextFocus: '',
     improvementArea: null,
     otherNotes: '',
+    shareMode: 'profile',
     createdAt: now,
     updatedAt: now,
   };

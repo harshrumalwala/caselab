@@ -1,9 +1,11 @@
 import {
   CASE_TYPES,
+  SHARE_MODES,
   SKILLS,
   SKILL_GROUPS,
   type CaseType,
   type Rating,
+  type ShareMode,
   type SkillGroupKey,
   type SkillKey,
 } from './constants';
@@ -47,6 +49,7 @@ export function blankCaseInput(now: Date = new Date()): CaseInput {
     nextFocus: '',
     improvementArea: null,
     otherNotes: '',
+    shareMode: 'profile',
   };
 }
 
@@ -164,6 +167,7 @@ export function normalizeCase(raw: unknown): CaseRecord | null {
     nextFocus: str(r.nextFocus),
     improvementArea: area,
     otherNotes: str(r.otherNotes),
+    shareMode: SHARE_MODES.some((m) => m.value === r.shareMode) ? (r.shareMode as ShareMode) : 'profile',
     createdAt,
     updatedAt,
   };

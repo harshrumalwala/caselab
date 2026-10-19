@@ -1,26 +1,28 @@
 # CaseLab
 
-A personal practice tracker for consulting case interviews. It keeps the simplicity and evaluation framework of Booth MCG's
-case log spreadsheet and adds what a spreadsheet can't do well: instant dashboards, coverage maps, and a short list of
-what to practice next.
+A case interview practice tracker for Booth students, built on the MCG case log. Every member keeps a private case history and
+dashboard, and can choose to share some of it with other members to help each other find the right case to practice.
 
 **Design goal: logging a finished case takes under two minutes.** Only a title, case type and industry are required.
-Everything else (ratings, notes) is optional and one tap away.
+Everything else (ratings, notes, sharing) is optional and one tap away.
 
 - **Dashboard**: totals, skill averages, trends, case-type and industry coverage, next-practice suggestions, weekly history, milestones
-- **Case Log**: searchable, filterable list of every case with full-detail view, edit and delete
+- **My Case Log**: searchable, filterable list of your cases with full-detail view, edit and delete
 - **Improvement Areas**: thin spots in your coverage, skills to sharpen, and a searchable history of what you've learned
-- **Your data, on every device**: saved to your own account in [Supabase](https://supabase.com) behind a login, so your laptop and phone show the same cases. JSON backup, CSV export and MCG Excel import are built in
+- **People**: find a fellow member, see only what they've chosen to share, and work out which case to give them
+- **Profile & privacy**: six switches for what other members can see, a per-case override, and a live preview
+- **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export and MCG Excel import are built in
 
 ---
 
 ## Set it up
 
-CaseLab is a static React app. It needs a Supabase project for sign-in and storage. Setup takes about ten minutes, once.
+CaseLab is a static React app. It needs a Supabase project for sign-in and storage. Setup takes about fifteen minutes, once.
 
-### 1. Create the database tables (one migration)
+### 1. Create the database tables (two migrations)
 
-The schema lives in [`supabase/migrations/`](supabase/migrations) and is tracked with the code. Apply it **one way only**:
+The schema lives in [`supabase/migrations/`](supabase/migrations) and is tracked with the code. Apply it **one way only**, and
+**before** deploying the matching version of the app (the app expects the newest tables):
 
 ```bash
 npx supabase login                                   # opens your browser
@@ -30,19 +32,32 @@ npx supabase db push                                 # applies any migration not
 
 `db push` records each migration's version in the project, so a migration is never applied twice. If you also use
 Supabase's GitHub integration (Project Settings → Integrations → GitHub, with the Supabase directory set to `supabase`),
-it reads the same history and will treat the migration as already applied. Don't paste the SQL into the SQL editor as
-well: that applies it without recording it, and the integration would then try to run it again and fail.
+it reads the same history and will treat applied migrations as done. Don't paste the SQL into the SQL editor as well: that
+applies it without recording it, and the integration would then try to run it again and fail.
 
 Future schema changes are new files in `supabase/migrations/` (`npx supabase migration new <name>`), applied the same way.
+The community migration only adds objects (and tightens table privileges); it never drops or rewrites data, and it shares
+nothing until a member opts in.
 
-### 2. Create your login and lock the door
+### 2. Configure sign-up, email and abuse protection in Supabase
 
-CaseLab has no sign-up screen. In the Supabase dashboard:
+Anyone can create an account on the website, and must verify their email before they get in. For that to work reliably in
+production, set these in the Supabase dashboard:
 
-1. **Authentication → Users → Add user → Create new user**: enter your email and a password, and tick *Auto Confirm User*.
-2. **Authentication → Sign In / Providers → turn off "Allow new users to sign up"** so nobody else can create an account.
+| Where | Setting | Why |
+| --- | --- | --- |
+| Authentication → Sign In / Providers → Email | **Allow new users to sign up: on. Confirm email: on.** | Open registration with verified addresses. The database also refuses members whose email isn't confirmed |
+| Authentication → URL Configuration | **Site URL** = your deployed address. **Redirect URLs** add `https://<your-domain>/**` and `http://localhost:5173/**` | Verification and password-reset links return to the app. Wrong values give "link invalid" errors |
+| Authentication → Emails → **SMTP Settings** | **A custom SMTP sender** (Resend, Postmark, SendGrid, Amazon SES...), with your sending domain's DNS records set up | **The important one.** Supabase's built-in email sender is for testing: it only delivers to members of your own Supabase team and is heavily rate-limited, so real classmates would never receive their verification email |
+| Authentication → Emails → Templates | Optional: customise the *Confirm signup* and *Reset password* wording | Friendlier emails |
+| Authentication → Rate Limits | Review "emails sent per hour" and sign-in/sign-up limits for your expected group size | Limits abuse and accidental floods |
+| Authentication → Attack Protection | **Enable CAPTCHA** (Cloudflare Turnstile or hCaptcha), and leaked-password protection if your plan has it | The standard defence against bot sign-ups. Tell me before you switch CAPTCHA on: the app needs a small addition to send the CAPTCHA token, and sign-up would fail until it has it |
+| Authentication → Sign In / Providers | Minimum password length 8 or more | The app already asks for 8 |
 
-Even if sign-ups were left open, row level security (below) means a new account could only ever see its own, empty data.
+**Restricting sign-up later** (for example to Booth addresses only) needs no rebuild. Community access is decided by one
+database function, `public.is_member()`; changing it to also require, say, `email like '%@chicagobooth.edu'` takes effect
+everywhere at once. To stop people *creating* accounts from other domains at all, add a Supabase "Before user created"
+auth hook (availability depends on your Supabase plan) or turn sign-ups off and invite people.
 
 ### 3. Add your project's two public settings
 
@@ -71,6 +86,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev` | Dev server with hot reload |
 | `npm test` | Run the automated tests once |
 | `npm run test:watch` | Tests in watch mode |
+| `npm run test:e2e` | Optional live checks against your Supabase project (see Tests) |
 | `npm run typecheck` | TypeScript check |
 | `npm run build` | Typecheck and build to `dist/` |
 | `npm run preview` | Serve the production build locally |
@@ -79,21 +95,85 @@ Press **N** anywhere in the app (outside a text field) to open the Log Case form
 
 ---
 
+## Accounts
+
+**Creating an account** takes four steps: email and password, verify the emailed link, choose a name (and optionally your MBA
+class) and sharing preferences, then start logging. **Signing in** is unchanged. **Forgot password?** emails a reset link that
+asks for a new password. The forms never reveal whether an email already has an account.
+
+---
+
+## Community: what other members can see
+
+Everything is **private by default**. Other members can only see what you explicitly share, and only if they are signed in
+with a verified email. Open **Profile & privacy** (the person icon in the header):
+
+| Setting | Shares |
+| --- | --- |
+| **Appear in People search** | Your name and MBA class. Turn it off to disappear completely |
+| **Case history** | Case name, source (casebook), industry, case type and date |
+| **Overall scores** | The overall 1-5 rating of each shared case |
+| **Skill scores** | The framework, quant, exhibits, brainstorm and other skill ratings |
+| **Written feedback** | Feedback you received (overall and per skill) |
+| **Improvement focus** | The "main thing to improve" tag on each shared case |
+| **Learning notes** | What went well, what you struggled with, concepts learned, next focus |
+
+Scores, feedback and notes only apply to cases that are shared, so they switch on after **Case history**. Each switch saves the
+moment you flip it, and **"What other members see"** at the bottom shows exactly what the database is serving about you.
+
+**Per case.** When you log or edit a case, an optional **Sharing for this case** section lets you override your defaults:
+use your profile settings (the default), keep this case private, share only its name, or share it in full (its scores,
+feedback and notes, even if your profile shares none of those). Nobody has to touch it when logging.
+
+**Never shared, whatever you choose:** your email address, the "Other notes" field, and who you practiced with.
+
+### Find a case for someone
+
+Open **People**, pick a member, and **Find a case for them** shows:
+
+1. **Cases you've done that they haven't shared**: the best candidates to give them.
+2. **Might overlap**: your cases that look similar to one of theirs (matching is by title: it ignores punctuation, filler words and plurals, so "Airline profit case" matches "Airline profitability"). Check these first.
+3. **Where their shared history is thin**: case types and industries they've shared little or nothing in, with how many you could offer. Tap one to narrow your list.
+4. **Cases they've shared**, marking the ones you've done too.
+
+You can filter by name, casebook, industry and case type. It uses **only** your cases and what they chose to share, so it
+never claims a case is definitely new to them: cases they keep private or haven't logged don't appear, and the page says so.
+If someone shares no case history, it says it can't tell what they've done. CaseLab stores case metadata only (names,
+sources, industry, type); it doesn't host casebook content, exhibits or answer keys.
+
+### How privacy is enforced
+
+Privacy is enforced in the database, not in the screens:
+
+- Other members can **never read your `cases` table**. It stays readable only by you (row level security), so a direct API
+  request for someone else's case returns nothing, whatever their settings are.
+- They read a separate **`shared_cases`** table. It contains only the fields you chose to share, and database triggers keep it
+  up to date in the same transaction as any change to a case or a switch. Private values aren't hidden there: they aren't in it
+  at all, so no query, filter, sort or count can leak them. Turning a switch off removes the data immediately.
+- It's read-only for members, internal functions can't be called through the API, signed-in users get only the privileges they
+  need, and the anonymous role gets nothing.
+- Membership (`is_member()`) requires a verified email and is the single switch for any future restriction.
+
+These rules are tested directly against a real Postgres (see Tests), including attempts to bypass the interface.
+
+---
+
 ## How your data is stored and protected
 
-| Table | Holds |
-| --- | --- |
-| `cases` | One row per case: date, title, source, case type, industry, partner, overall rating and feedback, the eight MCG skill ratings with feedback (one `skills` JSON column), the takeaway fields, improvement tag, other notes |
-| `opportunities` | The hand-edited lists from the MCG "Opportunity Areas" tab |
+| Table | Holds | Who can read it |
+| --- | --- | --- |
+| `cases` | Your cases: date, title, source, case type, industry, partner, overall rating and feedback, the eight MCG skill ratings with feedback (one `skills` JSON column), takeaways, improvement tag, other notes, sharing override | Only you |
+| `opportunities` | Your hand-edited lists from the MCG "Opportunity Areas" tab | Only you |
+| `profiles` | Name, optional MBA class, listed flag, the six sharing switches. No email | Verified members (listed profiles) |
+| `shared_cases` | The owner-approved projection of cases (see above). Written only by triggers | Verified members |
 
-Everything else (averages, coverage, trends, suggestions, learning history, custom industries) is calculated in the browser
-from those rows, so it needs no tables. Fields that are optional in the form are nullable in the database; only title, case
-type and date are required, and the database also enforces ratings of 1 to 5 and the 13 MCG case types.
+Averages, coverage, trends, suggestions, learning history and custom industries are calculated in the browser from your own
+rows, so they need no tables, and your personal dashboard can never include other members' records. Fields that are optional
+in the form are nullable in the database; only title, case type and date are required, and the database also enforces ratings
+of 1 to 5 and the 13 MCG case types.
 
-**Access control.** Every row has a `user_id` that the database fills in from your login. Row level security allows a
-signed-in user to read and change only rows where `user_id` is theirs, and the anonymous role has no access at all. The
-migration is tested against a real Postgres in `src/data/migration.test.ts`, including "another user can't see, edit or
-delete your cases" and "signed-out requests are refused".
+**Access control.** Every personal row has a `user_id` that the database fills in from your login, and row level security
+allows a signed-in user to read and change only their own rows.
 
 **Saving is honest.** Nothing appears saved until Supabase confirms it. If a save, edit or delete fails, you see the
 error (the Log Case form keeps everything you typed so you can retry), and if loading fails you get an error screen with
@@ -106,13 +186,13 @@ half-written Log Case draft, and Supabase's own sign-in session; none of them ho
 
 | Action | Where | Notes |
 | --- | --- | --- |
-| Extra copy of everything | Settings → Download backup (JSON) | Every case, rating, feedback note, learning and list item |
+| Extra copy of everything | Settings → Download backup (JSON) | Every case, rating, feedback note, learning and list item, and each case's sharing setting |
 | Restore a backup | Settings → Import backup (JSON) | **Merge** (adds cases, newer edit wins, deletes nothing) or **Replace everything**. Replace writes the file first and removes leftovers second, so a failure can't leave you with less than you started with |
 | Spreadsheet view | Settings → Export cases (CSV) | One row per case, MCG column order plus CaseLab's additions |
 | Bring in your MCG log | Settings → Import MCG Excel log | Reads the `Log` sheet by header names, skips duplicates (same date + title). Imported cases have no industry; open one to add it |
 | Wipe | Settings → Clear all data | Requires typing `DELETE` |
 | Sign out | Settings → Sign out | |
-| Demo | Settings → Try demo mode | 16 clearly labeled sample cases held only in this tab's memory. They are never sent to your account or mixed with real cases |
+| Demo | Settings → Try demo mode | 16 clearly labeled sample cases held only in this tab's memory. They are never sent to your account, never shared, and People is switched off while in demo mode |
 
 The app starts with 0 cases and shows no scores, trends or suggestions until you log something.
 
@@ -187,7 +267,10 @@ uses hash navigation and relative asset paths).
    | `VITE_SUPABASE_URL` | Project URL from Supabase → Project Settings → API |
    | `VITE_SUPABASE_PUBLISHABLE_KEY` | The **publishable** key (`sb_publishable_...`) |
 
-4. Deploy. Nothing else is needed: password sign-in doesn't use redirect URLs, and the publishable key is meant for browsers.
+4. In Supabase → Authentication → URL Configuration, set **Site URL** to your Vercel address and add it (plus
+   `http://localhost:5173/**` and, if you want working verification links on preview deployments, your preview URL pattern)
+   to **Redirect URLs**. Email verification and password-reset links return to those addresses.
+5. Deploy. **Apply the database migrations first** (Set it up, step 1): the app expects the newest tables.
 
 Never add the secret key, the `service_role` key or the database password to Vercel for this app. `VITE_` variables are
 embedded in the public JavaScript. Environment variables are read at build time, so redeploy after changing them.
@@ -207,7 +290,8 @@ src/
   data/        Persistence and I/O: Supabase client + repository, auth, row mapping, error messages,
                JSON backup/merge, CSV, MCG Excel import, demo data, in-memory repository
   state/       React context: auth, data (the only writer), toasts, theme, routing
-  features/    The three screens (dashboard, caselog, improvement), plus auth, logcase and settings
+  features/    The screens: dashboard, caselog, improvement, people (directory, profiles, find a case),
+               plus auth (sign in / sign up / reset), community (onboarding, profile & privacy), logcase, settings
   components/  Shared UI primitives, layout, chart colors
   test/        Test setup, builders, fixtures, fake Supabase / fake backend
 supabase/
@@ -215,12 +299,12 @@ supabase/
   config.toml  Supabase CLI configuration
 ```
 
-All persistence goes through the small `CaseLabRepository` interface in `src/data/repository.ts` (`SupabaseRepository` for
-real data, `createMemoryRepository` for demo mode and tests), and sign-in goes through `AuthApi` in `src/data/auth.ts`. The
-domain logic and screens don't know Supabase exists.
+Your own data goes through the small `CaseLabRepository` interface in `src/data/repository.ts` (`SupabaseRepository` for real
+data, `createMemoryRepository` for demo mode and tests), the community through `CommunityRepository`
+(`src/data/community.ts`), and sign-in through `AuthApi` (`src/data/auth.ts`). The domain logic (including case matching in
+`src/domain/pairing.ts`) and the screens don't know Supabase exists.
 
-**Multi-user later.** The schema is already per-user (`user_id` + row level security), so allowing other people to sign up is
-a Supabase setting plus a sign-up form; no migration or data rework. Nothing for sharing or administration is built.
+There is no group administration, messaging or social feed: members, profiles and sharing are all there is.
 
 **Tech**: React 19, TypeScript, Vite, Tailwind CSS v4, Supabase (`@supabase/supabase-js`), Recharts (lazy-loaded),
 `read-excel-file` (loaded only when you import an Excel file), Vitest + Testing Library, PGlite for the database tests.
@@ -229,9 +313,12 @@ a Supabase setting plus a sign-up form; no migration or data rework. Nothing for
 
 ## Tests
 
-`npm test` runs 102 tests covering:
+`npm test` runs the whole fast suite (about 170 tests) covering:
 
-- **Database**: the real migration run in Postgres (PGlite): required vs optional columns, rating and case-type rules, and row level security (own rows only, no cross-user read/update/delete/insert, no anonymous access, signed-out writes refused, cascade on user delete)
+- **Database**: the real migrations run in Postgres (PGlite): required vs optional columns, rating and case-type rules, and row level security for personal data (own rows only, no cross-user read/update/delete/insert, no anonymous access, signed-out writes refused, cascade on user delete)
+- **Privacy**: three verified members and one unverified, tried as an attacker would with direct queries: nothing shared by default; each of the six switches reveals only its own field; scores need case history; per-case overrides (private, name only, full); changes apply immediately and leave no stale data; unlisted members vanish; `other_notes` and partner never appear; another member can't read, edit or delete your cases or profile, write the shared table, or call the internal functions; filters, sorting and counts can't reveal hidden values; unverified and anonymous users get nothing; least-privilege table grants
+- **Community logic**: loose case-title matching, pairing (what to offer, what to avoid, thin areas) and the filters
+- **Accounts**: sign-up, verification, resend, expired links, password reset, onboarding with everything off by default
 - **Supabase layer**: row mapping that round-trips every field, a repository run against a fake Supabase (paging past 1000 rows, chunked upserts, replace-without-data-loss, errors surfaced), friendly error messages, configuration checks
 - **Calculations**: week boundaries, averages that ignore missing ratings, behavioral combining, trend windows, coverage, matrix, weekly history
 - **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
@@ -240,20 +327,31 @@ a Supabase setting plus a sign-up form; no migration or data rework. Nothing for
 
 ### Live checks against your real Supabase project (optional)
 
-`npm run test:e2e` signs in as you and exercises the real database: another session reads back exactly what was saved,
-signed-out access is refused, the database rules and row level security hold, and the whole app flow (sign in, log a case,
-refresh, edit, delete, sign out) works. It only creates rows titled `ZZ CaseLab e2e ...`, removes them afterwards, and
-checks your account ends up exactly as it started. To enable it, create a git-ignored `.env.e2e.local` in the project root:
+`npm run test:e2e` runs against the real database in three parts. It only creates rows titled `ZZ CaseLab e2e ...` and removes
+them afterwards. Put credentials in a git-ignored `.env.e2e.local` in the project root; any part without credentials is skipped:
 
 ```
+# Your account: personal-data checks only (read-back, constraints, row level security). Never creates a profile.
 CASELAB_E2E_EMAIL=you@example.com
 CASELAB_E2E_PASSWORD=your-password
+
+# Two THROWAWAY accounts (Supabase dashboard -> Authentication -> Users -> Add user, tick Auto Confirm):
+# the full app flow, and privacy between two real accounts with direct API requests.
+CASELAB_E2E_EMAIL_A=e2e-a@example.com
+CASELAB_E2E_PASSWORD_A=...
+CASELAB_E2E_EMAIL_B=e2e-b@example.com
+CASELAB_E2E_PASSWORD_B=...
 ```
 
-Without that file the live checks are skipped.
+Use throwaway accounts for A and B: the tests create their profiles (which can't be deleted through the API) and flip their
+sharing switches, then restore them to listed with nothing shared.
 
 ## Limitations
 
 - Weeks start on Monday.
 - The MCG import can't know industries, so imported cases show "–" until you edit them.
 - Edits made on two devices at the same moment aren't merged: the last save wins (fine for one person).
+- Case matching is by title only, so very different spellings of the same case can be missed, and different cases that share
+  most of their words can be flagged as "might overlap". It never decides for you.
+- The People directory shows listed members alphabetically (first 50 per search); there is no pagination or profile photo.
+- CAPTCHA is recommended for public sign-up but isn't wired in yet (see Set it up, step 2).

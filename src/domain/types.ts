@@ -1,4 +1,4 @@
-import type { CaseType, Rating, SkillGroupKey, SkillKey } from './constants';
+import type { CaseType, Rating, ShareMode, SkillGroupKey, SkillKey } from './constants';
 
 export interface SkillEntry {
   /** 1-5, or null when the skill was not tested / not rated. */
@@ -27,8 +27,10 @@ export interface CaseRecord {
   nextFocus: string;
   /** Optional explicit "main thing to improve" tag. */
   improvementArea: SkillGroupKey | null;
-  /** The template's free-text "Other" column. */
+  /** The template's free-text "Other" column. Never shared with other members. */
   otherNotes: string;
+  /** Per-case sharing override; 'profile' follows the Profile & privacy switches. */
+  shareMode: ShareMode;
   createdAt: string;
   updatedAt: string;
 }

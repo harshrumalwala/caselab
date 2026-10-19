@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
-import { RATING_LABELS, SKILLS, skillGroupLabel, type Rating } from '../../domain/constants';
+import { RATING_LABELS, SHARE_MODES, SKILLS, skillGroupLabel, type Rating } from '../../domain/constants';
 import { formatDate } from '../../domain/dates';
 import { describeError } from '../../data/errors';
 import type { CaseRecord } from '../../domain/types';
@@ -100,6 +100,7 @@ export function CaseDetail({ caseId, onClose }: { caseId: string; onClose: () =>
             <Detail label="Main improvement area">
               {c.improvementArea ? skillGroupLabel(c.improvementArea) : <span className="text-muted">–</span>}
             </Detail>
+            <Detail label="Sharing">{SHARE_MODES.find((m) => m.value === c.shareMode)?.label}</Detail>
           </dl>
 
           <section aria-label="Ratings">

@@ -36,6 +36,7 @@ export function makeCase(overrides: CaseOverrides = {}): CaseRecord {
     nextFocus: '',
     improvementArea: null,
     otherNotes: '',
+    shareMode: 'profile',
     createdAt: stamp,
     updatedAt: stamp,
     ...rest,
@@ -86,6 +87,7 @@ export function richCase(): CaseRecord {
     nextFocus: 'Slow down on the quant setup',
     improvementArea: 'quant',
     otherNotes: 'Unicode: café – naïve',
+    shareMode: 'history',
     createdAt: '2026-10-12T15:00:00.000Z',
     updatedAt: '2026-10-12T16:30:00.000Z',
   };

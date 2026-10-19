@@ -1,4 +1,4 @@
-import { SKILLS, skillGroupLabel } from '../domain/constants';
+import { SHARE_MODES, SKILLS, skillGroupLabel } from '../domain/constants';
 import { sortAsc } from '../domain/stats';
 import type { CaseRecord } from '../domain/types';
 
@@ -20,6 +20,7 @@ export const CSV_HEADERS: string[] = [
   'Next Focus',
   'Main Improvement Area',
   'Other Notes',
+  'Sharing',
   'Created',
   'Last Updated',
 ];
@@ -48,6 +49,7 @@ export function caseToRow(c: CaseRecord): (string | number | null)[] {
     c.nextFocus,
     c.improvementArea ? skillGroupLabel(c.improvementArea) : '',
     c.otherNotes,
+    SHARE_MODES.find((m) => m.value === c.shareMode)?.label ?? '',
     c.createdAt,
     c.updatedAt,
   ];

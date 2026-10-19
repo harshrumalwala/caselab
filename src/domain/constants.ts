@@ -197,6 +197,33 @@ export function skillGroupLabel(key: SkillGroupKey): string {
   return SKILL_GROUPS.find((g) => g.key === key)?.label ?? key;
 }
 
+/** Per-case sharing override. `profile` = follow the Profile & privacy switches. */
+export type ShareMode = 'profile' | 'private' | 'history' | 'full';
+
+export const SHARE_MODES: { value: ShareMode; label: string; description: string }[] = [
+  {
+    value: 'profile',
+    label: 'Use my profile settings',
+    description: 'Shares only what your Profile & privacy switches allow.',
+  },
+  {
+    value: 'private',
+    label: 'Keep this case private',
+    description: "Other members can't see this case at all.",
+  },
+  {
+    value: 'history',
+    label: 'Share the case name only',
+    description: 'Members see the name, source, industry and type, but no scores, feedback or notes.',
+  },
+  {
+    value: 'full',
+    label: 'Share this case in full',
+    description:
+      'Members see its scores, written feedback, improvement focus and learning notes, even if your profile shares none of those. "Other notes" stay private.',
+  },
+];
+
 /** Rating bands used for colour coding. */
 export const STRONG_AT = 4;
 export const DEVELOPING_AT = 3;
