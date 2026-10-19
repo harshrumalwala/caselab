@@ -1,19 +1,18 @@
 import { SCHEMA_VERSION, type AppData, type BackupFile, type CaseRecord } from '../domain/types';
-import { parseAppData } from './storage';
+import { parseAppData } from './parse';
 
 export class ImportError extends Error {}
 
 export function buildBackup(data: AppData, now: Date = new Date()): BackupFile {
-  const exportedAt = now.toISOString();
   return {
     app: 'caselab',
     schemaVersion: SCHEMA_VERSION,
-    exportedAt,
-    data: { ...data, schemaVersion: SCHEMA_VERSION, lastExportAt: exportedAt },
+    exportedAt: now.toISOString(),
+    data: { ...data, schemaVersion: SCHEMA_VERSION },
   };
 }
 
-/** The full, lossless backup: every case, rating, feedback field, learning note and list item. */
+/** A complete copy of your data: every case, rating, feedback field, learning note and list item. */
 export function backupToJSON(data: AppData, now: Date = new Date()): string {
   return JSON.stringify(buildBackup(data, now), null, 2);
 }
@@ -62,7 +61,5 @@ export function mergeAppData(current: AppData, incoming: AppData): AppData {
   return parseAppData({
     cases: [...cases.values()],
     opportunities: [...opportunities.values()],
-    customIndustries: [...current.customIndustries, ...incoming.customIndustries],
-    lastExportAt: current.lastExportAt,
   });
 }

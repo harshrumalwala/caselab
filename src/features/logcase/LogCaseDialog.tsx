@@ -24,6 +24,7 @@ import type { CaseInput, CaseRecord } from '../../domain/types';
 import { Button } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
 import { RatingInput } from '../../components/ui/RatingInput';
+import { describeError } from '../../data/errors';
 import { DRAFT_KEY, useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
@@ -144,6 +145,8 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
   const [customIndustry, setCustomIndustry] = useState(false);
   const [saved, setSaved] = useState<SavedInfo | null>(null);
   const [showRestored, setShowRestored] = useState(restored);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Best-effort draft so an accidental close never loses a half-written case.
   useEffect(() => {
@@ -191,8 +194,9 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
     }
   };
 
-  const submit = (e?: FormEvent) => {
+  const submit = async (e?: FormEvent) => {
     e?.preventDefault();
+    if (saving) return;
     const errs = validateCaseInput(cleanInput(input));
     setErrors(errs);
     if (Object.keys(errs).length > 0) {
@@ -200,31 +204,41 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
       return;
     }
 
-    if (editing) {
-      updateCase(editing.id, input);
-      toast({ title: 'Changes saved', body: input.title.trim() });
-      onClose();
-      return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      if (editing) {
+        await updateCase(editing.id, input);
+        toast({ title: 'Changes saved', body: input.title.trim() });
+        onClose();
+        return;
+      }
+
+      // Nothing is shown as saved until the database has confirmed it.
+      const before = cases;
+      const record = await addCase(input);
+      const after = [...before, record];
+      saveDraft(null);
+
+      const industry = canonicalIndustry(record.industry, data.customIndustries);
+      const sameIndustry = (c: CaseRecord) => canonicalIndustry(c.industry, data.customIndustries) === industry;
+      const stats = overview(after);
+      setSaved({
+        record,
+        total: stats.total,
+        thisWeek: stats.thisWeek,
+        typeCount: caseTypeCounts(after).find((c) => c.caseType === record.caseType)?.count ?? 1,
+        industryCount: after.filter(sameIndustry).length,
+        firstInIndustry: !before.some(sameIndustry),
+        milestones: newMilestones(before, after),
+        next: nextPracticeFocus(after)[0] ?? null,
+      });
+    } catch (err) {
+      // Keep the form exactly as it is so nothing typed is lost; the user can retry.
+      setSaveError(describeError(err));
+    } finally {
+      setSaving(false);
     }
-
-    const before = cases;
-    const record = addCase(input);
-    const after = [...before, record];
-    saveDraft(null);
-
-    const industry = canonicalIndustry(record.industry, data.customIndustries);
-    const sameIndustry = (c: CaseRecord) => canonicalIndustry(c.industry, data.customIndustries) === industry;
-    const stats = overview(after);
-    setSaved({
-      record,
-      total: stats.total,
-      thisWeek: stats.thisWeek,
-      typeCount: caseTypeCounts(after).find((c) => c.caseType === record.caseType)?.count ?? 1,
-      industryCount: after.filter(sameIndustry).length,
-      firstInIndustry: !before.some(sameIndustry),
-      milestones: newMilestones(before, after),
-      next: nextPracticeFocus(after)[0] ?? null,
-    });
   };
 
   const resetForm = (prefillNext?: Partial<CaseInput>) => {
@@ -301,19 +315,26 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
       }
       width="lg"
       footer={
-        <div className="flex items-center justify-between gap-3">
-          <p className="hidden text-xs text-muted sm:block">
-            <kbd className="rounded border border-line-strong bg-surface px-1.5 py-0.5 font-sans text-[11px]">Ctrl</kbd>{' '}
-            + <kbd className="rounded border border-line-strong bg-surface px-1.5 py-0.5 font-sans text-[11px]">Enter</kbd>{' '}
-            to save
-          </p>
-          <div className="flex w-full justify-end gap-2 sm:w-auto">
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button variant="primary" type="submit" form="case-form" className="min-w-32">
-              {editing ? 'Save changes' : 'Save case'}
-            </Button>
+        <div className="space-y-3">
+          {saveError && (
+            <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad">
+              Not saved. {saveError} Your entries are still here, so you can try again.
+            </p>
+          )}
+          <div className="flex items-center justify-between gap-3">
+            <p className="hidden text-xs text-muted sm:block">
+              <kbd className="rounded border border-line-strong bg-surface px-1.5 py-0.5 font-sans text-[11px]">Ctrl</kbd>{' '}
+              + <kbd className="rounded border border-line-strong bg-surface px-1.5 py-0.5 font-sans text-[11px]">Enter</kbd>{' '}
+              to save
+            </p>
+            <div className="flex w-full justify-end gap-2 sm:w-auto">
+              <Button variant="ghost" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button variant="primary" type="submit" form="case-form" className="min-w-32" disabled={saving}>
+                {saving ? 'Saving…' : editing ? 'Save changes' : 'Save case'}
+              </Button>
+            </div>
           </div>
         </div>
       }

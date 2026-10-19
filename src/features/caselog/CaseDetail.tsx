@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import { RATING_LABELS, SKILLS, skillGroupLabel, type Rating } from '../../domain/constants';
 import { formatDate } from '../../domain/dates';
+import { describeError } from '../../data/errors';
 import type { CaseRecord } from '../../domain/types';
 import { Badge, RatingBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -35,6 +36,7 @@ export function CaseDetail({ caseId, onClose }: { caseId: string; onClose: () =>
   const { editCase } = useUI();
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const c: CaseRecord | undefined = cases.find((x) => x.id === caseId);
   if (!c) return null;
@@ -43,11 +45,20 @@ export function CaseDetail({ caseId, onClose }: { caseId: string; onClose: () =>
   const unrated = SKILLS.length - rated.length;
   const hasTakeaways = [c.wentWell, c.struggled, c.concepts, c.nextFocus, c.otherNotes].some((t) => t.trim());
 
-  const remove = () => {
-    deleteCase(c.id);
-    toast({ title: 'Case deleted', body: c.title });
-    setConfirming(false);
-    onClose();
+  const remove = async () => {
+    setDeleting(true);
+    try {
+      await deleteCase(c.id);
+      toast({ title: 'Case deleted', body: c.title });
+      setConfirming(false);
+      onClose();
+    } catch (e) {
+      // Still there: say so, and leave the case in place.
+      toast({ kind: 'error', title: 'Not deleted', body: describeError(e) });
+      setConfirming(false);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -139,8 +150,9 @@ export function CaseDetail({ caseId, onClose }: { caseId: string; onClose: () =>
         open={confirming}
         title="Delete this case?"
         confirmLabel="Delete case"
+        busy={deleting}
         onCancel={() => setConfirming(false)}
-        onConfirm={remove}
+        onConfirm={() => void remove()}
       >
         <p>
           <span className="font-semibold text-ink">{c.title || 'This case'}</span> and all of its ratings and notes will

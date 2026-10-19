@@ -11,13 +11,25 @@ interface Props {
   onCancel: () => void;
   /** When set, the user must type this word before the confirm button enables. */
   requireText?: string;
+  /** The confirmed action is running (waiting on the database). */
+  busy?: boolean;
 }
 
-export function ConfirmDialog({ open, title, children, confirmLabel, onConfirm, onCancel, requireText }: Props) {
+export function ConfirmDialog({
+  open,
+  title,
+  children,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+  requireText,
+  busy = false,
+}: Props) {
   const [typed, setTyped] = useState('');
-  const blocked = requireText !== undefined && typed.trim() !== requireText;
+  const blocked = busy || (requireText !== undefined && typed.trim() !== requireText);
 
   const cancel = () => {
+    if (busy) return;
     setTyped('');
     onCancel();
   };
@@ -37,11 +49,11 @@ export function ConfirmDialog({ open, title, children, confirmLabel, onConfirm, 
       layer="top"
       footer={
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={cancel}>
+          <Button variant="ghost" onClick={cancel} disabled={busy}>
             Cancel
           </Button>
           <Button variant="danger" onClick={confirm} disabled={blocked}>
-            {confirmLabel}
+            {busy ? 'Working…' : confirmLabel}
           </Button>
         </div>
       }

@@ -10,13 +10,54 @@ Everything else (ratings, notes) is optional and one tap away.
 - **Dashboard**: totals, skill averages, trends, case-type and industry coverage, next-practice suggestions, weekly history, milestones
 - **Case Log**: searchable, filterable list of every case with full-detail view, edit and delete
 - **Improvement Areas**: thin spots in your coverage, skills to sharpen, and a searchable history of what you've learned
-- **Data stays yours**: saved in your browser, with JSON backup/restore, CSV export and MCG Excel import
-
-No backend, no account, no API keys.
+- **Your data, on every device**: saved to your own account in [Supabase](https://supabase.com) behind a login, so your laptop and phone show the same cases. JSON backup, CSV export and MCG Excel import are built in
 
 ---
 
-## Run it
+## Set it up
+
+CaseLab is a static React app. It needs a Supabase project for sign-in and storage. Setup takes about ten minutes, once.
+
+### 1. Create the database tables (one migration)
+
+The schema lives in [`supabase/migrations/`](supabase/migrations) and is tracked with the code. Apply it **one way only**:
+
+```bash
+npx supabase login                                   # opens your browser
+npx supabase link --project-ref <your-project-ref>   # the xxxx in https://xxxx.supabase.co; asks for the database password
+npx supabase db push                                 # applies any migration not yet applied
+```
+
+`db push` records each migration's version in the project, so a migration is never applied twice. If you also use
+Supabase's GitHub integration (Project Settings → Integrations → GitHub, with the Supabase directory set to `supabase`),
+it reads the same history and will treat the migration as already applied. Don't paste the SQL into the SQL editor as
+well: that applies it without recording it, and the integration would then try to run it again and fail.
+
+Future schema changes are new files in `supabase/migrations/` (`npx supabase migration new <name>`), applied the same way.
+
+### 2. Create your login and lock the door
+
+CaseLab has no sign-up screen. In the Supabase dashboard:
+
+1. **Authentication → Users → Add user → Create new user**: enter your email and a password, and tick *Auto Confirm User*.
+2. **Authentication → Sign In / Providers → turn off "Allow new users to sign up"** so nobody else can create an account.
+
+Even if sign-ups were left open, row level security (below) means a new account could only ever see its own, empty data.
+
+### 3. Add your project's two public settings
+
+Copy `.env.example` to `.env.local` and fill in both values (Supabase dashboard → Project Settings → API):
+
+```
+VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
+
+These two values are public by design: they ship in the browser. **Never** put a secret key, `service_role` key or
+database password in a `VITE_` variable (the app refuses to start if the key looks like a secret). If the settings are
+missing, CaseLab says so on screen; it never quietly switches to some other storage.
+
+### 4. Run it
 
 Requires Node.js 20.19+ (22 recommended).
 
@@ -38,35 +79,42 @@ Press **N** anywhere in the app (outside a text field) to open the Log Case form
 
 ---
 
-## Where your data lives (read this)
+## How your data is stored and protected
 
-CaseLab stores everything in **your browser's local storage**, on this device only.
+| Table | Holds |
+| --- | --- |
+| `cases` | One row per case: date, title, source, case type, industry, partner, overall rating and feedback, the eight MCG skill ratings with feedback (one `skills` JSON column), the takeaway fields, improvement tag, other notes |
+| `opportunities` | The hand-edited lists from the MCG "Opportunity Areas" tab |
 
-- It survives refreshes, restarts and updates to the app.
-- It does **not** sync between your laptop, phone, or different browsers. Each has its own separate data.
-- Clearing site data, using a private window, or switching browsers means starting empty.
+Everything else (averages, coverage, trends, suggestions, learning history, custom industries) is calculated in the browser
+from those rows, so it needs no tables. Fields that are optional in the form are nullable in the database; only title, case
+type and date are required, and the database also enforces ratings of 1 to 5 and the 13 MCG case types.
 
-So treat **Settings → Export backup (JSON)** as your save game. It contains every case, rating, feedback note, learning
-note and list item, and restoring it loses nothing. To move to a new device: export on the old one, import on the new one.
-The footer shows the date of your last backup.
+**Access control.** Every row has a `user_id` that the database fills in from your login. Row level security allows a
+signed-in user to read and change only rows where `user_id` is theirs, and the anonymous role has no access at all. The
+migration is tested against a real Postgres in `src/data/migration.test.ts`, including "another user can't see, edit or
+delete your cases" and "signed-out requests are refused".
 
-If you have a few weeks of cases in there, export a backup now and then.
+**Saving is honest.** Nothing appears saved until Supabase confirms it. If a save, edit or delete fails, you see the
+error (the Log Case form keeps everything you typed so you can retry), and if loading fails you get an error screen with
+Retry rather than an empty dashboard that looks like lost data. The only things kept in the browser are the theme, a
+half-written Log Case draft, and Supabase's own sign-in session; none of them hold saved cases.
 
-### Import and export
+**Two devices.** Changes show up on the other device when you come back to its tab (the app refreshes your cases then).
+
+### Download, import and demo mode
 
 | Action | Where | Notes |
 | --- | --- | --- |
-| Export everything | Settings → Export backup (JSON) | Lossless. Includes lists and custom industries |
-| Restore a backup | Settings → Import backup (JSON) | Choose **Merge** (adds cases, newer edit wins, deletes nothing) or **Replace everything** |
-| Spreadsheet view | Settings → Export cases (CSV) | One row per case, MCG column order plus CaseLab's additions. Opens in Excel with accents intact |
-| Bring in your MCG log | Settings → Import MCG Excel log | Reads the `Log` sheet by header names. Skips duplicates (same date + title). Imported cases have no industry; open one to add it |
+| Extra copy of everything | Settings → Download backup (JSON) | Every case, rating, feedback note, learning and list item |
+| Restore a backup | Settings → Import backup (JSON) | **Merge** (adds cases, newer edit wins, deletes nothing) or **Replace everything**. Replace writes the file first and removes leftovers second, so a failure can't leave you with less than you started with |
+| Spreadsheet view | Settings → Export cases (CSV) | One row per case, MCG column order plus CaseLab's additions |
+| Bring in your MCG log | Settings → Import MCG Excel log | Reads the `Log` sheet by header names, skips duplicates (same date + title). Imported cases have no industry; open one to add it |
 | Wipe | Settings → Clear all data | Requires typing `DELETE` |
+| Sign out | Settings → Sign out | |
+| Demo | Settings → Try demo mode | 16 clearly labeled sample cases held only in this tab's memory. They are never sent to your account or mixed with real cases |
 
-### Demo mode
-
-Settings → **Try demo mode** loads 16 clearly labeled sample cases so you can see a populated dashboard. Demo data lives
-under a separate storage key and is never mixed with your real cases. Exit demo mode and your real data is exactly as you
-left it. The app otherwise starts with 0 cases and no scores, trends or suggestions.
+The app starts with 0 cases and shows no scores, trends or suggestions until you log something.
 
 ---
 
@@ -125,31 +173,28 @@ Up to three suggestions, chosen by fixed rules that stay silent when there isn't
 
 ---
 
-## Deploy it
+## Deploy to Vercel
 
-`npm run build` produces a static site in `dist/`. It uses relative asset paths and hash-based navigation, so it works at
-a domain root or any sub-path on any static host, with no server rules or redirects needed.
+`npm run build` produces a static site in `dist/`; Vercel detects Vite automatically. No server rules are needed (the app
+uses hash navigation and relative asset paths).
 
-**Vercel / Netlify / Cloudflare Pages** (easiest): import the GitHub repo.
+1. Merge to `main` (or deploy any branch as a preview), then **Add New → Project → import the GitHub repo**.
+2. Framework preset **Vite**. Build command `npm run build`, output directory `dist` (the defaults).
+3. Under **Settings → Environment Variables**, add these two for **Production and Preview**:
 
-| Setting | Value |
-| --- | --- |
-| Build command | `npm run build` |
-| Output directory | `dist` |
-| Node version | 20.19+ (22 recommended) |
+   | Name | Value |
+   | --- | --- |
+   | `VITE_SUPABASE_URL` | Project URL from Supabase → Project Settings → API |
+   | `VITE_SUPABASE_PUBLISHABLE_KEY` | The **publishable** key (`sb_publishable_...`) |
 
-**GitHub Pages**: the repo includes `.github/workflows/deploy-pages.yml`, run manually from the *Actions* tab. First enable
-Pages (*Settings → Pages → Source: GitHub Actions*). Note that Pages for **private** repositories requires a paid GitHub
-plan; otherwise use one of the hosts above.
+4. Deploy. Nothing else is needed: password sign-in doesn't use redirect URLs, and the publishable key is meant for browsers.
 
-**Any file server**: upload the contents of `dist/`.
+Never add the secret key, the `service_role` key or the database password to Vercel for this app. `VITE_` variables are
+embedded in the public JavaScript. Environment variables are read at build time, so redeploy after changing them.
 
-Remember that data is per browser **and per web address**: if you move the site to a new URL, export a backup first and
-import it at the new address.
-
-### Continuous integration
-
-`.github/workflows/ci.yml` runs typecheck, tests and build on every pull request and push to `main`.
+`.github/workflows/ci.yml` runs typecheck, tests and build on every pull request and push to `main` (no Supabase credentials
+are needed: tests use fakes and an in-process Postgres). `.github/workflows/deploy-pages.yml` is an optional manual GitHub Pages
+deploy, but it would need the same two variables as repository variables, so Vercel is the simpler path.
 
 ---
 
@@ -158,35 +203,57 @@ import it at the new address.
 ```
 src/
   domain/      Pure TypeScript: types, constants, and all calculations (stats, suggestions,
-               improvement areas, knowledge, milestones, filters). No React, no storage.
-  data/        Persistence and I/O: storage adapter, JSON backup/merge, CSV, MCG Excel import, demo data
-  state/       React context: data provider (the only writer), toasts, theme, routing
-  features/    The three screens (dashboard, caselog, improvement), plus logcase and settings dialogs
+               improvement areas, knowledge, milestones, filters). No React, no database.
+  data/        Persistence and I/O: Supabase client + repository, auth, row mapping, error messages,
+               JSON backup/merge, CSV, MCG Excel import, demo data, in-memory repository
+  state/       React context: auth, data (the only writer), toasts, theme, routing
+  features/    The three screens (dashboard, caselog, improvement), plus auth, logcase and settings
   components/  Shared UI primitives, layout, chart colors
-  test/        Test setup, builders, fixtures
+  test/        Test setup, builders, fixtures, fake Supabase / fake backend
+supabase/
+  migrations/  The database schema, versioned with the code
+  config.toml  Supabase CLI configuration
 ```
 
-**Adding cloud sync or login later** doesn't require rewriting the app. All persistence goes through the small
-`CaseLabStorage` interface in `src/data/storage.ts` (`load`, `save`, `clear`). Implement it against Supabase, Firebase or
-your own API and pass it to `<DataProvider realStorage={...} />`. The domain logic, UI and backup format don't change.
+All persistence goes through the small `CaseLabRepository` interface in `src/data/repository.ts` (`SupabaseRepository` for
+real data, `createMemoryRepository` for demo mode and tests), and sign-in goes through `AuthApi` in `src/data/auth.ts`. The
+domain logic and screens don't know Supabase exists.
 
-**Tech**: React 19, TypeScript, Vite, Tailwind CSS v4, Recharts (lazy-loaded), `read-excel-file` (loaded only when you import
-an Excel file), Vitest + Testing Library.
+**Multi-user later.** The schema is already per-user (`user_id` + row level security), so allowing other people to sign up is
+a Supabase setting plus a sign-up form; no migration or data rework. Nothing for sharing or administration is built.
+
+**Tech**: React 19, TypeScript, Vite, Tailwind CSS v4, Supabase (`@supabase/supabase-js`), Recharts (lazy-loaded),
+`read-excel-file` (loaded only when you import an Excel file), Vitest + Testing Library, PGlite for the database tests.
 
 ---
 
 ## Tests
 
-`npm test` runs 68 tests covering:
+`npm test` runs 102 tests covering:
 
-- Calculations: week boundaries, averages that ignore missing ratings, behavioral combining, recent/trend/first-vs-latest windows, case-type / industry / matrix coverage, weekly history
-- Rules: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
-- Persistence: refresh survival, corrupted-data rescue, schema-version warning, demo isolation
-- Backup: lossless JSON round-trip, merge semantics, CSV quoting, MCG Excel import (against a populated sample workbook and the empty template)
-- The app end to end: empty state, logging, dashboard updates, validation, edit, delete-with-confirmation, filtering, demo mode, clear-all, and export-then-restore of a JSON backup through the real UI
+- **Database**: the real migration run in Postgres (PGlite): required vs optional columns, rating and case-type rules, and row level security (own rows only, no cross-user read/update/delete/insert, no anonymous access, signed-out writes refused, cascade on user delete)
+- **Supabase layer**: row mapping that round-trips every field, a repository run against a fake Supabase (paging past 1000 rows, chunked upserts, replace-without-data-loss, errors surfaced), friendly error messages, configuration checks
+- **Calculations**: week boundaries, averages that ignore missing ratings, behavioral combining, trend windows, coverage, matrix, weekly history
+- **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
+- **Backup**: lossless JSON round trip, merge semantics, CSV quoting, MCG Excel import (a populated sample workbook and the empty template)
+- **The app end to end** against a fake Supabase: sign-in and sign-out, nothing requested before sign-in, create / edit / delete with confirmation, data surviving a refresh, a failed save keeping what you typed, a failed delete, a failed load with Retry, a missing-tables message, demo mode never touching the database, export then restore, clear-all
+
+### Live checks against your real Supabase project (optional)
+
+`npm run test:e2e` signs in as you and exercises the real database: another session reads back exactly what was saved,
+signed-out access is refused, the database rules and row level security hold, and the whole app flow (sign in, log a case,
+refresh, edit, delete, sign out) works. It only creates rows titled `ZZ CaseLab e2e ...`, removes them afterwards, and
+checks your account ends up exactly as it started. To enable it, create a git-ignored `.env.e2e.local` in the project root:
+
+```
+CASELAB_E2E_EMAIL=you@example.com
+CASELAB_E2E_PASSWORD=your-password
+```
+
+Without that file the live checks are skipped.
 
 ## Limitations
 
-- Data is local to one browser (see above), so back it up.
-- The MCG import can't know industries, so imported cases show "–" until you edit them.
 - Weeks start on Monday.
+- The MCG import can't know industries, so imported cases show "–" until you edit them.
+- Edits made on two devices at the same moment aren't merged: the last save wins (fine for one person).

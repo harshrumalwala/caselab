@@ -8,6 +8,7 @@ import {
   keyImprovement,
   type CaseFilters,
 } from '../../domain/caseFilters';
+import { describeError } from '../../data/errors';
 import { formatDate } from '../../domain/dates';
 import { canonicalIndustry } from '../../domain/stats';
 import type { CaseRecord } from '../../domain/types';
@@ -70,6 +71,7 @@ export function CaseLog() {
   const [filters, setFilters] = useState<CaseFilters>(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<CaseRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const set = <K extends keyof CaseFilters>(key: K, value: CaseFilters[K]) =>
     setFilters((f) => ({ ...f, [key]: value }));
@@ -89,11 +91,18 @@ export function CaseLog() {
     filters.score !== 'all',
   ].filter(Boolean).length;
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!pendingDelete) return;
-    deleteCase(pendingDelete.id);
-    toast({ title: 'Case deleted', body: pendingDelete.title });
-    setPendingDelete(null);
+    setDeleting(true);
+    try {
+      await deleteCase(pendingDelete.id);
+      toast({ title: 'Case deleted', body: pendingDelete.title });
+    } catch (e) {
+      toast({ kind: 'error', title: 'Not deleted', body: describeError(e) });
+    } finally {
+      setDeleting(false);
+      setPendingDelete(null);
+    }
   };
 
   if (cases.length === 0) {
@@ -354,8 +363,9 @@ export function CaseLog() {
         open={pendingDelete !== null}
         title="Delete this case?"
         confirmLabel="Delete case"
+        busy={deleting}
         onCancel={() => setPendingDelete(null)}
-        onConfirm={confirmDelete}
+        onConfirm={() => void confirmDelete()}
       >
         <p>
           <span className="font-semibold text-ink">{pendingDelete?.title || 'This case'}</span> and all of its ratings

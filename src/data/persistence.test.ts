@@ -2,60 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { emptyAppData } from '../domain/factory';
 import { SKILLS } from '../domain/constants';
 import { backupToJSON, ImportError, mergeAppData, parseBackup } from './backup';
+import { createSupabaseBackend } from './backend';
 import { casesToCSV, CSV_HEADERS } from './csv';
 import { buildDemoData } from './demoData';
-import { createLocalStorageAdapter, DEMO_KEY, parseAppData, REAL_KEY } from './storage';
+import { describeError } from './errors';
+import { createMemoryRepository } from './memoryRepository';
+import { parseAppData } from './parse';
 import { NOW, appDataWith, makeCase, richCase } from '../test/builders';
-
-describe('local storage adapter (persistence)', () => {
-  it('returns empty data on first run with no warning', async () => {
-    const { data, warning } = await createLocalStorageAdapter(REAL_KEY).load();
-    expect(data.cases).toEqual([]);
-    expect(warning).toBeNull();
-  });
-
-  it('keeps saved cases across a "refresh" (a brand new adapter over the same storage)', async () => {
-    await createLocalStorageAdapter(REAL_KEY).save(appDataWith([richCase()]));
-    const afterRefresh = await createLocalStorageAdapter(REAL_KEY).load();
-    expect(afterRefresh.data.cases).toEqual([richCase()]);
-  });
-
-  it('clear() removes the data', async () => {
-    const store = createLocalStorageAdapter(REAL_KEY);
-    await store.save(appDataWith([richCase()]));
-    await store.clear();
-    expect((await store.load()).data.cases).toEqual([]);
-  });
-
-  it('never silently discards unreadable data: it keeps a raw copy and warns', async () => {
-    window.localStorage.setItem(REAL_KEY, '{not json');
-    const { data, warning } = await createLocalStorageAdapter(REAL_KEY).load();
-    expect(data.cases).toEqual([]);
-    expect(warning).toMatch(/could not be read/i);
-    const rescued = Object.keys(window.localStorage).filter((k) => k.startsWith(`${REAL_KEY}:unreadable:`));
-    expect(rescued).toHaveLength(1);
-    expect(window.localStorage.getItem(rescued[0])).toBe('{not json');
-  });
-
-  it('warns about data written by a newer schema version but still loads it', async () => {
-    window.localStorage.setItem(REAL_KEY, JSON.stringify({ ...appDataWith([richCase()]), schemaVersion: 99 }));
-    const { data, warning } = await createLocalStorageAdapter(REAL_KEY).load();
-    expect(data.cases).toHaveLength(1);
-    expect(warning).toMatch(/newer version/i);
-  });
-
-  it('keeps demo data under a separate key from real data', async () => {
-    const real = createLocalStorageAdapter(REAL_KEY);
-    const demo = createLocalStorageAdapter(DEMO_KEY);
-    await real.save(appDataWith([richCase()]));
-    await demo.save(buildDemoData(NOW));
-    expect((await real.load()).data.cases.map((c) => c.id)).toEqual(['rich-1']);
-    const demoCases = (await demo.load()).data.cases;
-    expect(demoCases.length).toBeGreaterThan(10);
-    expect(demoCases.every((c) => c.title.startsWith('Sample: '))).toBe(true);
-    expect(demoCases.some((c) => c.id === 'rich-1')).toBe(false);
-  });
-});
 
 describe('parseAppData', () => {
   it('survives garbage and fills in defaults', () => {
@@ -76,13 +29,25 @@ describe('parseAppData', () => {
     expect(c.skills.quant).toEqual({ rating: null, feedback: '' });
   });
 
-  it('de-duplicates by id (newest wins) and rebuilds the custom industry list', () => {
+  it('de-duplicates by id (newest wins) and derives the custom industry list from the cases', () => {
     const older = { ...richCase(), updatedAt: '2026-10-12T10:00:00.000Z', title: 'Old' };
     const newer = { ...richCase(), updatedAt: '2026-10-12T18:00:00.000Z', title: 'New' };
-    const data = parseAppData({ cases: [newer, older], customIndustries: ['Insurance', 'Marine'] });
+    const data = parseAppData({ cases: [newer, older], customIndustries: ['Ignored, not on any case'] });
     expect(data.cases).toHaveLength(1);
     expect(data.cases[0].title).toBe('New');
-    expect(data.customIndustries.sort()).toEqual(['Aerospace & Defense', 'Marine']);
+    expect(data.customIndustries).toEqual(['Aerospace & Defense']);
+  });
+});
+
+describe('demo mode data', () => {
+  it('is labelled as sample data and lives in its own in-memory repository', async () => {
+    const demo = createMemoryRepository(buildDemoData(NOW));
+    const real = createMemoryRepository({ cases: [richCase()] });
+    const demoCases = (await demo.loadAll()).cases;
+    expect(demoCases.length).toBeGreaterThan(10);
+    expect(demoCases.every((c) => c.title.startsWith('Sample: '))).toBe(true);
+    await demo.clearAll();
+    expect((await real.loadAll()).cases.map((c) => c.id)).toEqual(['rich-1']);
   });
 });
 
@@ -113,7 +78,16 @@ describe('JSON export / import', () => {
     expect(file.app).toBe('caselab');
     expect(file.schemaVersion).toBe(1);
     expect(file.exportedAt).toBe(NOW.toISOString());
-    expect(file.data.lastExportAt).toBe(NOW.toISOString());
+  });
+
+  it('still reads backups made by the earlier browser-storage version (extra fields are ignored)', () => {
+    const legacy = JSON.stringify({
+      app: 'caselab',
+      schemaVersion: 1,
+      exportedAt: '2026-10-01T00:00:00.000Z',
+      data: { ...full, lastExportAt: '2026-10-01T00:00:00.000Z' },
+    });
+    expect(parseBackup(legacy).data.cases).toEqual(full.cases);
   });
 
   it('rejects files that are not CaseLab backups', () => {
@@ -166,5 +140,37 @@ describe('CSV export', () => {
     const lines = csv.trim().split('\r\n');
     expect(lines[1]).toContain('Plain');
     expect(lines[1]).not.toMatch(/,0,/);
+  });
+});
+
+describe('Supabase configuration', () => {
+  it('reports missing settings instead of falling back to anything else', () => {
+    expect(createSupabaseBackend('', '')).toEqual({
+      problem: 'Missing configuration: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.',
+    });
+    expect('problem' in createSupabaseBackend('https://x.supabase.co', '')).toBe(true);
+  });
+
+  it('refuses a malformed URL and anything that looks like a secret key', () => {
+    expect(createSupabaseBackend('x.supabase.co', 'sb_publishable_abc')).toHaveProperty('problem');
+    expect(createSupabaseBackend('https://x.supabase.co', 'sb_secret_abc')).toHaveProperty('problem');
+    expect(createSupabaseBackend('https://x.supabase.co', 'service_role_key')).toHaveProperty('problem');
+  });
+
+  it('builds a backend from a URL and publishable key', () => {
+    expect(createSupabaseBackend('https://x.supabase.co', 'sb_publishable_abc')).toHaveProperty('backend');
+  });
+});
+
+describe('error messages', () => {
+  it('turns Supabase and network errors into plain language', () => {
+    expect(describeError({ message: 'TypeError: Failed to fetch' })).toMatch(/can't reach supabase/i);
+    expect(describeError({ message: 'JWT expired', code: 'PGRST301' })).toMatch(/session expired/i);
+    expect(describeError({ code: 'PGRST205', message: "Could not find the table 'public.cases'" })).toMatch(/migration/i);
+    expect(describeError({ code: '42501', message: 'new row violates row-level security policy' })).toMatch(/permission denied/i);
+    expect(describeError({ code: 'PGRST116', message: 'no rows' })).toMatch(/no longer exists/i);
+    expect(describeError({ code: '23514', message: 'violates check constraint' })).toMatch(/rejected the data/i);
+    expect(describeError(new Error('boom'))).toBe('Supabase error: boom');
+    expect(describeError({})).toMatch(/something went wrong/i);
   });
 });

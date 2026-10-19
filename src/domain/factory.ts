@@ -56,7 +56,6 @@ export function emptyAppData(): AppData {
     cases: [],
     opportunities: [],
     customIndustries: [],
-    lastExportAt: null,
   };
 }
 

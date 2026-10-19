@@ -7,11 +7,15 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss()],
+  build: {
+    chunkSizeWarningLimit: 650, // the Supabase client is the bulk of the main bundle
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
     restoreMocks: true,
+    testTimeout: 20_000, // the end-to-end UI tests click through whole flows
   },
 });

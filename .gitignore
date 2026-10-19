@@ -6,6 +6,11 @@ dist
 dist-ssr
 *.local
 
+# environment (the example file is committed; real values never are)
+.env
+.env.*
+!.env.example
+
 # logs
 *.log
 npm-debug.log*

@@ -50,8 +50,8 @@ export interface AppData {
   schemaVersion: number;
   cases: CaseRecord[];
   opportunities: OpportunityItem[];
+  /** Derived from cases (industries outside the preset list); never stored on its own. */
   customIndustries: string[];
-  lastExportAt: string | null;
 }
 
 /** The JSON backup file wraps AppData with a little provenance. */
