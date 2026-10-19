@@ -82,6 +82,7 @@ export function buildDemoData(now: Date = new Date()): AppData {
       nextFocus: s.nextFocus ?? '',
       improvementArea: s.struggled?.toLowerCase().includes('math') ? 'quant' : null,
       otherNotes: '',
+      shareMode: 'private', // sample data is never shared
       createdAt: stamp,
       updatedAt: stamp,
     };

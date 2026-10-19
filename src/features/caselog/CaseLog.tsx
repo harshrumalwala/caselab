@@ -108,7 +108,7 @@ export function CaseLog() {
   if (cases.length === 0) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Case Log</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">My Case Log</h1>
         <div className="card">
           <EmptyState
             icon={<FileSpreadsheet className="size-6" />}
@@ -135,7 +135,7 @@ export function CaseLog() {
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Case Log</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">My Case Log</h1>
         <p className="text-sm text-muted">
           {active ? `${visible.length} of ${cases.length} cases` : `${cases.length} ${cases.length === 1 ? 'case' : 'cases'}`}
         </p>

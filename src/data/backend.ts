@@ -1,15 +1,32 @@
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseAuth, type AuthApi } from './auth';
+import type { CommunityRepository } from './community';
 import type { CaseLabRepository } from './repository';
+import { SupabaseCommunity } from './supabaseCommunity';
 import { SupabaseRepository } from './supabaseRepository';
 
-/** Everything the app needs from the outside world: who you are, and where your data lives. */
+/** Everything the app needs from the outside world: who you are, where your data lives, and the community. */
 export interface Backend {
   auth: AuthApi;
   createRepository(): CaseLabRepository;
+  createCommunity(userId: string): CommunityRepository;
+  /** Set when the page was opened from an email link that failed (expired, already used). */
+  linkProblem?: string;
 }
 
 export type BackendResult = { backend: Backend } | { problem: string };
+
+/**
+ * Email links come back to this page as `#error=...&error_description=...` when they fail.
+ * Read it before the Supabase client starts and tidies the address bar.
+ */
+export function readLinkProblem(hash: string): string | undefined {
+  const params = new URLSearchParams(hash.replace(/^#\/?/, ''));
+  if (!params.get('error') && !params.get('error_code')) return undefined;
+  const code = params.get('error_code');
+  if (code === 'otp_expired') return 'That email link has expired or was already used. Request a new one below.';
+  return params.get('error_description')?.replace(/\+/g, ' ') ?? 'That email link did not work. Request a new one below.';
+}
 
 /**
  * Builds the Supabase backend from the two public settings in the environment. If they are
@@ -33,8 +50,18 @@ export function createSupabaseBackend(
     };
   }
 
+  const linkProblem = typeof window === 'undefined' ? undefined : readLinkProblem(window.location.hash);
+
+  // detectSessionInUrl lets the verification and password-reset links sign the person in.
   const client = createClient(url, key, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });
-  return { backend: { auth: createSupabaseAuth(client), createRepository: () => new SupabaseRepository(client) } };
+  return {
+    backend: {
+      auth: createSupabaseAuth(client),
+      createRepository: () => new SupabaseRepository(client),
+      createCommunity: (userId) => new SupabaseCommunity(client, userId),
+      linkProblem,
+    },
+  };
 }

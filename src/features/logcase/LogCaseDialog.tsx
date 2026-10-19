@@ -3,6 +3,7 @@ import { ChevronDown, MessageSquarePlus } from 'lucide-react';
 import {
   CASE_TYPES,
   INDUSTRIES,
+  SHARE_MODES,
   SKILLS,
   SKILL_GROUPS,
   type Rating,
@@ -147,6 +148,7 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
   const [showRestored, setShowRestored] = useState(restored);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showSharing, setShowSharing] = useState(() => initial.shareMode !== 'profile');
 
   // Best-effort draft so an accidental close never loses a half-written case.
   useEffect(() => {
@@ -673,6 +675,50 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
                   placeholder="Anything else worth remembering"
                 />
               </Field>
+            </div>
+          )}
+        </section>
+
+        {/* ---- Sharing for this case (collapsed; defaults to your profile settings) -------- */}
+        <section aria-label="Sharing" className="rounded-2xl border border-line">
+          <button
+            type="button"
+            onClick={() => setShowSharing((s) => !s)}
+            aria-expanded={showSharing}
+            className="flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-left transition hover:bg-surface-2/60"
+          >
+            <span>
+              <span className="block text-sm font-semibold text-ink">Sharing for this case</span>
+              <span className="block text-xs text-muted">
+                {SHARE_MODES.find((m) => m.value === input.shareMode)?.label}
+              </span>
+            </span>
+            <ChevronDown className={`size-5 text-muted transition-transform ${showSharing ? 'rotate-180' : ''}`} />
+          </button>
+          {showSharing && (
+            <div className="border-t border-line px-4 py-4">
+              <div role="radiogroup" aria-label="Sharing for this case" className="space-y-2">
+                {SHARE_MODES.map((m) => (
+                  <label
+                    key={m.value}
+                    className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 text-sm transition ${
+                      input.shareMode === m.value ? 'border-accent bg-accent-soft' : 'border-line hover:bg-surface-2'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="share-mode"
+                      className="mt-0.5 accent-[var(--accent)]"
+                      checked={input.shareMode === m.value}
+                      onChange={() => set('shareMode', m.value)}
+                    />
+                    <span>
+                      <span className="block font-medium text-ink">{m.label}</span>
+                      <span className="block text-xs text-muted">{m.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
           )}
         </section>

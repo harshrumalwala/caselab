@@ -1,12 +1,30 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-export const E2E_EMAIL = process.env.CASELAB_E2E_EMAIL ?? '';
-export const E2E_PASSWORD = process.env.CASELAB_E2E_PASSWORD ?? '';
+export interface Creds {
+  email: string;
+  password: string;
+}
+
+const env = (name: string) => process.env[name] ?? '';
+
+/** Your real account: used only for read-safe checks and rows titled "ZZ CaseLab e2e ...". */
+export const MAIN: Creds = { email: env('CASELAB_E2E_EMAIL'), password: env('CASELAB_E2E_PASSWORD') };
+/** Two throwaway accounts for multi-user checks. Create them (Auto Confirm) in the Supabase dashboard. */
+export const USER_A: Creds = { email: env('CASELAB_E2E_EMAIL_A'), password: env('CASELAB_E2E_PASSWORD_A') };
+export const USER_B: Creds = { email: env('CASELAB_E2E_EMAIL_B'), password: env('CASELAB_E2E_PASSWORD_B') };
+
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? '';
 export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '';
 
+const have = (c: Creds) => Boolean(c.email && c.password && SUPABASE_URL && SUPABASE_KEY);
 /** Without credentials the live checks are skipped, so `npm run test:e2e` never fails on a fresh clone. */
-export const HAVE_CREDENTIALS = Boolean(E2E_EMAIL && E2E_PASSWORD && SUPABASE_URL && SUPABASE_KEY);
+export const HAVE_CREDENTIALS = have(MAIN);
+export const HAVE_USER_A = have(USER_A);
+export const HAVE_TWO_USERS = have(USER_A) && have(USER_B);
+
+// Kept for the original single-account tests.
+export const E2E_EMAIL = MAIN.email;
+export const E2E_PASSWORD = MAIN.password;
 
 /** Every row these tests create has a title/text starting with this, so cleanup can find them. */
 export const TEST_PREFIX = 'ZZ CaseLab e2e';
@@ -16,10 +34,10 @@ export function newClient(): SupabaseClient {
   return createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-export async function signedInClient(): Promise<{ client: SupabaseClient; userId: string }> {
+export async function signedInClient(creds: Creds = MAIN): Promise<{ client: SupabaseClient; userId: string }> {
   const client = newClient();
-  const { data, error } = await client.auth.signInWithPassword({ email: E2E_EMAIL, password: E2E_PASSWORD });
-  if (error || !data.user) throw new Error(`E2E sign-in failed: ${error?.message ?? 'no user'}`);
+  const { data, error } = await client.auth.signInWithPassword({ email: creds.email, password: creds.password });
+  if (error || !data.user) throw new Error(`E2E sign-in failed for ${creds.email}: ${error?.message ?? 'no user'}`);
   return { client, userId: data.user.id };
 }
 

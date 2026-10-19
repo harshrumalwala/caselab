@@ -43,6 +43,31 @@ export function describeError(e: unknown): string {
   return msg ? `Supabase error: ${msg}` : 'Something went wrong talking to Supabase.';
 }
 
+/** Sign-in, sign-up and password-reset errors in plain English. */
+export function describeAuthError(e: unknown): string {
+  const err = (typeof e === 'object' && e !== null ? e : { message: String(e) }) as PostgrestLike;
+  const msg = err.message ?? '';
+  const code = err.code ?? '';
+  if (/invalid login credentials/i.test(msg)) return 'That email and password do not match.';
+  if (/email not confirmed/i.test(msg) || code === 'email_not_confirmed') {
+    return 'Your email address is not verified yet. Open the verification link we emailed you, or request a new one.';
+  }
+  if (/rate limit|too many/i.test(msg) || code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit') {
+    return 'Too many attempts. Please wait a few minutes and try again.';
+  }
+  if (code === 'signup_disabled' || /signups? (are )?(not allowed|disabled)/i.test(msg)) {
+    return 'New registrations are currently closed.';
+  }
+  if (code === 'same_password' || /different from the old password/i.test(msg)) {
+    return 'Choose a password different from your current one.';
+  }
+  if (code === 'weak_password' || /password should be|weak password/i.test(msg)) {
+    return msg || 'Choose a stronger password (at least 8 characters).';
+  }
+  if (/email address .* is invalid|unable to validate email/i.test(msg)) return 'Enter a valid email address.';
+  return describeError(e);
+}
+
 export function toDataError(e: unknown): DataError {
   return e instanceof DataError ? e : new DataError(describeError(e), e);
 }

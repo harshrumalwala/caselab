@@ -1,6 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
+
+// Whole-screen renders are slow on modest machines; wait longer before a query gives up.
+configure({ asyncUtilTimeout: 5000 });
 
 // Recharts' ResponsiveContainer needs ResizeObserver, which jsdom lacks.
 class ResizeObserverStub {

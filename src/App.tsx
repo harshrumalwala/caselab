@@ -1,18 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Banners } from './components/layout/Banners';
 import { BottomNav } from './components/layout/BottomNav';
 import { Header } from './components/layout/Header';
 import { createSupabaseBackend, type Backend, type BackendResult } from './data/backend';
 import type { CaseInput } from './domain/types';
+import { ConfigProblem, LoadFailed, Splash } from './features/auth/StatusScreens';
+import { LoginScreen, SetNewPasswordScreen } from './features/auth/LoginScreen';
 import { CaseDetail } from './features/caselog/CaseDetail';
 import { CaseLog } from './features/caselog/CaseLog';
-import { ConfigProblem, LoadFailed, Splash } from './features/auth/StatusScreens';
-import { LoginScreen } from './features/auth/LoginScreen';
+import { Onboarding } from './features/community/Onboarding';
+import { ProfileSettingsDialog } from './features/community/ProfileSettingsDialog';
 import { Dashboard } from './features/dashboard/Dashboard';
 import { ImprovementAreas } from './features/improvement/ImprovementAreas';
 import { LogCaseDialog } from './features/logcase/LogCaseDialog';
+import { People } from './features/people/People';
 import { SettingsDialog } from './features/settings/SettingsDialog';
 import { AuthProvider, useAuth, useSession } from './state/AuthProvider';
+import { CommunityProvider, useCommunity } from './state/CommunityProvider';
 import { DataProvider, useData } from './state/DataProvider';
 import { useRoute } from './state/route';
 import { ThemeProvider } from './state/theme';
@@ -35,10 +39,11 @@ function Shell() {
   const { status, loadError, reload, mode } = useData();
   const { signOut } = useAuth();
   const session = useSession();
-  const [route, navigate] = useRoute();
+  const [location, navigate] = useRoute();
   const [logState, setLogState] = useState<LogState | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const counter = useRef(0);
 
   // Switching between real and demo data must not leave a dialog open on the other dataset.
@@ -49,14 +54,16 @@ function Shell() {
 
   const ui = useMemo<UIContextValue>(
     () => ({
-      route,
+      route: location.route,
+      routeParam: location.param,
       navigate,
       openLogCase: (prefill) => setLogState({ key: ++counter.current, editId: null, prefill: prefill ?? null }),
       editCase: (id) => setLogState({ key: ++counter.current, editId: id, prefill: null }),
       viewCase: (id) => setViewId(id),
       openSettings: () => setSettingsOpen(true),
+      openProfile: () => setProfileOpen(true),
     }),
-    [route, navigate],
+    [location, navigate],
   );
 
   // "n" opens the Log Case form from anywhere, as long as you're not typing or in a dialog.
@@ -88,16 +95,18 @@ function Shell() {
         <Header />
         <Banners />
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 sm:px-6 sm:pt-8 md:pb-12">
-          {route === 'dashboard' && <Dashboard />}
-          {route === 'log' && <CaseLog />}
-          {route === 'improve' && <ImprovementAreas />}
+          {location.route === 'dashboard' && <Dashboard />}
+          {location.route === 'log' && <CaseLog />}
+          {location.route === 'improve' && <ImprovementAreas />}
+          {location.route === 'people' && <People />}
         </main>
         <footer className="hidden border-t border-line px-6 py-5 text-center text-xs text-muted md:block">
           Saved to your account{session.email ? ` (${session.email})` : ''} and available on every device you sign in
-          on.{' '}
-          <button type="button" className="font-semibold text-accent-text hover:underline" onClick={ui.openSettings}>
-            Settings
+          on. Your cases are private unless you choose to share them in{' '}
+          <button type="button" className="font-semibold text-accent-text hover:underline" onClick={ui.openProfile}>
+            Profile &amp; privacy
           </button>
+          .
         </footer>
         <BottomNav />
       </div>
@@ -112,23 +121,50 @@ function Shell() {
         />
       )}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {profileOpen && <ProfileSettingsDialog onClose={() => setProfileOpen(false)} />}
     </UIContext.Provider>
   );
 }
 
-/** Splits the app into: not signed in, signed in. Your data is only requested after sign-in. */
+/** First sign-in: set up a profile before anything else. Later sign-ins skip straight through. */
+function ProfileGate({ children }: { children: ReactNode }) {
+  const { status, loadError, profile, reload } = useCommunity();
+  const { signOut } = useAuth();
+  if (status === 'loading') return <Splash label="Loading your profile…" />;
+  if (status === 'error') {
+    return (
+      <LoadFailed
+        message={loadError ?? 'Something went wrong loading your profile.'}
+        onRetry={() => void reload()}
+        onSignOut={() => void signOut()}
+      />
+    );
+  }
+  if (!profile) return <Onboarding />;
+  return <>{children}</>;
+}
+
+/** Not signed in, signed in via a reset link (choose a password), or signed in. */
 function AuthGate({ backend }: { backend: Backend }) {
   const { state } = useAuth();
   const userId = state.status === 'signedIn' ? state.session.userId : null;
-  // One repository per signed-in user; a different user never reuses another's.
-  const repository = useMemo(() => (userId ? backend.createRepository() : null), [backend, userId]);
+  // One set of repositories per signed-in user; a different user never reuses another's.
+  const repos = useMemo(
+    () => (userId ? { data: backend.createRepository(), community: backend.createCommunity(userId) } : null),
+    [backend, userId],
+  );
 
   if (state.status === 'loading') return <Splash label="Checking your session…" />;
-  if (state.status === 'signedOut' || !repository) return <LoginScreen />;
+  if (state.status === 'signedOut' || !repos) return <LoginScreen />;
+  if (state.recovery) return <SetNewPasswordScreen />;
   return (
-    <DataProvider key={state.session.userId} repository={repository}>
-      <Shell />
-    </DataProvider>
+    <CommunityProvider key={state.session.userId} community={repos.community}>
+      <ProfileGate>
+        <DataProvider repository={repos.data}>
+          <Shell />
+        </DataProvider>
+      </ProfileGate>
+    </CommunityProvider>
   );
 }
 
@@ -149,7 +185,7 @@ export function App({ backend }: { backend?: BackendResult } = {}) {
         {'problem' in resolved ? (
           <ConfigProblem problem={resolved.problem} />
         ) : (
-          <AuthProvider auth={resolved.backend.auth}>
+          <AuthProvider auth={resolved.backend.auth} linkProblem={resolved.backend.linkProblem}>
             <AuthGate backend={resolved.backend} />
           </AuthProvider>
         )}

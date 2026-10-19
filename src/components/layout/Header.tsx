@@ -1,4 +1,4 @@
-import { Moon, Plus, Settings, Sun } from 'lucide-react';
+import { Moon, Plus, Settings, Sun, UserRound } from 'lucide-react';
 import { ROUTES } from '../../state/route';
 import { useTheme } from '../../state/theme';
 import { useUI } from '../../state/ui';
@@ -20,7 +20,7 @@ export function Logo() {
 }
 
 export function Header() {
-  const { route, openLogCase, openSettings } = useUI();
+  const { route, openLogCase, openSettings, openProfile } = useUI();
   const { isDark, toggle } = useTheme();
 
   return (
@@ -52,6 +52,9 @@ export function Header() {
           </Button>
           <IconButton label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={toggle}>
             {isDark ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
+          </IconButton>
+          <IconButton label="Profile and privacy" onClick={openProfile}>
+            <UserRound className="size-[18px]" />
           </IconButton>
           <IconButton label="Data and settings" onClick={openSettings}>
             <Settings className="size-[18px]" />

@@ -1,7 +1,9 @@
-import type { AuthApi, AuthSession } from '../data/auth';
+import type { AuthApi, AuthEvent, AuthSession } from '../data/auth';
 import type { Backend } from '../data/backend';
+import { createMemoryCommunity } from '../data/memoryCommunity';
 import { createMemoryRepository } from '../data/memoryRepository';
 import type { CaseLabRepository } from '../data/repository';
+import { NO_SHARING, type Profile, type SharedCase } from '../domain/community';
 
 export const TEST_USER: AuthSession = { userId: 'user-1', email: 'me@booth.edu' };
 export const TEST_PASSWORD = 'correct horse';
@@ -32,21 +34,48 @@ export function flakyRepository(base: CaseLabRepository) {
   };
 }
 
+export const MY_PROFILE: Profile = {
+  userId: TEST_USER.userId,
+  displayName: 'Test User',
+  mbaClass: 'Class of 2027',
+  listed: true,
+  sharing: NO_SHARING,
+};
+
 export interface FakeEnv {
   backend: { backend: Backend };
   repo: CaseLabRepository;
+  community: ReturnType<typeof createMemoryCommunity>;
   /** Which repository methods the app has called (use to prove nothing was fetched/written). */
   calls: Method[];
   failOn: ReturnType<typeof flakyRepository>['failOn'];
   heal: () => void;
   signedIn: () => boolean;
+  /** Emails the fake "Supabase" has sent: { kind, to }. Signing up queues a verification email. */
+  emails: { kind: 'verify' | 'reset'; to: string }[];
+  /** Simulate clicking the emailed verification link: the account becomes verified and signed in. */
+  clickVerificationLink(email: string): void;
+  /** Simulate clicking the password-reset link. */
+  clickResetLink(email: string): void;
+  password: () => string;
 }
 
-/** A fake Supabase: email/password auth plus one persistent in-memory database. */
-export function createFakeEnv({ signedIn = true }: { signedIn?: boolean } = {}): FakeEnv {
+interface Options {
+  signedIn?: boolean;
+  /** Start with a finished profile (default) or none, to see onboarding. */
+  profile?: Profile | null;
+  members?: Profile[];
+  shared?: SharedCase[];
+}
+
+/** A fake Supabase: email/password auth with email verification, one in-memory database, and a community. */
+export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members = [], shared = [] }: Options = {}): FakeEnv {
   let session: AuthSession | null = signedIn ? TEST_USER : null;
-  const listeners = new Set<(s: AuthSession | null) => void>();
-  const notify = () => listeners.forEach((l) => l(session));
+  let password = TEST_PASSWORD;
+  const accounts = new Map<string, { verified: boolean; userId: string }>([[TEST_USER.email, { verified: true, userId: TEST_USER.userId }]]);
+  const listeners = new Set<(s: AuthSession | null, e: AuthEvent) => void>();
+  const notify = (e: AuthEvent) => listeners.forEach((l) => l(session, e));
+  const emails: FakeEnv['emails'] = [];
 
   const auth: AuthApi = {
     async getSession() {
@@ -56,24 +85,72 @@ export function createFakeEnv({ signedIn = true }: { signedIn?: boolean } = {}):
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    async signIn(email, password) {
-      if (email !== TEST_USER.email || password !== TEST_PASSWORD) throw { message: 'Invalid login credentials' };
-      session = TEST_USER;
-      notify();
+    async signIn(email, pw) {
+      const account = accounts.get(email);
+      if (!account || (email === TEST_USER.email && pw !== password) || (email !== TEST_USER.email && pw !== 'new-password-1')) {
+        throw { message: 'Invalid login credentials' };
+      }
+      if (!account.verified) throw { message: 'Email not confirmed', code: 'email_not_confirmed' };
+      session = { userId: account.userId, email };
+      notify('signed_in');
+    },
+    async signUp(email) {
+      if (!accounts.has(email)) accounts.set(email, { verified: false, userId: `user-${accounts.size + 1}` });
+      emails.push({ kind: 'verify', to: email });
+      return { needsVerification: true };
+    },
+    async resendConfirmation(email) {
+      emails.push({ kind: 'verify', to: email });
+    },
+    async requestPasswordReset(email) {
+      emails.push({ kind: 'reset', to: email });
+    },
+    async updatePassword(pw) {
+      if (pw === password) throw { message: 'New password should be different from the old password.', code: 'same_password' };
+      password = pw;
+      notify('updated');
     },
     async signOut() {
       session = null;
-      notify();
+      notify('signed_out');
     },
   };
 
   const flaky = flakyRepository(createMemoryRepository());
+  const community = createMemoryCommunity({
+    me: TEST_USER.userId,
+    profiles: [...(profile ? [profile] : []), ...members],
+    shared,
+  });
+
   return {
-    backend: { backend: { auth, createRepository: () => flaky.repo } },
+    backend: {
+      backend: {
+        auth,
+        createRepository: () => flaky.repo,
+        createCommunity: () => community,
+      },
+    },
     repo: flaky.repo,
+    community,
     calls: flaky.calls,
     failOn: flaky.failOn,
     heal: flaky.heal,
     signedIn: () => session !== null,
+    emails,
+    clickVerificationLink(email) {
+      const account = accounts.get(email);
+      if (!account) throw new Error(`no account for ${email}`);
+      account.verified = true;
+      session = { userId: account.userId, email };
+      notify('signed_in');
+    },
+    clickResetLink(email) {
+      const account = accounts.get(email);
+      if (!account) throw new Error(`no account for ${email}`);
+      session = { userId: account.userId, email };
+      notify('recovery');
+    },
+    password: () => password,
   };
 }
