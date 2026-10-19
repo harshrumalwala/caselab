@@ -238,6 +238,20 @@ a Supabase setting plus a sign-up form; no migration or data rework. Nothing for
 - **Backup**: lossless JSON round trip, merge semantics, CSV quoting, MCG Excel import (a populated sample workbook and the empty template)
 - **The app end to end** against a fake Supabase: sign-in and sign-out, nothing requested before sign-in, create / edit / delete with confirmation, data surviving a refresh, a failed save keeping what you typed, a failed delete, a failed load with Retry, a missing-tables message, demo mode never touching the database, export then restore, clear-all
 
+### Live checks against your real Supabase project (optional)
+
+`npm run test:e2e` signs in as you and exercises the real database: another session reads back exactly what was saved,
+signed-out access is refused, the database rules and row level security hold, and the whole app flow (sign in, log a case,
+refresh, edit, delete, sign out) works. It only creates rows titled `ZZ CaseLab e2e ...`, removes them afterwards, and
+checks your account ends up exactly as it started. To enable it, create a git-ignored `.env.e2e.local` in the project root:
+
+```
+CASELAB_E2E_EMAIL=you@example.com
+CASELAB_E2E_PASSWORD=your-password
+```
+
+Without that file the live checks are skipped.
+
 ## Limitations
 
 - Weeks start on Monday.
