@@ -12,8 +12,9 @@
 --     `shared_cases`, `cases` or `opportunities`, so there is nothing for a visitor to filter, count, sort or
 --     estimate from: not even the planner's statistics describe data that isn't public.
 --
---   * Free text is members-only, always: written feedback and learning notes are not copied into the public
---     tables. The private case id (`case_id`) is not readable by visitors either.
+--   * Written feedback and learning notes are members-only, always: they are not copied into the public tables.
+--     Case titles, casebook names and industries are short text the member typed and are shown (cut to 200/200/100
+--     characters). The private case id (`case_id`) is not readable by visitors either.
 --
 --   * The same sharing switches and per-case overrides decide which rows and values exist; this migration only
 --     adds a second, narrower audience. Setting a case to 'private' hides it from everyone.
@@ -84,7 +85,8 @@ alter policy "profiles: owner updates own" on public.profiles
   );
 
 -- ---------------------------------------------------------------------------------------
--- Length limits on what can be shown to others (checked for new and edited rows)
+-- Length limits on what can be shown to others. Checked for new and edited rows only (NOT VALID, so older rows
+-- don't block the migration); the projection also cuts text to these lengths, so older long text can't be shown.
 -- ---------------------------------------------------------------------------------------
 alter table public.cases
   add constraint cases_title_length    check (char_length(title) <= 200) not valid,
@@ -98,11 +100,15 @@ language sql
 immutable
 set search_path = ''
 as $$
-  select jsonb_object_agg(t.k, t.v -> 'rating')
+  -- Whole-number ratings only, re-created from the number (so odd precision or huge values can never be published).
+  select jsonb_object_agg(t.k, to_jsonb(((t.v ->> 'rating')::numeric)::int))
   from jsonb_each(p_skills) as t(k, v)
   where t.k = any (array['behavioral1', 'behavioral2', 'prompt', 'framework', 'quant', 'exhibits', 'brainstorm', 'recommendation'])
     and jsonb_typeof(t.v -> 'rating') = 'number'
-    and case when jsonb_typeof(t.v -> 'rating') = 'number' then (t.v ->> 'rating')::numeric between 1 and 5 end;
+    and case when jsonb_typeof(t.v -> 'rating') = 'number'
+             then (t.v ->> 'rating')::numeric = trunc((t.v ->> 'rating')::numeric)
+                  and (t.v ->> 'rating')::numeric between 1 and 5
+        end;
 $$;
 
 create or replace function public._feedback(p_overall text, p_skills jsonb)
@@ -252,7 +258,7 @@ begin
     (case_id, owner_id, case_date, title, source, case_type, industry,
      overall, skill_scores, feedback, improvement_area, notes)
   values (
-    c.id, c.user_id, c.case_date, c.title, c.source, c.case_type, c.industry,
+    c.id, c.user_id, c.case_date, left(c.title, 200), left(c.source, 200), c.case_type, left(c.industry, 100),
     case when v_full or (v_prof and p.share_overall)     then c.overall end,
     case when v_full or (v_prof and p.share_skills)      then public._skill_scores(c.skills) end,
     case when v_full or (v_prof and p.share_feedback)    then public._feedback(c.overall_feedback, c.skills) end,
@@ -290,6 +296,7 @@ begin
 
   -- The public copy: only for public members, copied from the row above, with no free text.
   v_public := p.listed and p.public_profile
+              and public.is_member_id(c.user_id)
               and exists (select 1 from public.public_profiles pp where pp.user_id = c.user_id);
   if v_public then
     insert into public.public_shared_cases

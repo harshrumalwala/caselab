@@ -17,16 +17,16 @@ import {
 
 const PAGE = 1000;
 
-async function pageShared(client: SupabaseClient, table: string, columns: string, ownerId: string): Promise<SharedCase[]> {
+async function pageShared(client: SupabaseClient, table: string, columns: string, ownerId: string, maxRows = Infinity): Promise<SharedCase[]> {
   const out: SharedRow[] = [];
-  for (let from = 0; ; from += PAGE) {
+  for (let from = 0; from < maxRows; from += PAGE) {
     const { data, error } = await client
       .from(table)
       .select(columns)
       .eq('owner_id', ownerId)
       .order('case_date', { ascending: false })
       .order('share_id', { ascending: true })
-      .range(from, from + PAGE - 1);
+      .range(from, Math.min(from + PAGE, maxRows) - 1);
     if (error) throw error;
     const rows = (data ?? []) as unknown as SharedRow[];
     out.push(...rows);
@@ -60,7 +60,8 @@ export class PublicCommunity implements CommunityReader {
   }
 
   getSharedCases(ownerId: string): Promise<SharedCase[]> {
-    return pageShared(this.anon, 'public_shared_cases', PUBLIC_SHARED_COLUMNS, ownerId);
+    // Visitors get at most one page per member, so a single account can't make the public page enormous.
+    return pageShared(this.anon, 'public_shared_cases', PUBLIC_SHARED_COLUMNS, ownerId, PAGE);
   }
 }
 
@@ -87,13 +88,14 @@ export class SupabaseCommunity implements CommunityRepository {
   }
 
   async saveProfile(input: ProfileInput): Promise<Profile> {
-    const { data, error } = await this.client
-      .from('profiles')
-      .upsert({ user_id: this.userId, ...profileToRow(input) }, { onConflict: 'user_id' })
-      .select()
-      .single();
-    if (error) throw error;
-    return rowToProfile(data as ProfileRow);
+    const row = profileToRow(input);
+    // Update first: it is what lets a former member switch themselves off (creating a profile needs membership).
+    const updated = await this.client.from('profiles').update(row).eq('user_id', this.userId).select().maybeSingle();
+    if (updated.error) throw updated.error;
+    if (updated.data) return rowToProfile(updated.data as ProfileRow);
+    const created = await this.client.from('profiles').insert({ user_id: this.userId, ...row }).select().single();
+    if (created.error) throw created.error;
+    return rowToProfile(created.data as ProfileRow);
   }
 
   async searchPeople(query: string): Promise<Profile[]> {

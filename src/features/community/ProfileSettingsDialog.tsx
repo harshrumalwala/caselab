@@ -258,7 +258,8 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
       >
         <p>
           Anyone on the internet, signed in or not, will be able to find <strong className="text-ink">{profile.displayName}</strong> and
-          see your class and whatever you share below: case history, and any scores or improvement focus you've switched on.
+          see your class and whatever you share below: case history (the case names, casebook names and industries you typed) and
+          any scores or improvement focus you've switched on.
         </p>
         <p>
           This includes every case you've set to "share the case name only" or "share this case in full". A case set to "full" shows

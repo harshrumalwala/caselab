@@ -283,6 +283,46 @@ describe('abuse limits', () => {
   });
 });
 
+describe('hardening from the second independent review', () => {
+  it('publishes only whole-number ratings from 1 to 5, however the data was written', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases', 'share_skills'], { isPublic: true });
+    const huge = `1.${'0'.repeat(5000)}1`;
+    await addCase(ALICE, {
+      skills: `{"quant":{"rating":1.5},"framework":{"rating":${huge}},"prompt":{"rating":4},"exhibits":{"rating":4.0},"brainstorm":{"rating":6},"recommendation":{"rating":3.0000}}`,
+    });
+    const [pub] = await visitorSees();
+    expect(pub.skill_scores).toEqual({ prompt: 4, exhibits: 4, recommendation: 3 });
+    expect(JSON.stringify(pub.skill_scores).length).toBeLessThan(80);
+    const [mem] = await membersSee();
+    expect(mem.skill_scores).toEqual({ prompt: 4, exhibits: 4, recommendation: 3 });
+  });
+
+  it('cuts old over-length text in what others see, instead of publishing it at full length', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    // A row written before the length limits existed (the constraints only check new and edited rows).
+    await as(db, 'postgres');
+    await db.exec('alter table public.cases drop constraint cases_title_length, drop constraint cases_source_length, drop constraint cases_industry_length');
+    await db.query(`insert into public.cases (user_id, title, source, industry, case_type) values ($1, $2, $3, $4, 'Revenue')`, [ALICE, 't'.repeat(100000), 's'.repeat(5000), 'i'.repeat(5000)]);
+    const [pub] = await visitorSees();
+    expect([String(pub.title).length, String(pub.source).length, String(pub.industry).length]).toEqual([200, 200, 100]);
+    const [mem] = await membersSee();
+    expect(String(mem.title).length).toBe(200);
+  });
+
+  it('stops refreshing the public copy of a former member’s cases', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    const id = await addCase(ALICE, { title: 'Before' });
+    expect((await visitorSees()).map((r) => r.title)).toEqual(['Before']);
+    await as(db, 'postgres');
+    await db.query('update auth.users set email_confirmed_at = null where id = $1', [ALICE]);
+    await as(db, 'authenticated', ALICE);
+    await db.query(`update public.cases set title = 'After an edit by a former member' where id = $1`, [id]);
+    const titles = (await visitorSees()).map((r) => r.title);
+    expect(titles).not.toContain('After an edit by a former member');
+    expect(titles).toEqual([]); // the stale public copy is removed rather than updated
+  });
+});
+
 describe('membership', () => {
   it('stops a former member from re-listing or going public, but lets them switch themselves off', async () => {
     await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
