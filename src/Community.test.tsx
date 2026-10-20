@@ -13,10 +13,11 @@ const BOB: Profile = {
   displayName: 'Bob Brown',
   mbaClass: 'Class of 2027',
   listed: true,
+  publicProfile: false,
   sharing: { ...NO_SHARING, cases: true, overall: true, feedback: true },
 };
-const CAROL: Profile = { userId: 'carol', displayName: 'Carol Chen', mbaClass: '', listed: true, sharing: NO_SHARING };
-const HIDDEN: Profile = { userId: 'ghost', displayName: 'Hidden Harry', mbaClass: '', listed: false, sharing: NO_SHARING };
+const CAROL: Profile = { userId: 'carol', displayName: 'Carol Chen', mbaClass: '', listed: true, publicProfile: false, sharing: NO_SHARING };
+const HIDDEN: Profile = { userId: 'ghost', displayName: 'Hidden Harry', mbaClass: '', listed: false, publicProfile: false, sharing: NO_SHARING };
 
 const shared = (over: Partial<SharedCase> & Pick<SharedCase, 'caseId' | 'title'>): SharedCase => ({
   ownerId: 'bob',
@@ -51,7 +52,7 @@ async function goTo(hash: string) {
 
 describe('creating an account', () => {
   async function fillSignup(user: User, email: string, pw = 'new-password-1', confirm = pw) {
-    await user.click(await screen.findByRole('button', { name: 'Create an account' }));
+    await user.click(await screen.findByRole('link', { name: 'Create account' }));
     await user.type(screen.getByLabelText('Email'), email);
     await user.type(screen.getByLabelText('Password'), pw);
     await user.type(screen.getByLabelText('Confirm password'), confirm);
@@ -166,6 +167,7 @@ describe('password recovery', () => {
   it('emails a reset link, then lets you choose a new password', async () => {
     const env = createFakeEnv({ signedIn: false });
     const { user } = await openApp(env);
+    await user.click(await screen.findByRole('link', { name: 'Sign in' }));
     await user.click(await screen.findByRole('button', { name: 'Forgot password?' }));
     await user.type(screen.getByLabelText('Email'), TEST_USER.email);
     await user.click(screen.getByRole('button', { name: 'Email me a reset link' }));

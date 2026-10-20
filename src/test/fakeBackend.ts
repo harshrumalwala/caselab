@@ -1,6 +1,6 @@
 import type { AuthApi, AuthEvent, AuthSession } from '../data/auth';
 import type { Backend } from '../data/backend';
-import { createMemoryCommunity } from '../data/memoryCommunity';
+import { createMemoryCommunity, createMemoryPublic } from '../data/memoryCommunity';
 import { createMemoryRepository } from '../data/memoryRepository';
 import type { CaseLabRepository } from '../data/repository';
 import { NO_SHARING, type Profile, type SharedCase } from '../domain/community';
@@ -39,6 +39,7 @@ export const MY_PROFILE: Profile = {
   displayName: 'Test User',
   mbaClass: 'Class of 2027',
   listed: true,
+  publicProfile: false,
   sharing: NO_SHARING,
 };
 
@@ -46,6 +47,8 @@ export interface FakeEnv {
   backend: { backend: Backend };
   repo: CaseLabRepository;
   community: ReturnType<typeof createMemoryCommunity>;
+  /** What visitors without an account can read (also records which methods were called). */
+  publicReader: ReturnType<typeof createMemoryPublic>;
   /** Which repository methods the app has called (use to prove nothing was fetched/written). */
   calls: Method[];
   failOn: ReturnType<typeof flakyRepository>['failOn'];
@@ -123,16 +126,20 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
     shared,
   });
 
+  const publicReader = createMemoryPublic({ profiles: () => community.profiles, shared });
+
   return {
     backend: {
       backend: {
         auth,
         createRepository: () => flaky.repo,
         createCommunity: () => community,
+        createPublicCommunity: () => publicReader,
       },
     },
     repo: flaky.repo,
     community,
+    publicReader,
     calls: flaky.calls,
     failOn: flaky.failOn,
     heal: flaky.heal,

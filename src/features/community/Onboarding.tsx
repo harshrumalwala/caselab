@@ -6,6 +6,7 @@ import { describeError } from '../../data/errors';
 import { NO_SHARING, type SharingPrefs } from '../../domain/community';
 import { useAuth } from '../../state/AuthProvider';
 import { useCommunity } from '../../state/CommunityProvider';
+import { AudienceSwitch } from './AudienceSwitch';
 import { SharingSwitches } from './SharingSwitches';
 
 const CLASS_SUGGESTIONS = ['Class of 2026', 'Class of 2027', 'Class of 2028', 'Class of 2029', 'Evening MBA', 'Weekend MBA', 'Executive MBA'];
@@ -17,6 +18,7 @@ export function Onboarding() {
   const [name, setName] = useState('');
   const [mbaClass, setMbaClass] = useState('');
   const [listed, setListed] = useState(true);
+  const [publicProfile, setPublicProfile] = useState(false);
   const [sharing, setSharing] = useState<SharingPrefs>(NO_SHARING);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +30,7 @@ export function Onboarding() {
     setBusy(true);
     setError(null);
     try {
-      await saveProfile({ displayName: name, mbaClass, listed, sharing });
+      await saveProfile({ displayName: name, mbaClass, listed, publicProfile: listed && publicProfile, sharing });
       // The community provider now has a profile, so the app takes over.
     } catch (err) {
       setError(describeError(err));
@@ -92,7 +94,10 @@ export function Onboarding() {
               type="checkbox"
               className="mt-0.5 size-4 accent-[var(--accent)]"
               checked={listed}
-              onChange={(e) => setListed(e.target.checked)}
+              onChange={(e) => {
+                setListed(e.target.checked);
+                if (!e.target.checked) setPublicProfile(false);
+              }}
             />
             <span>
               <span className="font-medium text-ink">Let other members find me by name</span>
@@ -101,6 +106,8 @@ export function Onboarding() {
               </span>
             </span>
           </label>
+
+          <AudienceSwitch checked={publicProfile} disabled={!listed} onChange={setPublicProfile} />
 
           <div>
             <h2 className="mb-1 text-sm font-semibold text-ink">What would you like to share?</h2>

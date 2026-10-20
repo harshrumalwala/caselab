@@ -42,18 +42,25 @@ const table = async () => within(await screen.findByRole('table'));
 const metric = (label: string) => screen.getByText(label, { selector: 'p' }).closest('div.card') as HTMLElement;
 
 describe('sign in', () => {
-  it('shows only the sign-in screen, and requests no data, until you are signed in', async () => {
+  it('shows the public page first, never the app, and requests no member data until you are signed in', async () => {
     const env = createFakeEnv({ signedIn: false });
+    const user = userEvent.setup();
     render(<App backend={env.backend} />);
-    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Find a case partner' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Dashboard' })).not.toBeInTheDocument();
-    expect(env.calls).toEqual([]); // no database request without a session
+    expect(screen.queryByRole('button', { name: 'Log case' })).not.toBeInTheDocument();
+    expect(env.calls).toEqual([]); // no request for personal data without a session
+    expect(env.community.calls).toEqual([]);
+
+    await user.click(screen.getByRole('link', { name: 'Sign in' }));
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
   });
 
   it('rejects a wrong password with a visible message, then signs in with the right one', async () => {
     const env = createFakeEnv({ signedIn: false });
     const user = userEvent.setup();
     render(<App backend={env.backend} />);
+    await user.click(await screen.findByRole('link', { name: 'Sign in' }));
     await user.type(await screen.findByLabelText('Email'), TEST_USER.email);
     await user.type(screen.getByLabelText('Password'), 'wrong');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -65,6 +72,7 @@ describe('sign in', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
     expect(env.calls).toContain('loadAll');
+    expect(window.location.hash).toBe('#/dashboard'); // the sign-in address is dropped once you're in
   });
 
   it('signs out back to the sign-in screen and keeps your data for next time', async () => {
@@ -74,10 +82,11 @@ describe('sign in', () => {
 
     await user.click(screen.getByRole('button', { name: 'Data and settings' }));
     await user.click(await screen.findByRole('button', { name: 'Sign out' }));
-    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Find a case partner' })).toBeInTheDocument(); // back to the public page
     expect(screen.queryByText('Keep me')).not.toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Email'), TEST_USER.email);
+    await user.click(screen.getByRole('link', { name: 'Sign in' }));
+    await user.type(await screen.findByLabelText('Email'), TEST_USER.email);
     await user.type(screen.getByLabelText('Password'), TEST_PASSWORD);
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     await screen.findByRole('heading', { name: 'Dashboard' });

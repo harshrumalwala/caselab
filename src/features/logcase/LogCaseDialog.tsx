@@ -361,6 +361,7 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
             <Field label="Case title" htmlFor="case-title" required error={errors.title}>
               <input
                 id="case-title"
+                maxLength={200}
                 className="field"
                 value={input.title}
                 onChange={(e) => set('title', e.target.value)}
@@ -405,6 +406,7 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
                 <div className="flex gap-2">
                   <input
                     id="case-industry-custom"
+                    maxLength={100}
                     className="field"
                     value={input.industry}
                     onChange={(e) => set('industry', e.target.value)}
@@ -462,6 +464,7 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
             <Field label="Case source" htmlFor="case-source">
               <input
                 id="case-source"
+                maxLength={200}
                 className="field"
                 list="source-options"
                 value={input.source}

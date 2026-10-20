@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronRight, FlaskConical, Loader2, Search, Users } from 'lucide-react';
+import type { CommunityReader } from '../../data/community';
 import { describeError } from '../../data/errors';
-import { sharingSummary, type Profile } from '../../domain/community';
+import { publicSharingSummary, sharingSummary, type Profile } from '../../domain/community';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -10,9 +11,17 @@ import { useData } from '../../state/DataProvider';
 import { useUI } from '../../state/ui';
 import { PersonProfile } from './PersonProfile';
 
-function Directory() {
-  const { community } = useCommunity();
-  const { navigate } = useUI();
+/** Search box and member list. Used for signed-in members and for visitors without an account. */
+export function Directory({
+  reader,
+  onOpen,
+  publicView = false,
+}: {
+  reader: CommunityReader;
+  onOpen: (userId: string) => void;
+  /** Visitors without an account: only the shared parts they can actually see are summarised. */
+  publicView?: boolean;
+}) {
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<
     { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; people: Profile[] }
@@ -26,7 +35,7 @@ function Directory() {
     setResult((prev) => (prev.status === 'ready' ? prev : { status: 'loading' }));
     const timer = window.setTimeout(
       () => {
-        community
+        reader
           .searchPeople(query)
           .then((people) => current && setResult({ status: 'ready', people }))
           .catch((e) => current && setResult({ status: 'error', message: describeError(e) }));
@@ -37,18 +46,12 @@ function Directory() {
       current = false;
       window.clearTimeout(timer);
     };
-  }, [community, query, attempt]);
+  }, [reader, query, attempt]);
+
+  const summary = publicView ? publicSharingSummary : sharingSummary;
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">People</h1>
-        <p className="text-sm text-muted">
-          Find a fellow member, see what they've chosen to share, and pick a case to give them. Only verified CaseLab members
-          can see this.
-        </p>
-      </div>
-
       <div className="relative">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
         <input
@@ -80,10 +83,12 @@ function Directory() {
       {result.status === 'ready' &&
         (result.people.length === 0 ? (
           <Card>
-            <EmptyState icon={<Users className="size-6" />} title={query ? 'No members found' : 'No other members yet'} compact>
+            <EmptyState icon={<Users className="size-6" />} title={query ? 'No members found' : 'No members to show yet'} compact>
               {query
-                ? 'Try a different spelling. Members who chose not to appear in People can\'t be found.'
-                : 'When classmates join and appear in People, they\'ll show up here.'}
+                ? "Try a different spelling. Members who chose not to appear here can't be found."
+                : publicView
+                  ? 'Members choose whether to appear here. When someone does, they show up in this list.'
+                  : "When classmates join and appear in People, they'll show up here."}
             </EmptyState>
           </Card>
         ) : (
@@ -92,7 +97,7 @@ function Directory() {
               <li key={p.userId}>
                 <button
                   type="button"
-                  onClick={() => navigate('people', p.userId)}
+                  onClick={() => onOpen(p.userId)}
                   className="card flex w-full items-center justify-between gap-4 p-4 text-left transition hover:bg-surface-2/60"
                 >
                   <span className="flex min-w-0 items-center gap-3.5">
@@ -102,7 +107,7 @@ function Directory() {
                     <span className="min-w-0">
                       <span className="block truncate font-semibold text-ink">{p.displayName}</span>
                       <span className="block truncate text-xs text-muted">
-                        {p.mbaClass ? `${p.mbaClass} · ` : ''}Shares {sharingSummary(p.sharing)}
+                        {p.mbaClass ? `${p.mbaClass} · ` : ''}Shares {summary(p.sharing)}
                       </span>
                     </span>
                   </span>
@@ -116,10 +121,11 @@ function Directory() {
   );
 }
 
-/** People directory, and a single member's profile with "Find a case for them". */
+/** Signed-in People screen: the directory, or one member's profile with "Find a case for them". */
 export function People() {
-  const { routeParam } = useUI();
-  const { mode, exitDemo } = useData();
+  const { routeParam, navigate } = useUI();
+  const { community } = useCommunity();
+  const { mode, exitDemo, cases } = useData();
 
   if (mode === 'demo') {
     return (
@@ -131,5 +137,30 @@ export function People() {
     );
   }
 
-  return routeParam ? <PersonProfile key={routeParam} userId={routeParam} /> : <Directory />;
+  if (routeParam) {
+    return (
+      <PersonProfile
+        key={routeParam}
+        reader={community}
+        userId={routeParam}
+        onBack={() => navigate('people')}
+        mine={cases}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">People</h1>
+        <p className="text-sm text-muted">
+          Find a fellow member, see what they've chosen to share, and pick a case to give them. Members can choose to share with
+          other members only, or with anyone.
+        </p>
+      </div>
+      <Directory reader={community} onOpen={(id) => navigate('people', id)} />
+    </div>
+  );
 }
+
+export type { ReactNode };

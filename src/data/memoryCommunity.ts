@@ -1,7 +1,39 @@
 import type { Profile, ProfileInput, SharedCase } from '../domain/community';
-import type { CommunityRepository } from './community';
+import type { CommunityReader, CommunityRepository } from './community';
 
 type Method = keyof CommunityRepository;
+
+/** Visitors never get free text: drop it exactly as the database does (those columns aren't granted to them). */
+const forVisitors = (s: SharedCase): SharedCase => ({ ...s, feedback: null, notes: null });
+
+/**
+ * In-memory read access for people without an account: only members who are listed AND public, and no free text.
+ * `profiles` is read live so tests can change a member's settings after creating the reader.
+ */
+export function createMemoryPublic(opts: { profiles: () => Profile[]; shared?: SharedCase[] }): CommunityReader & { calls: string[] } {
+  const calls: string[] = [];
+  const isPublic = (p: Profile) => p.listed && p.publicProfile;
+  return {
+    calls,
+    async searchPeople(query: string) {
+      calls.push('searchPeople');
+      const q = query.trim().toLowerCase();
+      return opts
+        .profiles()
+        .filter((p) => isPublic(p) && p.displayName.toLowerCase().includes(q))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    },
+    async getPerson(userId: string) {
+      calls.push('getPerson');
+      return opts.profiles().find((p) => p.userId === userId && isPublic(p)) ?? null;
+    },
+    async getSharedCases(ownerId: string) {
+      calls.push('getSharedCases');
+      const owner = opts.profiles().find((p) => p.userId === ownerId);
+      return owner && isPublic(owner) ? (opts.shared ?? []).filter((s) => s.ownerId === ownerId).map(forVisitors) : [];
+    },
+  };
+}
 
 /** In-memory community data for tests: a fixed set of members and shared cases. */
 export function createMemoryCommunity(opts: { me: string; profiles?: Profile[]; shared?: SharedCase[] }): CommunityRepository & {
@@ -14,6 +46,7 @@ export function createMemoryCommunity(opts: { me: string; profiles?: Profile[]; 
   const profiles = [...(opts.profiles ?? [])];
   const calls: string[] = [];
   const failing = new Map<Method, unknown>();
+  const visitors = createMemoryPublic({ profiles: () => profiles, shared: opts.shared });
 
   const enter = (name: Method) => {
     calls.push(name);
@@ -35,7 +68,7 @@ export function createMemoryCommunity(opts: { me: string; profiles?: Profile[]; 
     },
     async saveProfile(input: ProfileInput) {
       enter('saveProfile');
-      const saved: Profile = { userId: opts.me, ...input };
+      const saved: Profile = { userId: opts.me, ...input, publicProfile: input.listed && input.publicProfile };
       const i = profiles.findIndex((p) => p.userId === opts.me);
       if (i === -1) profiles.push(saved);
       else profiles[i] = saved;
@@ -55,6 +88,10 @@ export function createMemoryCommunity(opts: { me: string; profiles?: Profile[]; 
     async getSharedCases(ownerId: string): Promise<SharedCase[]> {
       enter('getSharedCases');
       return (opts.shared ?? []).filter((s) => s.ownerId === ownerId);
+    },
+    async getPublicView(ownerId: string): Promise<SharedCase[]> {
+      enter('getPublicView');
+      return visitors.getSharedCases(ownerId);
     },
   };
 }
