@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { Loader2, MailCheck } from 'lucide-react';
+import { ArrowLeft, Loader2, MailCheck } from 'lucide-react';
 import { Logo } from '../../components/layout/Header';
 import { Button } from '../../components/ui/Button';
 import { describeAuthError } from '../../data/errors';
@@ -7,13 +7,18 @@ import { useAuth } from '../../state/AuthProvider';
 
 export const MIN_PASSWORD = 8;
 
-type Mode = 'signin' | 'signup' | 'forgot';
+export type Mode = 'signin' | 'signup' | 'forgot';
 type Sent = { kind: 'verify' | 'reset'; email: string } | null;
 
-function Shell({ children }: { children: ReactNode }) {
+function Shell({ children, onBack }: { children: ReactNode; onBack?: () => void }) {
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
+        {onBack && (
+          <button type="button" onClick={onBack} className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-accent-text hover:underline">
+            <ArrowLeft className="size-4" /> Back to People
+          </button>
+        )}
         <div className="mb-8 flex justify-center">
           <Logo />
         </div>
@@ -106,9 +111,9 @@ function CheckEmail({ sent, onBack }: { sent: NonNullable<Sent>; onBack: () => v
 }
 
 /** Sign in, create an account, or reset a password. Shown instead of the app until you are signed in. */
-export function LoginScreen() {
+export function LoginScreen({ initialMode = 'signin', onBack }: { initialMode?: Mode; onBack?: () => void } = {}) {
   const { signIn, signUp, requestPasswordReset, startupError, linkProblem } = useAuth();
-  const [mode, setMode] = useState<Mode>('signin');
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -161,7 +166,7 @@ export function LoginScreen() {
 
   if (sent) {
     return (
-      <Shell>
+      <Shell onBack={onBack}>
         <CheckEmail
           sent={sent}
           onBack={() => {
@@ -182,7 +187,7 @@ export function LoginScreen() {
         : "Enter your email and we'll send you a link to choose a new password.";
 
   return (
-    <Shell>
+    <Shell onBack={onBack}>
       <form onSubmit={submit} className="card space-y-5 p-6 sm:p-7" aria-labelledby="login-title">
         <div>
           <h1 id="login-title" className="text-xl font-semibold tracking-tight text-ink">

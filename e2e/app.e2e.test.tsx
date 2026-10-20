@@ -34,7 +34,8 @@ describe.skipIf(!HAVE_USER_A)('live Supabase: the real app, signed in as a test 
     const user = userEvent.setup();
     let view = render(<App />); // the real backend, built from the VITE_SUPABASE_* settings
 
-    // --- Sign in (wrong password first) ---
+    // --- The front page is public; sign-in is one click away (wrong password first) ---
+    await user.click(await screen.findByRole('link', { name: 'Sign in' }, LONG));
     await user.type(await screen.findByLabelText('Email'), USER_A.email);
     await user.type(screen.getByLabelText('Password'), 'wrong-password');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -97,7 +98,7 @@ describe.skipIf(!HAVE_USER_A)('live Supabase: the real app, signed in as a test 
     // --- Sign out ---
     await user.click(screen.getByRole('button', { name: 'Data and settings' }));
     await user.click(await screen.findByRole('button', { name: 'Sign out' }));
-    expect(await screen.findByRole('heading', { name: 'Sign in' }, LONG)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Find a case partner' }, LONG)).toBeInTheDocument(); // back to the public page
     view.unmount();
   });
 });

@@ -5,7 +5,7 @@ import { Header } from './components/layout/Header';
 import { createSupabaseBackend, type Backend, type BackendResult } from './data/backend';
 import type { CaseInput } from './domain/types';
 import { ConfigProblem, LoadFailed, Splash } from './features/auth/StatusScreens';
-import { LoginScreen, SetNewPasswordScreen } from './features/auth/LoginScreen';
+import { SetNewPasswordScreen } from './features/auth/LoginScreen';
 import { CaseDetail } from './features/caselog/CaseDetail';
 import { CaseLog } from './features/caselog/CaseLog';
 import { Onboarding } from './features/community/Onboarding';
@@ -14,6 +14,7 @@ import { Dashboard } from './features/dashboard/Dashboard';
 import { ImprovementAreas } from './features/improvement/ImprovementAreas';
 import { LogCaseDialog } from './features/logcase/LogCaseDialog';
 import { People } from './features/people/People';
+import { PublicSite } from './features/public/PublicSite';
 import { SettingsDialog } from './features/settings/SettingsDialog';
 import { AuthProvider, useAuth, useSession } from './state/AuthProvider';
 import { CommunityProvider, useCommunity } from './state/CommunityProvider';
@@ -45,6 +46,11 @@ function Shell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const counter = useRef(0);
+
+  // Arriving from the sign-in or sign-up page: drop that address and show the dashboard.
+  useEffect(() => {
+    if (/^#\/(signin|signup)/.test(window.location.hash)) navigate('dashboard');
+  }, [navigate]);
 
   // Switching between real and demo data must not leave a dialog open on the other dataset.
   useEffect(() => {
@@ -148,6 +154,8 @@ function ProfileGate({ children }: { children: ReactNode }) {
 function AuthGate({ backend }: { backend: Backend }) {
   const { state } = useAuth();
   const userId = state.status === 'signedIn' ? state.session.userId : null;
+  // Visitors without an account read through a client that never holds a session.
+  const publicReader = useMemo(() => backend.createPublicCommunity(), [backend]);
   // One set of repositories per signed-in user; a different user never reuses another's.
   const repos = useMemo(
     () => (userId ? { data: backend.createRepository(), community: backend.createCommunity(userId) } : null),
@@ -155,7 +163,7 @@ function AuthGate({ backend }: { backend: Backend }) {
   );
 
   if (state.status === 'loading') return <Splash label="Checking your session…" />;
-  if (state.status === 'signedOut' || !repos) return <LoginScreen />;
+  if (state.status === 'signedOut' || !repos) return <PublicSite reader={publicReader} />;
   if (state.recovery) return <SetNewPasswordScreen />;
   return (
     <CommunityProvider key={state.session.userId} community={repos.community}>

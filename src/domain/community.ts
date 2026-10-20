@@ -26,8 +26,10 @@ export interface Profile {
   displayName: string;
   /** e.g. "Class of 2027"; empty when not given. */
   mbaClass: string;
-  /** Appear in People search. */
+  /** Appear in People search (members). */
   listed: boolean;
+  /** Also visible to people without an account. Needs `listed`. Free-text fields are never shown to them. */
+  publicProfile: boolean;
   sharing: SharingPrefs;
 }
 
@@ -101,6 +103,14 @@ export const SHARING_OPTIONS: {
     needsCases: true,
   },
 ];
+
+/** What a visitor without an account can ever see: written feedback and learning notes are members-only. */
+export const PUBLIC_SHARING_KEYS: (keyof SharingPrefs)[] = ['cases', 'overall', 'skills', 'improvement'];
+
+/** Like sharingSummary, but only the parts visitors without an account can actually see. */
+export function publicSharingSummary(sharing: SharingPrefs): string {
+  return sharingSummary({ ...NO_SHARING, ...Object.fromEntries(PUBLIC_SHARING_KEYS.map((k) => [k, sharing[k]])) } as SharingPrefs);
+}
 
 /** "case history and overall scores", or "nothing" when nothing is on. */
 export function sharingSummary(sharing: SharingPrefs): string {

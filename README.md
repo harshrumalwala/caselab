@@ -1,7 +1,7 @@
 # CaseLab
 
 A case interview practice tracker for Booth students, built on the MCG case log. Every member keeps a private case history and
-dashboard, and can choose to share some of it with other members to help each other find the right case to practice.
+dashboard, and can choose to share some of it with other members, or with anyone, to help each other find the right case to practice.
 
 **Design goal: logging a finished case takes under two minutes.** Only a title, case type and industry are required.
 Everything else (ratings, notes, sharing) is optional and one tap away.
@@ -9,6 +9,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **Dashboard**: totals, skill averages, trends, case-type and industry coverage, next-practice suggestions, weekly history, milestones
 - **My Case Log**: searchable, filterable list of your cases with full-detail view, edit and delete
 - **Improvement Areas**: thin spots in your coverage, skills to sharpen, and a searchable history of what you've learned
+- **A public front page**: anyone, with no account (firm reps, second-years), can search the members who chose to be visible and read what they share
 - **People**: find a fellow member, see only what they've chosen to share, and work out which case to give them
 - **Profile & privacy**: six switches for what other members can see, a per-case override, and a live preview
 - **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export and MCG Excel import are built in
@@ -19,7 +20,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 
 CaseLab is a static React app. It needs a Supabase project for sign-in and storage. Setup takes about fifteen minutes, once.
 
-### 1. Create the database tables (two migrations)
+### 1. Create the database tables (three migrations)
 
 The schema lives in [`supabase/migrations/`](supabase/migrations) and is tracked with the code. Apply it **one way only**, and
 **before** deploying the matching version of the app (the app expects the newest tables):
@@ -54,10 +55,12 @@ production, set these in the Supabase dashboard:
 | Authentication → Attack Protection | **Enable CAPTCHA** (Cloudflare Turnstile or hCaptcha), and leaked-password protection if your plan has it | The standard defence against bot sign-ups. Tell me before you switch CAPTCHA on: the app needs a small addition to send the CAPTCHA token, and sign-up would fail until it has it |
 | Authentication → Sign In / Providers | Minimum password length 8 or more | The app already asks for 8 |
 
-**Restricting sign-up later** (for example to Booth addresses only) needs no rebuild. Community access is decided by one
-database function, `public.is_member()`; changing it to also require, say, `email like '%@chicagobooth.edu'` takes effect
-everywhere at once. To stop people *creating* accounts from other domains at all, add a Supabase "Before user created"
-auth hook (availability depends on your Supabase plan) or turn sign-ups off and invite people.
+**Restricting sign-up later** (for example to Booth addresses only) needs no rebuild. Who counts as a member is decided by
+one database function, `public.is_member_id(uuid)`; changing it to also require, say, `email like '%@chicagobooth.edu'`
+and then running `select public.revoke_nonmembers();` once (Supabase SQL editor) unlists everyone who no longer qualifies and
+removes their shared and public data. To stop people *creating* accounts from other domains at all, add a Supabase "Before
+user created" auth hook (availability depends on your Supabase plan) or turn sign-ups off and invite people. Never add
+CaseLab's tables to a Supabase Realtime publication: Realtime doesn't apply column-level privileges.
 
 ### 3. Add your project's two public settings
 
@@ -97,7 +100,8 @@ Press **N** anywhere in the app (outside a text field) to open the Log Case form
 
 ## Accounts
 
-**Creating an account** takes four steps: email and password, verify the emailed link, choose a name (and optionally your MBA
+**Browsing needs no account.** The front page shows the People search to anyone who isn't signed in, but only for members who
+chose to be visible (see below). **Creating an account** takes four steps: email and password, verify the emailed link, choose a name (and optionally your MBA
 class) and sharing preferences, then start logging. **Signing in** is unchanged. **Forgot password?** emails a reset link that
 asks for a new password. The forms never reveal whether an email already has an account.
 
@@ -106,7 +110,8 @@ asks for a new password. The forms never reveal whether an email already has an 
 ## Community: what other members can see
 
 Everything is **private by default**. Other members can only see what you explicitly share, and only if they are signed in
-with a verified email. Open **Profile & privacy** (the person icon in the header):
+with a verified email. Open **Profile & privacy** (the person icon in the header). There are two audiences: **signed-in
+members** (the default once you appear in People) and, only if you switch it on, **visitors without an account**.
 
 | Setting | Shares |
 | --- | --- |
@@ -118,7 +123,15 @@ with a verified email. Open **Profile & privacy** (the person icon in the header
 | **Improvement focus** | The "main thing to improve" tag on each shared case |
 | **Learning notes** | What went well, what you struggled with, concepts learned, next focus |
 
-Scores, feedback and notes only apply to cases that are shared, so they switch on after **Case history**. Each switch saves the
+Scores, feedback and notes only apply to cases that are shared, so they switch on after **Case history**.
+
+**Visible without an account** is a separate, extra switch under "Who can see me", **off by default** (nobody who joined before
+this existed is public). Turning it on asks you to confirm, because anyone on the internet could then see your name, class
+and the case history, scores and improvement focus you've chosen to share. The same switches decide what: **written feedback
+and learning notes are never shown to visitors**, even if you share them with members. A case set to "keep this case
+private" is hidden from everyone; a case set to "share the case name only" or "share this case in full" is shown to visitors
+too once your profile is public (a "full" case shows its scores and improvement focus, never its text). Profile & privacy
+previews each audience separately. Turning it off, or no longer appearing in People, withdraws you from the public page at once. Each switch saves the
 moment you flip it, and **"What other members see"** at the bottom shows exactly what the database is serving about you.
 
 **Per case.** When you log or edit a case, an optional **Sharing for this case** section lets you override your defaults:
@@ -150,9 +163,14 @@ Privacy is enforced in the database, not in the screens:
 - They read a separate **`shared_cases`** table. It contains only the fields you chose to share, and database triggers keep it
   up to date in the same transaction as any change to a case or a switch. Private values aren't hidden there: they aren't in it
   at all, so no query, filter, sort or count can leak them. Turning a switch off removes the data immediately.
-- It's read-only for members, internal functions can't be called through the API, signed-in users get only the privileges they
-  need, and the anonymous role gets nothing.
-- Membership (`is_member()`) requires a verified email and is the single switch for any future restriction.
+- It's read-only for members, internal functions can't be called through the API, and signed-in users get only the privileges
+  they need.
+- **Visitors without an account** (the database's `anon` role) have **no privilege at all** on `cases`, `profiles` or
+  `shared_cases`. They read two separate tables, `public_profiles` and `public_shared_cases`, which hold only members who
+  switched public on and only the fields visitors may see (no written feedback or notes, and not the private case id). Because
+  those are the only tables they can touch, they can't filter, sort, count or even estimate their way to anything that isn't
+  public, and the tables are filled by the same triggers, so changes apply at once.
+- Membership (`is_member_id()`) requires a verified email and is the single place to change who counts as a member.
 
 These rules are tested directly against a real Postgres (see Tests), including attempts to bypass the interface.
 
@@ -164,8 +182,9 @@ These rules are tested directly against a real Postgres (see Tests), including a
 | --- | --- | --- |
 | `cases` | Your cases: date, title, source, case type, industry, partner, overall rating and feedback, the eight MCG skill ratings with feedback (one `skills` JSON column), takeaways, improvement tag, other notes, sharing override | Only you |
 | `opportunities` | Your hand-edited lists from the MCG "Opportunity Areas" tab | Only you |
-| `profiles` | Name, optional MBA class, listed flag, the six sharing switches. No email | Verified members (listed profiles) |
+| `profiles` | Name, optional MBA class, listed and public flags, the six sharing switches. No email | Verified members (listed profiles) |
 | `shared_cases` | The owner-approved projection of cases (see above). Written only by triggers | Verified members |
+| `public_profiles`, `public_shared_cases` | Copies for members who chose to be public, without free text. Written only by triggers | Anyone, including visitors without an account |
 
 Averages, coverage, trends, suggestions, learning history and custom industries are calculated in the browser from your own
 rows, so they need no tables, and your personal dashboard can never include other members' records. Fields that are optional
@@ -316,6 +335,7 @@ There is no group administration, messaging or social feed: members, profiles an
 `npm test` runs the whole fast suite (about 170 tests) covering:
 
 - **Database**: the real migrations run in Postgres (PGlite): required vs optional columns, rating and case-type rules, and row level security for personal data (own rows only, no cross-user read/update/delete/insert, no anonymous access, signed-out writes refused, cascade on user delete)
+- **Public visitors**: the `anon` role tried as a scraper would: nothing public by default, opt-in only, no free text (the columns don't exist in the public tables), private cases hidden, no access to any member or personal table (so no filters, counts or planner estimates over hidden data), no writes or function calls, length and skill-name limits, and former members removed by `revoke_nonmembers()`
 - **Privacy**: three verified members and one unverified, tried as an attacker would with direct queries: nothing shared by default; each of the six switches reveals only its own field; scores need case history; per-case overrides (private, name only, full); changes apply immediately and leave no stale data; unlisted members vanish; `other_notes` and partner never appear; another member can't read, edit or delete your cases or profile, write the shared table, or call the internal functions; filters, sorting and counts can't reveal hidden values; unverified and anonymous users get nothing; least-privilege table grants
 - **Community logic**: loose case-title matching, pairing (what to offer, what to avoid, thin areas) and the filters
 - **Accounts**: sign-up, verification, resend, expired links, password reset, onboarding with everything off by default
@@ -354,5 +374,7 @@ sharing switches, then restore them to listed with nothing shared.
 - Case matching is by title only, so very different spellings of the same case can be missed, and different cases that share
   most of their words can be flagged as "might overlap". It never decides for you.
 - Member names aren't verified: anyone with a verified email can choose any display name, and no email is shown to check it. Restricting sign-up to Booth addresses (see Set it up, step 2) is the fix if impersonation becomes a concern.
+- Anything a member makes public can be read, copied and scraped by anyone, and can't be recalled once copied. That is why it is opt-in, off by default, confirmed, and excludes written text. Visitors can page through the public members and their cases; there is no rate limit beyond Supabase's own.
+- Per-case settings other than "private" (name only, full) also apply to visitors once a profile is public; "private" is the only per-case way to hide a case from everyone.
 - The People directory shows listed members alphabetically (first 50 per search); there is no pagination or profile photo.
 - CAPTCHA is recommended for public sign-up but isn't wired in yet (see Set it up, step 2).

@@ -1,17 +1,23 @@
 import type { Rating, SkillGroupKey, SkillKey, CaseType } from '../domain/constants';
 import type { Profile, ProfileInput, SharedCase } from '../domain/community';
 
-/** What the app needs from the community side of the database. Supabase implements it for real data. */
-export interface CommunityRepository {
+/** Read-only access to member profiles and shared cases. Visitors without an account only ever get this. */
+export interface CommunityReader {
+  /** Listed members whose name contains the text (empty text lists members alphabetically). */
+  searchPeople(query: string): Promise<Profile[]>;
+  getPerson(userId: string): Promise<Profile | null>;
+  /** The cases that person has chosen to share with this audience. */
+  getSharedCases(ownerId: string): Promise<SharedCase[]>;
+}
+
+/** What the app needs from the community side of the database for a signed-in member. */
+export interface CommunityRepository extends CommunityReader {
+  /** What visitors WITHOUT an account see of one member (for "preview"), read as a real anonymous request would. */
+  getPublicView(ownerId: string): Promise<SharedCase[]>;
   /** Your own profile, or null if you haven't set one up yet (shows the onboarding screen). */
   getMyProfile(): Promise<Profile | null>;
   /** Create or update your profile and sharing switches. Takes effect for other members immediately. */
   saveProfile(input: ProfileInput): Promise<Profile>;
-  /** Listed members whose name contains the text (empty text lists members alphabetically). Never includes you. */
-  searchPeople(query: string): Promise<Profile[]>;
-  getPerson(userId: string): Promise<Profile | null>;
-  /** The cases that person has chosen to share, exactly as the database serves them to other members. */
-  getSharedCases(ownerId: string): Promise<SharedCase[]>;
 }
 
 // --- row shapes (see supabase/migrations) and their mapping --------------------------------------
@@ -21,6 +27,7 @@ export interface ProfileRow {
   display_name: string;
   mba_class: string | null;
   listed: boolean;
+  public_profile: boolean;
   share_cases: boolean;
   share_overall: boolean;
   share_skills: boolean;
@@ -35,6 +42,7 @@ export function rowToProfile(r: ProfileRow): Profile {
     displayName: r.display_name,
     mbaClass: r.mba_class ?? '',
     listed: r.listed,
+    publicProfile: r.public_profile ?? false,
     sharing: {
       cases: r.share_cases,
       overall: r.share_overall,
@@ -51,6 +59,7 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
     display_name: input.displayName.trim(),
     mba_class: input.mbaClass.trim() === '' ? null : input.mbaClass.trim(),
     listed: input.listed,
+    public_profile: input.listed && input.publicProfile, // public needs listed (also a database rule)
     share_cases: input.sharing.cases,
     share_overall: input.sharing.overall,
     share_skills: input.sharing.skills,
@@ -64,6 +73,40 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
 export const SHARED_COLUMNS =
   'share_id, owner_id, case_date, title, source, case_type, industry, overall, skill_scores, feedback, improvement_area, notes';
 
+/** The public tables hold only public members and fields; these are the columns visitors without an account may read. */
+export const PUBLIC_PROFILE_COLUMNS = 'user_id, display_name, mba_class, share_cases, share_overall, share_skills, share_improvement';
+
+export interface PublicProfileRow {
+  user_id: string;
+  display_name: string;
+  mba_class: string | null;
+  share_cases: boolean;
+  share_overall: boolean;
+  share_skills: boolean;
+  share_improvement: boolean;
+}
+
+/** A public member as a visitor knows them. Free text (feedback, notes) is never shared with visitors. */
+export function rowToPublicProfile(r: PublicProfileRow): Profile {
+  return {
+    userId: r.user_id,
+    displayName: r.display_name,
+    mbaClass: r.mba_class ?? '',
+    listed: true,
+    publicProfile: true,
+    sharing: {
+      cases: r.share_cases,
+      overall: r.share_overall,
+      skills: r.share_skills,
+      feedback: false,
+      improvement: r.share_improvement,
+      notes: false,
+    },
+  };
+}
+export const PUBLIC_SHARED_COLUMNS =
+  'share_id, owner_id, case_date, title, source, case_type, industry, overall, skill_scores, improvement_area';
+
 export interface SharedRow {
   share_id: string;
   owner_id: string;
@@ -74,9 +117,10 @@ export interface SharedRow {
   industry: string | null;
   overall: number | null;
   skill_scores: Record<string, number> | null;
-  feedback: { overall?: string; skills?: Record<string, string> } | null;
+  /** Absent for visitors without an account: free text is members-only. */
+  feedback?: { overall?: string; skills?: Record<string, string> } | null;
   improvement_area: string | null;
-  notes: { went_well?: string; struggled?: string; concepts?: string; next_focus?: string } | null;
+  notes?: { went_well?: string; struggled?: string; concepts?: string; next_focus?: string } | null;
 }
 
 export function rowToSharedCase(r: SharedRow): SharedCase {
@@ -90,7 +134,7 @@ export function rowToSharedCase(r: SharedRow): SharedCase {
     industry: r.industry ?? '',
     overall: (r.overall as Rating | null) ?? null,
     skillScores: r.skill_scores as Partial<Record<SkillKey, Rating>> | null,
-    feedback: r.feedback as SharedCase['feedback'],
+    feedback: (r.feedback as SharedCase['feedback']) ?? null,
     improvementArea: (r.improvement_area as SkillGroupKey | null) ?? null,
     notes: r.notes
       ? {

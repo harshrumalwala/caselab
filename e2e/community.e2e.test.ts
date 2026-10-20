@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { SHARED_COLUMNS } from '../src/data/community';
-import { SupabaseCommunity } from '../src/data/supabaseCommunity';
+import { PublicCommunity, SupabaseCommunity } from '../src/data/supabaseCommunity';
 import { SupabaseRepository } from '../src/data/supabaseRepository';
 import { NO_SHARING, type ProfileInput, type SharingPrefs } from '../src/domain/community';
 import type { CaseRecord } from '../src/domain/types';
@@ -25,6 +25,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     displayName: 'E2E Owner A',
     mbaClass: '',
     listed: true,
+    publicProfile: false,
     sharing: NO_SHARING,
     ...over,
   });
@@ -47,8 +48,8 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     a = await signedInClient(USER_A);
     b = await signedInClient(USER_B);
     repoA = new SupabaseRepository(a.client);
-    communityA = new SupabaseCommunity(a.client, a.userId);
-    communityB = new SupabaseCommunity(b.client, b.userId);
+    communityA = new SupabaseCommunity(a.client, a.userId, newClient());
+    communityB = new SupabaseCommunity(b.client, b.userId, newClient());
     await communityA.saveProfile(profile());
     await communityB.saveProfile(profile({ displayName: 'E2E Viewer B' }));
     await cleanup(a.client);
@@ -213,6 +214,67 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     expect(star.error).not.toBeNull();
     const seen = await b.client.from('shared_cases').select('share_id').eq('owner_id', a.userId);
     expect(JSON.stringify(seen.data)).not.toContain(c.id);
+  });
+
+  describe('visitors without an account', () => {
+    const visitor = () => new PublicCommunity(newClient());
+    const visibleToVisitors = async () => (await visitor().getSharedCases(a.userId)).filter((s) => s.title.startsWith(TEST_PREFIX));
+
+    it('see nothing by default, however much is shared with members', async () => {
+      await repoA.insertCase(testCase());
+      await communityA.saveProfile(profile({ sharing: sharing(...(Object.keys(NO_SHARING) as (keyof SharingPrefs)[])) }));
+      expect(await visibleToVisitors()).toEqual([]);
+      expect(await visitor().getPerson(a.userId)).toBeNull();
+      expect((await visitor().searchPeople('E2E Owner A')).some((p) => p.userId === a.userId)).toBe(false);
+    });
+
+    it('see a member who opted in: history and chosen scores, never written feedback or notes, and only until they opt out', async () => {
+      const c = testCase();
+      await repoA.insertCase(c);
+      await communityA.saveProfile(profile({ publicProfile: true, sharing: sharing(...(Object.keys(NO_SHARING) as (keyof SharingPrefs)[])) }));
+
+      const person = await visitor().getPerson(a.userId);
+      expect(person).toMatchObject({ displayName: 'E2E Owner A', publicProfile: true });
+      expect(person?.sharing).toMatchObject({ cases: true, overall: true, feedback: false, notes: false }); // free text is not shared with visitors
+      const [row] = await visibleToVisitors();
+      expect(row).toMatchObject({ title: c.title, caseType: c.caseType, overall: c.overall });
+      expect([row.feedback, row.notes]).toEqual([null, null]);
+      expect(JSON.stringify(row)).not.toContain(c.overallFeedback);
+      expect(JSON.stringify(row)).not.toContain('PRIVATE-OTHER-NOTES');
+
+      await communityA.saveProfile(profile({ publicProfile: false, sharing: sharing('cases') }));
+      expect(await visibleToVisitors()).toEqual([]);
+      expect(await visitor().getPerson(a.userId)).toBeNull();
+    });
+
+    it('cannot read anything else, or write anything, through direct requests', async () => {
+      await repoA.insertCase(testCase());
+      await communityA.saveProfile(profile({ publicProfile: true, sharing: sharing('cases') }));
+      const anon = newClient();
+      for (const table of ['cases', 'opportunities', 'profiles', 'shared_cases']) {
+        expect((await anon.from(table).select('*')).error, table).not.toBeNull();
+      }
+      expect((await anon.from('public_shared_cases').select('feedback')).error).not.toBeNull(); // no such column
+      expect((await anon.from('public_shared_cases').select('case_id')).error).not.toBeNull(); // not granted
+      expect((await anon.from('public_shared_cases').select('*')).error).not.toBeNull();
+      expect((await anon.from('public_profiles').update({ display_name: 'hacked' }).eq('user_id', a.userId)).error).not.toBeNull();
+      expect((await anon.from('public_shared_cases').delete().eq('owner_id', a.userId)).error).not.toBeNull();
+      expect((await anon.rpc('revoke_nonmembers')).error).not.toBeNull();
+      expect((await anon.rpc('refresh_all_shared')).error).not.toBeNull();
+      expect((await communityB.getPerson(a.userId))?.displayName).toBe('E2E Owner A'); // members unaffected
+    });
+
+    it('stop seeing a member the moment they unlist, and a private case is never public', async () => {
+      const open = testCase({ title: `${TEST_PREFIX} public one` });
+      const secret = testCase({ title: `${TEST_PREFIX} secret one`, shareMode: 'private' });
+      await repoA.insertCase(open);
+      await repoA.insertCase(secret);
+      await communityA.saveProfile(profile({ publicProfile: true, sharing: sharing('cases') }));
+      expect((await visibleToVisitors()).map((s) => s.title)).toEqual([open.title]);
+
+      await communityA.saveProfile(profile({ listed: false, publicProfile: true, sharing: sharing('cases') })); // unlisting also withdraws public
+      expect(await visibleToVisitors()).toEqual([]);
+    });
   });
 
   it('removes shared data when the case is deleted', async () => {

@@ -214,13 +214,14 @@ export const SHARE_MODES: { value: ShareMode; label: string; description: string
   {
     value: 'history',
     label: 'Share the case name only',
-    description: 'Members see the name, source, industry and type, but no scores, feedback or notes.',
+    description:
+      'Others see the name, source, industry and type, but no scores, feedback or notes. If your profile is visible to anyone, this case is too.',
   },
   {
     value: 'full',
     label: 'Share this case in full',
     description:
-      'Members see its scores, written feedback, improvement focus and learning notes, even if your profile shares none of those. "Other notes" stay private.',
+      'Members see its scores, written feedback, improvement focus and learning notes, even if your profile shares none of those. If your profile is visible to anyone, visitors see its name, scores and improvement focus (never feedback or notes). "Other notes" stay private.',
   },
 ];
 

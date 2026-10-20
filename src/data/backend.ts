@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseAuth, type AuthApi } from './auth';
-import type { CommunityRepository } from './community';
+import type { CommunityReader, CommunityRepository } from './community';
 import type { CaseLabRepository } from './repository';
-import { SupabaseCommunity } from './supabaseCommunity';
+import { PublicCommunity, SupabaseCommunity } from './supabaseCommunity';
 import { SupabaseRepository } from './supabaseRepository';
 
 /** Everything the app needs from the outside world: who you are, where your data lives, and the community. */
@@ -10,6 +10,8 @@ export interface Backend {
   auth: AuthApi;
   createRepository(): CaseLabRepository;
   createCommunity(userId: string): CommunityRepository;
+  /** Read-only access for people without an account (the landing page). */
+  createPublicCommunity(): CommunityReader;
   /** Set when the page was opened from an email link that failed (expired, already used). */
   linkProblem?: string;
 }
@@ -56,11 +58,16 @@ export function createSupabaseBackend(
   const client = createClient(url, key, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });
+  // A second client that never holds a session: everything it does runs as a visitor without an account.
+  const anon = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
   return {
     backend: {
       auth: createSupabaseAuth(client),
       createRepository: () => new SupabaseRepository(client),
-      createCommunity: (userId) => new SupabaseCommunity(client, userId),
+      createCommunity: (userId) => new SupabaseCommunity(client, userId, anon),
+      createPublicCommunity: () => new PublicCommunity(anon),
       linkProblem,
     },
   };
