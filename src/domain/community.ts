@@ -10,6 +10,7 @@ export interface SharingPrefs {
   feedback: boolean; // written feedback received
   improvement: boolean; // improvement-focus tag of each shared case
   notes: boolean; // went well / struggled / concepts / next focus
+  partner: boolean; // who cased you (practice partner / interviewer) on each shared case
 }
 
 export const NO_SHARING: SharingPrefs = {
@@ -19,6 +20,7 @@ export const NO_SHARING: SharingPrefs = {
   feedback: false,
   improvement: false,
   notes: false,
+  partner: false,
 };
 
 export interface Profile {
@@ -42,6 +44,8 @@ export interface SharedCase {
   date: string;
   title: string;
   source: string;
+  /** Who cased them; empty unless they chose to share it. */
+  partner: string;
   caseType: CaseType;
   industry: string;
   overall: Rating | null;
@@ -102,10 +106,17 @@ export const SHARING_OPTIONS: {
     hint: 'What went well, what you struggled with, concepts learned and next focus.',
     needsCases: true,
   },
+  {
+    key: 'partner',
+    label: 'Who cased me',
+    short: 'who cased them',
+    hint: "The name of your practice partner or interviewer on each shared case. They haven't agreed to be listed, so keep this off unless you're sure.",
+    needsCases: true,
+  },
 ];
 
 /** What a visitor without an account can ever see: written feedback and learning notes are members-only. */
-export const PUBLIC_SHARING_KEYS: (keyof SharingPrefs)[] = ['cases', 'overall', 'skills', 'improvement'];
+export const PUBLIC_SHARING_KEYS: (keyof SharingPrefs)[] = ['cases', 'overall', 'skills', 'improvement', 'partner'];
 
 /** Like sharingSummary, but only the parts visitors without an account can actually see. */
 export function publicSharingSummary(sharing: SharingPrefs): string {
@@ -138,7 +149,7 @@ export function sharedToRecords(shared: SharedCase[]): CaseRecord[] {
       source: s.source,
       caseType: s.caseType,
       industry: s.industry,
-      partner: '',
+      partner: s.partner,
       overall: s.overall,
       overallFeedback: '',
       skills,

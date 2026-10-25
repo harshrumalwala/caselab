@@ -121,7 +121,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     expect(row.overall).toBe(c.overall);
     expect([row.skillScores, row.feedback, row.notes]).toEqual([null, null, null]);
 
-    await communityA.saveProfile(profile({ sharing: sharing('cases', 'skills', 'feedback', 'improvement', 'notes') }));
+    await communityA.saveProfile(profile({ sharing: sharing('cases', 'skills', 'feedback', 'improvement', 'notes') })); // partner stays off
     [row] = await seenByB();
     expect(row.overall).toBeNull();
     expect(row.skillScores).toMatchObject({ framework: 2 });
@@ -241,6 +241,10 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
       expect([row.feedback, row.notes]).toEqual([null, null]);
       expect(JSON.stringify(row)).not.toContain(c.overallFeedback);
       expect(JSON.stringify(row)).not.toContain('PRIVATE-OTHER-NOTES');
+      expect(row.partner).toBe('PRIVATE-PARTNER'); // "who cased me" was switched on above, and only then
+
+      await communityA.saveProfile(profile({ publicProfile: true, sharing: sharing('cases', 'overall') }));
+      expect((await visibleToVisitors())[0].partner).toBe(''); // switched off again: the name is gone at once
 
       await communityA.saveProfile(profile({ publicProfile: false, sharing: sharing('cases') }));
       expect(await visibleToVisitors()).toEqual([]);

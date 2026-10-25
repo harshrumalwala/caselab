@@ -8,7 +8,7 @@ interface Props {
 }
 
 /**
- * The six sharing switches. Case history is the master switch: scores, feedback and notes only apply
+ * The sharing switches. Case history is the master switch: scores, feedback and notes only apply
  * to cases that are shared, so they are greyed out until it is on.
  */
 export function SharingSwitches({ value, onChange, disabled = false }: Props) {

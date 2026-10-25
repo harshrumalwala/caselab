@@ -24,8 +24,8 @@ const PREFS = ['share_cases', 'share_overall', 'share_skills', 'share_feedback',
 type Pref = (typeof PREFS)[number];
 
 /** The public tables and the columns visitors may read. */
-const PUBLIC_CASES = 'share_id, owner_id, case_date, title, source, case_type, industry, overall, skill_scores, improvement_area';
-const PUBLIC_PROFILES = 'user_id, display_name, mba_class, share_cases, share_overall, share_skills, share_improvement';
+const PUBLIC_CASES = 'share_id, owner_id, case_date, title, source, partner, case_type, industry, overall, skill_scores, improvement_area';
+const PUBLIC_PROFILES = 'user_id, display_name, mba_class, share_cases, share_overall, share_skills, share_improvement, share_partner';
 /** What members may read (adds the free-text columns). */
 const MEMBER_SHARED = `${PUBLIC_CASES}, feedback, notes`;
 
@@ -254,6 +254,67 @@ describe('what visitors can see of a public member', () => {
   });
 });
 
+describe('who cased the member (the practice partner)', () => {
+  it('is off for everyone by default: no partner name is visible to members or visitors', async () => {
+    await createProfile(ALICE, 'Alice', [...PREFS], { isPublic: true });
+    await addCase(ALICE, { share_mode: 'full' });
+    expect((await visitorSees())[0].partner).toBeNull();
+    expect((await membersSee())[0].partner).toBeNull();
+    expect(JSON.stringify([await visitorSees(), await membersSee(), await visitorProfiles()])).not.toContain('PRIVATE-PARTNER');
+    expect((await visitorProfiles())[0].share_partner).toBe(false);
+  });
+
+  it('shows the name to members and visitors once the switch is on, and removes it the moment it is off', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await addCase(ALICE, { partner: '  Sam Lee  ' });
+    await update(ALICE, 'share_partner = true');
+    expect((await visitorSees())[0].partner).toBe('Sam Lee');
+    expect((await membersSee())[0].partner).toBe('Sam Lee');
+    expect((await visitorProfiles())[0].share_partner).toBe(true);
+
+    await update(ALICE, 'share_partner = false');
+    expect((await visitorSees())[0].partner).toBeNull();
+    expect((await membersSee())[0].partner).toBeNull();
+  });
+
+  it('follows edits to the case, leaves blank names out, and never reveals partners of private cases', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    const shown = await addCase(ALICE, { title: 'Shown case', partner: 'Sam' });
+    await addCase(ALICE, { title: 'Blank partner', partner: '   ' });
+    await addCase(ALICE, { title: 'Hidden case', partner: 'Secret Partner', share_mode: 'private' });
+    await update(ALICE, 'share_partner = true');
+
+    const rows = await visitorSees();
+    expect(rows.map((r) => [r.title, r.partner])).toEqual([['Blank partner', null], ['Shown case', 'Sam']]);
+    expect(JSON.stringify([rows, await membersSee()])).not.toContain('Secret Partner');
+
+    await as(db, 'authenticated', ALICE);
+    await db.query(`update public.cases set partner = 'Pat' where id = $1`, [shown]);
+    expect((await visitorSees()).find((r) => r.title === 'Shown case')?.partner).toBe('Pat');
+    await as(db, 'authenticated', ALICE);
+    await db.query(`update public.cases set share_mode = 'private' where id = $1`, [shown]);
+    expect((await visitorSees()).map((r) => r.title)).toEqual(['Blank partner']);
+  });
+
+  it('does not show the partner to visitors of a members-only profile, and cuts long names', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases']);
+    await update(ALICE, 'share_partner = true');
+    await addCase(ALICE, { partner: 'x'.repeat(100) });
+    expect(await visitorSees()).toEqual([]);
+    expect((await membersSee())[0].partner).toBe('x'.repeat(100));
+    await as(db, 'authenticated', ALICE);
+    await expect(db.query(`update public.cases set partner = $1`, ['x'.repeat(101)])).rejects.toThrow(/cases_partner_length/);
+  });
+
+  it('applies the whole-profile switch to the partner of cases shared with a name-only override', async () => {
+    await createProfile(ALICE, 'Alice', [], { isPublic: true });
+    await addCase(ALICE, { share_mode: 'history' });
+    expect((await visitorSees())[0].partner).toBeNull();
+    await update(ALICE, 'share_partner = true');
+    expect((await visitorSees())[0].partner).toBe('PRIVATE-PARTNER');
+  });
+});
+
 describe('abuse limits', () => {
   it('limits the length of what can be shown to others', async () => {
     await as(db, 'authenticated', ALICE);
@@ -411,7 +472,7 @@ describe('everything else stays closed to visitors', () => {
 
     const col = async (c: string) =>
       (await db.query<{ ok: boolean }>(`select has_column_privilege('anon', 'public.public_shared_cases', $1, 'SELECT') as ok`, [c])).rows[0].ok;
-    for (const c of ['share_id', 'owner_id', 'case_date', 'title', 'source', 'case_type', 'industry', 'overall', 'skill_scores', 'improvement_area']) {
+    for (const c of ['share_id', 'owner_id', 'case_date', 'title', 'source', 'partner', 'case_type', 'industry', 'overall', 'skill_scores', 'improvement_area']) {
       expect(await col(c), c).toBe(true);
     }
     expect(await col('case_id')).toBe(false);

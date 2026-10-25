@@ -237,7 +237,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
             <SharingSwitches value={profile.sharing} onChange={setSharing} disabled={saving || !profile.listed} />
             <p className="text-xs text-muted">
               You can override any single case when you log or edit it: keep it private, share only its name, or share it in
-              full. "Other notes" and your practice partner are never shared.
+              full. "Other notes" are never shared, and your practice partner's name only appears if you turn on "Who cased me".
             </p>
           </section>
 
@@ -266,6 +266,11 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
           visitors its scores and improvement focus even if those switches are off. To hide a case from everyone, set it to "keep this
           case private".
         </p>
+        {profile.sharing.partner && (
+          <p>
+            "Who cased me" is on, so the name you entered as your practice partner will also be shown on each of these cases.
+          </p>
+        )}
         <p>Written feedback and learning notes are never shown to visitors. You can switch this off again at any time.</p>
       </ConfirmDialog>
     </>
