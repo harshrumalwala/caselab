@@ -11,7 +11,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **Improvement Areas**: thin spots in your coverage, skills to sharpen, and a searchable history of what you've learned
 - **A public front page**: anyone, with no account (firm reps, second-years), can search the members who chose to be visible and read what they share
 - **People**: find a fellow member, see only what they've chosen to share, and work out which case to give them
-- **Profile & privacy**: six switches for what other members can see, a per-case override, and a live preview
+- **Profile & privacy**: switches for what other members can see, a per-case override, and a live preview
 - **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export and MCG Excel import are built in
 
 ---
@@ -122,6 +122,7 @@ members** (the default once you appear in People) and, only if you switch it on,
 | **Written feedback** | Feedback you received (overall and per skill) |
 | **Improvement focus** | The "main thing to improve" tag on each shared case |
 | **Learning notes** | What went well, what you struggled with, concepts learned, next focus |
+| **Who cased me** | The name you entered as your practice partner or interviewer, shown on each shared case (see below) |
 
 Scores, feedback and notes only apply to cases that are shared, so they switch on after **Case history**.
 
@@ -138,7 +139,11 @@ moment you flip it, and **"What other members see"** at the bottom shows exactly
 use your profile settings (the default), keep this case private, share only its name, or share it in full (its scores,
 feedback and notes, even if your profile shares none of those). Nobody has to touch it when logging.
 
-**Never shared, whatever you choose:** your email address, the "Other notes" field, and who you practiced with.
+**Who cased me** is its own switch, **off by default**, because it names a third person who hasn't agreed to be listed. When on, the
+partner name appears on every one of your cases that is shared at all, to members and (if your profile is public) to visitors; a case set to
+"keep this case private" never shows it. The casebook or source of each case is part of **Case history**, so it is shown with it.
+
+**Never shared, whatever you choose:** your email address and the "Other notes" field.
 
 ### Find a case for someone
 
@@ -182,7 +187,7 @@ These rules are tested directly against a real Postgres (see Tests), including a
 | --- | --- | --- |
 | `cases` | Your cases: date, title, source, case type, industry, partner, overall rating and feedback, the eight MCG skill ratings with feedback (one `skills` JSON column), takeaways, improvement tag, other notes, sharing override | Only you |
 | `opportunities` | Your hand-edited lists from the MCG "Opportunity Areas" tab | Only you |
-| `profiles` | Name, optional MBA class, listed and public flags, the six sharing switches. No email | Verified members (listed profiles) |
+| `profiles` | Name, optional MBA class, listed and public flags, the sharing switches. No email | Verified members (listed profiles) |
 | `shared_cases` | The owner-approved projection of cases (see above). Written only by triggers | Verified members |
 | `public_profiles`, `public_shared_cases` | Copies for members who chose to be public, without free text. Written only by triggers | Anyone, including visitors without an account |
 
@@ -336,7 +341,7 @@ There is no group administration, messaging or social feed: members, profiles an
 
 - **Database**: the real migrations run in Postgres (PGlite): required vs optional columns, rating and case-type rules, and row level security for personal data (own rows only, no cross-user read/update/delete/insert, no anonymous access, signed-out writes refused, cascade on user delete)
 - **Public visitors**: the `anon` role tried as a scraper would: nothing public by default, opt-in only, no free text (the columns don't exist in the public tables), private cases hidden, no access to any member or personal table (so no filters, counts or planner estimates over hidden data), no writes or function calls, length and skill-name limits, and former members removed by `revoke_nonmembers()`
-- **Privacy**: three verified members and one unverified, tried as an attacker would with direct queries: nothing shared by default; each of the six switches reveals only its own field; scores need case history; per-case overrides (private, name only, full); changes apply immediately and leave no stale data; unlisted members vanish; `other_notes` and partner never appear; another member can't read, edit or delete your cases or profile, write the shared table, or call the internal functions; filters, sorting and counts can't reveal hidden values; unverified and anonymous users get nothing; least-privilege table grants
+- **Privacy**: three verified members and one unverified, tried as an attacker would with direct queries: nothing shared by default; each switch reveals only its own field; scores need case history; per-case overrides (private, name only, full); changes apply immediately and leave no stale data; unlisted members vanish; `other_notes` never appears and the partner only with its own switch; another member can't read, edit or delete your cases or profile, write the shared table, or call the internal functions; filters, sorting and counts can't reveal hidden values; unverified and anonymous users get nothing; least-privilege table grants
 - **Community logic**: loose case-title matching, pairing (what to offer, what to avoid, thin areas) and the filters
 - **Accounts**: sign-up, verification, resend, expired links, password reset, onboarding with everything off by default
 - **Supabase layer**: row mapping that round-trips every field, a repository run against a fake Supabase (paging past 1000 rows, chunked upserts, replace-without-data-loss, errors surfaced), friendly error messages, configuration checks

@@ -33,7 +33,9 @@ export function SharedCaseRow({ shared, extra }: { shared: SharedCase; extra?: R
         <div className="min-w-0">
           <p className="font-semibold text-ink">{shared.title}</p>
           <p className="mt-0.5 text-xs text-muted">
-            {[formatDate(shared.date), shared.caseType, shared.industry, shared.source].filter(Boolean).join(' · ')}
+            {[formatDate(shared.date), shared.caseType, shared.industry, shared.source, shared.partner && `Cased by ${shared.partner}`]
+              .filter(Boolean)
+              .join(' · ')}
           </p>
         </div>
         {shared.overall !== null && <RatingBadge value={shared.overall} />}

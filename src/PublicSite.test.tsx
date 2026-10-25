@@ -19,6 +19,7 @@ const row = (over: Partial<SharedCase> & Pick<SharedCase, 'caseId' | 'title'>): 
   ownerId: 'bob',
   date: '2026-10-01',
   source: '',
+  partner: '',
   caseType: 'Profitability',
   industry: 'Technology / SaaS',
   overall: null,
@@ -64,6 +65,21 @@ describe('the public front page', () => {
     const bob = screen.getByRole('button', { name: /Bob Brown/ });
     expect(bob).toHaveTextContent('Shares case history and overall scores');
     expect(bob).not.toHaveTextContent(/feedback|notes/i);
+  });
+
+  it('shows who cased the member and where the case came from, when they chose to share it', async () => {
+    const env = visitor({
+      shared: [
+        row({ caseId: 'p1', title: 'Airline profitability', source: 'Booth casebook', partner: 'Sam Lee' }),
+        row({ caseId: 'p2', title: 'Bank market entry', source: 'Case in Point' }),
+      ],
+    });
+    const { user } = await open(env);
+    await user.click(await screen.findByRole('button', { name: /Bob Brown/ }));
+    const shown = (await screen.findByText('Airline profitability')).closest('li')!;
+    expect(shown).toHaveTextContent('Booth casebook');
+    expect(shown).toHaveTextContent('Cased by Sam Lee');
+    expect(screen.getByText('Bank market entry').closest('li')).not.toHaveTextContent(/Cased by/);
   });
 
   it('searches members by name', async () => {

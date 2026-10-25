@@ -158,7 +158,7 @@ describe('nothing is shared until someone opts in', () => {
     expect((await db.query('delete from public.cases where id = $1 returning id', [id])).rows).toEqual([]);
     const cols = (await db.query<{ column_name: string }>(`select column_name from information_schema.columns where table_name = 'shared_cases'`)).rows.map((c) => c.column_name);
     expect(cols).not.toEqual(expect.arrayContaining(['other_notes']));
-    expect(cols).not.toContain('partner');
+    expect(cols).toContain('partner'); // projected only when the member turns "who cased me" on (see public.test.ts)
     expect(cols).not.toContain('skills');
   });
 });
@@ -202,7 +202,7 @@ describe('what each sharing switch reveals', () => {
     expect(await sharedAs(BOB)).toEqual([]);
   });
 
-  it('never shares other notes or the practice partner, whatever is switched on', async () => {
+  it('never shares other notes, and the practice partner only with its own switch', async () => {
     await createProfile(ALICE, 'Alice', [...PREFS]);
     await addCase(ALICE, { share_mode: 'full' });
     const rows = await sharedAs(BOB);

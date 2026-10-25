@@ -487,6 +487,7 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
                 onChange={(e) => set('partner', e.target.value)}
                 placeholder="Optional"
                 autoComplete="off"
+                maxLength={100}
               />
               <datalist id="partner-options">
                 {partners.map((p) => (

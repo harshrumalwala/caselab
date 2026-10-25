@@ -23,6 +23,7 @@ const shared = (over: Partial<SharedCase> & Pick<SharedCase, 'caseId' | 'title'>
   ownerId: 'bob',
   date: '2026-10-01',
   source: '',
+  partner: '',
   caseType: 'Profitability',
   industry: 'Technology / SaaS',
   overall: null,
@@ -134,7 +135,7 @@ describe('profile setup', () => {
     const env = createFakeEnv({ profile: null });
     const { user } = await openApp(env);
     await screen.findByRole('heading', { name: 'Set up your profile' });
-    for (const label of ['Case history', 'Overall scores', 'Skill scores', 'Written feedback', 'Improvement focus', 'Learning notes']) {
+    for (const label of ['Case history', 'Overall scores', 'Skill scores', 'Written feedback', 'Improvement focus', 'Learning notes', 'Who cased me']) {
       expect(screen.getByRole('switch', { name: label })).toHaveAttribute('aria-checked', 'false');
     }
     await user.click(screen.getByRole('button', { name: 'Start casing' }));
@@ -383,6 +384,17 @@ describe('Profile & privacy settings', () => {
     await waitFor(() => expect(env.community.profiles.find((p) => p.userId === TEST_USER.userId)?.sharing.feedback).toBe(true));
     await user.click(sw('Case history'));
     await waitFor(() => expect(env.community.profiles.find((p) => p.userId === TEST_USER.userId)?.sharing.cases).toBe(false));
+  });
+
+  it('offers "Who cased me" as its own switch, off by default, saved like the others', async () => {
+    const { user, env, dialog } = await open();
+    const sw = (name: string) => within(dialog).getByRole('switch', { name });
+    expect(sw('Who cased me')).toHaveAttribute('aria-checked', 'false');
+    expect(sw('Who cased me')).toBeDisabled(); // needs case history first
+    await user.click(sw('Case history'));
+    await waitFor(() => expect(sw('Who cased me')).toBeEnabled());
+    await user.click(sw('Who cased me'));
+    await waitFor(() => expect(env.community.profiles.find((p) => p.userId === TEST_USER.userId)?.sharing.partner).toBe(true));
   });
 
   it('re-reads what other members can see after every change', async () => {
