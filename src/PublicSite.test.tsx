@@ -53,18 +53,26 @@ async function open(env: FakeEnv) {
   return { user };
 }
 
+/** The member list stays closed until someone asks for it. */
+const browse = async (user: ReturnType<typeof userEvent.setup>) => user.click(await screen.findByRole('button', { name: /See who.s casing/ }));
+
 describe('the public front page', () => {
   it('lets anyone browse members who chose to be public, without an account', async () => {
     const env = visitor();
-    await open(env);
-    expect(await screen.findByRole('heading', { name: 'Find a case partner' })).toBeInTheDocument();
+    const { user } = await open(env);
+    expect(await screen.findByRole('heading', { name: /Case smarter/ })).toBeInTheDocument();
+    // Nobody is listed, or even asked for, until the visitor opts to look.
+    expect(screen.queryByText('Bob Brown')).not.toBeInTheDocument();
+    expect(env.publicReader.calls).toEqual([]);
+
+    await browse(user);
     expect(await screen.findByRole('button', { name: /Bob Brown/ })).toBeInTheDocument();
     expect(screen.queryByText('Carol Chen')).not.toBeInTheDocument(); // shares with members only
     expect(screen.queryByText(/@/)).not.toBeInTheDocument(); // never an email address
-    // Only what a visitor can actually see is advertised: no mention of feedback or notes.
+    // The list shows a name and class only; what someone shares is a click further in.
     const bob = screen.getByRole('button', { name: /Bob Brown/ });
-    expect(bob).toHaveTextContent('Shares case history and overall scores');
-    expect(bob).not.toHaveTextContent(/feedback|notes/i);
+    expect(bob).toHaveTextContent('Class of 2027');
+    expect(bob).not.toHaveTextContent(/Shares|history|scores|feedback|notes|cased/i);
   });
 
   it('shows who cased the member and where the case came from, when they chose to share it', async () => {
@@ -75,6 +83,7 @@ describe('the public front page', () => {
       ],
     });
     const { user } = await open(env);
+    await browse(user);
     await user.click(await screen.findByRole('button', { name: /Bob Brown/ }));
     const shown = (await screen.findByText('Airline profitability')).closest('li')!;
     expect(shown).toHaveTextContent('Booth casebook');
@@ -82,9 +91,28 @@ describe('the public front page', () => {
     expect(screen.getByText('Bank market entry').closest('li')).not.toHaveTextContent(/Cased by/);
   });
 
+  it('explains the tool in general terms, without singling out a class year or one school', async () => {
+    const env = visitor();
+    await open(env);
+    await screen.findByRole('heading', { name: /Case smarter/ });
+    const text = document.body.textContent ?? '';
+    expect(text).toMatch(/Track your progress/);
+    expect(text).not.toMatch(/first-year|second-year|1Y|2Y|Booth/i);
+  });
+
+  it('keeps the list open when you come back from a profile', async () => {
+    const env = visitor();
+    const { user } = await open(env);
+    await browse(user);
+    await user.click(await screen.findByRole('button', { name: /Bob Brown/ }));
+    await user.click(await screen.findByRole('button', { name: /All members/ }));
+    expect(await screen.findByRole('button', { name: /Bob Brown/ })).toBeInTheDocument();
+  });
+
   it('searches members by name', async () => {
     const env = visitor({ members: [BOB, { ...BOB, userId: 'dana', displayName: 'Dana Diaz' }] });
     const { user } = await open(env);
+    await browse(user);
     await screen.findByRole('button', { name: /Bob Brown/ });
     await user.type(screen.getByLabelText('Search members by name'), 'dan');
     await waitFor(() => expect(screen.queryByText('Bob Brown')).not.toBeInTheDocument());
@@ -97,6 +125,7 @@ describe('the public front page', () => {
   it("opens a public member's profile: shared cases only, never feedback or notes, with a prompt to join", async () => {
     const env = visitor();
     const { user } = await open(env);
+    await browse(user);
     await user.click(await screen.findByRole('button', { name: /Bob Brown/ }));
 
     const heading = await screen.findByRole('heading', { name: 'Bob Brown' });
@@ -120,6 +149,7 @@ describe('the public front page', () => {
   it('filters a public member’s shared cases by name, casebook, industry and type', async () => {
     const env = visitor();
     const { user } = await open(env);
+    await browse(user);
     await user.click(await screen.findByRole('button', { name: /Bob Brown/ }));
     await screen.findByText('Airline profitability');
 
@@ -148,6 +178,7 @@ describe('the public front page', () => {
   it('never asks for personal or member data', async () => {
     const env = visitor();
     const { user } = await open(env);
+    await browse(user);
     await user.click(await screen.findByRole('button', { name: /Bob Brown/ }));
     await screen.findByText('Airline profitability');
     expect(env.calls).toEqual([]); // personal data repository untouched
@@ -160,8 +191,8 @@ describe('the public front page', () => {
     const { user } = await open(env);
     await user.click(await screen.findByRole('link', { name: 'Create account' }));
     expect(await screen.findByRole('heading', { name: 'Create your account' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Back to People/ }));
-    expect(await screen.findByRole('heading', { name: 'Find a case partner' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Back to CaseLab/ }));
+    expect(await screen.findByRole('heading', { name: /Case smarter/  })).toBeInTheDocument();
     await user.click(screen.getByRole('link', { name: 'Sign in' }));
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
   });

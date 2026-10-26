@@ -107,7 +107,7 @@ export function Directory({
                     <span className="min-w-0">
                       <span className="block truncate font-semibold text-ink">{p.displayName}</span>
                       <span className="block truncate text-xs text-muted">
-                        {p.mbaClass ? `${p.mbaClass} · ` : ''}Shares {summary(p.sharing)}
+                        {publicView ? p.mbaClass || 'Member' : `${p.mbaClass ? `${p.mbaClass} · ` : ''}Shares ${summary(p.sharing)}`}
                       </span>
                     </span>
                   </span>
