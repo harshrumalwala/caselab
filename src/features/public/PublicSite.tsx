@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowRight, BarChart3, Compass, EyeOff, FileSpreadsheet, Lock, ShieldCheck, Timer, Users } from 'lucide-react';
+import { ArrowRight, BarChart3, ChevronRight, Compass, EyeOff, FileSpreadsheet, Lock, Search, ShieldCheck, Timer, Users } from 'lucide-react';
 import { Logo } from '../../components/layout/Header';
-import type { CommunityReader } from '../../data/community';
+import { describeError } from '../../data/errors';
+import type { PublicReader, RecentCaser } from '../../data/community';
+import { formatDate } from '../../domain/dates';
 import type { Profile } from '../../domain/community';
+import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { useAuth } from '../../state/AuthProvider';
 import { LoginScreen } from '../auth/LoginScreen';
@@ -89,8 +92,68 @@ const ASSURANCES: { icon: ReactNode; title: string; text: string }[] = [
   { icon: <Lock className="size-5" />, title: 'Feedback stays inside', text: 'Written feedback and learning notes are only ever shown to signed-in members.' },
 ];
 
+const RECENT_COUNT = 5;
+
+/** The members who have cased most recently, newest first, so there is something to see before searching. */
+function RecentCasers({ reader, onOpen }: { reader: PublicReader; onOpen: (id: string) => void }) {
+  const [state, setState] = useState<{ status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; people: RecentCaser[] }>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let current = true;
+    reader
+      .recentPeople(RECENT_COUNT)
+      .then((people) => current && setState({ status: 'ready', people }))
+      .catch((e) => current && setState({ status: 'error', message: describeError(e) }));
+    return () => {
+      current = false;
+    };
+  }, [reader, attempt]);
+
+  if (state.status === 'loading') return null;
+  if (state.status === 'error') {
+    return (
+      <div role="alert" className="mt-5 flex flex-wrap items-center gap-3 text-sm text-ink-2">
+        <span>Couldn’t load recent members. {state.message}</span>
+        <Button onClick={() => { setState({ status: 'loading' }); setAttempt((n) => n + 1); }}>Try again</Button>
+      </div>
+    );
+  }
+  if (state.people.length === 0) return null;
+
+  return (
+    <div className="mt-6">
+      <h3 className="eyebrow">Cased recently</h3>
+      <ul className="mt-3 space-y-2.5">
+        {state.people.map(({ person, lastCased }) => (
+          <li key={person.userId}>
+            <button
+              type="button"
+              onClick={() => onOpen(person.userId)}
+              className="card flex w-full items-center justify-between gap-4 p-4 text-left transition hover:bg-surface-2/60"
+            >
+              <span className="flex min-w-0 items-center gap-3.5">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft font-semibold text-accent-text" aria-hidden>
+                  {person.displayName.trim().charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold text-ink">{person.displayName}</span>
+                  <span className="block truncate text-xs text-muted">
+                    {person.mbaClass ? `${person.mbaClass} · ` : ''}Last cased {formatDate(lastCased)}
+                  </span>
+                </span>
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-muted" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 interface LandingProps {
-  reader: CommunityReader;
+  reader: PublicReader;
   onOpen: (id: string) => void;
   /** Whether the member list has been asked for. It isn't loaded or shown until then. */
   open: boolean;
@@ -106,11 +169,7 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
     if (cameBackOpen.current) findRef.current?.scrollIntoView?.();
   }, []);
 
-  const reveal = () => {
-    onOpenChange(true);
-    // Wait for the list to render, then bring it into view.
-    window.setTimeout(() => findRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 0);
-  };
+  const scrollToFind = () => findRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
 
   return (
     <>
@@ -129,7 +188,7 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
             <a href="#/signup" className={PRIMARY}>
               Start your log, it’s free <ArrowRight className="size-4" aria-hidden />
             </a>
-            <button type="button" onClick={reveal} className={SECONDARY}>
+            <button type="button" onClick={scrollToFind} className={SECONDARY}>
               <Users className="size-4" aria-hidden /> See who&rsquo;s casing
             </button>
           </div>
@@ -171,13 +230,15 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
               by name to see what someone has practiced, and pick a case to run with them.
             </p>
           </div>
+          <RecentCasers reader={reader} onOpen={onOpen} />
           {open ? (
-            <div className="mt-5">
+            <div className="mt-8">
+              <h3 className="eyebrow mb-3">Everyone</h3>
               <Directory reader={reader} publicView onOpen={onOpen} />
             </div>
           ) : (
-            <button type="button" onClick={reveal} aria-expanded={false} className={`${SECONDARY} mt-5`}>
-              <Users className="size-4" aria-hidden /> Browse who&rsquo;s casing
+            <button type="button" onClick={() => onOpenChange(true)} aria-expanded={false} className={`${SECONDARY} mt-6`}>
+              <Search className="size-4" aria-hidden /> Search all members
             </button>
           )}
         </section>
@@ -226,7 +287,7 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
  * list that opens on request, showing only the members who chose to be visible and what they share. Sign-in and
  * sign-up live one click away; creating cases and "find a case for them" need an account.
  */
-export function PublicSite({ reader }: { reader: CommunityReader }) {
+export function PublicSite({ reader }: { reader: PublicReader }) {
   const { linkProblem } = useAuth();
   // An expired or already-used email link lands here with an error: show the sign-in form, which explains it.
   const [view, go] = useView(linkProblem ? { kind: 'signin' } : parse());

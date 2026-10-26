@@ -10,6 +10,19 @@ export interface CommunityReader {
   getSharedCases(ownerId: string): Promise<SharedCase[]>;
 }
 
+/** A member who has cased lately, with the date of their most recent shared case. */
+export interface RecentCaser {
+  person: Profile;
+  /** yyyy-mm-dd: the date of the newest case they share with this audience. */
+  lastCased: string;
+}
+
+/** What visitors without an account can read: the member list plus who has cased most recently. */
+export interface PublicReader extends CommunityReader {
+  /** Up to `limit` members, newest case first. Only cases that are visible to visitors count, never private ones. */
+  recentPeople(limit: number): Promise<RecentCaser[]>;
+}
+
 /** What the app needs from the community side of the database for a signed-in member. */
 export interface CommunityRepository extends CommunityReader {
   /** What visitors WITHOUT an account see of one member (for "preview"), read as a real anonymous request would. */

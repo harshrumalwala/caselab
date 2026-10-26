@@ -53,26 +53,36 @@ async function open(env: FakeEnv) {
   return { user };
 }
 
-/** The member list stays closed until someone asks for it. */
-const browse = async (user: ReturnType<typeof userEvent.setup>) => user.click(await screen.findByRole('button', { name: /See who.s casing/ }));
+/** The full member list stays closed until someone asks for it. */
+const browse = async (user: ReturnType<typeof userEvent.setup>) => user.click(await screen.findByRole('button', { name: 'Search all members' }));
+
+/** Bob appears under "Cased recently" (he shares cases); open him from there. */
+const bobRow = async () => (await screen.findAllByRole('button', { name: /Bob Brown/ }))[0];
+/** The full member list, which only exists once "Search all members" has been clicked. */
+const everyone = async () => within((await screen.findByRole('heading', { name: 'Everyone' })).parentElement!);
 
 describe('the public front page', () => {
   it('lets anyone browse members who chose to be public, without an account', async () => {
     const env = visitor();
     const { user } = await open(env);
     expect(await screen.findByRole('heading', { name: /Case smarter/ })).toBeInTheDocument();
-    // Nobody is listed, or even asked for, until the visitor opts to look.
-    expect(screen.queryByText('Bob Brown')).not.toBeInTheDocument();
-    expect(env.publicReader.calls).toEqual([]);
+    // The full list (and its search) isn't loaded until the visitor opts to look.
+    await screen.findByRole('button', { name: 'Search all members' });
+    expect(screen.queryByLabelText('Search members by name')).not.toBeInTheDocument();
+    expect(env.publicReader.calls).not.toContain('searchPeople');
+
+    // Bob has a visible case, so he is already showing as a recent caser: name, class and date, nothing about what he shares.
+    const recent = (await screen.findByRole('heading', { name: 'Cased recently' })).parentElement!;
+    expect(await within(recent).findByRole('button', { name: /Bob Brown/ })).toHaveTextContent('Class of 2027 · Last cased');
+    expect(within(recent).getByRole('button', { name: /Bob Brown/ })).not.toHaveTextContent(/Shares|history|scores|feedback|notes/i);
 
     await browse(user);
-    expect(await screen.findByRole('button', { name: /Bob Brown/ })).toBeInTheDocument();
-    expect(screen.queryByText('Carol Chen')).not.toBeInTheDocument(); // shares with members only
-    expect(screen.queryByText(/@/)).not.toBeInTheDocument(); // never an email address
-    // The list shows a name and class only; what someone shares is a click further in.
-    const bob = screen.getByRole('button', { name: /Bob Brown/ });
+    const list = await everyone();
+    const bob = await list.findByRole('button', { name: /Bob Brown/ });
     expect(bob).toHaveTextContent('Class of 2027');
     expect(bob).not.toHaveTextContent(/Shares|history|scores|feedback|notes|cased/i);
+    expect(screen.queryByText('Carol Chen')).not.toBeInTheDocument(); // shares with members only
+    expect(screen.queryByText(/@/)).not.toBeInTheDocument(); // never an email address
   });
 
   it('shows who cased the member and where the case came from, when they chose to share it', async () => {
@@ -83,12 +93,45 @@ describe('the public front page', () => {
       ],
     });
     const { user } = await open(env);
-    await browse(user);
-    await user.click(await screen.findByRole('button', { name: /Bob Brown/ }));
+    await user.click(await bobRow());
     const shown = (await screen.findByText('Airline profitability')).closest('li')!;
     expect(shown).toHaveTextContent('Booth casebook');
     expect(shown).toHaveTextContent('Cased by Sam Lee');
     expect(screen.getByText('Bank market entry').closest('li')).not.toHaveTextContent(/Cased by/);
+  });
+
+  it('shows the five members who cased most recently, newest first, before anyone searches', async () => {
+    const dated = (id: string, name: string, date: string): [Profile, SharedCase] => [
+      { ...BOB, userId: id, displayName: name },
+      row({ caseId: `c-${id}`, ownerId: id, title: `${name} case`, date }),
+    ];
+    const people = [
+      dated('p1', 'Ana Ames', '2026-09-01'),
+      dated('p2', 'Ben Boyd', '2026-10-20'),
+      dated('p3', 'Cy Cole', '2026-10-05'),
+      dated('p4', 'Di Dunn', '2026-10-12'),
+      dated('p5', 'Ed Egan', '2026-08-15'),
+      dated('p6', 'Flo Fry', '2026-10-18'),
+    ];
+    const nothingShared: Profile = { ...BOB, userId: 'p7', displayName: 'Gus Gray' }; // public, but no visible case
+    const env = visitor({ members: [...people.map(([p]) => p), nothingShared], shared: people.map(([, c]) => c) });
+    await open(env);
+    const heading = await screen.findByRole('heading', { name: 'Cased recently' });
+    const list = heading.parentElement!;
+    await waitFor(() => expect(within(list).getAllByRole('button')).toHaveLength(5));
+    const names = within(list).getAllByRole('button').map((b) => b.textContent);
+    expect(names.map((n) => n!.replace(/^[A-Z]/, '').split('Class')[0])).toEqual(['Ben Boyd', 'Flo Fry', 'Di Dunn', 'Cy Cole', 'Ana Ames']);
+    expect(names[0]).toContain('Last cased');
+    expect(within(list).queryByText(/Ed Egan|Gus Gray/)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/Carol/);
+  });
+
+  it('shows nothing under "Cased recently" when no one has a visible case yet', async () => {
+    const env = visitor({ shared: [] });
+    await open(env);
+    await screen.findByRole('button', { name: 'Search all members' });
+    await waitFor(() => expect(env.publicReader.calls).toContain('recentPeople'));
+    expect(screen.queryByRole('heading', { name: 'Cased recently' })).not.toBeInTheDocument();
   });
 
   it('explains the tool in general terms, without singling out a class year or one school', async () => {
@@ -104,19 +147,20 @@ describe('the public front page', () => {
     const env = visitor();
     const { user } = await open(env);
     await browse(user);
-    await user.click(await screen.findByRole('button', { name: /Bob Brown/ }));
+    await user.click(await bobRow());
     await user.click(await screen.findByRole('button', { name: /All members/ }));
-    expect(await screen.findByRole('button', { name: /Bob Brown/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Everyone' })).toBeInTheDocument(); // still open, no second click needed
   });
 
   it('searches members by name', async () => {
     const env = visitor({ members: [BOB, { ...BOB, userId: 'dana', displayName: 'Dana Diaz' }] });
     const { user } = await open(env);
     await browse(user);
-    await screen.findByRole('button', { name: /Bob Brown/ });
+    const list = await everyone();
+    await list.findByRole('button', { name: /Bob Brown/ });
     await user.type(screen.getByLabelText('Search members by name'), 'dan');
-    await waitFor(() => expect(screen.queryByText('Bob Brown')).not.toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /Dana Diaz/ })).toBeInTheDocument();
+    await waitFor(() => expect(list.queryByText('Bob Brown')).not.toBeInTheDocument());
+    expect(list.getByRole('button', { name: /Dana Diaz/ })).toBeInTheDocument();
     await user.clear(screen.getByLabelText('Search members by name'));
     await user.type(screen.getByLabelText('Search members by name'), 'zzz');
     expect(await screen.findByText('No members found')).toBeInTheDocument();
@@ -125,8 +169,7 @@ describe('the public front page', () => {
   it("opens a public member's profile: shared cases only, never feedback or notes, with a prompt to join", async () => {
     const env = visitor();
     const { user } = await open(env);
-    await browse(user);
-    await user.click(await screen.findByRole('button', { name: /Bob Brown/ }));
+    await user.click(await bobRow());
 
     const heading = await screen.findByRole('heading', { name: 'Bob Brown' });
     expect(heading.parentElement).toHaveTextContent('Class of 2027');
@@ -149,8 +192,7 @@ describe('the public front page', () => {
   it('filters a public member’s shared cases by name, casebook, industry and type', async () => {
     const env = visitor();
     const { user } = await open(env);
-    await browse(user);
-    await user.click(await screen.findByRole('button', { name: /Bob Brown/ }));
+    await user.click(await bobRow());
     await screen.findByText('Airline profitability');
 
     await user.type(screen.getByLabelText('Search cases'), 'point'); // casebook
@@ -179,11 +221,11 @@ describe('the public front page', () => {
     const env = visitor();
     const { user } = await open(env);
     await browse(user);
-    await user.click(await screen.findByRole('button', { name: /Bob Brown/ }));
+    await user.click(await bobRow());
     await screen.findByText('Airline profitability');
     expect(env.calls).toEqual([]); // personal data repository untouched
     expect(env.community.calls).toEqual([]); // member side untouched
-    expect(env.publicReader.calls).toEqual(expect.arrayContaining(['searchPeople', 'getPerson', 'getSharedCases']));
+    expect(env.publicReader.calls).toEqual(expect.arrayContaining(['recentPeople', 'searchPeople', 'getPerson', 'getSharedCases']));
   });
 
   it('keeps sign-in and sign-up one click away, and a way back', async () => {

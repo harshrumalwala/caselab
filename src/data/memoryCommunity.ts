@@ -1,5 +1,5 @@
 import type { Profile, ProfileInput, SharedCase } from '../domain/community';
-import type { CommunityReader, CommunityRepository } from './community';
+import type { CommunityRepository, PublicReader } from './community';
 
 type Method = keyof CommunityRepository;
 
@@ -10,7 +10,7 @@ const forVisitors = (s: SharedCase): SharedCase => ({ ...s, feedback: null, note
  * In-memory read access for people without an account: only members who are listed AND public, and no free text.
  * `profiles` is read live so tests can change a member's settings after creating the reader.
  */
-export function createMemoryPublic(opts: { profiles: () => Profile[]; shared?: SharedCase[] }): CommunityReader & { calls: string[] } {
+export function createMemoryPublic(opts: { profiles: () => Profile[]; shared?: SharedCase[] }): PublicReader & { calls: string[] } {
   const calls: string[] = [];
   const isPublic = (p: Profile) => p.listed && p.publicProfile;
   return {
@@ -26,6 +26,17 @@ export function createMemoryPublic(opts: { profiles: () => Profile[]; shared?: S
     async getPerson(userId: string) {
       calls.push('getPerson');
       return opts.profiles().find((p) => p.userId === userId && isPublic(p)) ?? null;
+    },
+    async recentPeople(limit: number) {
+      calls.push('recentPeople');
+      const people = opts.profiles().filter(isPublic);
+      return people
+        .flatMap((person) => {
+          const dates = (opts.shared ?? []).filter((s) => s.ownerId === person.userId).map((s) => s.date);
+          return dates.length ? [{ person, lastCased: dates.reduce((a, b) => (a > b ? a : b)) }] : [];
+        })
+        .sort((a, b) => b.lastCased.localeCompare(a.lastCased))
+        .slice(0, limit);
     },
     async getSharedCases(ownerId: string) {
       calls.push('getSharedCases');
