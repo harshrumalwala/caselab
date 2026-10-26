@@ -16,7 +16,7 @@ function Shell({ children, onBack }: { children: ReactNode; onBack?: () => void 
       <div className="w-full max-w-sm">
         {onBack && (
           <button type="button" onClick={onBack} className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-accent-text hover:underline">
-            <ArrowLeft className="size-4" /> Back to People
+            <ArrowLeft className="size-4" /> Back to CaseLab
           </button>
         )}
         <div className="mb-8 flex justify-center">

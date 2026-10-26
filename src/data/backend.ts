@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseAuth, type AuthApi } from './auth';
-import type { CommunityReader, CommunityRepository } from './community';
+import type { CommunityRepository, PublicReader } from './community';
 import type { CaseLabRepository } from './repository';
 import { PublicCommunity, SupabaseCommunity } from './supabaseCommunity';
 import { SupabaseRepository } from './supabaseRepository';
@@ -11,7 +11,7 @@ export interface Backend {
   createRepository(): CaseLabRepository;
   createCommunity(userId: string): CommunityRepository;
   /** Read-only access for people without an account (the landing page). */
-  createPublicCommunity(): CommunityReader;
+  createPublicCommunity(): PublicReader;
   /** Set when the page was opened from an email link that failed (expired, already used). */
   linkProblem?: string;
 }

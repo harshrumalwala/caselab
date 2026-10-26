@@ -9,7 +9,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **Dashboard**: totals, skill averages, trends, case-type and industry coverage, next-practice suggestions, weekly history, milestones
 - **My Case Log**: searchable, filterable list of your cases with full-detail view, edit and delete
 - **Improvement Areas**: thin spots in your coverage, skills to sharpen, and a searchable history of what you've learned
-- **A public front page**: anyone, with no account (firm reps, second-years), can search the members who chose to be visible and read what they share
+- **A public front page**: anyone, with no account, can search the members who chose to be visible and read what they share
 - **People**: find a fellow member, see only what they've chosen to share, and work out which case to give them
 - **Profile & privacy**: switches for what other members can see, a per-case override, and a live preview
 - **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export and MCG Excel import are built in

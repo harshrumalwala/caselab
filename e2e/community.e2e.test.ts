@@ -251,6 +251,21 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
       expect(await visitor().getPerson(a.userId)).toBeNull();
     });
 
+    it('see a public member in "cased recently" by the date of their newest visible case, and not once nothing is visible', async () => {
+      const shown = testCase({ date: '2026-03-02' });
+      const newerPrivate = testCase({ date: '2026-09-09', shareMode: 'private' });
+      await repoA.insertCase(shown);
+      await repoA.insertCase(newerPrivate);
+      await communityA.saveProfile(profile({ publicProfile: true, sharing: sharing('cases') }));
+
+      const mine = async () => (await visitor().recentPeople(50)).find((r) => r.person.userId === a.userId);
+      expect((await mine())?.lastCased).toBe('2026-03-02'); // the private, newer case doesn't count
+      expect((await visitor().recentPeople(1)).length).toBeLessThanOrEqual(1);
+
+      await communityA.saveProfile(profile({ publicProfile: true, sharing: NO_SHARING })); // nothing shared any more
+      expect(await mine()).toBeUndefined();
+    });
+
     it('cannot read anything else, or write anything, through direct requests', async () => {
       await repoA.insertCase(testCase());
       await communityA.saveProfile(profile({ publicProfile: true, sharing: sharing('cases') }));
