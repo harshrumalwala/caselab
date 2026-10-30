@@ -152,6 +152,58 @@ function RecentCasers({ reader, onOpen }: { reader: PublicReader; onOpen: (id: s
   );
 }
 
+const IMPORT_STEPS = [
+  ['Create your free account', 'It takes a minute.'],
+  ['Choose your Excel file', 'Your MCG case log template, as an .xlsx file.'],
+  ['Review, then import', 'You see everything first. Nothing is saved until you say so.'],
+] as const;
+
+/** The migration message, given a section of its own so nobody hesitates to switch because of the work already in a spreadsheet. */
+function ImportCallout() {
+  return (
+    <section
+      aria-labelledby="import-title"
+      className="scroll-mt-24 overflow-hidden rounded-3xl border border-accent/20 bg-accent-soft/70"
+    >
+      <div className="grid gap-8 p-6 sm:p-8 md:grid-cols-[1.1fr_1fr] md:items-center md:gap-10 md:p-10">
+        <div>
+          <span className="flex size-12 items-center justify-center rounded-2xl bg-accent text-accent-ink shadow-sm" aria-hidden>
+            <FileSpreadsheet className="size-6" />
+          </span>
+          <p className="eyebrow mt-5 text-accent-text">Switching from Excel?</p>
+          <h2 id="import-title" className="mt-1.5 text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-3xl">
+            Bring your whole case log with you
+          </h2>
+          <p className="mt-3 text-base leading-relaxed text-ink-2">
+            Already logging cases in the MCG Excel template? Import it in one step. Your cases, ratings, feedback and Opportunity Areas
+            lists all come across, so there is nothing to retype and you never start from zero.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
+            <a href="#/signup" className={PRIMARY}>
+              Create account and import <ArrowRight className="size-4" aria-hidden />
+            </a>
+            <span className="text-sm text-ink-2">Cases already in your log are skipped, so it is safe to try.</span>
+          </div>
+        </div>
+
+        <ol className="space-y-3" aria-label="How importing works">
+          {IMPORT_STEPS.map(([title, text], i) => (
+            <li key={title} className="flex items-start gap-4 rounded-2xl border border-line bg-surface p-4 shadow-card">
+              <span className="num flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-ink" aria-hidden>
+                {i + 1}
+              </span>
+              <div>
+                <p className="font-semibold text-ink">{title}</p>
+                <p className="mt-0.5 text-sm text-muted">{text}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
 interface LandingProps {
   reader: PublicReader;
   onOpen: (id: string) => void;
@@ -193,13 +245,12 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
             </button>
           </div>
           <p className="mt-4 text-sm text-muted">Your practice is private by default. Nothing is shown to anyone unless you switch it on.</p>
-          <p className="mt-1.5 flex items-center gap-1.5 text-sm text-ink-2">
-            <FileSpreadsheet className="size-4 text-accent-text" aria-hidden /> Already tracking cases in Excel? Bring your log with you, so you never start from zero.
-          </p>
         </div>
       </section>
 
       <div className="mx-auto w-full max-w-5xl space-y-16 px-4 pb-20 pt-12 sm:px-6 sm:pt-16">
+        <ImportCallout />
+
         <section aria-labelledby="what-title">
           <h2 id="what-title" className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
             Practice with a plan, not just volume
@@ -207,7 +258,7 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
             Most people just count cases. CaseLab keeps the details that tell you what to do differently next time.
           </p>
-          <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Tile icon={<Timer className="size-5" />} title="Log in two minutes">
               Date, case, type and industry are all it takes. Add 1 to 5 ratings and notes on the skills you want to track, only if you want to.
             </Tile>
@@ -216,10 +267,6 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
             </Tile>
             <Tile icon={<Compass className="size-5" />} title="Get a next step">
               Plain, explainable suggestions drawn from your own ratings and coverage, so you know what to work on in your next session.
-            </Tile>
-            <Tile icon={<FileSpreadsheet className="size-5" />} title="Bring your history">
-              Already logging cases in the MCG Excel template? Import it in one step: your cases, ratings, feedback and lists come across,
-              and you review everything before it is saved. Export it all whenever you like.
             </Tile>
           </ul>
         </section>
