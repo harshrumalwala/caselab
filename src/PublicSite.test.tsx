@@ -101,6 +101,23 @@ describe('the public front page', () => {
     expect(screen.getByText('Bank market entry').closest('li')).not.toHaveTextContent(/Cased by/);
   });
 
+  it('gives importing an Excel log its own prominent section, with the steps and a way to start', async () => {
+    const env = visitor();
+    await open(env);
+    const section = (await screen.findByRole('heading', { name: 'Bring your whole case log with you' })).closest('section')!;
+    expect(section).toHaveTextContent(/Switching from Excel\?/);
+    expect(section).toHaveTextContent(/cases, ratings, feedback and Opportunity Areas lists all come across/);
+    const steps = within(section).getByRole('list', { name: 'How importing works' });
+    expect(within(steps).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      expect.stringContaining('Create your free account'),
+      expect.stringContaining('Choose your Excel file'),
+      expect.stringContaining('Review, then import'),
+    ]);
+    expect(within(section).getByRole('link', { name: /Create account and import/ })).toHaveAttribute('href', '#/signup');
+    // It is said once, in this section, not repeated in the hero above it.
+    expect(screen.getAllByText(/Excel/i).filter((el) => !section.contains(el) && el.closest('section'))).toEqual([]);
+  });
+
   it('shows the five members who cased most recently, newest first, before anyone searches', async () => {
     const dated = (id: string, name: string, date: string): [Profile, SharedCase] => [
       { ...BOB, userId: id, displayName: name },
