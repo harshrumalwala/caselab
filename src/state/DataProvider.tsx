@@ -15,6 +15,7 @@ import { withUuidIds } from '../data/mapping';
 import { createMemoryRepository } from '../data/memoryRepository';
 import { deriveCustomIndustries, parseAppData } from '../data/parse';
 import type { CaseLabData, CaseLabRepository } from '../data/repository';
+import { caseKey } from '../domain/caseKey';
 import { cleanInput, emptyAppData, newId } from '../domain/factory';
 import { canonicalIndustry } from '../domain/stats';
 import { SCHEMA_VERSION, type AppData, type CaseInput, type CaseRecord, type OpportunityItem } from '../domain/types';
@@ -72,8 +73,14 @@ export interface DataContextValue {
 
   replaceAll(data: AppData): Promise<void>;
   mergeIn(data: AppData): Promise<void>;
-  /** Add imported cases, skipping any whose date + title already exist. */
-  importCases(cases: CaseRecord[]): Promise<{ added: number; skipped: number }>;
+  /**
+   * Add imported cases, skipping any whose date + title already exist, along with any hand-edited list entries
+   * that aren't already on the lists. Everything is stored in one write.
+   */
+  importCases(
+    cases: CaseRecord[],
+    opportunities?: Pick<OpportunityItem, 'kind' | 'text'>[],
+  ): Promise<{ added: number; skipped: number; opportunitiesAdded: number }>;
   clearAll(): Promise<void>;
 
   enterDemo(): void;
@@ -280,23 +287,38 @@ export function DataProvider({ children, repository }: Props) {
   );
 
   const importCases = useCallback<DataContextValue['importCases']>(
-    async (incoming) => {
+    async (incoming, incomingOpportunities = []) => {
       const before = dataRef.current;
-      const key = (c: CaseRecord) => `${c.date}|${c.title.trim().toLowerCase()}`;
-      const seen = new Set(before.cases.map(key));
+      const seen = new Set(before.cases.map(caseKey));
       const fresh: CaseRecord[] = [];
       for (const c of withUuidIds(incoming)) {
-        if (seen.has(key(c))) continue;
-        seen.add(key(c));
+        if (seen.has(caseKey(c))) continue;
+        seen.add(caseKey(c));
         fresh.push(c);
       }
-      if (fresh.length > 0) {
+
+      const listed = new Set(before.opportunities.map((o) => `${o.kind}|${o.text.trim().toLowerCase()}`));
+      const createdAt = new Date().toISOString();
+      const freshOpportunities: OpportunityItem[] = [];
+      for (const o of incomingOpportunities) {
+        const text = o.text.trim();
+        const key = `${o.kind}|${text.toLowerCase()}`;
+        if (!text || listed.has(key)) continue;
+        listed.add(key);
+        freshOpportunities.push({ id: newId(), kind: o.kind, text, createdAt });
+      }
+
+      if (fresh.length > 0 || freshOpportunities.length > 0) {
         await write(
-          (r) => r.upsertMany({ cases: fresh, opportunities: [] }),
-          () => setAll({ cases: [...before.cases, ...fresh], opportunities: before.opportunities }),
+          (r) => r.upsertMany({ cases: fresh, opportunities: freshOpportunities }),
+          () =>
+            setAll({
+              cases: [...before.cases, ...fresh],
+              opportunities: [...before.opportunities, ...freshOpportunities],
+            }),
         );
       }
-      return { added: fresh.length, skipped: incoming.length - fresh.length };
+      return { added: fresh.length, skipped: incoming.length - fresh.length, opportunitiesAdded: freshOpportunities.length };
     },
     [write, setAll],
   );

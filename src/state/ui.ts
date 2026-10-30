@@ -12,6 +12,8 @@ export interface UIContextValue {
   editCase(id: string): void;
   viewCase(id: string): void;
   openSettings(): void;
+  /** Import a case log from an Excel file shaped like the MCG template. */
+  openImport(): void;
   /** Profile & privacy settings. */
   openProfile(): void;
 }

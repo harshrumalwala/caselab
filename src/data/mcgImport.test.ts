@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ImportError } from './backup';
-import { cellToISODate, mcgRowsToCases, readMcgWorkbook } from './mcgImport';
+import { cellToISODate, mcgRowsToCases, opportunityRowsToItems, readMcgWorkbook } from './mcgImport';
 
 const fixture = (name: string) => {
   const buf = readFileSync(new URL(`../test/fixtures/${name}`, import.meta.url));
@@ -37,8 +37,8 @@ describe('MCG Excel import', () => {
     expect(pharma.skills.exhibits).toEqual({ rating: 4, feedback: 'good chart read' });
     expect(pharma.skills.quant.rating).toBe(3);
 
-    // An unrecognised case type falls back to "Other"; a missing rating stays null, not 0.
-    expect(deal.caseType).toBe('Other');
+    // "M&A deals" is a common way to write Mergers and Acquisitions; a missing rating stays null, not 0.
+    expect(deal.caseType).toBe('Mergers and Acquisitions');
     expect(deal.overall).toBeNull();
   });
 
@@ -70,6 +70,130 @@ describe('MCG Excel import', () => {
       overallFeedback: 'wow',
     });
     expect(cases[0].skills.framework).toEqual({ rating: 3, feedback: 'ok' });
+  });
+
+  it('falls back to Other for a case type it does not know, and keeps the original wording', () => {
+    const { rows } = mcgRowsToCases([
+      ['Date', 'Case Title', 'Case Type', 'Overall', null],
+      ['2026-10-01', 'Zoo turnaround', 'Zoo strategy', 4, null],
+    ]);
+    expect(rows[0].record.caseType).toBe('Other');
+    expect(rows[0].record.otherNotes).toContain('Case type in spreadsheet: Zoo strategy');
+    expect(rows[0].notes.join(' ')).toMatch(/Zoo strategy.*saved as Other/);
+  });
+
+  it('does not read the next column as feedback when it is a column of its own', () => {
+    const { cases } = mcgRowsToCases([
+      ['Case Title', 'Date', 'Overall', 'Framework', 'Quant'],
+      ['Zoo sizing', '2026-10-01', 4, 3, 5],
+    ]);
+    expect(cases[0].overall).toBe(4);
+    expect(cases[0].overallFeedback).toBe('');
+    expect(cases[0].skills.framework).toEqual({ rating: 3, feedback: '' });
+    expect(cases[0].skills.quant.rating).toBe(5);
+  });
+
+  it('understands other spellings of the headers', () => {
+    const { cases } = mcgRowsToCases([
+      ['#', 'Case Date', 'Title', 'Casebook', 'Type', 'Partner', 'Overall Rating', 'Structure', 'Math & Calculations'],
+      [1, '2026-10-01', 'Ice cream entry', 'Cosentino', 'market entry', 'Pat', 3, 4, 2],
+    ]);
+    expect(cases[0]).toMatchObject({ title: 'Ice cream entry', source: 'Cosentino', caseType: 'Market Entry', partner: 'Pat', overall: 3 });
+    expect(cases[0].skills.framework.rating).toBe(4);
+  });
+
+  it('flags ratings it could not use instead of guessing', () => {
+    const { rows } = mcgRowsToCases([
+      ['Case Title', 'Date', 'Overall', null, 'Framework', null, 'Quant', null],
+      ['Zoo sizing', '2026-10-01', '4/5', null, 'seven', null, 4.4, null],
+    ]);
+    expect(rows[0].record.overall).toBe(4); // "4/5" is read as 4
+    expect(rows[0].record.skills.framework.rating).toBeNull();
+    expect(rows[0].record.skills.quant.rating).toBe(4);
+    expect(rows[0].notes.join(' ')).toMatch(/Framework rating “seven”/);
+    expect(rows[0].notes.join(' ')).toMatch(/Quant \/ Math rating 4.4 was rounded to 4/);
+  });
+
+  it('notes missing dates and titles and shortens over-long text', () => {
+    const { rows } = mcgRowsToCases(
+      [
+        ['Case Title', 'Date', 'Overall', null],
+        [null, null, 3, null],
+        ['x'.repeat(250), 'not a date', 4, null],
+      ],
+      new Date(2026, 9, 30),
+    );
+    expect(rows[0].record.title).toBe('Untitled case (imported)');
+    expect(rows[0].record.date).toBe('2026-10-30');
+    expect(rows[0].notes.join(' ')).toMatch(/No case title/);
+    expect(rows[0].notes.join(' ')).toMatch(/No date/);
+    expect(rows[1].record.title).toHaveLength(200);
+    expect(rows[1].notes.join(' ')).toMatch(/title was longer than 200/);
+    expect(rows[1].notes.join(' ')).toMatch(/not a date.*wasn't understood/);
+  });
+
+  it('reads day-first dates when the month would be impossible', () => {
+    expect(cellToISODate('25/10/2026')).toBe('2026-10-25');
+    expect(cellToISODate('10/11/2026')).toBe('2026-10-11'); // ambiguous: month first
+    expect(cellToISODate('5.10.26')).toBe('2026-05-10');
+  });
+
+  describe('a workbook with the extras people add', () => {
+    it('uses an Industry column, and suggests an industry from the title when there is none', async () => {
+      const { rows } = await readMcgWorkbook(fixture('mcg-rich.xlsx'));
+      expect(rows).toHaveLength(3);
+      expect(rows[0].record.industry).toBe('Transportation / Logistics');
+      expect(rows[0].suggestedIndustry).toBe('Transportation / Logistics');
+      expect(rows[1].record.industry).toBe('');
+      expect(rows[1].suggestedIndustry).toBe('Healthcare / Pharmaceuticals'); // "Hospital" in the title
+      expect(rows[2].suggestedIndustry).toBe(''); // nothing in the words points anywhere
+    });
+
+    it("keeps columns it does not know in the case's private notes", async () => {
+      const { rows } = await readMcgWorkbook(fixture('mcg-rich.xlsx'));
+      expect(rows[0].record.otherNotes).toBe('Ask about load factor first\nDuration (min): 45');
+      expect(rows[1].record.otherNotes).toBe('Duration (min): 30');
+    });
+
+    it('maps loose case types and reports the problems it found', async () => {
+      const { rows } = await readMcgWorkbook(fixture('mcg-rich.xlsx'));
+      expect(rows[1].record.caseType).toBe('Market Entry'); // "market entry (healthcare)"
+      expect(rows[2].record.caseType).toBe('Investment Decision'); // "PE deal"
+      expect(rows[2].record.overall).toBe(4); // "4/5"
+      expect(rows[2].notes.join(' ')).toMatch(/Framework rating “seven”/);
+    });
+
+    it('brings in both hand-edited lists from the Opportunity Areas tab', async () => {
+      const { opportunities } = await readMcgWorkbook(fixture('mcg-rich.xlsx'));
+      expect(opportunities).toEqual([
+        { kind: 'exposure', text: 'Supply chain cases' },
+        { kind: 'exposure', text: 'Pricing' },
+        { kind: 'exposure', text: 'Insurance' },
+        { kind: 'skill', text: 'Quant speed' },
+        { kind: 'skill', text: 'Synthesis at the end' },
+      ]);
+    });
+
+    it("finds nothing in the empty template's lists", async () => {
+      const empty = readFileSync(new URL('../../MCG Case Log Template.xlsx', import.meta.url));
+      const buf = empty.buffer.slice(empty.byteOffset, empty.byteOffset + empty.byteLength) as ArrayBuffer;
+      expect((await readMcgWorkbook(buf)).opportunities).toEqual([]);
+    });
+  });
+
+  it('reads the Opportunity Areas layout: headings, then entries beneath each', () => {
+    expect(
+      opportunityRowsToItems([
+        ['Areas of Improvement'],
+        [],
+        ['Cases/Concepts with No Exposure', null, null, null, 'Skillsets to Improve Upon'],
+        ['Pricing', null, null, null, '1. Quant speed'],
+        ['pricing', null, null, null, 'Quant speed'],
+      ]),
+    ).toEqual([
+      { kind: 'exposure', text: 'Pricing' },
+      { kind: 'skill', text: 'Quant speed' },
+    ]);
   });
 
   it('parses Excel dates in all the forms they arrive in', () => {

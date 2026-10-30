@@ -27,7 +27,7 @@ import { WeeklyPractice } from './WeeklyPractice';
 
 export function Dashboard() {
   const { cases, data, enterDemo } = useData();
-  const { openLogCase, openSettings } = useUI();
+  const { openLogCase, openImport } = useUI();
   const now = useNow();
   const customs = data.customIndustries;
 
@@ -75,8 +75,8 @@ export function Dashboard() {
               <Button size="lg" onClick={() => void enterDemo()}>
                 <FlaskConical className="size-4" /> Explore with demo data
               </Button>
-              <Button size="lg" variant="ghost" onClick={openSettings}>
-                <Upload className="size-4" /> Import a backup or MCG log
+              <Button size="lg" variant="ghost" onClick={openImport}>
+                <Upload className="size-4" /> Import your Excel case log
               </Button>
             </div>
           </div>

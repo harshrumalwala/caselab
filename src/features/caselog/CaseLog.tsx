@@ -64,7 +64,7 @@ const SELECT = 'field !py-2 text-sm';
 
 export function CaseLog() {
   const { cases, data, deleteCase } = useData();
-  const { viewCase, openLogCase, openSettings } = useUI();
+  const { viewCase, openLogCase, openImport } = useUI();
   const toast = useToast();
   const now = useNow();
 
@@ -118,14 +118,14 @@ export function CaseLog() {
                 <Button variant="primary" onClick={() => openLogCase()}>
                   <Plus className="size-4" /> Log your first case
                 </Button>
-                <Button variant="ghost" onClick={openSettings}>
-                  Import from the MCG template
+                <Button variant="ghost" onClick={openImport}>
+                  Import from Excel
                 </Button>
               </>
             }
           >
-            Every case you log shows up here, searchable and filterable. Already tracking in the MCG spreadsheet? You
-            can import that log too.
+            Every case you log shows up here, searchable and filterable. Already tracking in the MCG spreadsheet? Import it and
+            your history comes with you.
           </EmptyState>
         </div>
       </div>
