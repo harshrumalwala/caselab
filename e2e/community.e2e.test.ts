@@ -320,7 +320,10 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
       for (const table of ['cases', 'opportunities', 'profiles', 'shared_cases']) {
         expect((await anon.from(table).select('*')).error, table).not.toBeNull();
       }
-      expect((await anon.from('public_shared_cases').select('feedback')).error).not.toBeNull(); // no such column
+      // The detail columns are readable, but empty for everyone who hasn't opened everything (A has not, here).
+      const detail = await anon.from('public_shared_cases').select('feedback, notes, other_notes').eq('owner_id', a.userId);
+      expect(detail.error).toBeNull();
+      expect(JSON.stringify(detail.data)).not.toMatch(/PRIVATE|Solid overall/);
       expect((await anon.from('public_shared_cases').select('case_id')).error).not.toBeNull(); // not granted
       expect((await anon.from('public_shared_cases').select('*')).error).not.toBeNull();
       expect((await anon.from('public_profiles').update({ display_name: 'hacked' }).eq('user_id', a.userId)).error).not.toBeNull();
