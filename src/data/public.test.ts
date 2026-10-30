@@ -24,10 +24,10 @@ const PREFS = ['share_cases', 'share_overall', 'share_skills', 'share_feedback',
 type Pref = (typeof PREFS)[number];
 
 /** The public tables and the columns visitors may read. */
-const PUBLIC_CASES = 'share_id, owner_id, case_date, title, source, partner, case_type, industry, overall, skill_scores, improvement_area';
-const PUBLIC_PROFILES = 'user_id, display_name, mba_class, share_cases, share_overall, share_skills, share_improvement, share_partner';
+const PUBLIC_CASES = 'share_id, owner_id, case_date, title, source, partner, case_type, industry, overall, skill_scores, improvement_area, feedback, notes, other_notes';
+const PUBLIC_PROFILES = 'user_id, display_name, mba_class, share_cases, share_overall, share_skills, share_improvement, share_partner, share_details, in_directory';
 /** What members may read (adds the free-text columns). */
-const MEMBER_SHARED = `${PUBLIC_CASES}, feedback, notes`;
+const MEMBER_SHARED = PUBLIC_CASES;
 
 async function createProfile(uid: string, name: string, on: Pref[] = [], opts: { isPublic?: boolean; listed?: boolean } = {}) {
   await as(db, 'authenticated', uid);
@@ -145,29 +145,24 @@ describe('what visitors can see of a public member', () => {
     for (const other of ['overall', 'skill_scores', 'improvement_area'].filter((c) => c !== column)) expect(row[other], other).toBeNull();
   });
 
-  it('never has written feedback, notes or the private case id for visitors, even when shared with members', async () => {
+  it('gives visitors no written feedback, notes or other notes unless the member opens everything, and never the private case id', async () => {
     await createProfile(ALICE, 'Alice', [...PREFS], { isPublic: true });
     await addCase(ALICE);
     await as(db, 'anon');
-    // Free text isn't merely forbidden to visitors: the columns don't exist in the public table at all.
-    for (const col of ['feedback', 'notes']) {
-      expect(await fails(`select ${col} from public.public_shared_cases`), col).toMatch(/does not exist/);
-    }
+    // The detail columns are readable by visitors, but they are empty for everyone who hasn't opened everything.
+    const { rows } = await db.query<Row>('select feedback, notes, other_notes from public.public_shared_cases');
+    expect(rows).toEqual([{ feedback: null, notes: null, other_notes: null }]);
     // The private case id exists (for the cascade) but visitors have no privilege on it.
     expect(await fails('select case_id from public.public_shared_cases')).toMatch(/permission denied/);
     expect(await fails('select * from public.public_shared_cases')).toMatch(/permission denied/);
     expect(await fails('select title from public.public_shared_cases where case_id is not null')).toMatch(/permission denied/);
-    // The public table doesn't even contain free text.
-    await as(db, 'postgres');
-    const cols = (await db.query<{ column_name: string }>(`select column_name from information_schema.columns where table_name in ('public_shared_cases', 'public_profiles')`)).rows.map((c) => c.column_name);
-    expect(cols).not.toContain('feedback');
-    expect(cols).not.toContain('notes');
 
     const everything = JSON.stringify(await visitorSees());
     for (const secret of ['PRIVATE-OVERALL-FEEDBACK', 'PRIVATE-WENT-WELL', 'PRIVATE-CONCEPTS', 'MECE tree', 'Slow on math', 'PRIVATE-OTHER-NOTES', 'PRIVATE-PARTNER']) {
       expect(everything).not.toContain(secret);
     }
     expect(JSON.stringify(await membersSee())).toContain('PRIVATE-OVERALL-FEEDBACK'); // members' access is unchanged
+    expect(JSON.stringify(await membersSee())).not.toContain('PRIVATE-OTHER-NOTES'); // other notes stay private by default
   });
 
   it('shares the same handle as members see, never the private case id', async () => {
@@ -312,6 +307,200 @@ describe('who cased the member (the practice partner)', () => {
     expect((await visitorSees())[0].partner).toBeNull();
     await update(ALICE, 'share_partner = true');
     expect((await visitorSees())[0].partner).toBe('PRIVATE-PARTNER');
+  });
+});
+
+describe('open everything (share_details)', () => {
+  const SECRETS = ['PRIVATE-OVERALL-FEEDBACK', 'PRIVATE-WENT-WELL', 'PRIVATE-CONCEPTS', 'MECE tree', 'PRIVATE-OTHER-NOTES'];
+
+  it('is off for every profile, so nothing changes until a member turns it on', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await addCase(ALICE);
+    expect((await visitorProfiles())[0].share_details).toBe(false);
+    const [row] = await membersSee();
+    expect([row.overall, row.skill_scores, row.feedback, row.notes, row.other_notes]).toEqual([null, null, null, null, null]);
+  });
+
+  it('shows members and visitors everything on a case that follows the profile, even with the single switches off', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await addCase(ALICE);
+    await update(ALICE, 'share_details = true');
+    for (const rows of [await visitorSees(), await membersSee()]) {
+      const text = JSON.stringify(rows);
+      for (const secret of SECRETS) expect(text, secret).toContain(secret);
+      expect(rows[0].overall).toBe(5);
+      expect(rows[0].improvement_area).toBe('quant');
+      expect(rows[0].skill_scores).toMatchObject({ framework: 4, quant: 2 });
+    }
+    expect(JSON.stringify(await visitorSees())).not.toContain('PRIVATE-PARTNER'); // its own switch
+  });
+
+  it('shows members the detail but visitors nothing when the profile is not visible without an account', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases']);
+    await addCase(ALICE);
+    await update(ALICE, 'share_details = true');
+    expect(JSON.stringify(await membersSee())).toContain('PRIVATE-OTHER-NOTES');
+    expect(await visitorSees()).toEqual([]);
+  });
+
+  it('takes the detail away the moment it is switched off', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await addCase(ALICE);
+    await update(ALICE, 'share_details = true');
+    expect(JSON.stringify(await visitorSees())).toContain('PRIVATE-WENT-WELL');
+    await update(ALICE, 'share_details = false');
+    for (const rows of [await visitorSees(), await membersSee()]) {
+      const text = JSON.stringify(rows);
+      for (const secret of SECRETS) expect(text, secret).not.toContain(secret);
+    }
+  });
+
+  it('leaves private and name-only cases as they were', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await addCase(ALICE, { title: 'Open case' });
+    await addCase(ALICE, { title: 'Private case', share_mode: 'private' });
+    await addCase(ALICE, { title: 'Name only', share_mode: 'history' });
+    await update(ALICE, 'share_details = true');
+    const rows = await visitorSees();
+    expect(rows.map((r) => r.title).sort()).toEqual(['Name only', 'Open case']);
+    const nameOnly = rows.find((r) => r.title === 'Name only')!;
+    expect([nameOnly.overall, nameOnly.feedback, nameOnly.notes, nameOnly.other_notes]).toEqual([null, null, null, null]);
+    expect((await membersSee()).find((r) => r.title === 'Name only')?.other_notes).toBeNull();
+  });
+
+  it('keeps a full-detail case free of other notes, and its text away from visitors, until everything is opened', async () => {
+    await createProfile(ALICE, 'Alice', [], { isPublic: true });
+    await addCase(ALICE, { share_mode: 'full' });
+    expect(JSON.stringify(await membersSee())).toContain('PRIVATE-OVERALL-FEEDBACK');
+    expect(JSON.stringify(await membersSee())).not.toContain('PRIVATE-OTHER-NOTES');
+    expect(JSON.stringify(await visitorSees())).not.toContain('PRIVATE-OVERALL-FEEDBACK');
+    await update(ALICE, 'share_details = true');
+    expect(JSON.stringify(await visitorSees())).toContain('PRIVATE-OTHER-NOTES');
+  });
+
+  it('cuts long text in the public copy to 2000 characters, while members see it all', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await addCase(ALICE, { overall_feedback: 'f'.repeat(5000), went_well: 'w'.repeat(5000), other_notes: 'o'.repeat(5000) });
+    await update(ALICE, 'share_details = true');
+    const [pub] = await visitorSees();
+    expect((pub.feedback as { overall: string }).overall).toHaveLength(2000);
+    expect((pub.notes as { went_well: string }).went_well).toHaveLength(2000);
+    expect(String(pub.other_notes)).toHaveLength(2000);
+    const [mem] = await membersSee();
+    expect((mem.feedback as { overall: string }).overall).toHaveLength(5000);
+  });
+});
+
+describe('link only', () => {
+  const person = async (id: string) => {
+    await as(db, 'anon');
+    return (await db.query<Row>('select * from public.public_person($1)', [id])).rows;
+  };
+  const casesOf = async (id: string) => {
+    await as(db, 'anon');
+    return (await db.query<Row>('select * from public.public_person_cases($1)', [id])).rows;
+  };
+
+  it('keeps the member out of every list, search and count, but reachable by exact id', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await createProfile(CAROL, 'Carol', ['share_cases'], { isPublic: true });
+    await addCase(ALICE, { title: 'Alice case' });
+    await addCase(CAROL, { title: 'Carol case' });
+    await update(ALICE, 'public_link_only = true');
+
+    // The front page's tables only ever return the directory.
+    expect((await visitorProfiles()).map((p) => p.display_name)).toEqual(['Carol']);
+    expect((await visitorSees()).map((r) => r.title)).toEqual(['Carol case']);
+    await as(db, 'anon');
+    expect((await db.query('select count(*)::int as n from public.public_profiles')).rows).toEqual([{ n: 1 }]);
+    expect((await db.query(`select user_id from public.public_profiles where display_name ilike '%alice%'`)).rows).toEqual([]);
+    expect((await db.query('select title from public.public_shared_cases where owner_id = $1', [ALICE])).rows).toEqual([]);
+
+    // Exact id still opens the profile, with what visitors see today.
+    const [alice] = await person(ALICE);
+    expect(alice).toMatchObject({ user_id: ALICE, display_name: 'Alice', share_cases: true });
+    expect((await casesOf(ALICE)).map((r) => r.title)).toEqual(['Alice case']);
+    // Carol (in the directory) is reachable the same way.
+    expect((await casesOf(CAROL)).map((r) => r.title)).toEqual(['Carol case']);
+  });
+
+  it('shows by id exactly what the directory would: only what the member shares, and detail only if opened', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await addCase(ALICE);
+    await update(ALICE, 'public_link_only = true');
+    const [row] = await casesOf(ALICE);
+    expect([row.overall, row.feedback, row.notes, row.other_notes]).toEqual([null, null, null, null]);
+    expect(JSON.stringify(row)).not.toContain('PRIVATE');
+    expect('case_id' in row).toBe(false);
+
+    await update(ALICE, 'share_details = true');
+    expect(JSON.stringify(await casesOf(ALICE))).toContain('PRIVATE-WENT-WELL');
+  });
+
+  it('returns nothing for a member who is not public, a profile that does not exist, or a malformed id', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases']); // members only
+    await addCase(ALICE);
+    expect(await person(ALICE)).toEqual([]);
+    expect(await casesOf(ALICE)).toEqual([]);
+    expect(await person('00000000-0000-4000-8000-000000000000')).toEqual([]);
+    await as(db, 'anon');
+    expect(await fails(`select * from public.public_person('not-a-uuid')`)).toMatch(/invalid input syntax/);
+  });
+
+  it('puts the member back in the directory when link only is switched off, and removes them completely when public is', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await addCase(ALICE);
+    await update(ALICE, 'public_link_only = true');
+    expect(await visitorProfiles()).toEqual([]);
+    await update(ALICE, 'public_link_only = false');
+    expect((await visitorProfiles()).map((p) => p.display_name)).toEqual(['Alice']);
+
+    await update(ALICE, 'public_link_only = true');
+    await update(ALICE, 'public_link_only = false, public_profile = false');
+    expect(await person(ALICE)).toEqual([]);
+    expect(await casesOf(ALICE)).toEqual([]);
+  });
+
+  it('follows every change at once: private cases, unlisting and deleting the case', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    const id = await addCase(ALICE, { title: 'Shown' });
+    await update(ALICE, 'public_link_only = true');
+    expect((await casesOf(ALICE)).map((r) => r.title)).toEqual(['Shown']);
+    await as(db, 'authenticated', ALICE);
+    await db.query(`update public.cases set share_mode = 'private' where id = $1`, [id]);
+    expect(await casesOf(ALICE)).toEqual([]);
+    await as(db, 'authenticated', ALICE);
+    await db.query(`update public.cases set share_mode = 'profile' where id = $1`, [id]);
+    expect((await casesOf(ALICE)).map((r) => r.title)).toEqual(['Shown']);
+    await update(ALICE, 'listed = false, public_profile = false, public_link_only = false');
+    expect(await person(ALICE)).toEqual([]);
+  });
+
+  it('can only be on for a profile that is also visible without an account', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases']);
+    await as(db, 'authenticated', ALICE);
+    await expect(db.query('update public.profiles set public_link_only = true where user_id = $1', [ALICE])).rejects.toThrow(/profiles_link_only_requires_public/);
+  });
+
+  it('is cleared along with everything else when a former member is revoked', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await update(ALICE, 'public_link_only = true');
+    await as(db, 'postgres');
+    await db.query(`update auth.users set email_confirmed_at = null where id = $1`, [ALICE]);
+    expect((await db.query<{ revoke_nonmembers: number }>('select public.revoke_nonmembers()')).rows[0].revoke_nonmembers).toBeGreaterThanOrEqual(1);
+    expect(await person(ALICE)).toEqual([]);
+  });
+
+  it('has exactly two functions for visitors, and none for signed-in sessions or the internals', async () => {
+    await as(db, 'postgres');
+    const can = async (role: string, fn: string) =>
+      (await db.query<{ ok: boolean }>(`select has_function_privilege($1, $2, 'EXECUTE') as ok`, [role, fn])).rows[0].ok;
+    expect(await can('anon', 'public.public_person(uuid)')).toBe(true);
+    expect(await can('anon', 'public.public_person_cases(uuid)')).toBe(true);
+    expect(await can('authenticated', 'public.public_person(uuid)')).toBe(false);
+    for (const fn of ['public._clip_strings(jsonb, integer)', 'public.refresh_shared_case(uuid)', 'public.sync_public_profile(uuid)', 'public.revoke_nonmembers()']) {
+      expect(await can('anon', fn), fn).toBe(false);
+    }
   });
 });
 

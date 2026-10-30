@@ -157,7 +157,7 @@ describe('nothing is shared until someone opts in', () => {
     expect((await db.query(`update public.cases set share_mode = 'full' where id = $1 returning id`, [id])).rows).toEqual([]);
     expect((await db.query('delete from public.cases where id = $1 returning id', [id])).rows).toEqual([]);
     const cols = (await db.query<{ column_name: string }>(`select column_name from information_schema.columns where table_name = 'shared_cases'`)).rows.map((c) => c.column_name);
-    expect(cols).not.toEqual(expect.arrayContaining(['other_notes']));
+    expect(cols).toContain('other_notes'); // empty unless the member opens everything (see public.test.ts)
     expect(cols).toContain('partner'); // projected only when the member turns "who cased me" on (see public.test.ts)
     expect(cols).not.toContain('skills');
   });

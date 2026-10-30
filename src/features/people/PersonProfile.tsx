@@ -156,7 +156,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
           )}
           <div className="flex flex-wrap gap-1.5">
             {!person.sharing.overall && !person.sharing.skills && <Badge>Scores not shared</Badge>}
-            {visitor ? <Badge>Written feedback and notes are members-only</Badge> : !person.sharing.feedback && <Badge>Feedback not shared</Badge>}
+            {!person.sharing.feedback && <Badge>{visitor ? 'Written feedback and notes are not shared' : 'Feedback not shared'}</Badge>}
           </div>
         </>
       )}

@@ -11,6 +11,7 @@ export interface SharingPrefs {
   improvement: boolean; // improvement-focus tag of each shared case
   notes: boolean; // went well / struggled / concepts / next focus
   partner: boolean; // who cased you (practice partner / interviewer) on each shared case
+  details: boolean; // open everything: scores, feedback, learning notes and other notes on every shared case
 }
 
 export const NO_SHARING: SharingPrefs = {
@@ -21,6 +22,7 @@ export const NO_SHARING: SharingPrefs = {
   improvement: false,
   notes: false,
   partner: false,
+  details: false,
 };
 
 export interface Profile {
@@ -32,6 +34,8 @@ export interface Profile {
   listed: boolean;
   /** Also visible to people without an account. Needs `listed`. Free-text fields are never shown to them. */
   publicProfile: boolean;
+  /** Visible without an account, but only to people who have this member's profile address. Needs `publicProfile`. */
+  publicLinkOnly: boolean;
   sharing: SharingPrefs;
 }
 
@@ -53,6 +57,8 @@ export interface SharedCase {
   feedback: { overall?: string; skills?: Partial<Record<SkillKey, string>> } | null;
   improvementArea: SkillGroupKey | null;
   notes: { wentWell?: string; struggled?: string; concepts?: string; nextFocus?: string } | null;
+  /** The template's free-text "Other" column. Empty unless the member has opened everything. */
+  otherNotes: string;
 }
 
 /** The labelled switches, in the order they are shown. Shared by settings, onboarding and profile pages. */
@@ -113,10 +119,23 @@ export const SHARING_OPTIONS: {
     hint: "The name of your practice partner or interviewer on each shared case. They haven't agreed to be listed, so keep this off unless you're sure.",
     needsCases: true,
   },
+  {
+    key: 'details',
+    label: 'Open everything',
+    short: 'all case detail',
+    hint: 'Show every detail of each case you share: scores, improvement focus, written feedback, learning notes and your other notes. Visitors can open each case to read it.',
+    needsCases: true,
+  },
 ];
 
-/** What a visitor without an account can ever see: written feedback and learning notes are members-only. */
-export const PUBLIC_SHARING_KEYS: (keyof SharingPrefs)[] = ['cases', 'overall', 'skills', 'improvement', 'partner'];
+/** The switches that "Open everything" turns on for you. */
+export const INCLUDED_IN_DETAILS: (keyof SharingPrefs)[] = ['overall', 'skills', 'feedback', 'improvement', 'notes'];
+
+/**
+ * What a visitor without an account can see. Written feedback, learning notes and other notes are theirs to see
+ * only when the member has opened everything.
+ */
+export const PUBLIC_SHARING_KEYS: (keyof SharingPrefs)[] = ['cases', 'overall', 'skills', 'improvement', 'partner', 'details'];
 
 /** Like sharingSummary, but only the parts visitors without an account can actually see. */
 export function publicSharingSummary(sharing: SharingPrefs): string {
@@ -125,7 +144,8 @@ export function publicSharingSummary(sharing: SharingPrefs): string {
 
 /** "case history and overall scores", or "nothing" when nothing is on. */
 export function sharingSummary(sharing: SharingPrefs): string {
-  const on = SHARING_OPTIONS.filter((o) => sharing[o.key]).map((o) => o.short);
+  // "Open everything" covers the single detail switches, so they aren't listed separately when it is on.
+  const on = SHARING_OPTIONS.filter((o) => sharing[o.key] && !(sharing.details && INCLUDED_IN_DETAILS.includes(o.key))).map((o) => o.short);
   if (on.length === 0) return 'nothing yet';
   if (on.length === 1) return on[0];
   return `${on.slice(0, -1).join(', ')} and ${on[on.length - 1]}`;
@@ -158,7 +178,7 @@ export function sharedToRecords(shared: SharedCase[]): CaseRecord[] {
       concepts: '',
       nextFocus: '',
       improvementArea: s.improvementArea,
-      otherNotes: '',
+      otherNotes: s.otherNotes,
       shareMode: 'profile',
       createdAt: stamp,
       updatedAt: stamp,

@@ -3,8 +3,18 @@ import type { CommunityRepository, PublicReader } from './community';
 
 type Method = keyof CommunityRepository;
 
-/** Visitors never get free text: drop it exactly as the database does (those columns aren't granted to them). */
-const forVisitors = (s: SharedCase): SharedCase => ({ ...s, feedback: null, notes: null });
+/** A member as visitors know them: written feedback and notes only count as shared if they opened everything. */
+const asVisitorsSee = (p: Profile): Profile => ({
+  ...p,
+  sharing: { ...p.sharing, feedback: p.sharing.details, notes: p.sharing.details },
+});
+
+/**
+ * Visitors get written feedback, learning notes and other notes only when the member opened everything; otherwise
+ * they are dropped exactly as the database leaves them out.
+ */
+const forVisitors = (s: SharedCase, owner: Profile | undefined): SharedCase =>
+  owner?.sharing.details ? s : { ...s, feedback: null, notes: null, otherNotes: '' };
 
 /**
  * In-memory read access for people without an account: only members who are listed AND public, and no free text.
@@ -13,6 +23,8 @@ const forVisitors = (s: SharedCase): SharedCase => ({ ...s, feedback: null, note
 export function createMemoryPublic(opts: { profiles: () => Profile[]; shared?: SharedCase[] }): PublicReader & { calls: string[] } {
   const calls: string[] = [];
   const isPublic = (p: Profile) => p.listed && p.publicProfile;
+  // Link-only members aren't in any list, search or "recent" result; they can still be opened by exact id.
+  const inDirectory = (p: Profile) => isPublic(p) && !p.publicLinkOnly;
   return {
     calls,
     async searchPeople(query: string) {
@@ -20,20 +32,22 @@ export function createMemoryPublic(opts: { profiles: () => Profile[]; shared?: S
       const q = query.trim().toLowerCase();
       return opts
         .profiles()
-        .filter((p) => isPublic(p) && p.displayName.toLowerCase().includes(q))
+        .filter((p) => inDirectory(p) && p.displayName.toLowerCase().includes(q))
+        .map(asVisitorsSee)
         .sort((a, b) => a.displayName.localeCompare(b.displayName));
     },
     async getPerson(userId: string) {
       calls.push('getPerson');
-      return opts.profiles().find((p) => p.userId === userId && isPublic(p)) ?? null;
+      const found = opts.profiles().find((p) => p.userId === userId && isPublic(p));
+      return found ? asVisitorsSee(found) : null;
     },
     async recentPeople(limit: number) {
       calls.push('recentPeople');
-      const people = opts.profiles().filter(isPublic);
+      const people = opts.profiles().filter(inDirectory);
       return people
         .flatMap((person) => {
           const dates = (opts.shared ?? []).filter((s) => s.ownerId === person.userId).map((s) => s.date);
-          return dates.length ? [{ person, lastCased: dates.reduce((a, b) => (a > b ? a : b)) }] : [];
+          return dates.length ? [{ person: asVisitorsSee(person), lastCased: dates.reduce((a, b) => (a > b ? a : b)) }] : [];
         })
         .sort((a, b) => b.lastCased.localeCompare(a.lastCased))
         .slice(0, limit);
@@ -41,7 +55,7 @@ export function createMemoryPublic(opts: { profiles: () => Profile[]; shared?: S
     async getSharedCases(ownerId: string) {
       calls.push('getSharedCases');
       const owner = opts.profiles().find((p) => p.userId === ownerId);
-      return owner && isPublic(owner) ? (opts.shared ?? []).filter((s) => s.ownerId === ownerId).map(forVisitors) : [];
+      return owner && isPublic(owner) ? (opts.shared ?? []).filter((s) => s.ownerId === ownerId).map((s) => forVisitors(s, owner)) : [];
     },
   };
 }
@@ -79,7 +93,8 @@ export function createMemoryCommunity(opts: { me: string; profiles?: Profile[]; 
     },
     async saveProfile(input: ProfileInput) {
       enter('saveProfile');
-      const saved: Profile = { userId: opts.me, ...input, publicProfile: input.listed && input.publicProfile };
+      const publicProfile = input.listed && input.publicProfile;
+      const saved: Profile = { userId: opts.me, ...input, publicProfile, publicLinkOnly: publicProfile && input.publicLinkOnly };
       const i = profiles.findIndex((p) => p.userId === opts.me);
       if (i === -1) profiles.push(saved);
       else profiles[i] = saved;

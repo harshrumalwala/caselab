@@ -10,16 +10,17 @@ const BOB: Profile = {
   displayName: 'Bob Brown',
   mbaClass: 'Class of 2027',
   listed: true,
-  publicProfile: true,
+  publicProfile: true, publicLinkOnly: false,
   sharing: { ...NO_SHARING, cases: true, overall: true, feedback: true, notes: true },
 };
-const CAROL: Profile = { userId: 'carol', displayName: 'Carol Chen', mbaClass: '', listed: true, publicProfile: false, sharing: { ...NO_SHARING, cases: true } };
+const CAROL: Profile = { userId: 'carol', displayName: 'Carol Chen', mbaClass: '', listed: true, publicProfile: false, publicLinkOnly: false, sharing: { ...NO_SHARING, cases: true } };
 
 const row = (over: Partial<SharedCase> & Pick<SharedCase, 'caseId' | 'title'>): SharedCase => ({
   ownerId: 'bob',
   date: '2026-10-01',
   source: '',
   partner: '',
+  otherNotes: '',
   caseType: 'Profitability',
   industry: 'Technology / SaaS',
   overall: null,
@@ -177,11 +178,11 @@ describe('the public front page', () => {
     expect(screen.getByText('Bank market entry')).toBeInTheDocument();
     expect(screen.queryByText('Carol members-only case')).not.toBeInTheDocument();
 
-    // Free text is members-only: it isn't even offered to a visitor, though Bob shares it with members.
+    // Bob has not opened everything: his text isn't even offered to a visitor, though he shares it with members.
     expect(document.body.textContent).not.toContain('SECRET-FEEDBACK-FOR-MEMBERS');
     expect(document.body.textContent).not.toContain('SECRET-NOTES-FOR-MEMBERS');
-    expect(screen.queryByText('Feedback and notes')).not.toBeInTheDocument();
-    expect(screen.getByText('Written feedback and notes are members-only')).toBeInTheDocument();
+    expect(screen.queryByText('See more details')).not.toBeInTheDocument();
+    expect(screen.getByText('Written feedback and notes are not shared')).toBeInTheDocument();
 
     // Pairing needs your own cases, so visitors get an invitation instead of "Find a case for them".
     expect(screen.queryByRole('tab', { name: /Find a case for them/ })).not.toBeInTheDocument();
@@ -269,7 +270,7 @@ describe('choosing to be visible without an account', () => {
 
     await user.click(toggle);
     const confirm = await screen.findByRole('dialog', { name: 'Show your profile to anyone?' });
-    expect(confirm).toHaveTextContent(/never shown to visitors/i);
+    expect(confirm).toHaveTextContent(/not shown to visitors unless you turn on Open everything/i);
     expect(confirm).toHaveTextContent(/share this case in full/i); // warns what per-case settings mean
     await user.click(within(confirm).getByRole('button', { name: 'Cancel' }));
     expect(mine(env)?.publicProfile).toBe(false); // cancelling changes nothing
@@ -299,19 +300,19 @@ describe('choosing to be visible without an account', () => {
     const mineShared: SharedCase[] = [
       row({ caseId: 'm1', ownerId: TEST_USER.userId, title: 'My airline case', overall: 5, feedback: { overall: 'MEMBERS-ONLY-TEXT' } }),
     ];
-    const env = createFakeEnv({ profile: { ...MY_PROFILE, publicProfile: true, sharing: { ...NO_SHARING, cases: true, overall: true, feedback: true } }, shared: mineShared });
+    const env = createFakeEnv({ profile: { ...MY_PROFILE, publicProfile: true, publicLinkOnly: false, sharing: { ...NO_SHARING, cases: true, overall: true, feedback: true } }, shared: mineShared });
     const { user, dialog } = await openProfile(env);
 
     // Members tab (default) can include written feedback.
     expect(await within(dialog).findByText('My airline case')).toBeInTheDocument();
-    expect(within(dialog).getByText('Feedback and notes')).toBeInTheDocument();
+    expect(within(dialog).getByText('See more details')).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('tab', { name: 'Visitors without an account' }));
     await waitFor(() => expect(env.community.calls).toContain('getPublicView'));
     expect(await within(dialog).findByText('My airline case')).toBeInTheDocument();
-    expect(within(dialog).queryByText('Feedback and notes')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('See more details')).not.toBeInTheDocument();
     expect(dialog.textContent).not.toContain('MEMBERS-ONLY-TEXT');
-    expect(within(dialog).getByText(/never see written feedback or learning notes/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/don't see written feedback, learning notes or other notes unless you turn on Open everything/i)).toBeInTheDocument();
   });
 
   it('tells you plainly that visitors see nothing until you opt in', async () => {
@@ -347,5 +348,139 @@ describe('profile setup and the audience', () => {
     await user.click(screen.getByRole('button', { name: 'Start casing' }));
     await screen.findByRole('heading', { name: 'Dashboard' });
     expect(env.community.profiles.find((p) => p.displayName === 'Quiet Quinn')).toMatchObject({ listed: false, publicProfile: false });
+  });
+});
+
+describe('seeing more detail on a case', () => {
+  const OPEN: Profile = { ...BOB, sharing: { ...NO_SHARING, cases: true, overall: true, feedback: true, notes: true, details: true } };
+  const DETAILED = row({
+    caseId: 'd1',
+    title: 'Detailed airline case',
+    overall: 4,
+    feedback: { overall: 'OPEN-FEEDBACK', skills: { framework: 'OPEN-FRAMEWORK-NOTE' } },
+    notes: { wentWell: 'OPEN-WENT-WELL', concepts: 'OPEN-CONCEPTS' },
+    otherNotes: 'OPEN-OTHER-NOTES',
+  });
+  const PLAIN = row({ caseId: 'd2', title: 'Plain bank case', overall: 3 });
+
+  it('offers "See more details" on a case when the member opened everything, and shows feedback and notes there', async () => {
+    const env = visitor({ members: [OPEN], shared: [DETAILED, PLAIN].map((r) => ({ ...r, ownerId: 'bob' })) });
+    const { user } = await open(env);
+    await user.click(await bobRow());
+    await screen.findByText('Detailed airline case');
+
+    // The standard card is what visitors see first; the detail is one click further.
+    expect(screen.getAllByText('See more details')).toHaveLength(1); // only the case that has any
+    await user.click(screen.getByText('See more details'));
+    const card = screen.getByText('Detailed airline case').closest('li')!;
+    for (const text of ['OPEN-FEEDBACK', 'OPEN-FRAMEWORK-NOTE', 'OPEN-WENT-WELL', 'OPEN-CONCEPTS', 'OPEN-OTHER-NOTES']) {
+      expect(card).toHaveTextContent(text);
+    }
+    expect(screen.getByText('Plain bank case').closest('li')).not.toHaveTextContent('Other notes');
+  });
+
+  it('offers nothing extra when the member has not opened everything', async () => {
+    const env = visitor({ shared: [{ ...DETAILED, ownerId: 'bob' }] });
+    const { user } = await open(env);
+    await user.click(await bobRow());
+    await screen.findByText('Detailed airline case');
+    expect(screen.queryByText('See more details')).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('OPEN-OTHER-NOTES');
+  });
+});
+
+describe('link only', () => {
+  const LENA: Profile = { ...BOB, userId: 'lena', displayName: 'Lena Link', publicLinkOnly: true };
+  const lenaCase = { ...row({ caseId: 'l1', title: 'Lena only-by-link case' }), ownerId: 'lena' };
+
+  it('keeps the member off the front page and out of search', async () => {
+    const env = visitor({ members: [BOB, LENA], shared: [...SHARED, lenaCase] });
+    const { user } = await open(env);
+    await screen.findByRole('heading', { name: 'Cased recently' });
+    expect(screen.queryByText('Lena Link')).not.toBeInTheDocument(); // not under "Cased recently"
+    await browse(user);
+    await (await everyone()).findByRole('button', { name: /Bob Brown/ });
+    expect(screen.queryByText('Lena Link')).not.toBeInTheDocument(); // not in the full list
+    await user.type(screen.getByLabelText('Search members by name'), 'lena');
+    expect(await screen.findByText('No members found')).toBeInTheDocument(); // not found by name
+  });
+
+  it('still opens their profile from the exact address', async () => {
+    const env = visitor({ members: [BOB, LENA], shared: [...SHARED, lenaCase] });
+    window.location.hash = '#/people/lena';
+    await open(env);
+    expect(await screen.findByRole('heading', { name: 'Lena Link' })).toBeInTheDocument();
+    expect(await screen.findByText('Lena only-by-link case')).toBeInTheDocument();
+  });
+});
+
+describe('choosing who finds you, and how much they see', () => {
+  const openProfile = async (env: FakeEnv) => {
+    const { user } = await open(env);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await user.click(screen.getByRole('button', { name: 'Profile and privacy' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Profile & privacy' });
+    return { user, dialog };
+  };
+  const mine = (env: FakeEnv) => env.community.profiles.find((p) => p.userId === TEST_USER.userId)!;
+  const publicMe: Profile = { ...MY_PROFILE, publicProfile: true, sharing: { ...NO_SHARING, cases: true } };
+
+  it('offers the front-page or link-only choice once visible, saves it, and shows a link to copy', async () => {
+    const env = createFakeEnv({ profile: publicMe });
+    const { user, dialog } = await openProfile(env);
+    expect(within(dialog).getByRole('radio', { name: /On the front page and in search/ })).toBeChecked();
+    expect((within(dialog).getByLabelText('Your profile address') as HTMLInputElement).value).toContain(`#/people/${TEST_USER.userId}`);
+
+    await user.click(within(dialog).getByRole('radio', { name: /Only people with my link/ }));
+    await waitFor(() => expect(mine(env).publicLinkOnly).toBe(true));
+    expect(within(dialog).getByText(/The only way to cut it off is to turn visibility off here/)).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('radio', { name: /On the front page and in search/ }));
+    await waitFor(() => expect(mine(env).publicLinkOnly).toBe(false));
+  });
+
+  it('clears link only when visibility without an account is switched off', async () => {
+    const env = createFakeEnv({ profile: { ...publicMe, publicLinkOnly: true } });
+    const { user, dialog } = await openProfile(env);
+    await user.click(within(dialog).getByRole('switch', { name: 'Visible without an account' }));
+    await waitFor(() => expect(mine(env)).toMatchObject({ publicProfile: false, publicLinkOnly: false }));
+    expect(within(dialog).queryByRole('radio', { name: /Only people with my link/ })).not.toBeInTheDocument();
+  });
+
+  it('offers no where-to-find-me choice while not visible without an account', async () => {
+    const env = createFakeEnv();
+    const { dialog } = await openProfile(env);
+    expect(within(dialog).queryByRole('radio', { name: /Only people with my link/ })).not.toBeInTheDocument();
+  });
+
+  it('opens everything: the single detail switches show as included, and visitors are warned first', async () => {
+    const env = createFakeEnv({ profile: publicMe });
+    const { user, dialog } = await openProfile(env);
+    const everything = within(dialog).getByRole('switch', { name: 'Open everything' });
+    expect(everything).toHaveAttribute('aria-checked', 'false');
+
+    await user.click(everything);
+    const confirm = await screen.findByRole('dialog', { name: 'Open everything to visitors too?' });
+    expect(confirm).toHaveTextContent(/scores, written feedback, learning notes and other notes/);
+    await user.click(within(confirm).getByRole('button', { name: 'Cancel' }));
+    expect(mine(env).sharing.details).toBe(false); // cancelling changes nothing
+
+    await user.click(everything);
+    const again = await screen.findByRole('dialog', { name: 'Open everything to visitors too?' });
+    await user.click(within(again).getByRole('button', { name: 'Open everything' }));
+    await waitFor(() => expect(mine(env).sharing.details).toBe(true));
+    for (const name of ['Written feedback', 'Learning notes', 'Overall scores']) {
+      const included = within(dialog).getByRole('switch', { name });
+      expect(included).toHaveAttribute('aria-checked', 'true');
+      expect(included).toBeDisabled();
+    }
+  });
+
+  it('opens everything without a warning when not visible without an account', async () => {
+    const env = createFakeEnv({ profile: { ...MY_PROFILE, sharing: { ...NO_SHARING, cases: true } } });
+    const { user, dialog } = await openProfile(env);
+    await user.click(within(dialog).getByRole('switch', { name: 'Open everything' }));
+    await waitFor(() => expect(mine(env).sharing.details).toBe(true));
+    expect(screen.queryByRole('dialog', { name: 'Open everything to visitors too?' })).not.toBeInTheDocument();
   });
 });

@@ -10,6 +10,7 @@ const theirs = (title: string, over: Partial<SharedCase> = {}): SharedCase => ({
   title,
   source: '',
   partner: '',
+  otherNotes: '',
   caseType: 'Profitability',
   industry: 'Technology / SaaS',
   overall: null,

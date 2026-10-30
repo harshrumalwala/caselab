@@ -13,17 +13,18 @@ const BOB: Profile = {
   displayName: 'Bob Brown',
   mbaClass: 'Class of 2027',
   listed: true,
-  publicProfile: false,
+  publicProfile: false, publicLinkOnly: false,
   sharing: { ...NO_SHARING, cases: true, overall: true, feedback: true },
 };
-const CAROL: Profile = { userId: 'carol', displayName: 'Carol Chen', mbaClass: '', listed: true, publicProfile: false, sharing: NO_SHARING };
-const HIDDEN: Profile = { userId: 'ghost', displayName: 'Hidden Harry', mbaClass: '', listed: false, publicProfile: false, sharing: NO_SHARING };
+const CAROL: Profile = { userId: 'carol', displayName: 'Carol Chen', mbaClass: '', listed: true, publicProfile: false, publicLinkOnly: false, sharing: NO_SHARING };
+const HIDDEN: Profile = { userId: 'ghost', displayName: 'Hidden Harry', mbaClass: '', listed: false, publicProfile: false, publicLinkOnly: false, sharing: NO_SHARING };
 
 const shared = (over: Partial<SharedCase> & Pick<SharedCase, 'caseId' | 'title'>): SharedCase => ({
   ownerId: 'bob',
   date: '2026-10-01',
   source: '',
   partner: '',
+  otherNotes: '',
   caseType: 'Profitability',
   industry: 'Technology / SaaS',
   overall: null,
@@ -231,7 +232,7 @@ describe('People', () => {
     expect(screen.getByText('Airline profitability')).toBeInTheDocument();
     expect(screen.getByText('Bank market entry')).toBeInTheDocument();
     // Only the case that has shared feedback offers it.
-    expect(screen.getAllByText('Feedback and notes')).toHaveLength(1);
+    expect(screen.getAllByText('See more details')).toHaveLength(1);
     expect(screen.queryByText(/Working on:/)).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText('Search cases'), 'point'); // matches the casebook

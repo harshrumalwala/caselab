@@ -2,7 +2,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Profile, ProfileInput, SharedCase } from '../domain/community';
 import {
   PUBLIC_PROFILE_COLUMNS,
-  PUBLIC_SHARED_COLUMNS,
   SHARED_COLUMNS,
   profileToRow,
   rowToProfile,
@@ -41,7 +40,7 @@ async function pageShared(client: SupabaseClient, table: string, columns: string
 /**
  * Read-only community access for people WITHOUT an account. It uses a client that never holds a session, so
  * every request runs as the database's `anon` role: it can only see members who opted in to being public,
- * and only the columns granted to that role (no written feedback, notes, or private ids).
+ * and only the columns granted to that role (written feedback and notes only when the member opened everything; never private ids).
  */
 export class PublicCommunity implements PublicReader {
   constructor(private readonly anon: SupabaseClient) {}
@@ -56,10 +55,13 @@ export class PublicCommunity implements PublicReader {
     return ((data ?? []) as unknown as PublicProfileRow[]).map(rowToPublicProfile);
   }
 
+  // One member by exact id. This goes through a function rather than the table, because a member who chose "link only"
+  // isn't in what the table returns: only someone who has their exact id can open them.
   async getPerson(userId: string): Promise<Profile | null> {
-    const { data, error } = await this.anon.from('public_profiles').select(PUBLIC_PROFILE_COLUMNS).eq('user_id', userId).maybeSingle();
+    const { data, error } = await this.anon.rpc('public_person', { p_id: userId });
     if (error) throw error;
-    return data ? rowToPublicProfile(data as unknown as PublicProfileRow) : null;
+    const row = ((data ?? []) as PublicProfileRow[])[0];
+    return row ? rowToPublicProfile(row) : null;
   }
 
   async recentPeople(limit: number): Promise<RecentCaser[]> {
@@ -86,9 +88,11 @@ export class PublicCommunity implements PublicReader {
     return ids.flatMap((id) => (byId.has(id) ? [{ person: byId.get(id)!, lastCased: latest.get(id)! }] : []));
   }
 
-  getSharedCases(ownerId: string): Promise<SharedCase[]> {
-    // Visitors get at most one page per member, so a single account can't make the public page enormous.
-    return pageShared(this.anon, 'public_shared_cases', PUBLIC_SHARED_COLUMNS, ownerId, PAGE);
+  async getSharedCases(ownerId: string): Promise<SharedCase[]> {
+    // The function returns at most 1000 cases, so a single account can't make the public page enormous.
+    const { data, error } = await this.anon.rpc('public_person_cases', { p_id: ownerId });
+    if (error) throw error;
+    return ((data ?? []) as SharedRow[]).map(rowToSharedCase);
   }
 }
 

@@ -41,6 +41,7 @@ export interface ProfileRow {
   mba_class: string | null;
   listed: boolean;
   public_profile: boolean;
+  public_link_only: boolean;
   share_cases: boolean;
   share_overall: boolean;
   share_skills: boolean;
@@ -48,6 +49,7 @@ export interface ProfileRow {
   share_improvement: boolean;
   share_notes: boolean;
   share_partner: boolean;
+  share_details: boolean;
 }
 
 export function rowToProfile(r: ProfileRow): Profile {
@@ -57,6 +59,7 @@ export function rowToProfile(r: ProfileRow): Profile {
     mbaClass: r.mba_class ?? '',
     listed: r.listed,
     publicProfile: r.public_profile ?? false,
+    publicLinkOnly: r.public_link_only ?? false,
     sharing: {
       cases: r.share_cases,
       overall: r.share_overall,
@@ -65,6 +68,7 @@ export function rowToProfile(r: ProfileRow): Profile {
       improvement: r.share_improvement,
       notes: r.share_notes,
       partner: r.share_partner ?? false,
+      details: r.share_details ?? false,
     },
   };
 }
@@ -75,6 +79,7 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
     mba_class: input.mbaClass.trim() === '' ? null : input.mbaClass.trim(),
     listed: input.listed,
     public_profile: input.listed && input.publicProfile, // public needs listed (also a database rule)
+    public_link_only: input.listed && input.publicProfile && input.publicLinkOnly, // link only needs public (also a database rule)
     share_cases: input.sharing.cases,
     share_overall: input.sharing.overall,
     share_skills: input.sharing.skills,
@@ -82,15 +87,16 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
     share_improvement: input.sharing.improvement,
     share_notes: input.sharing.notes,
     share_partner: input.sharing.partner,
+    share_details: input.sharing.details,
   };
 }
 
 /** The columns members may read from shared_cases. `case_id` (the private table's id) is deliberately not one of them. */
 export const SHARED_COLUMNS =
-  'share_id, owner_id, case_date, title, source, partner, case_type, industry, overall, skill_scores, feedback, improvement_area, notes';
+  'share_id, owner_id, case_date, title, source, partner, case_type, industry, overall, skill_scores, feedback, improvement_area, notes, other_notes';
 
 /** The public tables hold only public members and fields; these are the columns visitors without an account may read. */
-export const PUBLIC_PROFILE_COLUMNS = 'user_id, display_name, mba_class, share_cases, share_overall, share_skills, share_improvement, share_partner';
+export const PUBLIC_PROFILE_COLUMNS = 'user_id, display_name, mba_class, share_cases, share_overall, share_skills, share_improvement, share_partner, share_details';
 
 export interface PublicProfileRow {
   user_id: string;
@@ -101,6 +107,7 @@ export interface PublicProfileRow {
   share_skills: boolean;
   share_improvement: boolean;
   share_partner: boolean;
+  share_details: boolean;
 }
 
 /** A public member as a visitor knows them. Free text (feedback, notes) is never shared with visitors. */
@@ -111,19 +118,22 @@ export function rowToPublicProfile(r: PublicProfileRow): Profile {
     mbaClass: r.mba_class ?? '',
     listed: true,
     publicProfile: true,
+    publicLinkOnly: false,
     sharing: {
       cases: r.share_cases,
       overall: r.share_overall,
       skills: r.share_skills,
-      feedback: false,
+      // Written feedback and notes reach visitors only when the member opened everything.
+      feedback: r.share_details ?? false,
       improvement: r.share_improvement,
-      notes: false,
+      notes: r.share_details ?? false,
       partner: r.share_partner ?? false,
+      details: r.share_details ?? false,
     },
   };
 }
 export const PUBLIC_SHARED_COLUMNS =
-  'share_id, owner_id, case_date, title, source, partner, case_type, industry, overall, skill_scores, improvement_area';
+  'share_id, owner_id, case_date, title, source, partner, case_type, industry, overall, skill_scores, improvement_area, feedback, notes, other_notes';
 
 export interface SharedRow {
   share_id: string;
@@ -136,10 +146,11 @@ export interface SharedRow {
   industry: string | null;
   overall: number | null;
   skill_scores: Record<string, number> | null;
-  /** Absent for visitors without an account: free text is members-only. */
+  /** Empty for visitors unless the member opened everything. */
   feedback?: { overall?: string; skills?: Record<string, string> } | null;
   improvement_area: string | null;
   notes?: { went_well?: string; struggled?: string; concepts?: string; next_focus?: string } | null;
+  other_notes?: string | null;
 }
 
 export function rowToSharedCase(r: SharedRow): SharedCase {
@@ -164,5 +175,6 @@ export function rowToSharedCase(r: SharedRow): SharedCase {
           nextFocus: r.notes.next_focus,
         }
       : null,
+    otherNotes: r.other_notes ?? '',
   };
 }
