@@ -12,7 +12,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **A public front page**: anyone, with no account, can search the members who chose to be visible and read what they share
 - **People**: find a fellow member, see only what they've chosen to share, and work out which case to give them
 - **Profile & privacy**: switches for what other members can see, a per-case override, and a live preview
-- **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export and MCG Excel import are built in
+- **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export and an Excel import that reads the MCG template are built in
 
 ---
 
@@ -213,12 +213,36 @@ half-written Log Case draft, and Supabase's own sign-in session; none of them ho
 | Extra copy of everything | Settings → Download backup (JSON) | Every case, rating, feedback note, learning and list item, and each case's sharing setting |
 | Restore a backup | Settings → Import backup (JSON) | **Merge** (adds cases, newer edit wins, deletes nothing) or **Replace everything**. Replace writes the file first and removes leftovers second, so a failure can't leave you with less than you started with |
 | Spreadsheet view | Settings → Export cases (CSV) | One row per case, MCG column order plus CaseLab's additions |
-| Bring in your MCG log | Settings → Import MCG Excel log | Reads the `Log` sheet by header names, skips duplicates (same date + title). Imported cases have no industry; open one to add it |
+| Bring in your MCG log | Dashboard or Case Log (empty state), or Settings → Import from Excel | A preview first, nothing saved until you confirm. See "Importing your Excel log" below |
 | Wipe | Settings → Clear all data | Requires typing `DELETE` |
 | Sign out | Settings → Sign out | |
 | Demo | Settings → Try demo mode | 16 clearly labeled sample cases held only in this tab's memory. They are never sent to your account, never shared, and People is switched off while in demo mode |
 
 The app starts with 0 cases and shows no scores, trends or suggestions until you log something.
+
+---
+
+## Importing your Excel log
+
+Open **Import from Excel** from the Dashboard or Case Log (when empty) or from Settings, then drop in your `.xlsx` file. CaseLab reads
+it in your browser and shows a review screen first; **nothing is saved until you press Import**.
+
+| From the workbook | In CaseLab |
+| --- | --- |
+| **Log** tab: date, title, source, case type, interviewer, overall, all eight skills with their feedback, Other | The same fields on each case |
+| **Opportunity Areas** tab (the two lists you typed beneath the headings) | The two lists on Improvement Areas |
+| An **Industry** column, if you added one | The case's industry |
+| Any other columns you added (for example "Duration") | Kept in the case's private "Other notes" as `Header: value` |
+
+How it copes with real spreadsheets:
+
+- Columns are found by heading, so reordered or renamed ones ("Partner", "Casebook", "Structure", "Math") still work.
+- Case types are matched loosely ("M&A", "org change", "Market entry (pharma)"). Anything it can't place becomes Other, with your original wording kept in the case's notes.
+- Ratings like `4/5` are read as 4, decimals are rounded, and text such as "seven" is left blank. Each of these is listed under the case.
+- Day-first dates (25/10/2026) are understood when the month would otherwise be impossible.
+- Industries are suggested from the case title where the words are clear, and you can change any of them before importing.
+- Cases already in your log (same date and title) and list entries you already have are skipped, so importing twice is safe.
+- **Imported cases are private by default.** You can instead choose to have them follow your Profile & privacy settings, which is how a case you log normally behaves.
 
 ---
 
@@ -347,7 +371,7 @@ There is no group administration, messaging or social feed: members, profiles an
 - **Supabase layer**: row mapping that round-trips every field, a repository run against a fake Supabase (paging past 1000 rows, chunked upserts, replace-without-data-loss, errors surfaced), friendly error messages, configuration checks
 - **Calculations**: week boundaries, averages that ignore missing ratings, behavioral combining, trend windows, coverage, matrix, weekly history
 - **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
-- **Backup**: lossless JSON round trip, merge semantics, CSV quoting, MCG Excel import (a populated sample workbook and the empty template)
+- **Backup and import**: lossless JSON round trip, merge semantics, CSV quoting; Excel import (a populated sample, a richer workbook with an Industry column, extra columns and filled-in Opportunity Areas, and the empty template), header and case-type matching, industry suggestions, and the review screen end to end
 - **The app end to end** against a fake Supabase: sign-in and sign-out, nothing requested before sign-in, create / edit / delete with confirmation, data surviving a refresh, a failed save keeping what you typed, a failed delete, a failed load with Retry, a missing-tables message, demo mode never touching the database, export then restore, clear-all
 
 ### Live checks against your real Supabase project (optional)
@@ -374,7 +398,7 @@ sharing switches, then restore them to listed with nothing shared.
 ## Limitations
 
 - Weeks start on Monday.
-- The MCG import can't know industries, so imported cases show "–" until you edit them.
+- The MCG template has no industry column. The import suggests one from the case title where the words are clear (an airline, a hospital) and you confirm or change it on the review screen; anything left unset shows "–" until you edit the case.
 - Edits made on two devices at the same moment aren't merged: the last save wins (fine for one person).
 - Case matching is by title only, so very different spellings of the same case can be missed, and different cases that share
   most of their words can be flagged as "might overlap". It never decides for you.

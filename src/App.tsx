@@ -15,6 +15,7 @@ import { ImprovementAreas } from './features/improvement/ImprovementAreas';
 import { LogCaseDialog } from './features/logcase/LogCaseDialog';
 import { People } from './features/people/People';
 import { PublicSite } from './features/public/PublicSite';
+import { ImportDialog } from './features/import/ImportDialog';
 import { SettingsDialog } from './features/settings/SettingsDialog';
 import { AuthProvider, useAuth, useSession } from './state/AuthProvider';
 import { CommunityProvider, useCommunity } from './state/CommunityProvider';
@@ -44,6 +45,7 @@ function Shell() {
   const [logState, setLogState] = useState<LogState | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const counter = useRef(0);
 
@@ -67,6 +69,7 @@ function Shell() {
       editCase: (id) => setLogState({ key: ++counter.current, editId: id, prefill: null }),
       viewCase: (id) => setViewId(id),
       openSettings: () => setSettingsOpen(true),
+      openImport: () => setImportOpen(true),
       openProfile: () => setProfileOpen(true),
     }),
     [location, navigate],
@@ -127,6 +130,7 @@ function Shell() {
         />
       )}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
       {profileOpen && <ProfileSettingsDialog onClose={() => setProfileOpen(false)} />}
     </UIContext.Provider>
   );

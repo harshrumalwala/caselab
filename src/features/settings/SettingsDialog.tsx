@@ -14,12 +14,12 @@ import { backupToJSON, ImportError, parseBackup, type ParsedBackup } from '../..
 import { casesToCSV } from '../../data/csv';
 import { backupFilename, downloadText } from '../../data/download';
 import { describeError } from '../../data/errors';
-import { readMcgWorkbook } from '../../data/mcgImport';
 import { Button } from '../../components/ui/Button';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Dialog } from '../../components/ui/Dialog';
 import { useAuth, useSession } from '../../state/AuthProvider';
 import { useData } from '../../state/DataProvider';
+import { useUI } from '../../state/ui';
 import { useToast } from '../../state/ToastProvider';
 
 function Section({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
@@ -36,12 +36,12 @@ function Section({ title, icon, children }: { title: string; icon: ReactNode; ch
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
-  const { data, cases, mode, replaceAll, mergeIn, importCases, clearAll, enterDemo, exitDemo } = useData();
+  const { data, cases, mode, replaceAll, mergeIn, clearAll, enterDemo, exitDemo } = useData();
   const { signOut } = useAuth();
   const session = useSession();
   const toast = useToast();
+  const { openImport } = useUI();
   const jsonInput = useRef<HTMLInputElement>(null);
-  const xlsxInput = useRef<HTMLInputElement>(null);
   const [pendingBackup, setPendingBackup] = useState<ParsedBackup | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -68,33 +68,6 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         title: "Couldn't read that file",
         body: e instanceof ImportError ? e.message : 'It does not look like a CaseLab backup.',
       });
-    }
-  };
-
-  const onPickXlsx = async (file: File | undefined) => {
-    if (!file) return;
-    setBusy(true);
-    try {
-      const result = await readMcgWorkbook(file);
-      if (result.cases.length === 0) {
-        toast({ kind: 'info', title: 'No cases found', body: 'The Log sheet has no filled-in rows.' });
-        return;
-      }
-      const { added, skipped } = await importCases(result.cases);
-      toast({
-        title: `Imported ${plural(added, 'case', 'cases')}`,
-        body:
-          (skipped > 0 ? `${plural(skipped, 'duplicate was', 'duplicates were')} skipped. ` : '') +
-          'The template has no industry column, so open a case to add one.',
-      });
-    } catch (e) {
-      toast({
-        kind: 'error',
-        title: "Couldn't import that workbook",
-        body: e instanceof ImportError ? e.message : describeError(e),
-      });
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -177,14 +150,20 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               <Button onClick={exportCSV} disabled={demo || cases.length === 0}>
                 <Table2 className="size-4" /> Export cases (CSV)
               </Button>
-              <Button onClick={() => xlsxInput.current?.click()} disabled={demo || busy}>
-                <FileSpreadsheet className="size-4" /> {busy ? 'Working…' : 'Import MCG Excel log'}
+              <Button
+                onClick={() => {
+                  onClose();
+                  openImport();
+                }}
+                disabled={demo || busy}
+              >
+                <FileSpreadsheet className="size-4" /> Import from Excel
               </Button>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-muted">
               Your data already lives in your account; a JSON download is an extra copy that contains everything (every
               case, rating, feedback note, learning and list item) and can be restored here. CSV is a one-row-per-case
-              spreadsheet. The Excel import reads the “Log” sheet of the MCG template.
+              spreadsheet. Import from Excel brings in a case log shaped like the MCG template, after a preview.
             </p>
             <input
               ref={jsonInput}
@@ -194,17 +173,6 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               aria-label="Choose a JSON backup file"
               onChange={(e) => {
                 void onPickJSON(e.target.files?.[0]);
-                e.target.value = '';
-              }}
-            />
-            <input
-              ref={xlsxInput}
-              type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              className="hidden"
-              aria-label="Choose an MCG Excel case log"
-              onChange={(e) => {
-                void onPickXlsx(e.target.files?.[0]);
                 e.target.value = '';
               }}
             />
