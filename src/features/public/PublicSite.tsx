@@ -89,7 +89,7 @@ function Tile({ icon, title, children }: { icon: ReactNode; title: string; child
 const ASSURANCES: { icon: ReactNode; title: string; text: string }[] = [
   { icon: <ShieldCheck className="size-5" />, title: 'Members choose', text: 'Everything starts private. Each person switches on only what they’re comfortable showing.' },
   { icon: <EyeOff className="size-5" />, title: 'No email addresses', text: 'Names and class years only. Nobody can look up or contact someone through this page.' },
-  { icon: <Lock className="size-5" />, title: 'Feedback stays inside', text: 'Written feedback and learning notes are only ever shown to signed-in members.' },
+  { icon: <Lock className="size-5" />, title: 'Detail is opt-in', text: 'Written feedback and notes are shown only if a member chooses to open everything. Otherwise they stay with members.' },
 ];
 
 const RECENT_COUNT = 5;
@@ -193,6 +193,9 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
             </button>
           </div>
           <p className="mt-4 text-sm text-muted">Your practice is private by default. Nothing is shown to anyone unless you switch it on.</p>
+          <p className="mt-1.5 flex items-center gap-1.5 text-sm text-ink-2">
+            <FileSpreadsheet className="size-4 text-accent-text" aria-hidden /> Already tracking cases in Excel? Bring your log with you, so you never start from zero.
+          </p>
         </div>
       </section>
 
@@ -215,7 +218,8 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
               Plain, explainable suggestions drawn from your own ratings and coverage, so you know what to work on in your next session.
             </Tile>
             <Tile icon={<FileSpreadsheet className="size-5" />} title="Bring your history">
-              Already tracking cases in a spreadsheet? Import it, and export everything to a file whenever you like.
+              Already logging cases in the MCG Excel template? Import it in one step: your cases, ratings, feedback and lists come across,
+              and you review everything before it is saved. Export it all whenever you like.
             </Tile>
           </ul>
         </section>

@@ -39,7 +39,7 @@ export const MY_PROFILE: Profile = {
   displayName: 'Test User',
   mbaClass: 'Class of 2027',
   listed: true,
-  publicProfile: false,
+  publicProfile: false, publicLinkOnly: false,
   sharing: NO_SHARING,
 };
 

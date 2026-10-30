@@ -30,7 +30,7 @@ export function Onboarding() {
     setBusy(true);
     setError(null);
     try {
-      await saveProfile({ displayName: name, mbaClass, listed, publicProfile: listed && publicProfile, sharing });
+      await saveProfile({ displayName: name, mbaClass, listed, publicProfile: listed && publicProfile, publicLinkOnly: false, sharing });
       // The community provider now has a profile, so the app takes over.
     } catch (err) {
       setError(describeError(err));

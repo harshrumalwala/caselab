@@ -25,7 +25,7 @@ export function SharedCaseRow({ shared, extra }: { shared: SharedCase; extra?: R
   const skills = shared.skillScores ? (Object.entries(shared.skillScores) as [SkillKey, number][]) : [];
   const feedbackSkills = shared.feedback?.skills ? Object.entries(shared.feedback.skills) : [];
   const n = shared.notes;
-  const hasDetail = Boolean(shared.feedback || n);
+  const hasDetail = Boolean(shared.feedback || n || shared.otherNotes);
 
   return (
     <li className="rounded-2xl border border-line bg-surface p-4">
@@ -55,7 +55,7 @@ export function SharedCaseRow({ shared, extra }: { shared: SharedCase; extra?: R
       {hasDetail && (
         <details className="mt-3 text-sm">
           <summary className="cursor-pointer text-xs font-semibold text-accent-text hover:underline">
-            Feedback and notes
+            See more details
           </summary>
           <div className="mt-3 space-y-3">
             <Note label="Overall feedback" text={shared.feedback?.overall} />
@@ -66,6 +66,7 @@ export function SharedCaseRow({ shared, extra }: { shared: SharedCase; extra?: R
             <Note label="What they struggled with" text={n?.struggled} />
             <Note label="Concepts learned" text={n?.concepts} />
             <Note label="Practicing next" text={n?.nextFocus} />
+            <Note label="Other notes" text={shared.otherNotes} />
           </div>
         </details>
       )}

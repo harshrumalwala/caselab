@@ -10,7 +10,7 @@ import { Switch } from '../../components/ui/Switch';
 import { useCommunity, useMyProfile } from '../../state/CommunityProvider';
 import { useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
-import { AudienceSwitch } from './AudienceSwitch';
+import { AudienceSwitch, profileAddress } from './AudienceSwitch';
 import { SharedCaseRow } from './SharedCaseRow';
 import { SharingSwitches } from './SharingSwitches';
 
@@ -113,8 +113,15 @@ function Preview({ profile }: { profile: Profile }) {
                 {state.shared.length > 4 && <p className="text-xs text-muted">…and {state.shared.length - 4} more.</p>}
               </>
             ))}
+          {audience === 'visitors' && profile.publicProfile && profile.publicLinkOnly && (
+            <p className="text-xs text-muted">You're link only, so this is what people see when they open your link. You aren't on the front page or in search.</p>
+          )}
           {audience === 'visitors' && (
-            <p className="text-xs text-muted">Visitors never see written feedback or learning notes, even if you share them with members.</p>
+            <p className="text-xs text-muted">
+              {profile.sharing.details
+                ? 'Open everything is on, so visitors can open each case to read your feedback and notes.'
+                : "Visitors don't see written feedback, learning notes or other notes unless you turn on Open everything."}
+            </p>
           )}
         </div>
       )}
@@ -132,6 +139,8 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [confirmPublic, setConfirmPublic] = useState(false);
+  // Opening everything while visible without an account changes what visitors read, so it asks first.
+  const [pendingDetails, setPendingDetails] = useState<SharingPrefs | null>(null);
 
   const detailsChanged = name.trim() !== profile.displayName || mbaClass.trim() !== profile.mbaClass;
 
@@ -140,12 +149,15 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
     setSaving(true);
     try {
       const listed = next.listed ?? profile.listed;
+      // Being public needs being listed, so unlisting also withdraws public visibility.
+      const publicProfile = listed && (next.publicProfile ?? profile.publicProfile);
       await saveProfile({
         displayName: next.displayName ?? profile.displayName,
         mbaClass: next.mbaClass ?? profile.mbaClass,
         listed,
-        // Being public needs being listed, so unlisting also withdraws public visibility.
-        publicProfile: listed && (next.publicProfile ?? profile.publicProfile),
+        publicProfile,
+        // Link only needs public, so withdrawing public visibility clears it too.
+        publicLinkOnly: publicProfile && (next.publicLinkOnly ?? profile.publicLinkOnly),
         sharing: next.sharing ?? profile.sharing,
       });
       if (success) toast({ title: success });
@@ -163,7 +175,10 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
     void save({ displayName: name, mbaClass }, 'Profile saved');
   };
 
-  const setSharing = (sharing: SharingPrefs) => void save({ sharing });
+  const setSharing = (sharing: SharingPrefs) => {
+    if (sharing.details && !profile.sharing.details && profile.publicProfile) setPendingDetails(sharing);
+    else void save({ sharing });
+  };
 
   return (
     <>
@@ -228,6 +243,9 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
               checked={profile.publicProfile}
               disabled={saving || !profile.listed}
               onChange={(on) => (on ? setConfirmPublic(true) : void save({ publicProfile: false }))}
+              linkOnly={profile.publicLinkOnly}
+              onLinkOnlyChange={(linkOnly) => void save({ publicLinkOnly: linkOnly }, linkOnly ? 'Now only people with your link can find you' : 'Now on the front page')}
+              profileLink={profileAddress(profile.userId)}
             />
 
             <p className="pt-1 text-xs text-muted">
@@ -271,7 +289,32 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
             "Who cased me" is on, so the name you entered as your practice partner will also be shown on each of these cases.
           </p>
         )}
-        <p>Written feedback and learning notes are never shown to visitors. You can switch this off again at any time.</p>
+        {profile.sharing.details ? (
+          <p>
+            <strong className="text-ink">Open everything is on</strong>, so visitors can also open each case to read your written feedback,
+            learning notes and other notes. Turn Open everything off to keep those to members.
+          </p>
+        ) : (
+          <p>Written feedback, learning notes and other notes are not shown to visitors unless you turn on Open everything. You can switch this off again at any time.</p>
+        )}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={pendingDetails !== null}
+        title="Open everything to visitors too?"
+        confirmLabel="Open everything"
+        onCancel={() => setPendingDetails(null)}
+        onConfirm={() => {
+          const next = pendingDetails;
+          setPendingDetails(null);
+          if (next) void save({ sharing: next });
+        }}
+      >
+        <p>
+          You are visible without an account, so anyone who can see you will be able to open each case you share and read its{' '}
+          <strong className="text-ink">scores, written feedback, learning notes and other notes</strong>, in full.
+        </p>
+        <p>Cases set to "keep this case private" or "share the case name only" stay as they are. You can turn this off at any time.</p>
       </ConfirmDialog>
     </>
   );
