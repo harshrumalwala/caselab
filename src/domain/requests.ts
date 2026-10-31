@@ -86,6 +86,16 @@ export function sections(requests: readonly PracticeRequest[]): Sections {
   };
 }
 
+/**
+ * When you're already connected, "Case with …?" is a message in your conversation instead of a new request: the case, book and
+ * time if given, then your note. With nothing filled in it is just "Case again?".
+ */
+export function proposalMessage(input: NewRequest): string {
+  const r = cleanRequest(input);
+  const what = describeProposal(r);
+  return [`Case again?${what ? ` ${what}` : ''}`, r.message].filter(Boolean).join('\n');
+}
+
 /** "Asks to case" in a sentence: the proposed case, book and time, whichever were given. */
 export function describeProposal(r: Pick<PracticeRequest, 'caseTitle' | 'caseBook' | 'when'>): string {
   const what = r.caseTitle ? (r.caseBook ? `${r.caseTitle} (${r.caseBook})` : r.caseTitle) : r.caseBook ? `a case from ${r.caseBook}` : '';

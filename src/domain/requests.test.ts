@@ -3,6 +3,7 @@ import {
   badgeCount,
   cleanReply,
   cleanRequest,
+  proposalMessage,
   describeProposal,
   MAX_REQUEST_BOOK,
   MAX_REQUEST_TEXT,
@@ -79,5 +80,21 @@ describe('describing a proposal', () => {
     expect(describeProposal({ caseTitle: '', caseBook: 'Cosentino', when: '' })).toBe('a case from Cosentino');
     expect(describeProposal({ caseTitle: '', caseBook: '', when: 'this weekend' })).toBe('this weekend');
     expect(describeProposal({ caseTitle: '', caseBook: '', when: '' })).toBe('');
+  });
+});
+
+describe('the message sent when you are already connected', () => {
+  it('carries the case, book and time if given, then the note', () => {
+    expect(proposalMessage({ caseTitle: 'Airline profit', caseBook: 'Cosentino', when: 'tonight 8pm', message: 'Up for it?' })).toBe(
+      'Case again? Airline profit (Cosentino) · tonight 8pm\nUp for it?',
+    );
+    expect(proposalMessage({ caseTitle: 'Airline profit', caseBook: '', when: '', message: '' })).toBe('Case again? Airline profit');
+    expect(proposalMessage({ caseTitle: '', caseBook: 'Cosentino', when: '', message: '' })).toBe('Case again? a case from Cosentino');
+    expect(proposalMessage({ caseTitle: '', caseBook: '', when: 'this weekend', message: 'Free?' })).toBe('Case again? this weekend\nFree?');
+  });
+
+  it('is just "Case again?" with nothing filled in, and trimmed and cut like a request', () => {
+    expect(proposalMessage({ caseTitle: '  ', caseBook: '', when: '', message: '' })).toBe('Case again?');
+    expect(proposalMessage({ caseTitle: ' x ', caseBook: '', when: '', message: `  ${'m'.repeat(400)} ` })).toBe(`Case again? x\n${'m'.repeat(280)}`);
   });
 });

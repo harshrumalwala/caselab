@@ -154,6 +154,53 @@ describe('sending a request', () => {
   });
 });
 
+describe('connected members message each other instead', () => {
+  /** Alice asked, Bob accepted: they are connected. */
+  async function connect() {
+    await as(db, 'authenticated', ALICE);
+    const id = await send(BOB);
+    await as(db, 'authenticated', BOB);
+    await respond(id, true, 'Zoom');
+  }
+
+  it('refuses a new request between two connected members, whichever of them asks, and says to send a message', async () => {
+    await connect();
+    expect(await sendFails(ALICE)).toMatch(/already connected with this member\. Send them a message instead/); // Bob, who accepted
+    await as(db, 'authenticated', ALICE);
+    expect(await sendFails(BOB)).toMatch(/already connected with this member\. Send them a message instead/); // Alice, who asked
+    expect((await mine()).filter((r) => r.status === 'pending')).toHaveLength(0); // nothing new was created
+    expect(await mine()).toHaveLength(1);
+  });
+
+  it('does not affect anyone else: connected to Bob, Alice can still ask Carol, and Carol can ask Bob', async () => {
+    await connect();
+    await as(db, 'authenticated', ALICE);
+    await send(CAROL);
+    await as(db, 'authenticated', CAROL);
+    await send(BOB);
+  });
+
+  it('keeps the generic refusal first, so it says nothing about a pair who are not connected or who blocked you', async () => {
+    await connect();
+    await as(db, 'authenticated', BOB);
+    await db.query('select public.block_member($1)', [ALICE]);
+    await as(db, 'authenticated', ALICE);
+    expect(await sendFails(BOB)).toMatch(/can't be asked right now/); // blocked: same words as any other refusal
+    expect(await sendFails(CAROL)).toBe(''); // and a stranger is unaffected
+  });
+
+  it('leaves requests that were already waiting alone: they can still be answered, and cancelled', async () => {
+    await as(db, 'authenticated', ALICE);
+    const first = await send(BOB);
+    await as(db, 'authenticated', BOB);
+    const second = await send(ALICE); // each asked the other before either was answered
+    await respond(first, true, 'Yes');
+    await as(db, 'authenticated', ALICE);
+    await respond(second, true, 'Fine'); // still answerable though they are now connected
+    expect((await mine()).map((r) => r.status)).toEqual(['accepted', 'accepted']);
+  });
+});
+
 describe('answering and cancelling', () => {
   it('lets only the recipient answer, once, with an optional reply', async () => {
     await as(db, 'authenticated', ALICE);
@@ -199,15 +246,15 @@ describe('answering and cancelling', () => {
     await as(db, 'authenticated', BOB);
     await respond(id, true, null, true);
     expect((await db.query('select * from public.my_practice_blocks()')).rows).toEqual([]);
+  });
 
-    // Bob blocking Alice doesn't stop Bob asking Alice.
-    const id2 = await (async () => {
-      await as(db, 'authenticated', ALICE);
-      return send(BOB);
-    })();
+  it('a block only ever protects the person who made it: Bob blocking Alice does not stop Bob asking Alice', async () => {
+    await as(db, 'authenticated', ALICE);
+    const id = await send(BOB);
     await as(db, 'authenticated', BOB);
-    await respond(id2, false, null, true);
-    await send(ALICE);
+    await respond(id, false, null, true); // declined, and blocked
+    await send(ALICE); // not connected (a decline opens no conversation), so Bob can still ask
+    expect((await mine()).filter((r) => r.status === 'pending')).toHaveLength(1);
   });
 
   it('lets only the sender cancel, and only while it is waiting', async () => {

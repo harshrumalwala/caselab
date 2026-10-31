@@ -13,7 +13,7 @@ import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useMyUserId } from '../../state/CommunityProvider';
-import { useConversationWith } from '../../state/MessagesProvider';
+import { useConversationWith, useMessages } from '../../state/MessagesProvider';
 import { usePractice } from '../../state/PracticeProvider';
 import type { NewRequest } from '../../domain/requests';
 import { AskDialog } from '../requests/AskDialog';
@@ -41,10 +41,15 @@ function MessageButton({ person }: { person: Profile }) {
 /** "Case with them?" for a member who takes requests. Not offered to visitors, or while one is already waiting. */
 function AskButton({ person, onAsk }: { person: Profile; onAsk: () => void }) {
   const { requests } = usePractice();
+  const { status } = useMessages();
+  const conversation = useConversationWith(person.userId);
   const waiting = requests.some((r) => r.direction === 'sent' && r.otherId === person.userId && r.status === 'pending');
+  // Until the conversations have loaded we can't tell whether this is a new request or a message in an existing conversation.
+  const unsure = status === 'loading';
+  const name = firstName(person.displayName);
   return (
-    <Button variant="primary" className="grow sm:grow-0" onClick={onAsk} disabled={waiting}>
-      <Hand className="size-4" /> {waiting ? 'Request waiting' : `Case with ${firstName(person.displayName)}?`}
+    <Button variant="primary" className="grow sm:grow-0" onClick={onAsk} disabled={waiting || unsure}>
+      <Hand className="size-4" /> {waiting ? 'Request waiting' : conversation ? `Case again with ${name}?` : `Case with ${name}?`}
     </Button>
   );
 }

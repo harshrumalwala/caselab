@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import { NO_SHARING, type Profile } from './domain/community';
+import { makeCase } from './test/builders';
 import { createFakeEnv, TEST_USER, type FakeEnv } from './test/fakeBackend';
 
 const ME = TEST_USER.userId;
@@ -276,6 +277,95 @@ describe('controls', () => {
   });
 });
 
+describe('asking again when you are already connected', () => {
+  const again = { caseTitle: 'Jumping Jack', caseBook: 'Booth', when: 'this weekend', message: 'want to do it' };
+  const requestRows = (env: FakeEnv) => env.practice.rows.length;
+
+  async function openDialog() {
+    const { env, id } = await withConversation();
+    const user = await openAt(env, '#/people/bob', 'Bob Brown');
+    await user.click(await screen.findByRole('button', { name: 'Case again with Bob?' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Case again with Bob?' });
+    return { env, id, user, dialog };
+  }
+
+  it('sends the case details as a message in your conversation, not as a new request', async () => {
+    const { env, id, user, dialog } = await openDialog();
+    const before = requestRows(env);
+    expect(within(dialog).getByText(/already connected, so this goes into your conversation as a message/)).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText('Case to try'), again.caseTitle);
+    await user.type(within(dialog).getByLabelText('Casebook'), again.caseBook);
+    await user.type(within(dialog).getByLabelText('When'), again.when);
+    await user.type(within(dialog).getByLabelText('Note'), again.message);
+    await user.click(within(dialog).getByRole('button', { name: 'Send message' }));
+
+    expect(await screen.findByText('Sent to Bob')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(env.chat.msgs.at(-1)).toMatchObject({ conversationId: id, sender: ME, body: 'Case again? Jumping Jack (Booth) · this weekend\nwant to do it' });
+    expect(requestRows(env)).toBe(before); // no new request
+    expect(env.practice.rows.filter((r) => r.status === 'pending')).toEqual([]);
+  });
+
+  it('shows up as new in their inbox, with the case details', async () => {
+    const { env, id, user, dialog } = await openDialog();
+    await env.chat.as('bob').markRead(id); // Bob has read everything so far
+    await user.type(within(dialog).getByLabelText('Case to try'), again.caseTitle);
+    await user.click(within(dialog).getByRole('button', { name: 'Send message' }));
+    await screen.findByText('Sent to Bob');
+    const theirs = (await env.chat.as('bob').conversations()).find((c) => c.id === id)!;
+    expect(theirs).toMatchObject({ unread: 1, lastBody: 'Case again? Jumping Jack' });
+  });
+
+  it('adds nothing to the requests you are waiting on in your inbox', async () => {
+    const { env, user, dialog } = await openDialog();
+    await user.click(within(dialog).getByRole('button', { name: 'Send message' })); // even with nothing filled in
+    await screen.findByText('Sent to Bob');
+    expect(env.chat.msgs.at(-1)).toMatchObject({ body: 'Case again?' });
+    window.location.hash = '#/inbox';
+    await screen.findByRole('heading', { name: 'Conversations (1)' });
+    expect(screen.queryByRole('heading', { name: /You're waiting on/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps what you typed and says why when it can not be sent', async () => {
+    const { env, user, dialog } = await openDialog();
+    await user.type(within(dialog).getByLabelText('Note'), 'Hello?');
+    await env.chat.as('bob').block(ME); // Bob blocks me meanwhile
+    await user.click(within(dialog).getByRole('button', { name: 'Send message' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent("You can't message this member right now.");
+    expect(within(dialog).getByLabelText('Note')).toHaveValue('Hello?');
+  });
+
+  it('also works from "Ask to case this" in Find a case for them', async () => {
+    const { env, id } = await withConversation();
+    await env.repo.insertCase(makeCase({ title: 'Airline profit', source: 'Cosentino', date: '2026-09-01' }));
+    const user = await openAt(env, '#/people/bob', 'Bob Brown');
+    await user.click(await screen.findByRole('button', { name: 'Ask to case this' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Case again with Bob?' });
+    expect(within(dialog).getByLabelText('Case to try')).toHaveValue('Airline profit');
+    await user.click(within(dialog).getByRole('button', { name: 'Send message' }));
+    await screen.findByText('Sent to Bob');
+    expect(env.chat.msgs.at(-1)).toMatchObject({ conversationId: id, body: 'Case again? Airline profit (Cosentino)' });
+  });
+
+  it('refuses a new request between connected members even if one is sent anyway', async () => {
+    const { env } = await withConversation();
+    await expect(env.practice.mine.send('bob', ask)).rejects.toThrow(/already connected with this member\. Send them a message instead/);
+    await expect(env.practice.as('bob').send(ME, ask)).rejects.toThrow(/already connected/);
+  });
+
+  it('still sends a normal request to someone you are not connected to', async () => {
+    const env = createFakeEnv({ members: [BOB, CAROL] });
+    await env.practice.as('bob').send(ME, ask);
+    await env.practice.mine.respond(env.practice.rows[0].id, true, 'Yes'); // connected to Bob, not to Carol
+    const user = await openAt(env, '#/people/carol', 'Carol Chen');
+    await user.click(await screen.findByRole('button', { name: 'Case with Carol?' })); // not "again"
+    const dialog = await screen.findByRole('dialog', { name: 'Case with Carol?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Send request' }));
+    await screen.findByText('Request sent to Carol');
+    expect(env.practice.rows.filter((r) => r.to === 'carol')).toHaveLength(1);
+  });
+});
+
 describe('finding the conversation from elsewhere', () => {
   it('offers "Message …" on the profile of someone you have a conversation with, and not otherwise', async () => {
     const { env, id } = await withConversation([CAROL]);
@@ -288,10 +378,10 @@ describe('finding the conversation from elsewhere', () => {
     expect(screen.queryByRole('link', { name: /Message Carol/ })).not.toBeInTheDocument();
   });
 
-  it('puts "Case with …?" and "Message …" side by side in one row, the main action first', async () => {
+  it('puts "Case again with …?" and "Message …" side by side in one row, the main action first', async () => {
     const { env } = await withConversation();
     await openAt(env, '#/people/bob', 'Bob Brown');
-    const ask = await screen.findByRole('button', { name: 'Case with Bob?' });
+    const ask = await screen.findByRole('button', { name: 'Case again with Bob?' });
     const message = await screen.findByRole('link', { name: /Message Bob/ });
     expect(ask.parentElement).toBe(message.parentElement);
     expect(ask.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
