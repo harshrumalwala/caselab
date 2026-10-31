@@ -21,7 +21,7 @@ import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
 import { chipClass } from '../../components/ui/chips';
-import { pillTabClass } from '../../components/ui/pillTab';
+import { splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
 import { useMyProfile } from '../../state/CommunityProvider';
 import { BurnedPanel } from './BurnedPanel';
 import { useExportExcel } from './useExportExcel';
@@ -50,7 +50,7 @@ function logQuip(count: number): string {
 /** My cases, and the solo cases I've burned (which are listed here but never counted). */
 function LogTabs({ tab, onChange, burned }: { tab: 'cases' | 'burned'; onChange: (t: 'cases' | 'burned') => void; burned: number }) {
   return (
-    <div role="tablist" aria-label="Case log views" className="flex flex-wrap gap-2">
+    <div role="tablist" aria-label="Case log views" className={splitTabsClass}>
       {(
         [
           ['cases', 'My cases'],
@@ -63,7 +63,7 @@ function LogTabs({ tab, onChange, burned }: { tab: 'cases' | 'burned'; onChange:
           role="tab"
           aria-selected={tab === id}
           onClick={() => onChange(id)}
-          className={pillTabClass(tab === id)}
+          className={splitTabClass(tab === id)}
         >
           {id === 'burned' && <Flame className="size-4" aria-hidden />}
           {label}

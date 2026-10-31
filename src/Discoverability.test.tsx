@@ -120,6 +120,24 @@ describe('five tabs, with people and messages together under Community', () => {
     expect(inbox).toHaveClass('flex-1');
   });
 
+  it('uses the same full-width split for the other two-way switches: the Case Log and a member profile', async () => {
+    const env = createFakeEnv({ members: [BOB] });
+    const { unmount } = await openAtAndKeep(env, '#/log', 'My Case Log');
+    const log = screen.getByRole('tablist', { name: 'Case log views' });
+    expect(within(log).getAllByRole('tab').map((t) => t.textContent)).toEqual(['My cases', 'Burned (0)']);
+    expect(log).toHaveClass('flex', 'rounded-xl');
+    expect(log).not.toHaveClass('flex-wrap');
+    for (const tab of within(log).getAllByRole('tab')) expect(tab).toHaveClass('flex-1');
+    unmount();
+
+    await openAtAndKeep(env, '#/people/bob', 'Bob Brown');
+    const profile = await screen.findByRole('tablist', { name: 'Profile sections' });
+    expect(within(profile).getAllByRole('tab')).toHaveLength(2);
+    expect(profile).toHaveClass('flex', 'rounded-xl');
+    expect(profile).not.toHaveClass('flex-wrap');
+    for (const tab of within(profile).getAllByRole('tab')) expect(tab).toHaveClass('flex-1');
+  });
+
   it('shows requests and conversations together in the Inbox, in the order you would act on them', async () => {
     const env = await withThingsWaiting();
     await openAt(env, '#/inbox', 'Community');

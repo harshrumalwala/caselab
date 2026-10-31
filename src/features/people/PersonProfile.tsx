@@ -8,7 +8,7 @@ import { round1, skillStats } from '../../domain/stats';
 import type { CaseRecord } from '../../domain/types';
 import { Badge, RatingBadge } from '../../components/ui/Badge';
 import { chipClass } from '../../components/ui/chips';
-import { pillTabClass } from '../../components/ui/pillTab';
+import { splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
 import { BurnedLine } from '../community/BurnedLine';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
@@ -246,7 +246,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
         </>
       ) : (
         <>
-          <div role="tablist" aria-label="Profile sections" className="flex flex-wrap gap-2">
+          <div role="tablist" aria-label="Profile sections" className={splitTabsClass}>
             {(
               [
                 ['find', 'Find a case for them'],
@@ -259,7 +259,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
                 role="tab"
                 aria-selected={tab === id}
                 onClick={() => setTab(id)}
-                className={pillTabClass(tab === id)}
+                className={splitTabClass(tab === id)}
               >
                 {label}
               </button>
