@@ -1,4 +1,4 @@
-import { SKILLS, type Rating, type SkillKey } from '../domain/constants';
+import { SKILLS, SKILL_GROUPS, type Rating, type SkillGroupKey, type SkillKey } from '../domain/constants';
 import { isValidISODate, toISODate } from '../domain/dates';
 import { emptySkills, normalizeCase, normalizeRating, newId } from '../domain/factory';
 import { canonicalIndustryName, guessIndustry, matchCaseType, normalizeText } from '../domain/importHints';
@@ -48,6 +48,12 @@ const COLUMN_ALIASES = {
   partner: ['interviewer', 'partner', 'practice partner', 'interviewer partner', 'caser', 'casing partner'],
   overall: ['overall', 'overall rating', 'overall score'],
   other: ['other', 'other notes', 'notes', 'comments'],
+  // Columns CaseLab's own export adds to the right of "Other" (the template has no place for these).
+  wentWell: ['what went well', 'went well'],
+  struggled: ['what i struggled with', 'what i struggled', 'struggled'],
+  concepts: ['concepts i learned', 'concepts learned', 'concepts'],
+  nextFocus: ['next focus', 'what to practice next', 'practice next'],
+  improvement: ['improvement focus', 'main thing to improve', 'main improvement'],
 } as const;
 
 // Each skill header sits above two columns: the rating, then the feedback text (the header cell is merged across both).
@@ -111,6 +117,13 @@ function rate(v: Cell, label: string, notes: string[]): Rating | null {
     notes.push(`${label} ${text} was rounded to ${r}.`);
   }
   return r;
+}
+
+/** "Quant / Math" or "quant" both name the same skill area; anything else is not one. */
+function matchImprovementArea(text: string): SkillGroupKey | null {
+  const t = normalizeText(text);
+  if (t === '') return null;
+  return SKILL_GROUPS.find((g) => g.key === t || normalizeText(g.label) === t)?.key ?? null;
 }
 
 function clip(text: string, max: number, label: string, notes: string[]): string {
@@ -194,6 +207,11 @@ export function mcgRowsToCases(rows: Cell[][], now: Date = new Date()): McgImpor
     partner: col('partner'),
     overall: col('overall'),
     other: col('other'),
+    wentWell: col('wentWell'),
+    struggled: col('struggled'),
+    concepts: col('concepts'),
+    nextFocus: col('nextFocus'),
+    improvement: col('improvement'),
   };
   const read = (row: Cell[], i: number): Cell => (i >= 0 ? row[i] : undefined);
 
@@ -255,6 +273,10 @@ export function mcgRowsToCases(rows: Cell[][], now: Date = new Date()): McgImpor
     const sheetIndustry = canonicalIndustryName(cellText(read(row, idx.industry)));
     const industry = clip(sheetIndustry, MAX.industry, 'The industry', notes);
 
+    const areaText = cellText(read(row, idx.improvement));
+    const improvementArea = matchImprovementArea(areaText);
+    if (areaText && !improvementArea) notes.push(`Improvement focus “${areaText}” isn't one of the skill areas, so it was left blank.`);
+
     const stamp = now.toISOString();
     const record = normalizeCase({
       id: newId(),
@@ -267,6 +289,11 @@ export function mcgRowsToCases(rows: Cell[][], now: Date = new Date()): McgImpor
       overall,
       overallFeedback,
       skills,
+      wentWell: cellText(read(row, idx.wentWell)),
+      struggled: cellText(read(row, idx.struggled)),
+      concepts: cellText(read(row, idx.concepts)),
+      nextFocus: cellText(read(row, idx.nextFocus)),
+      improvementArea,
       otherNotes: [cellText(read(row, idx.other)), ...extraLines].filter(Boolean).join('\n'),
       createdAt: stamp,
       updatedAt: stamp,

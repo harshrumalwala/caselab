@@ -16,7 +16,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **Messages**: once a request is accepted, a private conversation between the two of you, to settle a time, share a link or go over a case afterwards. It lives in the Community tab's Inbox, and the Dashboard tells you when something is waiting
 - **Profile & privacy**: switches for what other members can see, a per-case override, and a live preview
 - **A weekly goal**: pick how many cases a week you want to log; a ring on the Dashboard fills as the week goes, and weeks in a row on target show as a streak. Private to you
-- **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export, an Excel import that reads the MCG template and an Excel export in the same layout are built in
+- **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export, an Excel import that reads the MCG template, and an Excel export that fills in the real MCG workbook are built in
 - **Find your way around**: a short tour for a new account, keyboard shortcuts (`?` lists them), and it can be installed on a phone or desktop like an app
 
 ---
@@ -261,7 +261,7 @@ half-written Log Case draft, a copy of your Warm-up record, and Supabase's own s
 | --- | --- | --- |
 | Extra copy of everything | Settings → Download backup (JSON) | Every case, rating, feedback note, learning and list item, and each case's sharing setting |
 | Restore a backup | Settings → Import backup (JSON) | **Merge** (adds cases, newer edit wins, deletes nothing) or **Replace everything**. Replace writes the file first and removes leftovers second, so a failure can't leave you with less than you started with |
-| Excel file | Case Log (top right) or Settings → Export to Excel | An `.xlsx` in the MCG template layout: a **Log** tab and an **Opportunity Areas** tab, which Import from Excel reads straight back. Only the template's columns are in it, so learning notes, improvement tags and sharing settings are not; the JSON backup is the complete copy |
+| Excel file | Case Log (top right) or Settings → Export to Excel | Your cases filled into the real MCG workbook, ready to open in Excel and to import again. See "Exporting to Excel" below. Sharing choices and burned cases are not in it; the JSON backup is the complete copy |
 | Spreadsheet view | Settings → Export cases (CSV) | One row per case, MCG column order plus CaseLab's additions |
 | Bring in your MCG log | The Dashboard's Excel card (while empty), the Case Log header, or Settings → Import from Excel | A preview first, nothing saved until you confirm. See "Importing your Excel log" below |
 | Wipe | Settings → Clear all data | Requires typing `DELETE` |
@@ -310,6 +310,27 @@ one that reaches the goal.
 - **Shortcuts** work anywhere you aren't typing in a box or in a window: `N` logs a case, `?` shows the list, and `G` then `D`, `L`, `I`, `C` or `W` jumps to Dashboard, Case Log, Improvement Areas, Community or Warm-up.
 - **First-login tour**: a brand-new account (no cases yet) gets three notes pointing at **Log Case**, **Import** and **Community**, once. Skip it with a click or Escape; it never comes back, and it steps aside whenever a window is open.
 - **Install**: CaseLab has a web manifest and icons, so a browser can offer to install it. Settings → Shortcuts and install shows an **Install CaseLab** button when the browser offers one; on an iPhone use Share → Add to Home Screen.
+
+## Exporting to Excel (the real MCG workbook)
+
+**Export to Excel** (on the Case Log and in Settings) fills in the actual MCG workbook, not a lookalike. The template's four tabs,
+column order, merged skill headers, widths, frozen panes, the case-type dropdown, the date check, the Dashboard's formulas, pie chart
+and logo are all kept exactly as MCG made them (the file is `src/data/mcg-case-log-template.xlsx`, a copy of the reference template, and
+the export edits a copy of it in your browser: nothing is uploaded).
+
+- **Log**: every case on its own row, oldest first, in the template's exact columns: `#`, Date (a real Excel date), Case Title, Case Source,
+  Case Type, Interviewer, then **Overall** and each skill (Behavioral 1, Behavioral 2, Prompt / Pre-framework, Framework, Quant / Math,
+  Exhibits & Charts, Brainstorm(s), Recommendation) as a rating column followed by its **feedback** column, then **Other**. Rows grow
+  tall enough to show long feedback.
+- **Extra columns to the right of "Other"**, for what CaseLab keeps and the template has no place for: **Industry**, **What went well**,
+  **What I struggled with**, **Concepts I learned**, **Next focus**, **Improvement focus**. The template's own columns are untouched.
+- **Dashboard**: your name beside "Name:", and the template's own formulas (total cases, cases in the past week, per-skill averages, count
+  per case type, the pie chart) do their work on your cases. The file asks Excel to recalculate when it opens, and the current numbers are
+  stored too so a previewer shows them. The formulas are the template's, so the Dashboard tab keeps its quirks (for example its Behavioral
+  average reads Behavioral 1 only); CaseLab's own Dashboard combines both.
+- **Opportunity Areas**: your two lists under their headings. **Data Validation**: untouched.
+- **Import reads it back**, including the extra columns, so a CaseLab export round-trips with nothing lost. (Sharing choices and burned
+  cases are CaseLab-only and live in the JSON backup, which is still the complete copy.)
 
 ## How it maps to the MCG template
 
@@ -466,7 +487,7 @@ data, `createMemoryRepository` for demo mode and tests), the community through `
 There is no group administration, group chat or social feed: members, profiles, sharing, practice requests, and private conversations between two members who agreed to case are all there is.
 
 **Tech**: React 19, TypeScript, Vite, Tailwind CSS v4, Supabase (`@supabase/supabase-js`), Recharts (lazy-loaded),
-`read-excel-file` and `write-excel-file` (each loaded only when you import or export an Excel file), Vitest + Testing Library, PGlite for the database tests.
+`read-excel-file` (loaded only when you import an Excel file), `fflate` (loaded only when you export one: it opens and re-packs the template), Vitest + Testing Library, PGlite for the database tests.
 
 ---
 
@@ -488,8 +509,8 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **Warm-up**: question generation (seeded, so repeatable), answer reading and the 5% tolerance, scoring; the record in Postgres (own row only, no direct writes, raise-only, no visitor access, cascade on user delete); syncing between the account and this device (offline, first sign-in on a shared browser, demo mode); and the screen (timer, streaks, tips after a miss, end of round)
 - **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
 - **Weekly goal**: the Monday-to-Sunday count, passing the goal, the streak (an unfinished week neither counts nor breaks it), the table in Postgres (own row only, 1 to 14, nothing for visitors, cascade), and the screens (set, change, remove, a failed save keeping the old goal, demo mode never writing, the saved panel's cheer)
-- **Excel export**: the MCG layout, oldest case first, a round trip back through the importer, a real `.xlsx` read back by Import from Excel (lists included), and the buttons on the Case Log and in Settings
 - **First run**: the import wish after sign-up (kept, used once, expires, ignored when the account has cases), the tour (once, skippable, Escape, steps aside for windows, its ring following a button that moves), the shortcuts, the install button and the Warm-up nudge
+- **Excel export**: fills the real MCG template (all four tabs, charts, logo, dropdowns, merged headers, widths and panes kept byte for byte where untouched), the exact column layout, a real date, every skill's rating and feedback, the extra columns, rows tall enough for long text, oldest first, Dashboard name and numbers (and formulas stretched past 997 cases), Opportunity Areas, awkward text (accents, ampersands, line breaks, leading spaces, forbidden characters, the 32,767-character cell limit), well-formed XML, the template left unchanged, and a lossless round trip through the importer; opened and checked with an independent parser too
 - **Backup and import**: lossless JSON round trip, merge semantics, CSV quoting; Excel import (a populated sample, a richer workbook with an Industry column, extra columns and filled-in Opportunity Areas, and the empty template), header and case-type matching, industry suggestions, and the review screen end to end
 - **The app end to end** against a fake Supabase: sign-in and sign-out, nothing requested before sign-in, create / edit / delete with confirmation, data surviving a refresh, a failed save keeping what you typed, a failed delete, a failed load with Retry, a missing-tables message, demo mode never touching the database, export then restore, clear-all
 
