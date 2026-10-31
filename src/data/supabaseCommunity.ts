@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { CaseType } from '../domain/constants';
 import type { Profile, ProfileInput, SharedCase } from '../domain/community';
+import type { SharedInterviewed } from '../domain/interviewed';
 import {
   PUBLIC_PROFILE_COLUMNS,
   SHARED_COLUMNS,
@@ -94,6 +96,11 @@ export class PublicCommunity implements PublicReader {
     if (error) throw error;
     return ((data ?? []) as SharedRow[]).map(rowToSharedCase);
   }
+
+  /** Visitors without an account never see interviewed cases: they are for members only. */
+  async getInterviewed(): Promise<SharedInterviewed[]> {
+    return [];
+  }
 }
 
 /**
@@ -148,7 +155,28 @@ export class SupabaseCommunity implements CommunityRepository {
     return pageShared(this.client, 'shared_cases', SHARED_COLUMNS, ownerId);
   }
 
+  async getInterviewed(ownerId: string): Promise<SharedInterviewed[]> {
+    // The function checks that you are a verified member and that they listed themselves and switched this on.
+    const { data, error } = await this.client.rpc('member_interviewed', { p_member: ownerId });
+    if (error) throw error;
+    return ((data ?? []) as InterviewedRow[]).map((r) => ({
+      date: r.case_date,
+      title: r.title,
+      source: r.source ?? '',
+      caseType: r.case_type as CaseType,
+      industry: r.industry ?? '',
+    }));
+  }
+
   getPublicView(ownerId: string): Promise<SharedCase[]> {
     return this.publicView.getSharedCases(ownerId);
   }
+}
+
+interface InterviewedRow {
+  case_date: string;
+  title: string;
+  source: string | null;
+  case_type: string;
+  industry: string | null;
 }

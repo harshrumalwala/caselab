@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, Download, FileSpreadsheet, Filter, Flame, Lock, LockOpen, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import { ChevronDown, Download, FileSpreadsheet, Filter, Flame, Lock, LockOpen, Mic, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 import { CASE_TYPES, INDUSTRIES } from '../../domain/constants';
 import {
   applyFilters,
@@ -24,6 +24,8 @@ import { chipClass } from '../../components/ui/chips';
 import { splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
 import { useMyProfile } from '../../state/CommunityProvider';
 import { BurnedPanel } from './BurnedPanel';
+import { InterviewedPanel } from './InterviewedPanel';
+import { useInterviewed } from '../../state/InterviewedProvider';
 import { useExportExcel } from './useExportExcel';
 import { useTogglePrivate } from './useTogglePrivate';
 
@@ -48,12 +50,15 @@ function logQuip(count: number): string {
 }
 
 /** My cases, and the solo cases I've burned (which are listed here but never counted). */
-function LogTabs({ tab, onChange, burned }: { tab: 'cases' | 'burned'; onChange: (t: 'cases' | 'burned') => void; burned: number }) {
+type LogTab = 'cases' | 'burned' | 'interviewed';
+
+function LogTabs({ tab, onChange, burned, interviewed }: { tab: LogTab; onChange: (t: LogTab) => void; burned: number; interviewed: number }) {
   return (
     <div role="tablist" aria-label="Case log views" className={splitTabsClass}>
       {(
         [
           ['cases', 'My cases'],
+          ['interviewed', `Interviewed (${interviewed})`],
           ['burned', `Burned (${burned})`],
         ] as const
       ).map(([id, label]) => (
@@ -66,6 +71,7 @@ function LogTabs({ tab, onChange, burned }: { tab: 'cases' | 'burned'; onChange:
           className={splitTabClass(tab === id)}
         >
           {id === 'burned' && <Flame className="size-4" aria-hidden />}
+          {id === 'interviewed' && <Mic className="size-4" aria-hidden />}
           {label}
         </button>
       ))}
@@ -127,7 +133,8 @@ export function CaseLog() {
   const { cases, data, deleteCase } = useData();
   const { viewCase, openLogCase, openImport } = useUI();
   const burnedCount = useMyProfile().burnedCases.length;
-  const [tab, setTab] = useState<'cases' | 'burned'>('cases');
+  const interviewedCount = useInterviewed().items.length;
+  const [tab, setTab] = useState<LogTab>('cases');
   const toast = useToast();
   const now = useNow();
   const { exportExcel, busy: exporting } = useExportExcel();
@@ -173,8 +180,9 @@ export function CaseLog() {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">My Case Log</h1>
-        <LogTabs tab={tab} onChange={setTab} burned={burnedCount} />
+        <LogTabs tab={tab} onChange={setTab} burned={burnedCount} interviewed={interviewedCount} />
         {tab === 'burned' && <BurnedPanel />}
+        {tab === 'interviewed' && <InterviewedPanel />}
         {tab === 'cases' && (
         <div className="sticker bg-sun-soft">
           <EmptyState
@@ -208,6 +216,7 @@ export function CaseLog() {
         <p className="text-sm text-ink-2">
           {active ? `${visible.length} of ${cases.length} cases` : `${cases.length} ${cases.length === 1 ? 'case' : 'cases'}`}
           {burnedCount > 0 && <span className="ml-2 font-semibold">· {burnedCount} burned, not counted</span>}
+          {interviewedCount > 0 && <span className="ml-2 font-semibold">· {interviewedCount} interviewed, not counted</span>}
         </p>
         <p className="text-sm font-semibold text-accent-text">{logQuip(cases.length)}</p>
       </div>
@@ -221,9 +230,10 @@ export function CaseLog() {
       </div>
       </div>
 
-      <LogTabs tab={tab} onChange={setTab} burned={burnedCount} />
+      <LogTabs tab={tab} onChange={setTab} burned={burnedCount} interviewed={interviewedCount} />
 
       {tab === 'burned' && <BurnedPanel />}
+      {tab === 'interviewed' && <InterviewedPanel />}
 
       {tab === 'cases' && (
         <>
