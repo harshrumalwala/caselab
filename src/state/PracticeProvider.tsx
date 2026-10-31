@@ -23,7 +23,7 @@ interface PracticeContextValue {
   unblock(userId: string): Promise<void>;
 }
 
-const PracticeContext = createContext<PracticeContextValue | null>(null);
+export const PracticeContext = createContext<PracticeContextValue | null>(null);
 
 /** How often to look for new requests while the app is open and visible. */
 const REFRESH_MS = 60_000;

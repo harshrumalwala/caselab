@@ -4,6 +4,7 @@ import type { CommunityRepository, PublicReader } from './community';
 import type { CaseLabRepository } from './repository';
 import { SupabaseWarmup, type WarmupRepository } from './warmupBest';
 import { PublicCommunity, SupabaseCommunity } from './supabaseCommunity';
+import { SupabaseMessages, type MessagesRepository } from './messages';
 import { SupabasePractice, type PracticeRepository } from './practiceRequests';
 import { SupabaseRepository } from './supabaseRepository';
 
@@ -14,6 +15,8 @@ export interface Backend {
   createCommunity(userId: string): CommunityRepository;
   /** The signed-in member's practice requests (sent and received). */
   createPractice(): PracticeRepository;
+  /** The signed-in member's private conversations. */
+  createMessages(): MessagesRepository;
   /** The signed-in member's best Warm-up score and streak. */
   createWarmup(userId: string): WarmupRepository;
   /** Read-only access for people without an account (the landing page). */
@@ -74,6 +77,7 @@ export function createSupabaseBackend(
       createRepository: () => new SupabaseRepository(client),
       createCommunity: (userId) => new SupabaseCommunity(client, userId, anon),
       createPractice: () => new SupabasePractice(client),
+      createMessages: () => new SupabaseMessages(client),
       createWarmup: () => new SupabaseWarmup(client),
       createPublicCommunity: () => new PublicCommunity(anon),
       linkProblem,

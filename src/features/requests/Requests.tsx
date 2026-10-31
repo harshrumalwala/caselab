@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BellRing, Check, FlaskConical, Hourglass, Inbox, Loader2, X } from 'lucide-react';
+import { BellRing, Check, FlaskConical, Hourglass, Inbox, Loader2, MessageCircle, X } from 'lucide-react';
 import type { BlockedMember } from '../../data/practiceRequests';
 import { describeError } from '../../data/errors';
 import { cleanReply, describeProposal, MAX_REQUEST_TEXT, sections, unseenAnswer, type PracticeRequest } from '../../domain/requests';
@@ -11,6 +11,7 @@ import { useCommunity } from '../../state/CommunityProvider';
 import { useData } from '../../state/DataProvider';
 import { usePractice } from '../../state/PracticeProvider';
 import { useToast } from '../../state/ToastProvider';
+import { useConversationWith } from '../../state/MessagesProvider';
 import { useUI } from '../../state/ui';
 
 const first = (name: string) => name.trim().split(/\s+/)[0] || name;
@@ -91,6 +92,22 @@ function AnswerCard({ r }: { r: PracticeRequest }) {
   );
 }
 
+/** An accepted request has a conversation behind it. */
+function OpenConversation({ r }: { r: PracticeRequest }) {
+  const conversation = useConversationWith(r.otherId);
+  if (r.status !== 'accepted' || !conversation) return null;
+  return (
+    <div className="mt-3">
+      <a
+        href={`#/messages/${encodeURIComponent(conversation.id)}`}
+        className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-line-strong bg-surface px-3 text-xs font-semibold text-ink hover:bg-surface-2"
+      >
+        <MessageCircle className="size-3.5" aria-hidden /> Message {first(r.otherName)}
+      </a>
+    </div>
+  );
+}
+
 /** One of your requests, still waiting or finished. */
 function HistoryRow({ r, onCancel }: { r: PracticeRequest; onCancel?: () => void }) {
   const fresh = unseenAnswer(r);
@@ -118,6 +135,7 @@ function HistoryRow({ r, onCancel }: { r: PracticeRequest; onCancel?: () => void
           <span className="whitespace-pre-line">{r.reply}</span>
         </p>
       )}
+      <OpenConversation r={r} />
       {onCancel && (
         <div className="mt-3">
           <Button size="sm" onClick={onCancel}>
@@ -143,7 +161,7 @@ function Blocked() {
   if (!list || list.length === 0) return null;
   return (
     <Card aria-labelledby="blocked-title">
-      <CardHeader titleId="blocked-title" title="Not taking requests from" subtitle="They don't know. Their requests are simply refused." />
+      <CardHeader titleId="blocked-title" title="Blocked members" subtitle="They can't send you requests or messages, and they aren't told. Allow them again any time." />
       <ul className="space-y-2">
         {list.map((b) => (
           <li key={b.userId} className="flex items-center justify-between gap-3 text-sm">
