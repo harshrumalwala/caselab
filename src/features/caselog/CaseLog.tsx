@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, Download, FileSpreadsheet, Filter, Flame, Lock, LockOpen, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ChevronDown, Download, FileSpreadsheet, Filter, Flame, Lock, LockOpen, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 import { CASE_TYPES, INDUSTRIES } from '../../domain/constants';
 import {
   applyFilters,
@@ -211,9 +211,14 @@ export function CaseLog() {
         </p>
         <p className="text-sm font-semibold text-accent-text">{logQuip(cases.length)}</p>
       </div>
-      <Button onClick={() => void exportExcel()} disabled={exporting} title="Download your log as an Excel file in the MCG layout">
-        <Download className="size-4" /> Export to Excel
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={openImport} title="Bring in a case log from an Excel file">
+          <Upload className="size-4" /> Import from Excel
+        </Button>
+        <Button onClick={() => void exportExcel()} disabled={exporting} title="Download your log as an Excel file in the MCG layout">
+          <Download className="size-4" /> Export to Excel
+        </Button>
+      </div>
       </div>
 
       <LogTabs tab={tab} onChange={setTab} burned={burnedCount} />

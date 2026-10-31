@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { FlaskConical, Gauge, Layers, Lightbulb, Plus, Upload } from 'lucide-react';
+import { FileSpreadsheet, FlaskConical, Gauge, Layers, Lightbulb, Plus, Upload } from 'lucide-react';
 import { milestones } from '../../domain/milestones';
 import { nextPracticeFocus } from '../../domain/suggestions';
 import {
@@ -86,9 +86,6 @@ export function Dashboard() {
               <Button size="lg" onClick={() => void enterDemo()}>
                 <FlaskConical className="size-4" /> Explore with demo data
               </Button>
-              <Button size="lg" variant="ghost" onClick={openImport}>
-                <Upload className="size-4" /> Import your Excel case log
-              </Button>
             </div>
           </div>
           <HeroScene className="hidden w-full max-w-xs justify-self-center md:block" />
@@ -107,6 +104,25 @@ export function Dashboard() {
             ))}
           </ul>
         </Card>
+      )}
+
+      {total === 0 && (
+        <section aria-label="Import from Excel" className="sticker relative flex flex-col gap-4 overflow-hidden bg-teal-soft p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex min-w-0 items-start gap-4">
+            <span className="flex size-12 shrink-0 -rotate-3 items-center justify-center rounded-2xl border-2 border-ink/80 bg-teal text-on-color shadow-[2px_3px_0_0_rgb(28_26_24/0.85)]">
+              <FileSpreadsheet className="size-6" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <h2 className="font-display text-xl font-extrabold leading-snug tracking-tight text-teal-ink sm:text-2xl">Already logging cases in Excel?</h2>
+              <p className="mt-1 text-sm leading-relaxed text-teal-ink/90">
+                Bring the whole log across in one step: cases, ratings, feedback and your lists. You see everything first, and nothing is saved until you say so.
+              </p>
+            </div>
+          </div>
+          <Button size="lg" className="shrink-0 self-start sm:self-center" onClick={openImport}>
+            <Upload className="size-4" /> Import your Excel case log
+          </Button>
+        </section>
       )}
 
       {total > 0 && <TodayStrip cases={cases} now={now} next={view.suggestions[0]} />}

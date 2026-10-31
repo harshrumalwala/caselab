@@ -4,6 +4,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App';
+import { makeCase } from './test/builders';
 import { createFakeEnv, type FakeEnv } from './test/fakeBackend';
 
 const workbook = (name: string) => {
@@ -136,5 +137,30 @@ describe('importing a case log from Excel', () => {
     const empty = readFileSync(resolve(process.cwd(), 'MCG Case Log Template.xlsx'));
     await pick(user, dialog, new File([new Uint8Array(empty)], 'template.xlsx'));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(/nothing to import/);
+  });
+});
+
+describe('finding the import', () => {
+  it('puts it in its own card on an empty dashboard, not just a small button', async () => {
+    render(<App backend={createFakeEnv().backend} />);
+    const card = within(await screen.findByRole('region', { name: 'Import from Excel' }));
+    expect(card.getByRole('heading', { name: 'Already logging cases in Excel?' })).toBeInTheDocument();
+    await userEvent.setup().click(card.getByRole('button', { name: 'Import your Excel case log' }));
+    expect(await screen.findByRole('dialog', { name: 'Import from Excel' })).toBeInTheDocument();
+  });
+
+  it('leaves the card off once there are cases, and offers Import beside Export on the Case Log', async () => {
+    const env = createFakeEnv();
+    await env.repo.insertCase(makeCase({ title: 'Airline profit', date: '2026-09-01' }));
+    const user = userEvent.setup();
+    render(<App backend={env.backend} />);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    expect(screen.queryByRole('region', { name: 'Import from Excel' })).not.toBeInTheDocument();
+
+    window.location.hash = '#/log';
+    await screen.findByRole('heading', { name: 'My Case Log' });
+    expect(screen.getByRole('button', { name: 'Export to Excel' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Import from Excel' }));
+    expect(await screen.findByRole('dialog', { name: 'Import from Excel' })).toBeInTheDocument();
   });
 });
