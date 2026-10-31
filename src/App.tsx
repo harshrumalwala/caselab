@@ -14,6 +14,7 @@ import { Dashboard } from './features/dashboard/Dashboard';
 import { ImprovementAreas } from './features/improvement/ImprovementAreas';
 import { LogCaseDialog } from './features/logcase/LogCaseDialog';
 import { People } from './features/people/People';
+import { Warmup } from './features/warmup/Warmup';
 import { PublicSite } from './features/public/PublicSite';
 import { ImportDialog } from './features/import/ImportDialog';
 import { SettingsDialog } from './features/settings/SettingsDialog';
@@ -116,6 +117,7 @@ function Shell() {
           {location.route === 'log' && <CaseLog />}
           {location.route === 'improve' && <ImprovementAreas />}
           {location.route === 'people' && <People />}
+          {location.route === 'warmup' && <Warmup />}
         </main>
         <footer className="hidden border-t border-line px-6 py-5 text-center text-xs text-muted md:block">
           Saved to your account{session.email ? ` (${session.email})` : ''} and available on every device you sign in

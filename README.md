@@ -10,6 +10,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **My Case Log**: searchable, filterable list of your cases with full-detail view, edit and delete
 - **Improvement Areas**: thin spots in your coverage, skills to sharpen, and a searchable history of what you've learned
 - **A public front page**: anyone, with no account, can search the members who chose to be visible and read what they share
+- **Warm-up**: an optional 60-second mental-math sprint for a break between cases (kept on your device only)
 - **People**: find a fellow member, see only what they've chosen to share, and work out which case to give them
 - **Profile & privacy**: switches for what other members can see, a per-case override, and a live preview
 - **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export and an Excel import that reads the MCG template are built in
@@ -333,6 +334,18 @@ Up to three suggestions, chosen by fixed rules that stay silent when there isn't
 - **Skills to improve** needs 3 cases, then ranks skills by: low recent average (under 3.5), declining trend, and how often you tagged it as your main improvement area in your last 10 cases. Skills rated 3.5+ that aren't declining or tagged never appear.
 - **Knowledge history** only contains what you typed under "Concepts I learned" (split by line or `;`), merged across cases and grouped by industry. Nothing is pre-populated.
 
+### Warm-up: a 60-second mental-math sprint
+
+An optional extra, in the menu as **Warm-up** (`#/warmup`, signed-in members only). Quant is the skill most people rate lowest,
+so this turns the "short daily mental-math drills" habit into a game: 60 seconds of case-style sums, as many as you can.
+
+- **Questions** are percentages of a number, growth over a few years, break-even units and market-sizing multiplications
+  (like 40M × 12% × $85). They start easy and get harder as you get more right, and the same kind never comes up twice in a row.
+- **Estimating counts.** An answer within 5% of the exact one is right. Type `36`, `4.8k` or `408M`; a bare number means the unit the question asks for.
+- **Score**: 10 points, plus 5 per difficulty level, plus 2 for each answer in your current streak (up to 10). A miss or a skip breaks the streak and shows the quick way to do it; the clock pauses while you read that.
+- **Your best score and streak are saved in your browser** (`localStorage`, key `caselab:v1:warmup`) and nowhere else: no database, no migration, nothing shown to other members. Clearing site data resets them.
+- The game rules (question generation from a seedable random source, answer checking, scoring) are pure code in `src/domain/warmup.ts`; the screen is `src/features/warmup/`.
+
 ---
 
 ## Deploy to Vercel
@@ -372,7 +385,7 @@ src/
   data/        Persistence and I/O: Supabase client + repository, auth, row mapping, error messages,
                JSON backup/merge, CSV, MCG Excel import, demo data, in-memory repository
   state/       React context: auth, data (the only writer), toasts, theme, routing
-  features/    The screens: dashboard, caselog, improvement, people (directory, profiles, find a case),
+  features/    The screens: dashboard, caselog, improvement, warmup, people (directory, profiles, find a case),
                plus auth (sign in / sign up / reset), community (onboarding, profile & privacy), logcase, settings
   components/  Shared UI primitives, layout, chart colors
   test/        Test setup, builders, fixtures, fake Supabase / fake backend
@@ -404,6 +417,7 @@ There is no group administration, messaging or social feed: members, profiles an
 - **Accounts**: sign-up, verification, resend, expired links, password reset, onboarding with everything off by default
 - **Supabase layer**: row mapping that round-trips every field, a repository run against a fake Supabase (paging past 1000 rows, chunked upserts, replace-without-data-loss, errors surfaced), friendly error messages, configuration checks
 - **Calculations**: week boundaries, averages that ignore missing ratings, behavioral combining, trend windows, coverage, matrix, weekly history
+- **Warm-up**: question generation (seeded, so repeatable), answer reading and the 5% tolerance, scoring, best scores kept on the device, and the screen (timer, streaks, tips after a miss, end of round)
 - **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
 - **Backup and import**: lossless JSON round trip, merge semantics, CSV quoting; Excel import (a populated sample, a richer workbook with an Industry column, extra columns and filled-in Opportunity Areas, and the empty template), header and case-type matching, industry suggestions, and the review screen end to end
 - **The app end to end** against a fake Supabase: sign-in and sign-out, nothing requested before sign-in, create / edit / delete with confirmation, data surviving a refresh, a failed save keeping what you typed, a failed delete, a failed load with Retry, a missing-tables message, demo mode never touching the database, export then restore, clear-all
