@@ -133,11 +133,11 @@ describe('five tabs, with people and messages together under Community', () => {
     expect(within(mainNav).getByRole('link', { name: /^Community/ })).toHaveClass('bg-sun', 'ring-2'); // the same look up top
   });
 
-  it('uses the same full-width split for the other two-way switches: the Case Log and a member profile', async () => {
+  it('uses the same full-width split for the other switches: the Case Log and a member profile', async () => {
     const env = createFakeEnv({ members: [BOB] });
     const { unmount } = await openAtAndKeep(env, '#/log', 'My Case Log');
     const log = screen.getByRole('tablist', { name: 'Case log views' });
-    expect(within(log).getAllByRole('tab').map((t) => t.textContent)).toEqual(['My cases', 'Burned (0)']);
+    expect(within(log).getAllByRole('tab').map((t) => t.textContent)).toEqual(['My cases', 'Interviewed (0)', 'Burned (0)']);
     expect(log).toHaveClass('flex', 'sticker');
     expect(log).not.toHaveClass('flex-wrap');
     for (const tab of within(log).getAllByRole('tab')) expect(tab).toHaveClass('flex-1');
