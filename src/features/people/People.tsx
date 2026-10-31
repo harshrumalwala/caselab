@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronRight, FlaskConical, Inbox, Loader2, Search, Users } from 'lucide-react';
+import { ChevronRight, FlaskConical, Inbox, Loader2, MessageCircle, Search, Users } from 'lucide-react';
 import type { CommunityReader } from '../../data/community';
 import { describeError } from '../../data/errors';
 import { publicSharingSummary, sharingSummary, type Profile } from '../../domain/community';
@@ -9,8 +9,9 @@ import { CountDot } from '../../components/ui/CountDot';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useCommunity } from '../../state/CommunityProvider';
 import { useData } from '../../state/DataProvider';
+import { chatsHaveNew } from '../../domain/messages';
 import { needYou } from '../../domain/requests';
-import { usePracticeBadge } from '../../state/PracticeProvider';
+import { useNavBadge } from '../../state/badge';
 import { useUI } from '../../state/ui';
 import { chipClass } from '../../components/ui/chips';
 import { PersonProfile } from './PersonProfile';
@@ -130,7 +131,7 @@ export function People() {
   const { routeParam, navigate } = useUI();
   const { community } = useCommunity();
   const { mode, exitDemo, cases } = useData();
-  const waiting = usePracticeBadge();
+  const badge = useNavBadge();
 
   if (mode === 'demo') {
     return (
@@ -159,10 +160,16 @@ export function People() {
       <div className="flex flex-col gap-1">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">People</h1>
-          <Button onClick={() => navigate('requests')} aria-label={waiting > 0 ? `Requests, ${needYou(waiting)}` : 'Requests'}>
-            <Inbox className="size-4" /> Requests
-            {waiting > 0 && <CountDot n={waiting} inline />}
-          </Button>
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <Button onClick={() => navigate('requests')} aria-label={badge.requests > 0 ? `Requests, ${needYou(badge.requests)}` : 'Requests'}>
+              <Inbox className="size-4" /> Requests
+              {badge.requests > 0 && <CountDot n={badge.requests} inline />}
+            </Button>
+            <Button onClick={() => navigate('messages')} aria-label={badge.chats > 0 ? `Messages, ${chatsHaveNew(badge.chats)}` : 'Messages'}>
+              <MessageCircle className="size-4" /> Messages
+              {badge.chats > 0 && <CountDot n={badge.chats} inline />}
+            </Button>
+          </div>
         </div>
         <p className="text-sm text-muted">
           Find a fellow member, see what they've chosen to share, and pick a case to give them. Members can choose to share with

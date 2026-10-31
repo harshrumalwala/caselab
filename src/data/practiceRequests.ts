@@ -118,6 +118,19 @@ export class SupabasePractice implements PracticeRepository {
   }
 }
 
+/** What the messages twin needs to open a conversation when a request is accepted. */
+export interface AcceptedRequest {
+  from: string;
+  to: string;
+  caseTitle: string;
+  caseBook: string;
+  when: string;
+  message: string;
+  reply: string;
+  createdAt: string;
+  respondedAt: string;
+}
+
 interface MemoryMember {
   userId: string;
   name: string;
@@ -137,6 +150,7 @@ export function createMemoryPractice(members: () => MemoryMember[]) {
   }
   const rows: Stored[] = [];
   const blocks: { blocker: string; blocked: string }[] = [];
+  const acceptListeners: ((r: AcceptedRequest) => void)[] = [];
   let next = 1;
   const nameOf = (id: string) => members().find((m) => m.userId === id)?.name ?? 'A former member';
   const refused = () => new DataError("This member can't be asked right now.");
@@ -178,6 +192,10 @@ export function createMemoryPractice(members: () => MemoryMember[]) {
         r.reply = cleanReply(reply);
         r.respondedAt = new Date().toISOString();
         if (!accept && blockAsker && !blocks.some((b) => b.blocker === me && b.blocked === r.from)) blocks.push({ blocker: me, blocked: r.from });
+        const blockedEitherWay = blocks.some((b) => (b.blocker === me && b.blocked === r.from) || (b.blocker === r.from && b.blocked === me));
+        if (accept && !blockedEitherWay) {
+          for (const listen of acceptListeners) listen({ from: r.from, to: r.to, caseTitle: r.caseTitle, caseBook: r.caseBook, when: r.when, message: r.message, reply: r.reply, createdAt: r.createdAt, respondedAt: r.respondedAt! });
+        }
       },
       async cancel(id) {
         guard();
@@ -203,5 +221,5 @@ export function createMemoryPractice(members: () => MemoryMember[]) {
     return Object.assign(repo, { control });
   }
 
-  return { as: view, rows, blocks };
+  return { as: view, rows, blocks, onAccept: (listen: (r: AcceptedRequest) => void) => void acceptListeners.push(listen) };
 }

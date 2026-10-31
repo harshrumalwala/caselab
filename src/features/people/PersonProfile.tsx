@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ArrowLeft, Hand, Loader2, UserRound } from 'lucide-react';
+import { ArrowLeft, Hand, Loader2, MessageCircle, UserRound } from 'lucide-react';
 import type { CommunityReader } from '../../data/community';
 import { describeError } from '../../data/errors';
 import { publicSharingSummary, sharedToRecords, sharingSummary, type Profile, type SharedCase } from '../../domain/community';
@@ -12,6 +12,7 @@ import { BurnedLine } from '../community/BurnedLine';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { useConversationWith } from '../../state/MessagesProvider';
 import { usePractice } from '../../state/PracticeProvider';
 import type { NewRequest } from '../../domain/requests';
 import { AskDialog } from '../requests/AskDialog';
@@ -20,6 +21,23 @@ import { SharedCaseRow } from '../community/SharedCaseRow';
 import { FindCase } from './FindCase';
 
 type Tab = 'cases' | 'find';
+
+/** "Message them", when you already have a conversation (it starts when a request is accepted). */
+function MessageButton({ person }: { person: Profile }) {
+  const conversation = useConversationWith(person.userId);
+  if (!conversation) return null;
+  return (
+    <div className="mt-3">
+      <a
+        href={`#/messages/${encodeURIComponent(conversation.id)}`}
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line-strong bg-surface px-4 text-sm font-semibold text-ink transition hover:bg-surface-2"
+      >
+        <MessageCircle className="size-4" aria-hidden /> Message {firstName(person.displayName)}
+        {conversation.unread > 0 && !conversation.muted && <span className="num rounded-full bg-coral px-1.5 text-[11px] font-extrabold text-on-color">{conversation.unread}</span>}
+      </a>
+    </div>
+  );
+}
 
 /** "Case with them?" for a member who takes requests. Not offered to visitors, or while one is already waiting. */
 function AskButton({ person, onAsk }: { person: Profile; onAsk: () => void }) {
@@ -199,6 +217,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
             Shares <strong className="font-semibold text-ink">{summary}</strong>
             {shared.length > 0 && <> · {shared.length} case{shared.length === 1 ? '' : 's'} visible</>}
           </p>
+          {!visitor && <MessageButton person={person} />}
           {!visitor && person.openToRequests && (
             <>
               <AskButton person={person} onAsk={() => setAsk({})} />

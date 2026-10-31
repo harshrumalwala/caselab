@@ -3,6 +3,7 @@ import type { Backend } from '../data/backend';
 import { createMemoryCommunity, createMemoryPublic } from '../data/memoryCommunity';
 import { createMemoryRepository } from '../data/memoryRepository';
 import type { CaseLabRepository } from '../data/repository';
+import { createMemoryMessages } from '../data/messages';
 import { createMemoryPractice } from '../data/practiceRequests';
 import { createMemoryWarmup } from '../data/warmupBest';
 import { NO_SHARING, type Profile, type SharedCase } from '../domain/community';
@@ -51,6 +52,8 @@ export interface FakeEnv {
   community: ReturnType<typeof createMemoryCommunity>;
   /** Practice requests between all the fake members; `as(userId)` is that member's view of them. */
   practice: ReturnType<typeof createMemoryPractice> & { mine: ReturnType<ReturnType<typeof createMemoryPractice>['as']> };
+  /** Conversations between all the fake members; `as(userId)` is that member's view. */
+  chat: ReturnType<typeof createMemoryMessages> & { mine: ReturnType<ReturnType<typeof createMemoryMessages>['as']> };
   /** The member's Warm-up record, as the "database" holds it. */
   warmup: ReturnType<typeof createMemoryWarmup>;
   /** What visitors without an account can read (also records which methods were called). */
@@ -137,6 +140,8 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
     community.profiles.map((p) => ({ userId: p.userId, name: p.displayName, open: p.listed && p.openToRequests })),
   );
   const myPractice = practice.as(TEST_USER.userId);
+  const chat = createMemoryMessages(practice, () => community.profiles.map((p) => ({ userId: p.userId, name: p.displayName })));
+  const myChat = chat.as(TEST_USER.userId);
   const publicReader = createMemoryPublic({ profiles: () => community.profiles, shared });
 
   return {
@@ -147,6 +152,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
         createCommunity: () => community,
         createWarmup: () => warmup,
         createPractice: () => myPractice,
+        createMessages: () => myChat,
         createPublicCommunity: () => publicReader,
       },
     },
@@ -154,6 +160,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
     community,
     warmup,
     practice: Object.assign(practice, { mine: myPractice }),
+    chat: Object.assign(chat, { mine: myChat }),
     publicReader,
     calls: flaky.calls,
     failOn: flaky.failOn,

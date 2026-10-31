@@ -188,13 +188,13 @@ describe('answering requests', () => {
     expect(await screen.findByText("You declined Bob's request")).toBeInTheDocument();
     expect(mineRow(env).status).toBe('declined');
 
-    const blocked = (await screen.findByRole('heading', { name: 'Not taking requests from' })).closest('section')!;
+    const blocked = (await screen.findByRole('heading', { name: 'Blocked members' })).closest('section')!;
     expect(within(blocked).getByText('Bob Brown')).toBeInTheDocument();
     await expect(env.practice.as('bob').send(ME, ask)).rejects.toThrow(/can't be asked right now/);
 
     await user.click(within(blocked).getByRole('button', { name: 'Allow again' }));
     expect(await screen.findByText('Bob Brown can ask you again')).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Not taking requests from' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Blocked members' })).not.toBeInTheDocument());
     await env.practice.as('bob').send(ME, ask);
   });
 
@@ -203,7 +203,7 @@ describe('answering requests', () => {
     await user.click(await screen.findByRole('button', { name: 'Decline' }));
     await screen.findByText("You declined Bob's request");
     expect(env.practice.blocks).toEqual([]);
-    expect(screen.queryByRole('heading', { name: 'Not taking requests from' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Blocked members' })).not.toBeInTheDocument();
   });
 });
 
@@ -214,7 +214,8 @@ describe('following up on what you sent', () => {
     await env.practice.as('bob').respond(env.practice.rows[0].id, true, 'Zoom: example.com/room');
 
     const user = await openAt(env, '#/people', 'People');
-    expect(await screen.findAllByRole('link', { name: 'People, 1 request needs you' })).toHaveLength(2);
+    // The answer and the reply that came with it: one request to look at, one conversation with something new.
+    expect(await screen.findAllByRole('link', { name: 'People, 1 request needs you and 1 conversation has new messages' })).toHaveLength(2);
     await user.click(screen.getByRole('button', { name: 'Requests, 1 request needs you' }));
 
     await screen.findByRole('heading', { name: 'Requests' });

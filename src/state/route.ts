@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type Route = 'dashboard' | 'log' | 'improve' | 'people' | 'warmup' | 'requests';
-/** The screens that have a tab in the navigation. Requests lives under People. */
-export type NavRoute = Exclude<Route, 'requests'>;
+export type Route = 'dashboard' | 'log' | 'improve' | 'people' | 'warmup' | 'requests' | 'messages';
+/** The screens that have a tab in the navigation. Requests and Messages live under People. */
+export type NavRoute = Exclude<Route, 'requests' | 'messages'>;
+
+/** The screens that sit under the People tab. */
+export const UNDER_PEOPLE: readonly Route[] = ['requests', 'messages'];
 
 export const ROUTES: { id: NavRoute; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -14,14 +17,14 @@ export const ROUTES: { id: NavRoute; label: string }[] = [
 
 export interface Location {
   route: Route;
-  /** For `people`: the member being viewed (#/people/<id>); undefined shows the directory. */
+  /** For `people`: the member being viewed (#/people/<id>); for `messages`: the conversation (#/messages/<id>). Undefined shows the list. */
   param: string | undefined;
 }
 
 function parse(): Location {
   const [first, second] = window.location.hash.replace(/^#\/?/, '').split('/');
   if (first === 'log' || first === 'improve' || first === 'warmup' || first === 'requests') return { route: first, param: undefined };
-  if (first === 'people') return { route: 'people', param: second ? decodeURIComponent(second) : undefined };
+  if (first === 'people' || first === 'messages') return { route: first, param: second ? decodeURIComponent(second) : undefined };
   return { route: 'dashboard', param: undefined };
 }
 

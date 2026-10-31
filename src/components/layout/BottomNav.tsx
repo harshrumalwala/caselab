@@ -1,8 +1,7 @@
 import { LayoutDashboard, ListChecks, Target, Timer, Users, type LucideIcon } from 'lucide-react';
 import { CountDot } from '../ui/CountDot';
-import { needYou } from '../../domain/requests';
-import { usePracticeBadge } from '../../state/PracticeProvider';
-import { ROUTES, type NavRoute } from '../../state/route';
+import { useNavBadge } from '../../state/badge';
+import { ROUTES, UNDER_PEOPLE, type NavRoute } from '../../state/route';
 import { useUI } from '../../state/ui';
 
 const ICONS: Record<NavRoute, LucideIcon> = {
@@ -24,7 +23,7 @@ const SHORT: Record<NavRoute, string> = {
 /** Phone navigation: the same sections, within thumb reach. */
 export function BottomNav() {
   const { route } = useUI();
-  const badge = usePracticeBadge();
+  const badge = useNavBadge();
   return (
     <nav
       aria-label="Primary"
@@ -33,14 +32,14 @@ export function BottomNav() {
       <ul className="mx-auto grid max-w-md grid-cols-5">
         {ROUTES.map((r) => {
           const Icon = ICONS[r.id];
-          const on = route === r.id || (r.id === 'people' && route === 'requests'); // Requests lives under People
-          const waiting = r.id === 'people' ? badge : 0;
+          const on = route === r.id || (r.id === 'people' && UNDER_PEOPLE.includes(route)); // Requests and Messages live under People
+          const waiting = r.id === 'people' ? badge.total : 0;
           return (
             <li key={r.id}>
               <a
                 href={`#/${r.id}`}
                 aria-current={on ? 'page' : undefined}
-                aria-label={waiting > 0 ? `${r.label}, ${needYou(waiting)}` : r.label}
+                aria-label={waiting > 0 && badge.spoken ? `${r.label}, ${badge.spoken}` : r.label}
                 className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition ${
                   on ? 'text-accent-text' : 'text-muted'
                 }`}
