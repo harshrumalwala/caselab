@@ -165,6 +165,22 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     await communityA.saveProfile(profile()); // leave the account as it was found
   });
 
+  it('shows burned books and cases to visitors only after the member opts in, and stops the moment it is switched off', async () => {
+    const list = [{ title: `${TEST_PREFIX} burned case`, book: 'Cosentino' }];
+    const seen = async () => new PublicCommunity(newClient()).getPerson(a.userId);
+
+    await communityA.saveProfile(profile({ publicProfile: true, burnedBooks: ['Cosentino'], burnedCases: list }));
+    expect((await seen())?.burnedBooks).toEqual([]); // public, but not opted in: nothing there
+    expect((await communityB.getPerson(a.userId))?.burnedBooks).toEqual(['Cosentino']); // members still see it
+
+    await communityA.saveProfile(profile({ publicProfile: true, burnedBooks: ['Cosentino'], burnedCases: list, sharing: sharing('burned') }));
+    expect((await seen())).toMatchObject({ burnedBooks: ['Cosentino'], burnedCases: list });
+
+    await communityA.saveProfile(profile({ publicProfile: true, burnedBooks: ['Cosentino'], burnedCases: list }));
+    expect((await seen())?.burnedCases).toEqual([]);
+    await communityA.saveProfile(profile()); // leave the account as it was found
+  });
+
   it('applies a privacy change immediately and keeps no old private data', async () => {
     await repoA.insertCase(testCase());
     await communityA.saveProfile(profile({ sharing: sharing(...(Object.keys(NO_SHARING) as (keyof SharingPrefs)[])) }));

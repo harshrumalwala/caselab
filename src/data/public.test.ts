@@ -683,3 +683,73 @@ describe('everything else stays closed to visitors', () => {
     expect((await db.query(`update public.profiles set public_profile = true where user_id = $1 returning user_id`, [ALICE])).rows).toEqual([]); // can't make someone else public
   });
 });
+
+describe('burned books and cases for visitors (share_burned)', () => {
+  const BURNED = `burned_books = array['Cosentino', 'Case in Point'], burned_cases = '[{"title":"Airline profit","book":"Cosentino"},{"title":"Piano tuners","book":""}]'::jsonb`;
+  const publicRow = async () => {
+    await as(db, 'anon');
+    return (await db.query<Row>('select share_burned, burned_books, burned_cases from public.public_profiles')).rows;
+  };
+  const byId = async (id: string) => {
+    await as(db, 'anon');
+    return (await db.query<Row>('select share_burned, burned_books, burned_cases from public.public_person($1)', [id])).rows;
+  };
+  const EMPTY = { share_burned: false, burned_books: [], burned_cases: [] };
+  const SHOWN = {
+    share_burned: true,
+    burned_books: ['Cosentino', 'Case in Point'],
+    burned_cases: [{ title: 'Airline profit', book: 'Cosentino' }, { title: 'Piano tuners', book: '' }],
+  };
+
+  it('keeps the public copy empty for a public member who has not switched it on, while members still see the lists', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await update(ALICE, BURNED);
+    expect(await publicRow()).toEqual([EMPTY]);
+    expect(await byId(ALICE)).toEqual([EMPTY]);
+    await as(db, 'authenticated', BOB);
+    const { rows } = await db.query<Row>('select burned_books from public.profiles where user_id = $1', [ALICE]);
+    expect(rows).toEqual([{ burned_books: ['Cosentino', 'Case in Point'] }]); // members: unchanged
+  });
+
+  it('shows visitors the lists once the member turns it on, in the directory and by exact id', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await update(ALICE, `${BURNED}, share_burned = true`);
+    expect(await publicRow()).toEqual([SHOWN]);
+    expect(await byId(ALICE)).toEqual([SHOWN]);
+
+    await update(ALICE, 'public_link_only = true');
+    expect(await publicRow()).toEqual([]); // not listed any more
+    expect(await byId(ALICE)).toEqual([SHOWN]); // but the exact id still shows what they chose to share
+  });
+
+  it('empties the public copy the moment it is switched off, edited, or the member goes private or unlisted', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await update(ALICE, `${BURNED}, share_burned = true`);
+    expect(await publicRow()).toEqual([SHOWN]);
+
+    await update(ALICE, `burned_books = array['Cosentino']`);
+    expect((await publicRow())[0].burned_books).toEqual(['Cosentino']); // edits follow straight away
+
+    await update(ALICE, 'share_burned = false');
+    expect(await publicRow()).toEqual([EMPTY]);
+
+    await update(ALICE, 'share_burned = true');
+    await update(ALICE, 'public_profile = false');
+    expect(await publicRow()).toEqual([]);
+    expect(await byId(ALICE)).toEqual([]);
+  });
+
+  it('shows visitors nothing for a member who is not public, even with the switch on', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases']);
+    await update(ALICE, `${BURNED}, share_burned = true`);
+    expect(await publicRow()).toEqual([]);
+    expect(await byId(ALICE)).toEqual([]);
+  });
+
+  it('never opens the profiles table to visitors', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases'], { isPublic: true });
+    await update(ALICE, `${BURNED}, share_burned = true`);
+    await as(db, 'anon');
+    expect(await fails('select burned_books, burned_cases, share_burned from public.profiles')).toMatch(/permission denied/);
+  });
+});

@@ -501,3 +501,73 @@ describe('choosing who finds you, and how much they see', () => {
     expect(screen.queryByRole('dialog', { name: 'Open everything to visitors too?' })).not.toBeInTheDocument();
   });
 });
+
+describe('burned books and cases on a public profile', () => {
+  const BURNED = { burnedBooks: ['Cosentino'], burnedCases: [{ title: 'Airline profit', book: 'Case in Point' }, { title: 'Piano tuners', book: '' }] };
+
+  it('shows visitors the burned books and cases of a member who opted in, grouped by book, as not counted', async () => {
+    const env = visitor({ members: [{ ...BOB, ...BURNED, sharing: { ...BOB.sharing, burned: true } }] });
+    const { user } = await open(env);
+    await user.click(await bobRow());
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    expect(screen.getByText(/Has burned/)).toHaveTextContent('Has burned Cosentino and 2 cases');
+    await user.click(screen.getByText('See the burned cases'));
+    expect(within(screen.getByRole('list', { name: 'Burned cases from Case in Point' })).getByText('Airline profit')).toBeInTheDocument();
+    expect(screen.getByText(/not counted in Bob's totals/)).toBeInTheDocument();
+  });
+
+  it('shows visitors nothing about them when the member has not opted in', async () => {
+    const env = visitor({ members: [{ ...BOB, ...BURNED }] });
+    const { user } = await open(env);
+    await user.click(await bobRow());
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    expect(screen.queryByText(/Has burned/)).not.toBeInTheDocument();
+    expect(screen.queryByText('See the burned cases')).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('Cosentino');
+  });
+});
+
+describe('choosing whether visitors see what you have burned', () => {
+  const openProfile = async (env: FakeEnv) => {
+    const { user } = await open(env);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await user.click(screen.getByRole('button', { name: 'Profile and privacy' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Profile & privacy' });
+    return { user, dialog };
+  };
+  const mine = (env: FakeEnv) => env.community.profiles.find((p) => p.userId === TEST_USER.userId)!;
+  const burnedMe: Profile = {
+    ...MY_PROFILE,
+    publicProfile: true,
+    burnedBooks: ['Cosentino'],
+    burnedCases: [{ title: 'Airline profit', book: '' }],
+    sharing: { ...NO_SHARING, cases: true },
+  };
+
+  it('has a switch, off by default, that saves like the others', async () => {
+    const env = createFakeEnv({ profile: burnedMe });
+    const { user, dialog } = await openProfile(env);
+    const toggle = within(dialog).getByRole('switch', { name: 'Show burned books and cases to visitors' });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await user.click(toggle);
+    await waitFor(() => expect(mine(env).sharing.burned).toBe(true));
+    await user.click(within(dialog).getByRole('switch', { name: 'Show burned books and cases to visitors' }));
+    await waitFor(() => expect(mine(env).sharing.burned).toBe(false));
+  });
+
+  it('previews them for members always, and for visitors only once switched on', async () => {
+    const env = createFakeEnv({ profile: burnedMe });
+    const { user, dialog } = await openProfile(env);
+    const preview = within(within(dialog).getByRole('region', { name: /What others see/ }));
+
+    // Members tab (default): always there.
+    expect(await preview.findByText(/Has burned/)).toHaveTextContent('Has burned Cosentino and 1 case');
+
+    await user.click(within(dialog).getByRole('tab', { name: 'Visitors without an account' }));
+    expect(preview.queryByText(/Has burned/)).not.toBeInTheDocument(); // switch is off
+
+    await user.click(within(dialog).getByRole('switch', { name: 'Show burned books and cases to visitors' }));
+    await waitFor(() => expect(preview.getByText(/Has burned/)).toBeInTheDocument());
+    expect(preview.getByText(/Has burned/)).toHaveTextContent('Has burned Cosentino and 1 case');
+  });
+});

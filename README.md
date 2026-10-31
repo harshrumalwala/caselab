@@ -156,6 +156,11 @@ are picking a case for you to skip those exact cases (matched by title, however 
 to members who can see your profile and never to visitors. Use **I've finished this whole book** (when logging) or **Books I've burned**
 only when you really did the entire book.
 
+**Burned books and cases for visitors.** Members can always see what you've burned (on your profile, and in the "What others see"
+preview). If you're visible without an account you can also switch on **Show burned books and cases to visitors**: it is off by default, and
+while it is off the public copy is empty, so there is nothing to read. Visitors can't use "find a case for them", so for them it is display
+only. They never count in your totals either way.
+
 **Per case.** When you log or edit a case, an optional **Sharing for this case** section lets you override your defaults:
 use your profile settings (the default), keep this case private, share only its name, or share it in full (its scores,
 feedback and notes, even if your profile shares none of those). Nobody has to touch it when logging.

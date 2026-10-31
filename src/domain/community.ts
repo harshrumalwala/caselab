@@ -12,6 +12,7 @@ export interface SharingPrefs {
   notes: boolean; // went well / struggled / concepts / next focus
   partner: boolean; // who cased you (practice partner / interviewer) on each shared case
   details: boolean; // open everything: scores, feedback, learning notes and other notes on every shared case
+  burned: boolean; // also show burned books and cases to visitors without an account (members always see them)
 }
 
 /** A case worked through on its own, and the book it came from (which may be blank). */
@@ -79,6 +80,7 @@ export const NO_SHARING: SharingPrefs = {
   notes: false,
   partner: false,
   details: false,
+  burned: false,
 };
 
 export interface Profile {
@@ -186,6 +188,13 @@ export const SHARING_OPTIONS: {
     hint: 'Show every detail of each case you share: scores, improvement focus, written feedback, learning notes and your other notes. Visitors can open each case to read it.',
     needsCases: true,
   },
+  {
+    key: 'burned',
+    label: 'Show burned books and cases to visitors',
+    short: 'burned books and cases',
+    hint: "Members can always see the books and cases you've burned. Turn this on to show them to visitors without an account too (only if you're visible without one).",
+    needsCases: false,
+  },
 ];
 
 /** The switches that "Open everything" turns on for you. */
@@ -195,7 +204,7 @@ export const INCLUDED_IN_DETAILS: (keyof SharingPrefs)[] = ['overall', 'skills',
  * What a visitor without an account can see. Written feedback, learning notes and other notes are theirs to see
  * only when the member has opened everything.
  */
-export const PUBLIC_SHARING_KEYS: (keyof SharingPrefs)[] = ['cases', 'overall', 'skills', 'improvement', 'partner', 'details'];
+export const PUBLIC_SHARING_KEYS: (keyof SharingPrefs)[] = ['cases', 'overall', 'skills', 'improvement', 'partner', 'details', 'burned'];
 
 /** Like sharingSummary, but only the parts visitors without an account can actually see. */
 export function publicSharingSummary(sharing: SharingPrefs): string {
