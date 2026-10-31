@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createSupabaseAuth, type AuthApi } from './auth';
 import type { CommunityRepository, PublicReader } from './community';
 import type { CaseLabRepository } from './repository';
+import { SupabaseInterviewed, type InterviewedRepository } from './interviewed';
 import { SupabaseGoal, type GoalRepository } from './weeklyGoal';
 import { SupabaseWarmup, type WarmupRepository } from './warmupBest';
 import { PublicCommunity, SupabaseCommunity } from './supabaseCommunity';
@@ -20,6 +21,8 @@ export interface Backend {
   createMessages(): MessagesRepository;
   /** The signed-in member's best Warm-up score and streak. */
   createWarmup(userId: string): WarmupRepository;
+  /** The cases the signed-in member ran as the interviewer (private, kept apart from the cases they solved). */
+  createInterviewed(): InterviewedRepository;
   /** The signed-in member's private weekly practice goal. */
   createGoal(userId: string): GoalRepository;
   /** Read-only access for people without an account (the landing page). */
@@ -83,6 +86,7 @@ export function createSupabaseBackend(
       createMessages: () => new SupabaseMessages(client),
       createWarmup: () => new SupabaseWarmup(client),
       createGoal: (userId) => new SupabaseGoal(client, userId),
+      createInterviewed: () => new SupabaseInterviewed(client),
       createPublicCommunity: () => new PublicCommunity(anon),
       linkProblem,
     },

@@ -5,6 +5,7 @@ import { createMemoryRepository } from '../data/memoryRepository';
 import type { CaseLabRepository } from '../data/repository';
 import { createMemoryMessages } from '../data/messages';
 import { createMemoryPractice } from '../data/practiceRequests';
+import { createMemoryInterviewed } from '../data/interviewed';
 import { createMemoryGoal } from '../data/weeklyGoal';
 import { createMemoryWarmup } from '../data/warmupBest';
 import { NO_SHARING, type Profile, type SharedCase } from '../domain/community';
@@ -57,6 +58,8 @@ export interface FakeEnv {
   chat: ReturnType<typeof createMemoryMessages> & { mine: ReturnType<ReturnType<typeof createMemoryMessages>['as']> };
   /** The member's Warm-up record, as the "database" holds it. */
   warmup: ReturnType<typeof createMemoryWarmup>;
+  /** The cases the member ran as the interviewer, as the "database" holds them. */
+  interviewed: ReturnType<typeof createMemoryInterviewed>;
   /** The member's weekly goal, as the "database" holds it. */
   goal: ReturnType<typeof createMemoryGoal>;
   /** What visitors without an account can read (also records which methods were called). */
@@ -140,6 +143,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
 
   const warmup = createMemoryWarmup();
   const goal = createMemoryGoal();
+  const interviewed = createMemoryInterviewed();
   const practice = createMemoryPractice(() =>
     community.profiles.map((p) => ({ userId: p.userId, name: p.displayName, open: p.listed })),
   );
@@ -156,6 +160,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
         createCommunity: () => community,
         createWarmup: () => warmup,
         createGoal: () => goal,
+        createInterviewed: () => interviewed,
         createPractice: () => myPractice,
         createMessages: () => myChat,
         createPublicCommunity: () => publicReader,
@@ -165,6 +170,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
     community,
     warmup,
     goal,
+    interviewed,
     practice: Object.assign(practice, { mine: myPractice }),
     chat: Object.assign(chat, { mine: myChat }),
     publicReader,
