@@ -13,6 +13,7 @@ import { useToast } from '../../state/ToastProvider';
 import { AudienceSwitch, profileAddress } from './AudienceSwitch';
 import { BurnedBooks } from './BurnedBooks';
 import { BurnedCases } from './BurnedCases';
+import { BurnedLine } from './BurnedLine';
 import { SharedCaseRow } from './SharedCaseRow';
 import { SharingSwitches } from './SharingSwitches';
 
@@ -87,6 +88,12 @@ function Preview({ profile }: { profile: Profile }) {
               {profile.mbaClass || 'MBA class not shown'} · Shares{' '}
               {audience === 'members' ? sharingSummary(profile.sharing) : publicSharingSummary(profile.sharing)}
             </p>
+            {/* Members always see what you've burned; visitors only if you switched that on. */}
+            <BurnedLine
+              books={audience === 'members' || profile.sharing.burned ? profile.burnedBooks : []}
+              cases={audience === 'members' || profile.sharing.burned ? profile.burnedCases : []}
+              name={profile.displayName.trim().split(/\s+/)[0] || profile.displayName}
+            />
           </div>
 
           {state.status === 'loading' && (

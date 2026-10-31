@@ -53,6 +53,7 @@ export interface ProfileRow {
   share_notes: boolean;
   share_partner: boolean;
   share_details: boolean;
+  share_burned: boolean;
 }
 
 /** The stored list, read defensively: anything that isn't a {title, book} pair is ignored. */
@@ -85,6 +86,7 @@ export function rowToProfile(r: ProfileRow): Profile {
       notes: r.share_notes,
       partner: r.share_partner ?? false,
       details: r.share_details ?? false,
+      burned: r.share_burned ?? false,
     },
   };
 }
@@ -107,6 +109,7 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
     share_notes: input.sharing.notes,
     share_partner: input.sharing.partner,
     share_details: input.sharing.details,
+    share_burned: input.sharing.burned,
   };
 }
 
@@ -115,7 +118,7 @@ export const SHARED_COLUMNS =
   'share_id, owner_id, case_date, title, source, partner, case_type, industry, overall, skill_scores, feedback, improvement_area, notes, other_notes';
 
 /** The public tables hold only public members and fields; these are the columns visitors without an account may read. */
-export const PUBLIC_PROFILE_COLUMNS = 'user_id, display_name, mba_class, share_cases, share_overall, share_skills, share_improvement, share_partner, share_details';
+export const PUBLIC_PROFILE_COLUMNS = 'user_id, display_name, mba_class, share_cases, share_overall, share_skills, share_improvement, share_partner, share_details, share_burned';
 
 export interface PublicProfileRow {
   user_id: string;
@@ -127,6 +130,9 @@ export interface PublicProfileRow {
   share_improvement: boolean;
   share_partner: boolean;
   share_details: boolean;
+  share_burned: boolean;
+  burned_books?: string[];
+  burned_cases?: unknown;
 }
 
 /** A public member as a visitor knows them. Free text (feedback, notes) is never shared with visitors. */
@@ -138,8 +144,9 @@ export function rowToPublicProfile(r: PublicProfileRow): Profile {
     listed: true,
     publicProfile: true,
     publicLinkOnly: false,
-    burnedBooks: [], // never public
-    burnedCases: [], // never public
+    // Empty unless the member also switched on showing them to visitors.
+    burnedBooks: r.burned_books ?? [],
+    burnedCases: parseBurnedCases(r.burned_cases),
     openToRequests: false, // requests are between members, never offered to visitors
     sharing: {
       cases: r.share_cases,
@@ -151,6 +158,7 @@ export function rowToPublicProfile(r: PublicProfileRow): Profile {
       notes: r.share_details ?? false,
       partner: r.share_partner ?? false,
       details: r.share_details ?? false,
+      burned: r.share_burned ?? false,
     },
   };
 }
