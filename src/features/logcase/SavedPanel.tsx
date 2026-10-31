@@ -14,6 +14,16 @@ export interface SavedInfo {
   next: Suggestion | null;
 }
 
+/** One of these under "Case saved", picked by how many cases you now have so it changes as you go. */
+const CHEERS = [
+  'Your future self just sent a thank-you note.',
+  'Another one in the bank. Somewhere, a partner is nodding approvingly.',
+  'Logged. Memory is unreliable, spreadsheets are forever (and this one is nicer).',
+  'Nice. That is how patterns get found.',
+  'Case closed. Well, case logged.',
+  'Look at you, being organised.',
+];
+
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** What the save changed, shown in place of the form so the effect is visible immediately. */
@@ -30,6 +40,7 @@ export function SavedPanel({ info, onUseSuggestion }: { info: SavedInfo; onUseSu
           <p className="truncate text-sm text-muted">{record.title}</p>
         </div>
       </div>
+      <p className="mt-3 text-sm font-semibold text-accent-text">{CHEERS[info.total % CHEERS.length]}</p>
 
       <ul className="mt-6 divide-y divide-line rounded-2xl border border-line bg-surface-2/50 text-sm">
         <li className="flex items-center justify-between gap-4 px-4 py-3">

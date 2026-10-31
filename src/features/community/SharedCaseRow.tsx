@@ -28,10 +28,10 @@ export function SharedCaseRow({ shared, extra }: { shared: SharedCase; extra?: R
   const hasDetail = Boolean(shared.feedback || n || shared.otherNotes);
 
   return (
-    <li className="rounded-2xl border border-line bg-surface p-4">
+    <li className="sticker p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-semibold text-ink">{shared.title}</p>
+          <p className="font-display text-lg font-bold text-ink">{shared.title}</p>
           <p className="mt-0.5 text-xs text-muted">
             {[formatDate(shared.date), shared.caseType, shared.industry, shared.source, shared.partner && `Cased by ${shared.partner}`]
               .filter(Boolean)

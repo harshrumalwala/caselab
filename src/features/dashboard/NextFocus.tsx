@@ -32,7 +32,7 @@ export function NextFocus({ suggestions, total }: { suggestions: Suggestion[]; t
       <CardHeader
         titleId="next-title"
         title="What should I work on next?"
-        subtitle="Based only on the cases you've logged"
+        subtitle="Based only on the cases you've logged. No crystal ball involved."
         icon={<Lightbulb className="size-4" />}
       />
 

@@ -1,5 +1,5 @@
 import type { Rating, SkillGroupKey, SkillKey, CaseType } from '../domain/constants';
-import { normalizeBurnedBooks, type Profile, type ProfileInput, type SharedCase } from '../domain/community';
+import { normalizeBurnedBooks, normalizeBurnedCases, type BurnedCase, type Profile, type ProfileInput, type SharedCase } from '../domain/community';
 
 /** Read-only access to member profiles and shared cases. Visitors without an account only ever get this. */
 export interface CommunityReader {
@@ -43,6 +43,7 @@ export interface ProfileRow {
   public_profile: boolean;
   public_link_only: boolean;
   burned_books: string[];
+  burned_cases: unknown;
   share_cases: boolean;
   share_overall: boolean;
   share_skills: boolean;
@@ -51,6 +52,16 @@ export interface ProfileRow {
   share_notes: boolean;
   share_partner: boolean;
   share_details: boolean;
+}
+
+/** The stored list, read defensively: anything that isn't a {title, book} pair is ignored. */
+function parseBurnedCases(raw: unknown): BurnedCase[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((x) => {
+    if (!x || typeof x !== 'object') return [];
+    const { title, book } = x as Record<string, unknown>;
+    return typeof title === 'string' && title.trim() ? [{ title, book: typeof book === 'string' ? book : '' }] : [];
+  });
 }
 
 export function rowToProfile(r: ProfileRow): Profile {
@@ -62,6 +73,7 @@ export function rowToProfile(r: ProfileRow): Profile {
     publicProfile: r.public_profile ?? false,
     publicLinkOnly: r.public_link_only ?? false,
     burnedBooks: r.burned_books ?? [],
+    burnedCases: parseBurnedCases(r.burned_cases),
     sharing: {
       cases: r.share_cases,
       overall: r.share_overall,
@@ -83,6 +95,7 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
     public_profile: input.listed && input.publicProfile, // public needs listed (also a database rule)
     public_link_only: input.listed && input.publicProfile && input.publicLinkOnly, // link only needs public (also a database rule)
     burned_books: normalizeBurnedBooks(input.burnedBooks),
+    burned_cases: normalizeBurnedCases(input.burnedCases),
     share_cases: input.sharing.cases,
     share_overall: input.sharing.overall,
     share_skills: input.sharing.skills,
@@ -123,6 +136,7 @@ export function rowToPublicProfile(r: PublicProfileRow): Profile {
     publicProfile: true,
     publicLinkOnly: false,
     burnedBooks: [], // never public
+    burnedCases: [], // never public
     sharing: {
       cases: r.share_cases,
       overall: r.share_overall,

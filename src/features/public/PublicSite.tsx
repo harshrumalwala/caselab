@@ -5,6 +5,7 @@ import { describeError } from '../../data/errors';
 import type { PublicReader, RecentCaser } from '../../data/community';
 import { formatDate } from '../../domain/dates';
 import { quipOfTheDay } from '../../domain/quips';
+import { chipClass } from '../../components/ui/chips';
 import { HeroScene, Sparkle, Sticky } from '../../components/ui/Doodles';
 import type { Profile } from '../../domain/community';
 import { Button } from '../../components/ui/Button';
@@ -131,10 +132,10 @@ function RecentCasers({ reader, onOpen }: { reader: PublicReader; onOpen: (id: s
             <button
               type="button"
               onClick={() => onOpen(person.userId)}
-              className="card flex w-full items-center justify-between gap-4 p-4 text-left transition hover:bg-surface-2/60"
+              className="sticker flex w-full items-center justify-between gap-4 p-4 text-left transition hover:-translate-y-0.5 hover:bg-sun-soft"
             >
               <span className="flex min-w-0 items-center gap-3.5">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft font-semibold text-accent-text" aria-hidden>
+                <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl border-2 border-ink/80 font-display font-bold ${chipClass(person.displayName)}`} aria-hidden>
                   {person.displayName.trim().charAt(0).toUpperCase()}
                 </span>
                 <span className="min-w-0">
@@ -412,7 +413,7 @@ export function PublicSite({ reader }: { reader: PublicReader }) {
       )}
 
       <footer className="border-t border-line px-6 py-5 text-center text-xs text-muted">
-        CaseLab is a practice tracker for case interviews. Members decide what to share.
+        CaseLab: for people who say “let me structure my thoughts” and mean it. Members decide what to share.
       </footer>
     </div>
   );

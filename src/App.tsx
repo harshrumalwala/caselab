@@ -48,6 +48,7 @@ function Shell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileFocus, setProfileFocus] = useState<'burned' | null>(null);
   const counter = useRef(0);
 
   // Arriving from the sign-in or sign-up page: drop that address and show the dashboard.
@@ -71,7 +72,14 @@ function Shell() {
       viewCase: (id) => setViewId(id),
       openSettings: () => setSettingsOpen(true),
       openImport: () => setImportOpen(true),
-      openProfile: () => setProfileOpen(true),
+      openProfile: () => {
+        setProfileFocus(null);
+        setProfileOpen(true);
+      },
+      openBurned: () => {
+        setProfileFocus('burned');
+        setProfileOpen(true);
+      },
     }),
     [location, navigate],
   );
@@ -88,7 +96,7 @@ function Shell() {
     return () => document.removeEventListener('keydown', onKey);
   }, [ui]);
 
-  if (status === 'loading') return <Splash label="Loading your cases…" />;
+  if (status === 'loading') return <Splash label="Dusting off your case log…" />;
   if (status === 'error') {
     return (
       <LoadFailed
@@ -133,7 +141,7 @@ function Shell() {
       )}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
-      {profileOpen && <ProfileSettingsDialog onClose={() => setProfileOpen(false)} />}
+      {profileOpen && <ProfileSettingsDialog focus={profileFocus} onClose={() => setProfileOpen(false)} />}
     </UIContext.Provider>
   );
 }
@@ -142,7 +150,7 @@ function Shell() {
 function ProfileGate({ children }: { children: ReactNode }) {
   const { status, loadError, profile, reload } = useCommunity();
   const { signOut } = useAuth();
-  if (status === 'loading') return <Splash label="Loading your profile…" />;
+  if (status === 'loading') return <Splash label="Warming up your profile…" />;
   if (status === 'error') {
     return (
       <LoadFailed

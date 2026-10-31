@@ -13,11 +13,11 @@ const BOB: Profile = {
   displayName: 'Bob Brown',
   mbaClass: 'Class of 2027',
   listed: true,
-  publicProfile: false, publicLinkOnly: false, burnedBooks: [],
+  publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [],
   sharing: { ...NO_SHARING, cases: true, overall: true, feedback: true },
 };
-const CAROL: Profile = { userId: 'carol', displayName: 'Carol Chen', mbaClass: '', listed: true, publicProfile: false, publicLinkOnly: false, burnedBooks: [], sharing: NO_SHARING };
-const HIDDEN: Profile = { userId: 'ghost', displayName: 'Hidden Harry', mbaClass: '', listed: false, publicProfile: false, publicLinkOnly: false, burnedBooks: [], sharing: NO_SHARING };
+const CAROL: Profile = { userId: 'carol', displayName: 'Carol Chen', mbaClass: '', listed: true, publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [], sharing: NO_SHARING };
+const HIDDEN: Profile = { userId: 'ghost', displayName: 'Hidden Harry', mbaClass: '', listed: false, publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [], sharing: NO_SHARING };
 
 const shared = (over: Partial<SharedCase> & Pick<SharedCase, 'caseId' | 'title'>): SharedCase => ({
   ownerId: 'bob',

@@ -149,6 +149,13 @@ see it. It is advice, not a lock (it only changes what that screen suggests), it
 shown to visitors without an account. Books are matched by name ignoring case and filler words ("Booth casebook" and "The Booth Casebook"
 are the same book).
 
+**Burned cases (solo practice).** For single cases you worked through on your own, open **Cases I've burned** in Profile & privacy (or
+click "Practiced solo? Burn cases without logging them" on the Case Log), optionally name the book, and paste the titles, one per line.
+They are **not practice cases**: they never appear in your Case Log or count in any total, rating or coverage. They only tell members who
+are picking a case for you to skip those exact cases (matched by title, however it was typed). Like burned books, the list is visible only
+to members who can see your profile and never to visitors. Use **I've finished this whole book** (when logging) or **Books I've burned**
+only when you really did the entire book.
+
 **Per case.** When you log or edit a case, an optional **Sharing for this case** section lets you override your defaults:
 use your profile settings (the default), keep this case private, share only its name, or share it in full (its scores,
 feedback and notes, even if your profile shares none of those). Nobody has to touch it when logging.
@@ -215,7 +222,7 @@ These rules are tested directly against a real Postgres (see Tests), including a
 | --- | --- | --- |
 | `cases` | Your cases: date, title, source, case type, industry, partner, overall rating and feedback, the eight MCG skill ratings with feedback (one `skills` JSON column), takeaways, improvement tag, other notes, sharing override | Only you |
 | `opportunities` | Your hand-edited lists from the MCG "Opportunity Areas" tab | Only you |
-| `profiles` | Name, optional MBA class, listed and public flags, the sharing switches, burned books. No email | Verified members (listed profiles) |
+| `profiles` | Name, optional MBA class, listed and public flags, the sharing switches, burned books and cases. No email | Verified members (listed profiles) |
 | `shared_cases` | The owner-approved projection of cases (see above). Written only by triggers | Verified members |
 | `public_profiles`, `public_shared_cases` | Copies for members who chose to be public (free text only if they opened everything; link-only members are excluded from table reads). Written only by triggers | Anyone, including visitors without an account |
 

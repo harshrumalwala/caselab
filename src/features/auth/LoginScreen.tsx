@@ -188,10 +188,10 @@ export function LoginScreen({ initialMode = 'signin', onBack }: { initialMode?: 
   const title = mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create your account' : 'Reset your password';
   const blurb =
     mode === 'signin'
-      ? 'Your cases are saved to your account and follow you across devices.'
+      ? 'Your cases are saved to your account and follow you across devices. No more "Case Log FINAL v7.xlsx".'
       : mode === 'signup'
-        ? "We'll email a link to verify your address. After that you'll set up a short profile."
-        : "Enter your email and we'll send you a link to choose a new password.";
+        ? "We'll email a link to verify your address. After that, a short profile and you're in. No spreadsheets harmed."
+        : "Enter your email and we'll send you a link to choose a new password. It happens to the best of us.";
 
   return (
     <Shell onBack={onBack}>

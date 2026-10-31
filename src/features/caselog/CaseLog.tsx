@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, FileSpreadsheet, Filter, Lock, LockOpen, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ChevronDown, FileSpreadsheet, Filter, Flame, Lock, LockOpen, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { CASE_TYPES, INDUSTRIES } from '../../domain/constants';
 import {
   applyFilters,
@@ -20,6 +20,7 @@ import { useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
+import { chipClass } from '../../components/ui/chips';
 import { useTogglePrivate } from './useTogglePrivate';
 
 function ImprovementCell({ c }: { c: CaseRecord }) {
@@ -32,6 +33,14 @@ function ImprovementCell({ c }: { c: CaseRecord }) {
       {k.label} <span className="opacity-70">(lowest)</span>
     </span>
   );
+}
+
+/** A line under the title that notices how far along you are. */
+function logQuip(count: number): string {
+  if (count < 5) return 'A good start. Everyone starts somewhere (usually airline profitability).';
+  if (count < 15) return 'Getting somewhere. A pattern is forming, and so are opinions.';
+  if (count < 30) return 'That is a serious stack of cases. Your case partners are impressed.';
+  return 'Veteran status. Please remember to eat, sleep and occasionally not case.';
 }
 
 function PrivateBadge({ c }: { c: CaseRecord }) {
@@ -86,7 +95,7 @@ const SELECT = 'field !py-2 text-sm';
 
 export function CaseLog() {
   const { cases, data, deleteCase } = useData();
-  const { viewCase, openLogCase, openImport } = useUI();
+  const { viewCase, openLogCase, openImport, openBurned } = useUI();
   const toast = useToast();
   const now = useNow();
 
@@ -130,8 +139,8 @@ export function CaseLog() {
   if (cases.length === 0) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">My Case Log</h1>
-        <div className="card">
+        <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">My Case Log</h1>
+        <div className="sticker bg-sun-soft">
           <EmptyState
             icon={<FileSpreadsheet className="size-6" />}
             title="No cases logged yet"
@@ -146,7 +155,7 @@ export function CaseLog() {
               </>
             }
           >
-            Every case you log shows up here, searchable and filterable. Already tracking in the MCG spreadsheet? Import it and
+            Every case you log shows up here, searchable and filterable. It is much nicer than a folder of PDFs. Already tracking in the MCG spreadsheet? Import it and
             your history comes with you.
           </EmptyState>
         </div>
@@ -157,14 +166,22 @@ export function CaseLog() {
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">My Case Log</h1>
-        <p className="text-sm text-muted">
+        <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">My Case Log</h1>
+        <p className="text-sm text-ink-2">
           {active ? `${visible.length} of ${cases.length} cases` : `${cases.length} ${cases.length === 1 ? 'case' : 'cases'}`}
         </p>
+        <p className="text-sm font-semibold text-accent-text">{logQuip(cases.length)}</p>
+        <button
+          type="button"
+          onClick={openBurned}
+          className="mt-1 inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-ink-2 underline decoration-dotted underline-offset-4 hover:text-accent-text"
+        >
+          <Flame className="size-4" aria-hidden /> Practiced solo? Burn cases without logging them
+        </button>
       </div>
 
       {/* ---- Toolbar ------------------------------------------------------------------ */}
-      <div className="card space-y-3 p-3 sm:p-4">
+      <div className="sticker space-y-3 p-3 sm:p-4">
         <div className="flex gap-2">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
@@ -294,9 +311,9 @@ export function CaseLog() {
       ) : (
         <>
           {/* Table on larger screens */}
-          <div className="card hidden overflow-hidden md:block">
+          <div className="sticker hidden overflow-hidden md:block">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-line bg-surface-2/60 text-xs font-semibold text-muted">
+              <thead className="border-b-2 border-ink/80 bg-sun-soft text-xs font-bold text-ink-2">
                 <tr>
                   <th className="px-5 py-3">Case</th>
                   <th className="px-3 py-3">Date</th>
@@ -314,13 +331,13 @@ export function CaseLog() {
                 {visible.map((c) => (
                   <tr
                     key={c.id}
-                    className="group cursor-pointer transition hover:bg-surface-2/70"
+                    className="group cursor-pointer transition hover:bg-sun-soft/60"
                     onClick={() => viewCase(c.id)}
                   >
                     <td className="max-w-72 px-5 py-3.5">
                       <button
                         type="button"
-                        className="block max-w-full truncate text-left font-semibold text-ink hover:text-accent-text"
+                        className="block max-w-full truncate text-left font-display text-base font-bold text-ink hover:text-accent-text"
                         onClick={(e) => {
                           e.stopPropagation();
                           viewCase(c.id);
@@ -334,7 +351,9 @@ export function CaseLog() {
                       </p>
                     </td>
                     <td className="num whitespace-nowrap px-3 py-3.5 text-ink-2">{formatDate(c.date)}</td>
-                    <td className="px-3 py-3.5 text-ink-2">{c.caseType}</td>
+                    <td className="px-3 py-3.5">
+                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${chipClass(c.caseType)}`}>{c.caseType}</span>
+                    </td>
                     <td className="px-3 py-3.5 text-ink-2">{c.industry || <span className="text-muted">–</span>}</td>
                     <td className="hidden px-3 py-3.5 text-ink-2 xl:table-cell">
                       {c.partner || <span className="text-muted">–</span>}
@@ -357,16 +376,16 @@ export function CaseLog() {
           {/* Cards on phones */}
           <ul className="space-y-3 md:hidden">
             {visible.map((c) => (
-              <li key={c.id} className="card group p-4">
+              <li key={c.id} className="sticker group p-4">
                 <div className="flex items-start justify-between gap-3">
                   <button type="button" className="min-w-0 text-left" onClick={() => viewCase(c.id)}>
-                    <span className="block truncate text-base font-semibold text-ink">{c.title || 'Untitled case'}</span>
+                    <span className="block truncate font-display text-lg font-bold text-ink">{c.title || 'Untitled case'}</span>
                     <span className="num mt-0.5 block text-xs text-muted">{formatDate(c.date)}</span>
                   </button>
                   <RatingBadge value={c.overall} />
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                  <Badge>{c.caseType}</Badge>
+                  <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${chipClass(c.caseType)}`}>{c.caseType}</span>
                   {c.industry && <Badge>{c.industry}</Badge>}
                   <PrivateBadge c={c} />
                 </div>
