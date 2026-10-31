@@ -73,6 +73,8 @@ export interface Pairing {
   theyHaveDone: TheyHaveDone[];
   /** Mine left out because they have burned the book it comes from. */
   burnedExcluded: CaseRecord[];
+  /** Mine left out because it is one of the individual cases they have burned (and not already left out by its book). */
+  burnedCaseExcluded: CaseRecord[];
   /** Mine with no match in what they've shared: the best candidates to give them. */
   newToThem: CaseRecord[];
   /** Mine that look similar to one of theirs: worth checking before using. */
@@ -99,12 +101,20 @@ export function sameBook(a: string, b: string): boolean {
   return x.toLowerCase() === y.toLowerCase() || compareTitles(x, y) === 'same';
 }
 
-export function pairCases(mine: CaseRecord[], theirs: SharedCase[], theirBurnedBooks: readonly string[] = []): Pairing {
+export function pairCases(
+  mine: CaseRecord[],
+  theirs: SharedCase[],
+  theirBurnedBooks: readonly string[] = [],
+  theirBurnedCases: readonly { title: string }[] = [],
+): Pairing {
   // A burned book is one they have already worked through, so none of its cases are worth offering.
   const burned = (c: CaseRecord) => theirBurnedBooks.some((book) => sameBook(book, c.source));
+  // A burned case is one they did on their own; it matches by title, however it was typed.
+  const burnedCase = (c: CaseRecord) => theirBurnedCases.some((b) => compareTitles(b.title, c.title) === 'same');
   const allMine = distinctMine(mine);
   const burnedExcluded = allMine.filter(burned);
-  const myCases = allMine.filter((c) => !burned(c));
+  const burnedCaseExcluded = allMine.filter((c) => !burned(c) && burnedCase(c));
+  const myCases = allMine.filter((c) => !burned(c) && !burnedCase(c));
 
   const theyHaveDone: TheyHaveDone[] = theirs.map((shared) => {
     let best: TheyHaveDone['mine'] = null;
@@ -164,7 +174,7 @@ export function pairCases(mine: CaseRecord[], theirs: SharedCase[], theirBurnedB
     .map((n): Gap => ({ name: n, theirCount: theirIndustries.get(n) ?? 0, offerable: offerableIndustries.get(n) ?? 0 }))
     .sort(gapsSort);
 
-  return { theyHaveDone, burnedExcluded, newToThem, mayOverlap, caseTypeGaps, industryGaps };
+  return { theyHaveDone, burnedExcluded, burnedCaseExcluded, newToThem, mayOverlap, caseTypeGaps, industryGaps };
 }
 
 // ---------------------------------------------------------------------------------------

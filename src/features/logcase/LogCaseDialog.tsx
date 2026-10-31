@@ -534,10 +534,10 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
               />
               <span>
                 <span className="flex items-center gap-1.5 font-medium text-ink">
-                  <Flame className="size-4 text-accent-text" aria-hidden /> I've burned this book
+                  <Flame className="size-4 text-accent-text" aria-hidden /> I've finished this whole book
                 </span>
                 <span className="block text-xs text-muted">
-                  Members picking a case for you will skip {input.source.trim()}. You can change this any time in Profile &amp; privacy.
+                  Members picking a case for you will skip all of {input.source.trim()}. Only tick this if you've done the whole book. For single solo cases, use "Cases I've burned" in Profile &amp; privacy; they don't count as practice.
                 </span>
               </span>
             </label>

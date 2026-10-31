@@ -65,7 +65,7 @@ export function nextPracticeFocus(cases: CaseRecord[]): Suggestion[] {
     skill = {
       id: `skill-${weakest.key}`,
       kind: 'skill',
-      text: `Your ${weakest.label} score has averaged ${fmt(weakest.recentAverage)} across the last ${RECENT_WINDOW} rated cases. ${group?.tip ?? ''}`.trim(),
+      text: `${weakest.label} is averaging ${fmt(weakest.recentAverage)} over your last ${RECENT_WINDOW} rated cases, so it's due some love. ${group?.tip ?? ''}`.trim(),
     };
   }
 
@@ -78,7 +78,7 @@ export function nextPracticeFocus(cases: CaseRecord[]): Suggestion[] {
       ? {
           id: `decline-${decliner.key}`,
           kind: 'decline',
-          text: `Your ${decliner.label} ratings have slipped from ${fmt(decliner.earlierAverage)} earlier to ${fmt(decliner.recentAverage)} over the last ${RECENT_WINDOW} rated cases. Worth a refresher.`,
+          text: `Your ${decliner.label} ratings have slipped from ${fmt(decliner.earlierAverage)} earlier to ${fmt(decliner.recentAverage)} over the last ${RECENT_WINDOW} rated cases. It happens to everyone. Worth a refresher.`,
         }
       : null;
 
@@ -96,7 +96,7 @@ export function nextPracticeFocus(cases: CaseRecord[]): Suggestion[] {
     concentration = {
       id: `concentration-${type}`,
       kind: 'concentration',
-      text: `Your last three cases were all ${type}. Try ${joinOr(alts)} next.`,
+      text: `Your last three cases were all ${type}. Great commitment, but interviewers do like variety. Try ${joinOr(alts)} next.`,
       action: { label: `Log a ${alts[0]} case`, caseType: alts[0] },
     };
   } else if (total >= 10) {
@@ -106,7 +106,7 @@ export function nextPracticeFocus(cases: CaseRecord[]): Suggestion[] {
       concentration = {
         id: `concentration-share-${top.caseType}`,
         kind: 'concentration',
-        text: `${top.caseType} makes up ${top.count} of your ${total} cases. Mixing in ${joinOr(alts)} would broaden your range.`,
+        text: `${top.caseType} makes up ${top.count} of your ${total} cases. Someone has a favourite. Mixing in ${joinOr(alts)} would broaden your range.`,
         action: { label: `Log a ${alts[0]} case`, caseType: alts[0] },
       };
     }
@@ -121,7 +121,7 @@ export function nextPracticeFocus(cases: CaseRecord[]): Suggestion[] {
     caseTypeGap = {
       id: `casetype-${named.join('-')}`,
       kind: 'caseType',
-      text: `You haven't practiced any ${joinOr(named)} cases yet${rest > 0 ? ` (${rest} more case type${rest === 1 ? '' : 's'} still unexplored)` : ''}.`,
+      text: `You haven't practiced any ${joinOr(named)} cases yet${rest > 0 ? ` (${rest} more case type${rest === 1 ? '' : 's'} still unexplored)` : ''}. Fresh territory awaits.`,
       action: { label: `Log a ${named[0]} case`, caseType: named[0] },
     };
   }
@@ -135,7 +135,7 @@ export function nextPracticeFocus(cases: CaseRecord[]): Suggestion[] {
     industryGap = {
       id: `industry-${named.join('-')}`,
       kind: 'industry',
-      text: `You haven't practiced any ${joinOr(named)} cases yet.`,
+      text: `You haven't practiced any ${joinOr(named)} cases yet. Time to find out what they actually do all day.`,
       action: { label: `Log a ${named[0]} case`, industry: named[0] },
     };
   }

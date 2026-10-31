@@ -45,8 +45,8 @@ export function WeeklyPractice({ weeks, total }: { weeks: WeekBucket[]; total: n
           </ol>
           <p className="mt-4 text-xs text-muted">
             {sum} {sum === 1 ? 'case' : 'cases'} across the last {weeks.length} weeks
-            {active > 0 && ` · ${active} active ${active === 1 ? 'week' : 'weeks'}`}. Quiet weeks are normal during
-            recruiting.
+            {active > 0 && ` · ${active} active ${active === 1 ? 'week' : 'weeks'}`}. Quiet weeks happen. Even
+            partners take vacations.
           </p>
         </>
       )}

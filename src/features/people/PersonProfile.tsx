@@ -7,6 +7,7 @@ import { distinctValues, matchesFilter, NO_FILTER, type CaseFilter } from '../..
 import { round1, skillStats } from '../../domain/stats';
 import type { CaseRecord } from '../../domain/types';
 import { Badge, RatingBadge } from '../../components/ui/Badge';
+import { chipClass } from '../../components/ui/chips';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -167,22 +168,29 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
     <div className="space-y-5">
       {back}
 
-      <div className="card flex items-start gap-4 p-5 sm:p-6">
-        <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-lg font-semibold text-accent-text" aria-hidden>
+      <div className="sticker flex items-start gap-4 bg-sun-soft p-5 sm:p-6">
+        <span className={`flex size-14 shrink-0 items-center justify-center rounded-2xl border-2 border-ink/80 font-display text-2xl font-extrabold ${chipClass(person.displayName)}`} aria-hidden>
           {person.displayName.trim().charAt(0).toUpperCase()}
         </span>
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">{person.displayName}</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-ink">{person.displayName}</h1>
           <p className="text-sm text-muted">{person.mbaClass || 'MBA class not shown'}</p>
           <p className="mt-2 text-sm text-ink-2">
             Shares <strong className="font-semibold text-ink">{summary}</strong>
             {shared.length > 0 && <> · {shared.length} case{shared.length === 1 ? '' : 's'} visible</>}
           </p>
-          {!visitor && person.burnedBooks.length > 0 && (
+          {!visitor && (person.burnedBooks.length > 0 || person.burnedCases.length > 0) && (
             <p className="mt-1.5 flex items-start gap-1.5 text-sm text-ink-2">
               <Flame className="mt-0.5 size-4 shrink-0 text-accent-text" aria-hidden />
               <span>
-                Has burned <strong className="font-semibold text-ink">{person.burnedBooks.join(', ')}</strong>
+                Has burned{' '}
+                {person.burnedBooks.length > 0 && <strong className="font-semibold text-ink">{person.burnedBooks.join(', ')}</strong>}
+                {person.burnedBooks.length > 0 && person.burnedCases.length > 0 && ' and '}
+                {person.burnedCases.length > 0 && (
+                  <strong className="font-semibold text-ink">
+                    {person.burnedCases.length} {person.burnedCases.length === 1 ? 'case' : 'cases'}
+                  </strong>
+                )}
               </span>
             </p>
           )}

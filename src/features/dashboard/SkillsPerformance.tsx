@@ -87,7 +87,7 @@ export function SkillsPerformance({ stats, total }: { stats: SkillStat[]; total:
       <CardHeader
         titleId="skills-title"
         title="Skills performance"
-        subtitle="Average of the cases where you rated each skill"
+        subtitle="Average of the cases where you rated each skill. Skills you skipped never count against you."
         icon={<Gauge className="size-4" />}
       />
 

@@ -549,3 +549,72 @@ describe('burned books', () => {
     expect(rows[0].source).toBe('Cosentino');
   });
 });
+
+describe('burned cases', () => {
+  const burnedOf = async (viewer: string, owner: string) => {
+    await as(db, 'authenticated', viewer);
+    return (await db.query<{ burned_cases: unknown }>('select burned_cases from public.profiles where user_id = $1', [owner])).rows;
+  };
+  const setBurned = async (uid: string, value: unknown) => {
+    await as(db, 'authenticated', uid);
+    await db.query('update public.profiles set burned_cases = $2::jsonb where user_id = $1', [uid, JSON.stringify(value)]);
+  };
+  const LIST = [
+    { title: 'Airline profitability', book: 'Cosentino' },
+    { title: 'Piano tuners', book: '' },
+  ];
+
+  it('starts empty, and is readable only by members who can see the profile', async () => {
+    await createProfile(ALICE, 'Alice');
+    expect(await burnedOf(BOB, ALICE)).toEqual([{ burned_cases: [] }]);
+    await setBurned(ALICE, LIST);
+    expect(await burnedOf(BOB, ALICE)).toEqual([{ burned_cases: LIST }]);
+    await setPrefs(ALICE, { listed: false });
+    expect(await burnedOf(BOB, ALICE)).toEqual([]); // unlisted: not even the row is visible
+  });
+
+  it('is never readable by visitors and is not in the public tables', async () => {
+    await createProfile(ALICE, 'Alice');
+    await setBurned(ALICE, LIST);
+    await as(db, 'anon');
+    expect(await fails('select burned_cases from public.profiles')).toMatch(/permission denied/);
+    await as(db, 'postgres');
+    const cols = (
+      await db.query<{ column_name: string }>(
+        `select column_name from information_schema.columns where table_name in ('public_profiles', 'public_shared_cases', 'shared_cases')`,
+      )
+    ).rows.map((c) => c.column_name);
+    expect(cols).not.toContain('burned_cases');
+  });
+
+  it('is not a practice case: it never creates a case or a shared case', async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases']);
+    await setBurned(ALICE, LIST);
+    await as(db, 'authenticated', ALICE);
+    expect((await db.query('select count(*)::int as n from public.cases')).rows).toEqual([{ n: 0 }]);
+    expect(await sharedAs(BOB)).toEqual([]);
+  });
+
+  it("does not let another member change someone's list", async () => {
+    await createProfile(ALICE, 'Alice');
+    await setBurned(ALICE, LIST);
+    await as(db, 'authenticated', BOB);
+    expect((await db.query(`update public.profiles set burned_cases = '[]'::jsonb where user_id = $1 returning user_id`, [ALICE])).rows).toEqual([]);
+    expect(await burnedOf(BOB, ALICE)).toEqual([{ burned_cases: LIST }]);
+  });
+
+  it('must be a list of at most 300 entries and 40 000 characters', async () => {
+    await createProfile(ALICE, 'Alice');
+    await setBurned(ALICE, Array.from({ length: 300 }, (_, i) => ({ title: `Case ${i}`, book: 'B' })));
+    await as(db, 'authenticated', ALICE);
+    await expect(
+      db.query('update public.profiles set burned_cases = $2::jsonb where user_id = $1', [ALICE, JSON.stringify(Array.from({ length: 301 }, (_, i) => ({ title: `Case ${i}`, book: '' })))]),
+    ).rejects.toThrow(/profiles_burned_cases_size/);
+    await as(db, 'authenticated', ALICE);
+    await expect(db.query(`update public.profiles set burned_cases = '{"not":"a list"}'::jsonb where user_id = $1`, [ALICE])).rejects.toThrow(/profiles_burned_cases_size/);
+    await as(db, 'authenticated', ALICE);
+    await expect(
+      db.query('update public.profiles set burned_cases = $2::jsonb where user_id = $1', [ALICE, JSON.stringify(Array.from({ length: 150 }, () => ({ title: 'x'.repeat(200), book: 'y'.repeat(100) })))]),
+    ).rejects.toThrow(/profiles_burned_cases_size/);
+  });
+});
