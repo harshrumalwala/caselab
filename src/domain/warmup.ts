@@ -285,6 +285,11 @@ export function parseBest(json: string | null): Best {
   }
 }
 
+/** The better of each: used when the same member's record is held in two places (this device and their account). */
+export function mergeBest(a: Best, b: Best): Best {
+  return { score: Math.max(a.score, b.score), streak: Math.max(a.streak, b.streak) };
+}
+
 export interface BestUpdate {
   best: Best;
   newScore: boolean;
@@ -296,7 +301,7 @@ export function updateBest(best: Best, round: RoundStats): BestUpdate {
   const newScore = round.score > best.score;
   const newStreak = round.bestStreak > best.streak;
   return {
-    best: { score: Math.max(best.score, round.score), streak: Math.max(best.streak, round.bestStreak) },
+    best: mergeBest(best, { score: round.score, streak: round.bestStreak }),
     newScore,
     newStreak,
   };

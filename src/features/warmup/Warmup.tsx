@@ -19,6 +19,7 @@ import {
 } from '../../domain/warmup';
 import { Button } from '../../components/ui/Button';
 import { Sparkle, Sticky } from '../../components/ui/Doodles';
+import { useWarmupSync } from '../../state/warmupSync';
 import { useBest } from './useBest';
 
 type Phase = 'intro' | 'playing' | 'done';
@@ -54,11 +55,12 @@ function Stat({ label, value, icon, tone }: { label: string; value: ReactNode; i
 }
 
 /**
- * A 60-second mental-math sprint. Entirely optional and entirely local: the best score and streak live in this browser
- * (see useBest), nothing is saved to the account or shown to other members. `seed` makes the questions repeatable for tests.
+ * A 60-second mental-math sprint. Entirely optional. The best score and streak are private to you: kept with your account
+ * (see useBest), or in this browser only in demo mode, and never shown to other members. `seed` makes the questions repeatable for tests.
  */
 export function Warmup({ seed }: { seed?: number } = {}) {
   const [best, saveBest] = useBest();
+  const onAccount = useWarmupSync() !== null;
   const [phase, setPhase] = useState<Phase>('intro');
   const [stats, setStats] = useState<RoundStats>(EMPTY_ROUND);
   const [msLeft, setMsLeft] = useState(ROUND_SECONDS * 1000);
@@ -189,7 +191,11 @@ export function Warmup({ seed }: { seed?: number } = {}) {
               )}
             </p>
           </div>
-          <p className="mt-4 text-xs text-ink-2">Your best is kept on this device only. Nobody else sees it.</p>
+          <p className="mt-4 text-xs text-ink-2">
+            {onAccount
+              ? 'Your best is saved with your account, so it follows you to any device. Nobody else sees it.'
+              : 'Your best is kept on this device only. Nobody else sees it.'}
+          </p>
         </section>
       )}
 

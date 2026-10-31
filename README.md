@@ -10,7 +10,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **My Case Log**: searchable, filterable list of your cases with full-detail view, edit and delete
 - **Improvement Areas**: thin spots in your coverage, skills to sharpen, and a searchable history of what you've learned
 - **A public front page**: anyone, with no account, can search the members who chose to be visible and read what they share
-- **Warm-up**: an optional 60-second mental-math sprint for a break between cases (kept on your device only)
+- **Warm-up**: an optional 60-second mental-math sprint for a break between cases (your best score and streak follow your account)
 - **People**: find a fellow member, see only what they've chosen to share, and work out which case to give them
 - **Profile & privacy**: switches for what other members can see, a per-case override, and a live preview
 - **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export and an Excel import that reads the MCG template are built in
@@ -223,6 +223,7 @@ These rules are tested directly against a real Postgres (see Tests), including a
 | `cases` | Your cases: date, title, source, case type, industry, partner, overall rating and feedback, the eight MCG skill ratings with feedback (one `skills` JSON column), takeaways, improvement tag, other notes, sharing override | Only you |
 | `opportunities` | Your hand-edited lists from the MCG "Opportunity Areas" tab | Only you |
 | `profiles` | Name, optional MBA class, listed and public flags, the sharing switches, burned books and cases. No email | Verified members (listed profiles) |
+| `warmup_best` | Your best Warm-up score and streak (one row per member). Read-only for you; changed only by `record_warmup_best()`, which can only raise it | Only you |
 | `shared_cases` | The owner-approved projection of cases (see above). Written only by triggers | Verified members |
 | `public_profiles`, `public_shared_cases` | Copies for members who chose to be public (free text only if they opened everything; link-only members are excluded from table reads). Written only by triggers | Anyone, including visitors without an account |
 
@@ -237,7 +238,7 @@ allows a signed-in user to read and change only their own rows.
 **Saving is honest.** Nothing appears saved until Supabase confirms it. If a save, edit or delete fails, you see the
 error (the Log Case form keeps everything you typed so you can retry), and if loading fails you get an error screen with
 Retry rather than an empty dashboard that looks like lost data. The only things kept in the browser are the theme, a
-half-written Log Case draft, and Supabase's own sign-in session; none of them hold saved cases.
+half-written Log Case draft, a copy of your Warm-up record, and Supabase's own sign-in session; none of them hold saved cases.
 
 **Two devices.** Changes show up on the other device when you come back to its tab (the app refreshes your cases then).
 
@@ -343,7 +344,8 @@ so this turns the "short daily mental-math drills" habit into a game: 60 seconds
   (like 40M × 12% × $85). They start easy and get harder as you get more right, and the same kind never comes up twice in a row.
 - **Estimating counts.** An answer within 5% of the exact one is right. Type `36`, `4.8k` or `408M`; a bare number means the unit the question asks for.
 - **Score**: 10 points, plus 5 per difficulty level, plus 2 for each answer in your current streak (up to 10). A miss or a skip breaks the streak and shows the quick way to do it; the clock pauses while you read that.
-- **Your best score and streak are saved in your browser** (`localStorage`, key `caselab:v1:warmup`) and nowhere else: no database, no migration, nothing shown to other members. Clearing site data resets them.
+- **Your best score and streak are saved with your account**, so they follow you to any device. They are private: only you can read them, they are not part of your profile, and there is no leaderboard. The table is `warmup_best` (one row per member, deleted with the account); it can only be changed through `record_warmup_best()`, which only ever *raises* a record, so a bad round or a stale tab can't overwrite a better one.
+- **This browser keeps a copy** (`localStorage`) so the page works offline: when you open Warm-up the two are merged (the better of each) and anything the account is missing is sent up. A record saved in this browser before records moved to accounts is claimed once, by the first member who opens Warm-up here. In demo mode nothing touches your account.
 - The game rules (question generation from a seedable random source, answer checking, scoring) are pure code in `src/domain/warmup.ts`; the screen is `src/features/warmup/`.
 
 ---
@@ -417,7 +419,7 @@ There is no group administration, messaging or social feed: members, profiles an
 - **Accounts**: sign-up, verification, resend, expired links, password reset, onboarding with everything off by default
 - **Supabase layer**: row mapping that round-trips every field, a repository run against a fake Supabase (paging past 1000 rows, chunked upserts, replace-without-data-loss, errors surfaced), friendly error messages, configuration checks
 - **Calculations**: week boundaries, averages that ignore missing ratings, behavioral combining, trend windows, coverage, matrix, weekly history
-- **Warm-up**: question generation (seeded, so repeatable), answer reading and the 5% tolerance, scoring, best scores kept on the device, and the screen (timer, streaks, tips after a miss, end of round)
+- **Warm-up**: question generation (seeded, so repeatable), answer reading and the 5% tolerance, scoring; the record in Postgres (own row only, no direct writes, raise-only, no visitor access, cascade on user delete); syncing between the account and this device (offline, first sign-in on a shared browser, demo mode); and the screen (timer, streaks, tips after a miss, end of round)
 - **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
 - **Backup and import**: lossless JSON round trip, merge semantics, CSV quoting; Excel import (a populated sample, a richer workbook with an Industry column, extra columns and filled-in Opportunity Areas, and the empty template), header and case-type matching, industry suggestions, and the review screen end to end
 - **The app end to end** against a fake Supabase: sign-in and sign-out, nothing requested before sign-in, create / edit / delete with confirmation, data surviving a refresh, a failed save keeping what you typed, a failed delete, a failed load with Retry, a missing-tables message, demo mode never touching the database, export then restore, clear-all

@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { createQuestionStream, createRng, ROUND_SECONDS, type Question } from './domain/warmup';
 import { Warmup } from './features/warmup/Warmup';
-import { WARMUP_KEY } from './state/storageKeys';
+import { createMemoryWarmup } from './data/warmupBest';
+import { WARMUP_KEY, warmupKeyFor } from './state/storageKeys';
+import { WarmupSyncContext, type WarmupSync } from './state/warmupSync';
 import { createFakeEnv } from './test/fakeBackend';
 
 const SEED = 7;
@@ -28,9 +30,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function setup(seed = SEED) {
+function setup(seed = SEED, sync: WarmupSync | null = null) {
   const user = userEvent.setup();
-  render(<Warmup seed={seed} />);
+  const view = render(
+    <WarmupSyncContext.Provider value={sync}>
+      <Warmup seed={seed} />
+    </WarmupSyncContext.Provider>,
+  );
   const tick = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
   const start = () => user.click(screen.getByRole('button', { name: 'Start the sprint' }));
   const answerBox = () => screen.getByLabelText(/Your answer/);
@@ -40,7 +46,7 @@ function setup(seed = SEED) {
     await user.click(screen.getByRole('button', { name: 'Check' }));
   };
   const stat = (label: string) => screen.getByText(label).closest('div.sticker')!.querySelector('p:last-child')!.textContent;
-  return { user, tick, start, answerBox, submit, stat };
+  return { user, view, tick, start, answerBox, submit, stat };
 }
 
 describe('Warm-up: before you start', () => {
@@ -211,6 +217,97 @@ describe('Warm-up: the end of a round', () => {
   });
 });
 
+describe('Warm-up record on your account', () => {
+  const ME = 'user-1';
+  const account = (saved = { score: 0, streak: 0 }) => {
+    const repository = createMemoryWarmup(saved);
+    return { repository, sync: { repository, userId: ME } satisfies WarmupSync };
+  };
+  const flush = () => act(async () => void (await new Promise((r) => setTimeout(r, 0))));
+  const local = (key = warmupKeyFor(ME)) => JSON.parse(window.localStorage.getItem(key) ?? 'null');
+
+  it('shows the record saved on your account, and keeps a copy on this device', async () => {
+    const { sync } = account({ score: 142, streak: 9 });
+    setup(SEED, sync);
+    await flush();
+    expect(screen.getByText('142')).toBeInTheDocument();
+    expect(local()).toEqual({ score: 142, streak: 9 });
+    expect(screen.getByText(/saved with your account/)).toBeInTheDocument();
+    expect(screen.queryByText(/this device only/)).not.toBeInTheDocument();
+  });
+
+  it('saves a new best to your account when a round ends, and never lowers it afterwards', async () => {
+    const { repository, sync } = account();
+    const s = setup(SEED, sync);
+    await flush();
+    await s.start();
+    const next = questions();
+    for (let i = 0; i < 3; i++) await s.submit(typeOf(next()));
+    s.tick(ROUND_SECONDS * 1000);
+    await flush();
+    expect(screen.getByText('New best!')).toBeInTheDocument();
+    expect(repository.saved).toEqual({ score: 42, streak: 3 });
+    expect(local()).toEqual({ score: 42, streak: 3 });
+
+    // A weaker second round leaves the record where it was.
+    await s.user.click(screen.getByRole('button', { name: 'Go again' }));
+    s.tick(ROUND_SECONDS * 1000);
+    await flush();
+    expect(screen.queryByText('New best!')).not.toBeInTheDocument();
+    expect(repository.saved).toEqual({ score: 42, streak: 3 });
+  });
+
+  it('sends up a better record this device already had, and takes the better of each', async () => {
+    window.localStorage.setItem(warmupKeyFor(ME), JSON.stringify({ score: 300, streak: 4 }));
+    const { repository, sync } = account({ score: 100, streak: 12 });
+    setup(SEED, sync);
+    await flush();
+    expect(repository.saved).toEqual({ score: 300, streak: 12 });
+    expect(screen.getByText(/Best:/)).toHaveTextContent('300 points, streak of 12');
+  });
+
+  it('moves a record from before accounts onto the first member who signs in, and not onto the next', async () => {
+    window.localStorage.setItem(WARMUP_KEY, JSON.stringify({ score: 77, streak: 5 }));
+    const first = account();
+    const firstScreen = setup(SEED, first.sync);
+    await flush();
+    expect(first.repository.saved).toEqual({ score: 77, streak: 5 });
+    expect(window.localStorage.getItem(WARMUP_KEY)).toBeNull();
+
+    // Someone else signs in on the same browser: they start from their own record.
+    firstScreen.view.unmount();
+    const second = account();
+    setup(SEED, { repository: second.repository, userId: 'user-2' });
+    await flush();
+    expect(screen.getByText('No best yet. Yours to set.')).toBeInTheDocument();
+    expect(second.repository.saved).toEqual({ score: 0, streak: 0 });
+  });
+
+  it('keeps playing and keeps your record on this device when the account cannot be reached, then sends it up on the next visit', async () => {
+    const { repository, sync } = account({ score: 50, streak: 2 });
+    repository.failing = true;
+    window.localStorage.setItem(warmupKeyFor(ME), JSON.stringify({ score: 50, streak: 2 }));
+    const s = setup(SEED, sync);
+    await flush();
+    expect(screen.getByText('50')).toBeInTheDocument(); // from the copy on this device
+    await s.start();
+    const next = questions();
+    for (let i = 0; i < 3; i++) await s.submit(typeOf(next()));
+    s.tick(ROUND_SECONDS * 1000);
+    await flush();
+    expect(screen.getByRole('heading', { name: /42 points/ })).toBeInTheDocument();
+    expect(repository.saved).toEqual({ score: 50, streak: 2 });
+    expect(local()).toEqual({ score: 50, streak: 3 }); // streak of 3 beat the old 2, kept here
+
+    // Back online, the next visit sends it up.
+    s.view.unmount();
+    repository.failing = false;
+    setup(SEED, sync);
+    await flush();
+    expect(repository.saved).toEqual({ score: 50, streak: 3 });
+  });
+});
+
 describe('Warm-up in the app', () => {
   // The app and its fake backend resolve with real promises; fake timers would stall them.
   beforeEach(() => vi.useRealTimers());
@@ -228,6 +325,31 @@ describe('Warm-up in the app', () => {
     expect(within(screen.getAllByRole('navigation', { name: 'Primary' })[0]).getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute(
       'aria-current',
     );
+  });
+
+  it("loads the member's record from their account", async () => {
+    const env = createFakeEnv();
+    await env.warmup.record({ score: 88, streak: 6 });
+    window.location.hash = '#/warmup';
+    render(<App backend={env.backend} />);
+    expect(await screen.findByText('88')).toBeInTheDocument();
+  });
+
+  it('leaves the account alone in demo mode: the record stays on this device', async () => {
+    const env = createFakeEnv();
+    const load = vi.spyOn(env.warmup, 'load');
+    const record = vi.spyOn(env.warmup, 'record');
+    const user = userEvent.setup();
+    render(<App backend={env.backend} />);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await user.click(screen.getByRole('button', { name: 'Data and settings' }));
+    await user.click(await screen.findByRole('button', { name: 'Try demo mode' }));
+    expect(await screen.findByText(/Demo mode\./)).toBeInTheDocument();
+    window.location.hash = '#/warmup';
+    expect(await screen.findByRole('heading', { name: 'Warm-up' })).toBeInTheDocument();
+    expect(await screen.findByText('No best yet. Yours to set.')).toBeInTheDocument();
+    expect(load).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
   });
 
   it('is not part of the public site for visitors who are not signed in', async () => {
