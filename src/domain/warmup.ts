@@ -131,8 +131,8 @@ function breakevenQuestion(rng: Rng, level: Level): Question {
   const target = pick(rng, [[100, 200, 500], [400, 800, 1_000, 2_500], [3_000, 8_000, 12_500, 20_000]][level]);
   const fixed = level === 2 ? Math.round((target * margin) / 5_000) * 5_000 : target * margin;
   const answer = fixed / margin;
-  const tip = `Margin per unit is ${money(price)} − ${money(variable)} = ${money(margin)}. Break-even is fixed costs ÷ margin: ${money(fixed)} ÷ ${money(margin)}${
-    Number.isInteger(answer) ? '' : ' ≈'
+  const tip = `Margin per unit is ${money(price)} − ${money(variable)} = ${money(margin)}. Break-even is fixed costs ÷ margin: ${money(fixed)} ÷ ${money(margin)} ${
+    Number.isInteger(answer) ? '=' : '≈'
   } ${fmt(Math.round(answer))}.`;
   return {
     kind: 'breakeven',

@@ -32,8 +32,14 @@ interface Feedback {
   right: boolean;
   text: string;
 }
+/** A question you got wrong or skipped, kept for the review at the end. `said` is what you typed, or null if you skipped. */
+interface Miss {
+  question: Question;
+  said: string | null;
+}
 interface Result {
   stats: RoundStats;
+  misses: Miss[];
   line: string;
   update: BestUpdate;
 }
@@ -66,7 +72,7 @@ export function Warmup({ seed }: { seed?: number } = {}) {
   const [msLeft, setMsLeft] = useState(ROUND_SECONDS * 1000);
   const [asked, setAsked] = useState<Asked | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [missed, setMissed] = useState(false); // you just missed this one: the clock waits while you read the tip
+  const [misses, setMisses] = useState<Miss[]>([]);
   const [typed, setTyped] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -86,7 +92,7 @@ export function Warmup({ seed }: { seed?: number } = {}) {
     setStats(EMPTY_ROUND);
     setMsLeft(ROUND_SECONDS * 1000);
     setFeedback(null);
-    setMissed(false);
+    setMisses([]);
     setTyped('');
     setProblem(null);
     setResult(null);
@@ -94,8 +100,8 @@ export function Warmup({ seed }: { seed?: number } = {}) {
     setPhase('playing');
   };
 
-  // The clock only runs while you are answering, not while you read what went wrong.
-  const running = phase === 'playing' && !missed;
+  // A flat 60 seconds: the clock never waits. What you missed is reviewed at the end.
+  const running = phase === 'playing';
   useEffect(() => {
     if (!running) return;
     let last = Date.now();
@@ -112,43 +118,37 @@ export function Warmup({ seed }: { seed?: number } = {}) {
     if (phase !== 'playing' || msLeft > 0) return;
     const update = updateBest(best, stats);
     if (update.newScore || update.newStreak) saveBest(update.best);
-    setResult({ stats, line: endOfRoundLine(stats, rng.current), update });
+    setResult({ stats, misses, line: endOfRoundLine(stats, rng.current), update });
     setPhase('done');
-  }, [phase, msLeft, stats, best, saveBest]);
+  }, [phase, msLeft, stats, misses, best, saveBest]);
 
   useEffect(() => {
     if (running) input.current?.focus();
   }, [running, asked]);
 
-  const answer = (right: boolean, q: Question, level: Level) => {
+  const answer = (right: boolean, q: Question, level: Level, said: string | null) => {
     const next = recordAnswer(stats, level, right);
     setStats(next);
     setTyped('');
     setProblem(null);
     if (right) {
       setFeedback({ right: true, text: `Yes, ${q.display}. +${next.score - stats.score} points` });
-      ask(next.correct);
     } else {
-      setFeedback({ right: false, text: `The answer was ${q.display}.` });
-      setMissed(true);
+      setFeedback({ right: false, text: said === null ? 'Skipped. On to the next.' : 'Missed. On to the next.' });
+      setMisses((m) => [...m, { question: q, said }]);
     }
+    ask(next.correct);
   };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!asked || missed) return;
+    if (!asked) return;
     const verdict = checkAnswer(asked.question, typed);
     if (verdict === 'invalid') {
       setProblem('Type a number, like 36, 4.8k or 408M.');
       return;
     }
-    answer(verdict === 'correct', asked.question, asked.level);
-  };
-
-  const next = () => {
-    setMissed(false);
-    setFeedback(null);
-    ask(stats.correct);
+    answer(verdict === 'correct', asked.question, asked.level, typed.trim());
   };
 
   const seconds = Math.ceil(msLeft / 1000);
@@ -174,7 +174,7 @@ export function Warmup({ seed }: { seed?: number } = {}) {
               Estimating is the job: anything within {Math.round(TOLERANCE * 100)}% counts. Type <span className="num font-semibold text-ink">36</span>,{' '}
               <span className="num font-semibold text-ink">4.8k</span> or <span className="num font-semibold text-ink">408M</span>.
             </li>
-            <li>A streak earns bonus points. A miss shows you the quick way and pauses the clock while you read it.</li>
+            <li>A streak earns bonus points. The clock never stops: misses and skips are waiting for you at the end, with the quick way to do each.</li>
           </ul>
           <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3">
             <Button variant="primary" size="lg" onClick={start}>
@@ -223,63 +223,49 @@ export function Warmup({ seed }: { seed?: number } = {}) {
           </div>
 
           {/* Announced politely to screen readers as well as shown. */}
-          <p role="status" className="min-h-5 text-sm font-semibold text-good">
-            {!missed && feedback?.right ? feedback.text : ''}
+          <p role="status" className={`min-h-5 text-sm font-semibold ${feedback?.right ? 'text-good' : 'text-coral-ink'}`}>
+            {feedback?.text ?? ''}
           </p>
 
           <section aria-label="Question" className="sticker bg-surface p-5 sm:p-6">
-            <p className="eyebrow">Question {stats.correct + stats.missed + (missed ? 0 : 1)}</p>
+            <p className="eyebrow">Question {stats.correct + stats.missed + 1}</p>
             <p className="mt-1 font-display text-xl font-bold leading-snug text-ink sm:text-2xl">{asked.question.prompt}</p>
 
-            {missed ? (
-              <div className="mt-4 space-y-3">
-                <div className="rounded-xl border-2 border-ink/80 bg-coral-soft px-4 py-3 text-coral-ink">
-                  <p className="font-display text-base font-extrabold">{feedback?.text}</p>
-                  <p className="mt-1 text-sm text-ink">
-                    <span className="font-semibold">Here’s the quick way:</span> {asked.question.tip}
-                  </p>
-                </div>
-                <Button variant="primary" onClick={next} autoFocus>
-                  Next question
+            <form onSubmit={submit} className="mt-4" noValidate>
+              <label htmlFor="warmup-answer" className="label">
+                Your answer <span className="font-normal text-muted">({asked.question.unitHint})</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="warmup-answer"
+                  ref={input}
+                  className="field num text-lg"
+                  value={typed}
+                  onChange={(e) => {
+                    setTyped(e.target.value);
+                    setProblem(null);
+                  }}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  inputMode="text"
+                  enterKeyHint="go"
+                  aria-invalid={problem ? true : undefined}
+                  aria-describedby={problem ? 'warmup-problem' : undefined}
+                />
+                <Button type="submit" variant="primary" size="lg">
+                  Check
+                </Button>
+                <Button size="lg" onClick={() => answer(false, asked.question, asked.level, null)}>
+                  Skip
                 </Button>
               </div>
-            ) : (
-              <form onSubmit={submit} className="mt-4" noValidate>
-                <label htmlFor="warmup-answer" className="label">
-                  Your answer <span className="font-normal text-muted">({asked.question.unitHint})</span>
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    id="warmup-answer"
-                    ref={input}
-                    className="field num text-lg"
-                    value={typed}
-                    onChange={(e) => {
-                      setTyped(e.target.value);
-                      setProblem(null);
-                    }}
-                    autoComplete="off"
-                    autoCapitalize="off"
-                    spellCheck={false}
-                    inputMode="text"
-                    enterKeyHint="go"
-                    aria-invalid={problem ? true : undefined}
-                    aria-describedby={problem ? 'warmup-problem' : undefined}
-                  />
-                  <Button type="submit" variant="primary" size="lg">
-                    Check
-                  </Button>
-                  <Button size="lg" onClick={() => answer(false, asked.question, asked.level)}>
-                    Skip
-                  </Button>
-                </div>
-                {problem && (
-                  <p id="warmup-problem" role="alert" className="mt-2 text-sm font-medium text-bad">
-                    {problem}
-                  </p>
-                )}
-              </form>
-            )}
+              {problem && (
+                <p id="warmup-problem" role="alert" className="mt-2 text-sm font-medium text-bad">
+                  {problem}
+                </p>
+              )}
+            </form>
           </section>
         </>
       )}
@@ -301,6 +287,9 @@ export function Warmup({ seed }: { seed?: number } = {}) {
             <span className="num font-semibold text-ink">{result.stats.bestStreak}</span>.
           </p>
           <p className="mt-4 font-display text-lg font-bold leading-snug text-ink">{result.line}</p>
+          {result.stats.correct > 0 && result.misses.length === 0 && (
+            <p className="mt-3 text-sm font-semibold text-good">Nothing to review: a clean sheet.</p>
+          )}
           <p className="mt-3 text-sm text-ink-2">
             Best so far: <span className="num font-bold text-ink">{result.update.best.score}</span> points, streak of{' '}
             <span className="num font-bold text-ink">{result.update.best.streak}</span>.
@@ -316,6 +305,29 @@ export function Warmup({ seed }: { seed?: number } = {}) {
               Back to the dashboard
             </a>
           </div>
+        </section>
+      )}
+
+      {phase === 'done' && result && result.misses.length > 0 && (
+        <section aria-labelledby="warmup-review" className="sticker bg-surface p-5 sm:p-6">
+          <h2 id="warmup-review" className="text-xl font-extrabold tracking-tight text-ink">
+            Review your misses <span className="num text-muted">({result.misses.length})</span>
+          </h2>
+          <p className="mt-1 text-sm text-ink-2">Here’s the quick way to each one, now that the clock has stopped.</p>
+          <ol className="mt-4 space-y-3">
+            {result.misses.map((m, i) => (
+              <li key={i} className="rounded-xl border-2 border-ink/80 bg-coral-soft px-4 py-3 text-ink">
+                <p className="font-display text-base font-bold leading-snug">{m.question.prompt}</p>
+                <p className="mt-1 text-sm">
+                  <span className="text-ink-2">{m.said ? `You said ${m.said}.` : 'You skipped it.'}</span>{' '}
+                  <span className="font-bold">Answer: {m.question.display}.</span>
+                </p>
+                <p className="mt-1 text-sm">
+                  <span className="font-semibold">Quick way:</span> {m.question.tip}
+                </p>
+              </li>
+            ))}
+          </ol>
         </section>
       )}
     </div>
