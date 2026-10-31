@@ -21,7 +21,7 @@ import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
 import { chipClass } from '../../components/ui/chips';
-import { pillTabClass } from '../../components/ui/pillTab';
+import { splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
 import { useMyProfile } from '../../state/CommunityProvider';
 import { BurnedPanel } from './BurnedPanel';
 import { InterviewedPanel } from './InterviewedPanel';
@@ -54,7 +54,7 @@ type LogTab = 'cases' | 'burned' | 'interviewed';
 
 function LogTabs({ tab, onChange, burned, interviewed }: { tab: LogTab; onChange: (t: LogTab) => void; burned: number; interviewed: number }) {
   return (
-    <div role="tablist" aria-label="Case log views" className="flex flex-wrap gap-2">
+    <div role="tablist" aria-label="Case log views" className={splitTabsClass}>
       {(
         [
           ['cases', 'My cases'],
@@ -68,7 +68,7 @@ function LogTabs({ tab, onChange, burned, interviewed }: { tab: LogTab; onChange
           role="tab"
           aria-selected={tab === id}
           onClick={() => onChange(id)}
-          className={pillTabClass(tab === id)}
+          className={splitTabClass(tab === id)}
         >
           {id === 'burned' && <Flame className="size-4" aria-hidden />}
           {id === 'interviewed' && <Mic className="size-4" aria-hidden />}
