@@ -64,10 +64,12 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
   });
 
   afterAll(async () => {
-    if (!communityA) return;
-    await communityA.saveProfile(profile()); // back to: listed, nothing shared
-    await cleanup(a.client);
-    await cleanup(b.client);
+    // Leave both throwaway accounts UNLISTED with nothing shared, so they never show up in the Community list or search for real
+    // members. (They are listed only while the tests above run, because the directory tests need that.)
+    if (communityA) await communityA.saveProfile(profile({ listed: false }));
+    if (communityB) await communityB.saveProfile(profile({ displayName: 'E2E Viewer B', listed: false }));
+    if (a) await cleanup(a.client);
+    if (b) await cleanup(b.client);
   });
 
   it('shares nothing by default, and never exposes the full case record', async () => {

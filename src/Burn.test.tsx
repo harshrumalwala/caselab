@@ -205,7 +205,7 @@ describe("other members' burned books", () => {
 
   it("skips your cases from a book they've burned when picking one for them, and says so", async () => {
     await openBob();
-    const offer = within(screen.getByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
+    const offer = within(await screen.findByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
     expect(offer.getByText('Hospital entry')).toBeInTheDocument();
     expect(offer.queryByText('Airline profit')).not.toBeInTheDocument(); // from Cosentino, which Bob has burned
     const note = screen.getByText(/Bob has burned Cosentino/).closest('[role="note"]')!;
@@ -220,7 +220,7 @@ describe("other members' burned books", () => {
     await screen.findByRole('heading', { name: 'Bob Brown' });
     expect(screen.queryByText(/Has burned/)).not.toBeInTheDocument();
     expect(screen.queryByText(/has burned/)).not.toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: /Cases you've done that Bob hasn't shared/ })).getByText('Airline profit')).toBeInTheDocument();
+    expect(within(await screen.findByRole('region', { name: /Cases you've done that Bob hasn't shared/ })).getByText('Airline profit')).toBeInTheDocument();
   });
 });
 
@@ -350,7 +350,7 @@ describe('burning individual cases (not practice)', () => {
     window.location.hash = '#/people/bob';
     await screen.findByRole('heading', { name: 'Bob Brown' });
     expect(screen.getByText(/Has burned/)).toHaveTextContent('Has burned 2 cases');
-    const offer = within(screen.getByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
+    const offer = within(await screen.findByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
     expect(offer.getByText('Hospital entry')).toBeInTheDocument();
     expect(offer.queryByText('Airline profitability')).not.toBeInTheDocument();
     const note = screen.getByText(/Bob has burned 2 cases on their own/).closest('[role="note"]')!;
@@ -372,7 +372,7 @@ describe('burning individual cases (not practice)', () => {
     const note = screen.getByText(/Bob has burned Cosentino/).closest('[role="note"]')!;
     expect(note).toHaveTextContent('1 of your cases from that book is left out below');
     expect(note).toHaveTextContent('Bob has also burned 1 case on their own, and 1 more of yours is left out.');
-    const offer = within(screen.getByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
+    const offer = within(await screen.findByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
     expect(offer.getByText('Piano tuners')).toBeInTheDocument();
     expect(offer.queryByText('Airline profit')).not.toBeInTheDocument();
     expect(offer.queryByText('Hospital entry')).not.toBeInTheDocument();
