@@ -8,7 +8,7 @@ export function WeeklyPractice({ weeks, total }: { weeks: WeekBucket[]; total: n
   const active = weeks.filter((w) => w.count > 0).length;
 
   return (
-    <Card aria-labelledby="weekly-title">
+    <Card strip="lilac" aria-labelledby="weekly-title">
       <CardHeader
         titleId="weekly-title"
         title="Weekly practice"

@@ -8,7 +8,7 @@ export function CoverageMatrix({ matrix, total }: { matrix: Matrix; total: numbe
   const [open, setOpen] = useState(false);
 
   return (
-    <Card className="!p-0" aria-labelledby="matrix-title">
+    <Card strip="teal" flush aria-labelledby="matrix-title">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

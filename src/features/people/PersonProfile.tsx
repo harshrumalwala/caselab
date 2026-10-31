@@ -8,6 +8,7 @@ import { round1, skillStats } from '../../domain/stats';
 import type { CaseRecord } from '../../domain/types';
 import { Badge, RatingBadge } from '../../components/ui/Badge';
 import { chipClass } from '../../components/ui/chips';
+import { pillTabClass } from '../../components/ui/pillTab';
 import { BurnedLine } from '../community/BurnedLine';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
@@ -245,7 +246,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
         </>
       ) : (
         <>
-          <div role="tablist" aria-label="Profile sections" className="flex gap-1 rounded-xl bg-surface-2 p-1 text-sm font-medium">
+          <div role="tablist" aria-label="Profile sections" className="flex flex-wrap gap-2">
             {(
               [
                 ['find', 'Find a case for them'],
@@ -258,7 +259,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
                 role="tab"
                 aria-selected={tab === id}
                 onClick={() => setTab(id)}
-                className={`flex-1 rounded-lg px-3 py-2 transition ${tab === id ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
+                className={pillTabClass(tab === id)}
               >
                 {label}
               </button>

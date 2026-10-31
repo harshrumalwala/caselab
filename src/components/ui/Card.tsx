@@ -13,18 +13,21 @@ export function Card({
   children,
   className = '',
   strip,
+  flush = false,
   ...rest
 }: {
   children: ReactNode;
   className?: string;
   /** Draws the card as a sticker with a coloured band across the top. */
   strip?: keyof typeof STRIP;
+  /** With a strip: no padding inside, for content that runs edge to edge. */
+  flush?: boolean;
 } & React.HTMLAttributes<HTMLElement>) {
   if (strip) {
     return (
       <section className={`sticker overflow-hidden ${className}`} {...rest}>
         <div className={`h-3 border-b-2 border-ink/80 ${STRIP[strip]}`} aria-hidden />
-        <div className="p-5 sm:p-6 font-sans">{children}</div>
+        <div className={`font-sans ${flush ? '' : 'p-5 sm:p-6'}`}>{children}</div>
       </section>
     );
   }

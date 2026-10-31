@@ -28,7 +28,7 @@ export function NextFocus({ suggestions, total }: { suggestions: Suggestion[]; t
   const { openLogCase } = useUI();
 
   return (
-    <Card aria-labelledby="next-title">
+    <Card strip="coral" aria-labelledby="next-title">
       <CardHeader
         titleId="next-title"
         title="What should I work on next?"

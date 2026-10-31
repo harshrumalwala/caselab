@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Flame, Timer, Trophy, Zap } from 'lucide-react';
+import { Calculator, Flame, Target, Timer, Trophy, Zap } from 'lucide-react';
 import {
   checkAnswer,
   createQuestionStream,
@@ -46,15 +46,30 @@ interface Result {
 
 const TICK_MS = 200;
 
-function Stat({ label, value, icon, tone }: { label: string; value: ReactNode; icon: ReactNode; tone: string }) {
+/** A scoreboard tile. `bumpKey` makes the number pop each time it changes; `iconClass` can animate the icon. */
+function Stat({
+  label,
+  value,
+  icon,
+  tone,
+  bumpKey,
+  iconClass = '',
+}: {
+  label: string;
+  value: ReactNode;
+  icon: ReactNode;
+  tone: string;
+  bumpKey?: number;
+  iconClass?: string;
+}) {
   return (
     <div className={`sticker flex items-center gap-2.5 px-3 py-2.5 sm:px-4 ${tone}`}>
-      <span aria-hidden className="shrink-0">
+      <span aria-hidden className={`shrink-0 ${iconClass}`}>
         {icon}
       </span>
       <div className="min-w-0">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] opacity-80">{label}</p>
-        <p className="num font-display text-2xl font-extrabold leading-none">{value}</p>
+        <p key={bumpKey} className={`num inline-block origin-left font-display text-2xl font-extrabold leading-none ${bumpKey ? 'animate-bump' : ''}`}>{value}</p>
       </div>
     </div>
   );
@@ -163,35 +178,52 @@ export function Warmup({ seed }: { seed?: number } = {}) {
       </div>
 
       {phase === 'intro' && (
-        <section aria-labelledby="warmup-intro" className="sticker relative bg-sun-soft p-5 sm:p-6">
-          <Sparkle className="absolute right-4 top-4 size-6 text-sun" />
-          <h2 id="warmup-intro" className="text-xl font-extrabold tracking-tight text-ink">
+        <section aria-labelledby="warmup-intro" className="sticker relative overflow-hidden bg-sun-soft p-5 text-center sm:p-8">
+          <Sparkle className="absolute left-5 top-5 size-5 text-coral" />
+          <Sparkle className="absolute right-6 top-8 size-6 text-sun" />
+          <Sparkle className="absolute bottom-6 right-10 size-4 text-lilac" />
+          <p className="eyebrow !text-ink-2">Ready when you are</p>
+          <h2 id="warmup-intro" className="mt-1 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
             The 60-second sprint
           </h2>
-          <ul className="mt-3 space-y-1.5 text-sm text-ink-2">
-            <li>Answer as many percentages, growth, break-even and market-sizing sums as you can.</li>
-            <li>
-              Estimating is the job: anything within {Math.round(TOLERANCE * 100)}% counts. Type <span className="num font-semibold text-ink">36</span>,{' '}
-              <span className="num font-semibold text-ink">4.8k</span> or <span className="num font-semibold text-ink">408M</span>.
+
+          <ul className="mx-auto mt-5 grid max-w-xl gap-3 text-left text-sm sm:grid-cols-3">
+            <li className="rounded-xl border-2 border-ink/80 bg-surface p-3 text-ink-2">
+              <Calculator className="size-5 text-coral" aria-hidden />
+              <span className="mt-1.5 block">Percentages, growth, break-even and market-sizing sums. As many as you can.</span>
             </li>
-            <li>A streak earns bonus points. The clock never stops: misses and skips are waiting for you at the end, with the quick way to do each.</li>
+            <li className="rounded-xl border-2 border-ink/80 bg-surface p-3 text-ink-2">
+              <Target className="size-5 text-teal" aria-hidden />
+              <span className="mt-1.5 block">
+                Estimating is the job: anything within {Math.round(TOLERANCE * 100)}% counts. Type <span className="num font-semibold text-ink">36</span>,{' '}
+                <span className="num font-semibold text-ink">4.8k</span> or <span className="num font-semibold text-ink">408M</span>.
+              </span>
+            </li>
+            <li className="rounded-xl border-2 border-ink/80 bg-surface p-3 text-ink-2">
+              <Flame className="size-5 text-lilac" aria-hidden />
+              <span className="mt-1.5 block">A streak earns bonus points. The clock never stops: misses wait for you at the end, with the quick way to do each.</span>
+            </li>
           </ul>
-          <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3">
-            <Button variant="primary" size="lg" onClick={start}>
-              <Zap className="size-4" /> Start the sprint
+
+          <div className="mt-6 flex flex-col items-center gap-5">
+            <Button variant="primary" size="lg" className="!h-14 px-10 text-base" onClick={start}>
+              <Zap className="size-5" /> Start the sprint
             </Button>
-            <p className="text-sm text-ink-2">
-              {best.score > 0 ? (
-                <>
-                  Best: <span className="num font-bold text-ink">{best.score}</span> points, streak of{' '}
-                  <span className="num font-bold text-ink">{best.streak}</span>
-                </>
-              ) : (
-                'No best yet. Yours to set.'
-              )}
-            </p>
+            <div className="sticker -rotate-2 bg-surface px-5 py-3 text-ink">
+              <Trophy className="mx-auto size-5 text-sun-ink" aria-hidden />
+              <p className="mt-1 text-sm">
+                {best.score > 0 ? (
+                  <>
+                    Best: <span className="num font-display text-2xl font-extrabold">{best.score}</span> points, streak of{' '}
+                    <span className="num font-bold">{best.streak}</span>
+                  </>
+                ) : (
+                  'No best yet. Yours to set.'
+                )}
+              </p>
+            </div>
           </div>
-          <p className="mt-4 text-xs text-ink-2">
+          <p className="mt-5 text-xs text-ink-2">
             {onAccount
               ? 'Your best is saved with your account, so it follows you to any device. Nobody else sees it.'
               : 'Your best is kept on this device only. Nobody else sees it.'}
@@ -212,8 +244,15 @@ export function Warmup({ seed }: { seed?: number } = {}) {
               icon={<Timer className="size-5" />}
               tone="bg-sky-soft text-sky-ink"
             />
-            <Stat label="Score" value={stats.score} icon={<Trophy className="size-5" />} tone="bg-teal-soft text-teal-ink" />
-            <Stat label="Streak" value={stats.streak} icon={<Flame className="size-5" />} tone="bg-coral-soft text-coral-ink" />
+            <Stat label="Score" value={stats.score} bumpKey={stats.score} icon={<Trophy className="size-5" />} tone="bg-teal-soft text-teal-ink" />
+            <Stat
+              label="Streak"
+              value={stats.streak}
+              bumpKey={stats.streak}
+              icon={<Flame className="size-5" />}
+              iconClass={stats.streak >= 3 ? 'animate-flame' : ''}
+              tone="bg-coral-soft text-coral-ink"
+            />
           </div>
           <div aria-hidden className="h-2.5 overflow-hidden rounded-full border-2 border-ink/80 bg-track">
             <div
@@ -223,7 +262,7 @@ export function Warmup({ seed }: { seed?: number } = {}) {
           </div>
 
           {/* Announced politely to screen readers as well as shown. */}
-          <p role="status" className={`min-h-5 text-sm font-semibold ${feedback?.right ? 'text-good' : 'text-coral-ink'}`}>
+          <p key={feedback?.text} role="status" className={`min-h-5 text-sm font-semibold ${feedback ? 'animate-rise' : ''} ${feedback?.right ? 'text-good' : 'text-coral-ink'}`}>
             {feedback?.text ?? ''}
           </p>
 

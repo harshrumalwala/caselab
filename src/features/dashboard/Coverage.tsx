@@ -20,7 +20,7 @@ export function CaseTypeCoverage({ counts, total }: { counts: CaseTypeCount[]; t
   const neutral = total === 0;
 
   return (
-    <Card aria-labelledby="types-title">
+    <Card strip="sky" aria-labelledby="types-title">
       <CardHeader
         titleId="types-title"
         title="Case type coverage"
@@ -59,7 +59,7 @@ export function IndustryCoverage({ counts }: { counts: IndustryCount[] }) {
   const max = Math.max(1, ...counts.map((c) => c.count));
 
   return (
-    <Card aria-labelledby="industries-title">
+    <Card strip="sun" aria-labelledby="industries-title">
       <CardHeader
         titleId="industries-title"
         title="Industry coverage"
