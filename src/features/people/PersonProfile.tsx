@@ -60,7 +60,7 @@ function SharedPerformance({ shared }: { shared: SharedCase[] }) {
   const stats = useMemo(() => skillStats(sharedToRecords(shared)).filter((s) => s.count > 0), [shared]);
   if (stats.length === 0) return null;
   return (
-    <Card aria-labelledby="shared-perf">
+    <Card strip="sky" aria-labelledby="shared-perf">
       <CardHeader
         titleId="shared-perf"
         title="Shared performance"
