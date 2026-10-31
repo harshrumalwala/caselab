@@ -1,6 +1,7 @@
 import { Building2, Layers } from 'lucide-react';
 import type { CaseTypeCount, IndustryCount } from '../../domain/stats';
 import { Card, CardHeader } from '../../components/ui/Card';
+import { GrowBar } from '../../components/ui/Motion';
 import { TONE, type Tone } from '../../components/ui/tones';
 
 const EXPOSURE: Record<CaseTypeCount['exposure'], { tone: Tone; label: string }> = {
@@ -73,10 +74,7 @@ export function IndustryCoverage({ counts }: { counts: IndustryCount[] }) {
             </span>
             <div className="h-2 rounded-full bg-track" aria-hidden>
               {c.count > 0 && (
-                <div
-                  className="h-full rounded-full bg-accent transition-[width] duration-700 ease-out"
-                  style={{ width: `${Math.max(6, (c.count / max) * 100)}%` }}
-                />
+                <GrowBar className="h-full rounded-full bg-accent" pct={Math.max(6, (c.count / max) * 100)} />
               )}
             </div>
             <span className={`num w-6 text-right text-sm ${c.count ? 'font-semibold text-ink' : 'text-muted'}`}>

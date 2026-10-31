@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type CSSProperties, type ReactNode } from 'react';
 
 /** Hand-drawn-looking scenery. Everything here is decoration: hidden from screen readers and drawn from the colour tokens. */
 
@@ -54,7 +54,12 @@ export function Sticky({
  * The hero picture: a whiteboard with a chart heading the right way, a coffee, a light bulb, a pencil and a sticky note.
  * Drawn with plain shapes so it needs no image files and follows light and dark mode.
  */
+const FROM_BOTTOM: CSSProperties = { transformBox: 'fill-box', transformOrigin: 'bottom' };
+const FROM_CENTRE: CSSProperties = { transformBox: 'fill-box', transformOrigin: 'center' };
+const after = (seconds: number, base: CSSProperties = {}): CSSProperties => ({ ...base, animationDelay: `${seconds}s` });
+
 export function HeroScene({ className = '' }: { className?: string }) {
+  const draw = useId();
   return (
     <svg viewBox="0 0 480 400" className={className} aria-hidden fill="none" strokeLinecap="round" strokeLinejoin="round">
       {/* soft colour blobs behind everything */}
@@ -70,18 +75,25 @@ export function HeroScene({ className = '' }: { className?: string }) {
       {/* chart */}
       <path d="M110 254H338M110 254V128" className="stroke-ink-2" strokeWidth="3.5" />
       <path d="M110 226H338M110 198H338" className="stroke-line-strong" strokeWidth="1.5" strokeDasharray="3 7" />
-      <rect x="128" y="206" width="36" height="48" rx="7" className="fill-teal" />
-      <rect x="178" y="180" width="36" height="74" rx="7" className="fill-sun" />
-      <rect x="228" y="152" width="36" height="102" rx="7" className="fill-coral" />
-      <rect x="278" y="128" width="36" height="126" rx="7" className="fill-lilac" />
-      {/* the line that goes up and to the right */}
-      <path d="M122 190C190 188 240 150 318 98" className="stroke-accent" strokeWidth="5" strokeDasharray="1 11" />
-      <path d="M300 94l24-3-5 24" className="stroke-accent" strokeWidth="5" />
+      {/* the bars grow up one after another (motion is skipped when the person prefers less of it) */}
+      <rect x="128" y="206" width="36" height="48" rx="7" className="fill-teal animate-grow-up" style={after(0.1, FROM_BOTTOM)} />
+      <rect x="178" y="180" width="36" height="74" rx="7" className="fill-sun animate-grow-up" style={after(0.25, FROM_BOTTOM)} />
+      <rect x="228" y="152" width="36" height="102" rx="7" className="fill-coral animate-grow-up" style={after(0.4, FROM_BOTTOM)} />
+      <rect x="278" y="128" width="36" height="126" rx="7" className="fill-lilac animate-grow-up" style={after(0.55, FROM_BOTTOM)} />
+      {/* the line that goes up and to the right draws itself, then the arrowhead pops on */}
+      <defs>
+        <mask id={draw} maskUnits="userSpaceOnUse" x="0" y="0" width="480" height="400">
+          <path d="M122 190C190 188 240 150 318 98" fill="none" stroke="white" strokeWidth="16" pathLength={1} strokeDasharray={1} className="animate-draw" />
+        </mask>
+      </defs>
+      <path d="M122 190C190 188 240 150 318 98" className="stroke-accent" strokeWidth="5" strokeDasharray="1 11" mask={`url(#${draw})`} />
+      <path d="M300 94l24-3-5 24" className="stroke-accent animate-pop" strokeWidth="5" style={FROM_CENTRE} />
 
       {/* coffee */}
       <path d="M356 262h68v46a22 22 0 0 1-22 22h-24a22 22 0 0 1-22-22Z" className="fill-coral stroke-ink" strokeWidth="4" />
       <path d="M424 276h10a14 14 0 0 1 0 28h-10" className="stroke-ink" strokeWidth="4" />
-      <path d="M374 244q-8-12 0-22t0-20M394 244q-8-12 0-22t0-20" className="stroke-ink-2" strokeWidth="3.5" opacity=".6" />
+      <path d="M374 244q-8-12 0-22t0-20" className="stroke-ink-2 animate-steam" strokeWidth="3.5" />
+      <path d="M394 244q-8-12 0-22t0-20" className="stroke-ink-2 animate-steam" strokeWidth="3.5" style={{ animationDelay: '1.4s' }} />
       <path d="M370 282h40" className="stroke-white" strokeWidth="3" opacity=".7" />
 
       {/* sticky note */}
@@ -94,7 +106,7 @@ export function HeroScene({ className = '' }: { className?: string }) {
       <g transform="translate(40 40)">
         <circle cx="26" cy="26" r="20" className="fill-sun-soft stroke-ink" strokeWidth="4" />
         <path d="M18 50h16M20 58h12" className="stroke-ink" strokeWidth="4" />
-        <path d="M26 -8v-10M-2 4l-8-6M54 4l8-6M-10 26h-10M62 26h10" className="stroke-sun" strokeWidth="4" />
+        <path d="M26 -8v-10M-2 4l-8-6M54 4l8-6M-10 26h-10M62 26h10" className="stroke-sun animate-flicker" strokeWidth="4" />
       </g>
 
       {/* pencil */}
@@ -105,9 +117,9 @@ export function HeroScene({ className = '' }: { className?: string }) {
       </g>
 
       {/* sparkles */}
-      <path d="M440 20c1 7 6 12 13 13-7 1-12 6-13 13-1-7-6-12-13-13 7-1 12-6 13-13Z" className="fill-coral" />
-      <path d="M20 190c1 5 4 8 9 9-5 1-8 4-9 9-1-5-4-8-9-9 5-1 8-4 9-9Z" className="fill-lilac" />
-      <path d="M230 30c1 5 4 8 9 9-5 1-8 4-9 9-1-5-4-8-9-9 5-1 8-4 9-9Z" className="fill-teal" />
+      <path d="M440 20c1 7 6 12 13 13-7 1-12 6-13 13-1-7-6-12-13-13 7-1 12-6 13-13Z" className="fill-coral animate-twinkle" style={FROM_CENTRE} />
+      <path d="M20 190c1 5 4 8 9 9-5 1-8 4-9 9-1-5-4-8-9-9 5-1 8-4 9-9Z" className="fill-lilac animate-twinkle" style={after(1.1, FROM_CENTRE)} />
+      <path d="M230 30c1 5 4 8 9 9-5 1-8 4-9 9-1-5-4-8-9-9 5-1 8-4 9-9Z" className="fill-teal animate-twinkle" style={after(2.2, FROM_CENTRE)} />
     </svg>
   );
 }

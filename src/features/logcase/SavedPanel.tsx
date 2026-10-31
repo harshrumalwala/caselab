@@ -1,4 +1,5 @@
 import { ArrowRight, CheckCircle2, Flag, Sparkles } from 'lucide-react';
+import { Confetti } from '../../components/ui/Motion';
 import type { Milestone } from '../../domain/milestones';
 import type { Suggestion } from '../../domain/suggestions';
 import type { CaseRecord } from '../../domain/types';
@@ -31,6 +32,8 @@ export function SavedPanel({ info, onUseSuggestion }: { info: SavedInfo; onUseSu
   const { record } = info;
   return (
     <div role="status" className="animate-rise">
+      {/* A milestone (10th case, first of an industry, every main case type) gets confetti. */}
+      {(info.milestones.length > 0 || info.firstInIndustry) && <Confetti />}
       <div className="flex items-center gap-3">
         <span className="flex size-11 items-center justify-center rounded-full bg-good-soft text-good">
           <CheckCircle2 className="size-6" />
@@ -39,6 +42,9 @@ export function SavedPanel({ info, onUseSuggestion }: { info: SavedInfo; onUseSu
           <p className="text-lg font-semibold tracking-tight text-ink">Case saved</p>
           <p className="truncate text-sm text-muted">{record.title}</p>
         </div>
+        <span className="stamp ml-auto" aria-hidden>
+          Logged
+        </span>
       </div>
       <p className="mt-3 text-sm font-semibold text-accent-text">{CHEERS[info.total % CHEERS.length]}</p>
 
