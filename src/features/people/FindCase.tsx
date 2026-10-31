@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRight, Check, Compass, Info } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Check, Compass, Flame, Info } from 'lucide-react';
 import type { Profile, SharedCase } from '../../domain/community';
 import {
   distinctValues,
@@ -83,7 +83,7 @@ export function FindCase({ person, theirs, mine }: { person: Profile; theirs: Sh
   const name = first(person.displayName);
   const [filter, setFilter] = useState<CaseFilter>(NO_FILTER);
 
-  const pairing = useMemo(() => pairCases(mine, theirs), [mine, theirs]);
+  const pairing = useMemo(() => pairCases(mine, theirs, person.burnedBooks), [mine, theirs, person.burnedBooks]);
   const industries = useMemo(() => distinctValues([...mine, ...theirs], 'industry'), [mine, theirs]);
   const sources = useMemo(() => distinctValues([...mine, ...theirs], 'source'), [mine, theirs]);
 
@@ -117,6 +117,20 @@ export function FindCase({ person, theirs, mine }: { person: Profile; theirs: Sh
           )}
         </p>
       </div>
+
+      {person.burnedBooks.length > 0 && (
+        <div className="flex gap-3 rounded-2xl border border-line bg-surface-2/60 px-4 py-3.5 text-sm" role="note">
+          <Flame className="mt-0.5 size-4 shrink-0 text-accent-text" aria-hidden />
+          <p className="leading-relaxed text-ink-2">
+            <strong className="font-semibold text-ink">{name} has burned {person.burnedBooks.join(', ')}.</strong>{' '}
+            {pairing.burnedExcluded.length > 0
+              ? `${pairing.burnedExcluded.length === 1 ? '1 of your cases' : `${pairing.burnedExcluded.length} of your cases`} from ${
+                  person.burnedBooks.length === 1 ? 'that book is' : 'those books are'
+                } left out below.`
+              : 'None of your cases come from those books.'}
+          </p>
+        </div>
+      )}
 
       <CaseFilterBar value={filter} onChange={setFilter} industries={industries} sources={sources} />
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, FileSpreadsheet, Filter, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ChevronDown, FileSpreadsheet, Filter, Lock, LockOpen, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { CASE_TYPES, INDUSTRIES } from '../../domain/constants';
 import {
   applyFilters,
@@ -20,6 +20,7 @@ import { useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
+import { useTogglePrivate } from './useTogglePrivate';
 
 function ImprovementCell({ c }: { c: CaseRecord }) {
   const k = keyImprovement(c);
@@ -33,10 +34,31 @@ function ImprovementCell({ c }: { c: CaseRecord }) {
   );
 }
 
+function PrivateBadge({ c }: { c: CaseRecord }) {
+  if (c.shareMode !== 'private') return null;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold text-ink-2" title="Hidden from every other member">
+      <Lock className="size-3" aria-hidden /> Private
+    </span>
+  );
+}
+
 function RowActions({ c, onDelete }: { c: CaseRecord; onDelete: (c: CaseRecord) => void }) {
   const { editCase } = useUI();
+  const togglePrivate = useTogglePrivate();
+  const isPrivate = c.shareMode === 'private';
   return (
     <div className="flex justify-end gap-0.5 opacity-100 transition sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
+      <IconButton
+        label={isPrivate ? `Stop keeping ${c.title} private` : `Make ${c.title} private`}
+        aria-pressed={isPrivate}
+        onClick={(e) => {
+          e.stopPropagation();
+          void togglePrivate(c);
+        }}
+      >
+        {isPrivate ? <Lock className="size-4 text-accent-text" /> : <LockOpen className="size-4" />}
+      </IconButton>
       <IconButton
         label={`Edit ${c.title}`}
         onClick={(e) => {
@@ -306,7 +328,10 @@ export function CaseLog() {
                       >
                         {c.title || 'Untitled case'}
                       </button>
-                      {c.source && <p className="truncate text-xs text-muted">{c.source}</p>}
+                      <p className="flex items-center gap-2 truncate text-xs text-muted">
+                        {c.source && <span className="truncate">{c.source}</span>}
+                        <PrivateBadge c={c} />
+                      </p>
                     </td>
                     <td className="num whitespace-nowrap px-3 py-3.5 text-ink-2">{formatDate(c.date)}</td>
                     <td className="px-3 py-3.5 text-ink-2">{c.caseType}</td>
@@ -340,9 +365,10 @@ export function CaseLog() {
                   </button>
                   <RatingBadge value={c.overall} />
                 </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
                   <Badge>{c.caseType}</Badge>
                   {c.industry && <Badge>{c.industry}</Badge>}
+                  <PrivateBadge c={c} />
                 </div>
                 {(c.source || c.partner) && (
                   <p className="mt-2.5 truncate text-xs text-muted">
