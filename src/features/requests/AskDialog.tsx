@@ -2,17 +2,24 @@ import { useState, type FormEvent } from 'react';
 import { Send } from 'lucide-react';
 import { describeError } from '../../data/errors';
 import type { Profile } from '../../domain/community';
-import { cleanRequest, EMPTY_REQUEST, MAX_REQUEST_BOOK, MAX_REQUEST_TEXT, MAX_REQUEST_TITLE, MAX_REQUEST_WHEN, type NewRequest } from '../../domain/requests';
+import { cleanRequest, EMPTY_REQUEST, MAX_REQUEST_BOOK, MAX_REQUEST_TEXT, MAX_REQUEST_TITLE, MAX_REQUEST_WHEN, proposalMessage, type NewRequest } from '../../domain/requests';
 import { Button } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
+import { useConversationWith, useMessages } from '../../state/MessagesProvider';
 import { usePractice } from '../../state/PracticeProvider';
 import { useToast } from '../../state/ToastProvider';
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 
-/** "Case with me?": a short, optional proposal to another member. They answer yes or no, with a note back. */
+/**
+ * "Case with …?": a short, optional proposal to another member. They answer yes or no, with a note back.
+ * If you're already connected (you have a conversation), there is nothing to accept: it goes into that conversation as a message
+ * with the new case details, and shows up as new in their inbox.
+ */
 export function AskDialog({ person, prefill, onClose }: { person: Profile; prefill?: Partial<NewRequest>; onClose: () => void }) {
   const { send } = usePractice();
+  const { repository, reload } = useMessages();
+  const conversation = useConversationWith(person.userId);
   const toast = useToast();
   const [form, setForm] = useState<NewRequest>({ ...EMPTY_REQUEST, ...prefill });
   const [sending, setSending] = useState(false);
@@ -26,8 +33,14 @@ export function AskDialog({ person, prefill, onClose }: { person: Profile; prefi
     setSending(true);
     setError(null);
     try {
-      await send(person.userId, cleanRequest(form));
-      toast({ title: `Request sent to ${name}`, body: "You'll see their answer in Community → Inbox." });
+      if (conversation) {
+        await repository.send(conversation.id, proposalMessage(form));
+        await reload();
+        toast({ title: `Sent to ${name}`, body: "It's in your conversation, and new in their inbox." });
+      } else {
+        await send(person.userId, cleanRequest(form));
+        toast({ title: `Request sent to ${name}`, body: "You'll see their answer in Community → Inbox." });
+      }
       onClose();
     } catch (err) {
       setError(describeError(err));
@@ -39,8 +52,12 @@ export function AskDialog({ person, prefill, onClose }: { person: Profile; prefi
     <Dialog
       open
       onClose={onClose}
-      title={`Case with ${name}?`}
-      description="Everything here is optional. They can accept or decline, and reply with a note."
+      title={conversation ? `Case again with ${name}?` : `Case with ${name}?`}
+      description={
+        conversation
+          ? "You're already connected, so this goes into your conversation as a message. They'll see it as new in their inbox."
+          : 'Everything here is optional. They can accept or decline, and reply with a note.'
+      }
       width="md"
       footer={
         <div className="flex justify-end gap-2">
@@ -48,7 +65,7 @@ export function AskDialog({ person, prefill, onClose }: { person: Profile; prefi
             Cancel
           </Button>
           <Button type="submit" form="ask-form" variant="primary" disabled={sending}>
-            <Send className="size-4" /> {sending ? 'Sending…' : 'Send request'}
+            <Send className="size-4" /> {sending ? 'Sending…' : conversation ? 'Send message' : 'Send request'}
           </Button>
         </div>
       }

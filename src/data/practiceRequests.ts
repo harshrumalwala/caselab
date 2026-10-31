@@ -151,6 +151,8 @@ export function createMemoryPractice(members: () => MemoryMember[]) {
   const rows: Stored[] = [];
   const blocks: { blocker: string; blocked: string }[] = [];
   const acceptListeners: ((r: AcceptedRequest) => void)[] = [];
+  /** Whether two members already have a conversation (set by the messages twin). Connected members message each other instead. */
+  let connected: (a: string, b: string) => boolean = () => false;
   let next = 1;
   const nameOf = (id: string) => members().find((m) => m.userId === id)?.name ?? 'A former member';
   const refused = () => new DataError("This member can't be asked right now.");
@@ -179,6 +181,7 @@ export function createMemoryPractice(members: () => MemoryMember[]) {
         guard();
         const target = members().find((m) => m.userId === to);
         if (!target || !target.open || to === me || blocks.some((b) => b.blocker === to && b.blocked === me)) throw refused();
+        if (connected(me, to)) throw new DataError("You're already connected with this member. Send them a message instead.");
         if (rows.some((r) => r.from === me && r.to === to && r.status === 'pending')) throw new DataError('You already have a request waiting with this member.');
         if (rows.filter((r) => r.from === me && r.status === 'pending').length >= 5) throw new DataError('You have 5 requests waiting. Wait for answers or cancel one first.');
         const c = cleanRequest(request);
@@ -221,5 +224,11 @@ export function createMemoryPractice(members: () => MemoryMember[]) {
     return Object.assign(repo, { control });
   }
 
-  return { as: view, rows, blocks, onAccept: (listen: (r: AcceptedRequest) => void) => void acceptListeners.push(listen) };
+  return {
+    as: view,
+    rows,
+    blocks,
+    onAccept: (listen: (r: AcceptedRequest) => void) => void acceptListeners.push(listen),
+    setConnected: (fn: (a: string, b: string) => boolean) => void (connected = fn),
+  };
 }

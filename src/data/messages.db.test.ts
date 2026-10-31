@@ -89,12 +89,17 @@ describe('starting a conversation', () => {
     expect(await messages(c.id)).toEqual([]);
   });
 
-  it('reuses the same conversation for the same pair', async () => {
-    const first = await agree();
-    const again = await agree(BOB, ALICE, [null, null, null, 'Round two?'], null);
-    expect(again).toBe(first);
-    expect(await conversations()).toHaveLength(1);
-    expect((await messages(first)).at(-1)!.body).toBe('Round two?');
+  it('uses one conversation for a pair, even if they asked each other before either was answered', async () => {
+    await as(db, 'authenticated', ALICE);
+    const aliceAsked = (await db.query<{ send_practice_request: string }>('select public.send_practice_request($1, null, null, null, $2)', [BOB, 'Up for it?'])).rows[0].send_practice_request;
+    await as(db, 'authenticated', BOB);
+    const bobAsked = (await db.query<{ send_practice_request: string }>('select public.send_practice_request($1, null, null, null, $2)', [ALICE, 'Me first!'])).rows[0].send_practice_request;
+    await db.query('select public.respond_practice_request($1, true, $2, false)', [aliceAsked, 'Yes']);
+    await as(db, 'authenticated', ALICE);
+    await db.query('select public.respond_practice_request($1, true, $2, false)', [bobAsked, 'Fine by me']);
+    const list = await conversations();
+    expect(list).toHaveLength(1);
+    expect((await messages(list[0].id)).map((m) => m.body)).toEqual(['Up for it?', 'Me first!', 'Yes', 'Fine by me']); // in the order they were written
   });
 
   it('cannot be started by hand: no function creates a conversation except accepting a request', async () => {

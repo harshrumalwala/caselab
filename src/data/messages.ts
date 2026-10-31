@@ -149,6 +149,8 @@ export function createMemoryMessages(practice: ReturnType<typeof createMemoryPra
   const blockedBetween = (a: string, b: string) => practice.blocks.some((x) => (x.blocker === a && x.blocked === b) || (x.blocker === b && x.blocked === a));
   const unavailable = () => new DataError("That conversation isn't available.");
 
+  practice.setConnected((a, b) => convs.some((c) => (c.lo === a && c.hi === b) || (c.lo === b && c.hi === a)));
+
   practice.onAccept((r) => {
     const lo = r.from < r.to ? r.from : r.to;
     const hi = r.from < r.to ? r.to : r.from;
