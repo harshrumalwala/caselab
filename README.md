@@ -14,6 +14,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **Community**: one tab with two views. **Members**: find a fellow member, see only what they've chosen to share, and work out which case to give them. **Inbox**: practice requests and your conversations together
 - **Practice requests**: ask a member to case (with a proposed case and time), and answer when someone asks you. Open to every member, and short notes only
 - **Messages**: once a request is accepted, a private conversation between the two of you, to settle a time, share a link or go over a case afterwards. It lives in the Community tab's Inbox, and the Dashboard tells you when something is waiting
+- **Email notifications**: an email when someone asks you to case (with the case, casebook, time and their note, so you know what you're answering) and when someone says yes. On by default, one switch in Profile & privacy turns it off
 - **Profile & privacy**: switches for what other members can see, a per-case override, and a live preview
 - **Interviewed cases**: log the cases you ran as the interviewer, with what you told them and what it taught you. Kept apart from the cases you solved and private to you
 - **A weekly goal**: pick how many cases a week you want to log; a ring on the Dashboard fills as the week goes, and weeks in a row on target show as a streak. Private to you
@@ -428,8 +429,33 @@ the Dashboard. **Find a case for them** also offers "Ask to case this" on each c
 - **Private to the two people.** The tables have no direct access for the API roles at all; reads and writes go through database functions that act only on your own requests. Nobody else, and no visitor, can read one. No email address is stored or shown anywhere.
 - **Limits.** One waiting request per person, at most 5 waiting at a time and 20 sent in 24 hours. Declining can also stop that person asking again; their next request is refused with the same message as any other refusal, so they can't tell. You can undo that under "Blocked members".
 - **Once you're connected, asking again is a message.** After a request is accepted you have a conversation, so "Case with …?" becomes **Case again with …?** and sends the new case details (case, book, time and note) into that conversation as a message. There is nothing to accept: it shows up as new in their inbox and they reply in the conversation. The database enforces it too: a new request between two connected members is refused ("You're already connected with this member. Send them a message instead."). Requests already waiting are unaffected.
-- **No email notifications.** The count and the list come from `my_practice_requests()`. Accepting a request opens a conversation (see Messages).
+- **Emails for the two moments that matter.** The count and the list come from `my_practice_requests()`, and two events also send an email: someone asks you to case, and someone says yes to your request (see Email notifications). Accepting a request opens a conversation (see Messages).
 - Requests are not available in demo mode.
+
+### Email notifications
+
+Two events send an email, from the same sender as the sign-up emails (Resend):
+
+| Event | Who is emailed | What it says |
+|---|---|---|
+| Someone asks you to case | The member asked | Who asked, and the whole request: case, casebook, time and their note, with an **Answer in CaseLab** button |
+| Someone accepts your request | The member who asked | Who said yes, what it was about and what they wrote back, with a **Say hello in CaseLab** button |
+
+Declines are never emailed, and neither are chat messages. The emails are branded, have a plain-text version, are readable on
+a phone, and use no images or remote files. Everything a member typed is shown as plain text (web addresses become links; nothing
+else does).
+
+- **A switch, on by default.** **Profile & privacy → Email me about requests**. The choice lives in its own table (`notification_settings`), private to you, and is not part of your profile, so nobody else can see whether you have emails on. No row means on. It goes with the account when you delete it.
+- **The sender never learns whether an email went out.** The app asks the function to send after a request is sent or accepted; the function always answers "ok", whatever it decided.
+- **Sent once, to the right person, soon after.** The function (`supabase/functions/notify-request`) checks the caller's sign-in: only the sender can trigger the "asked you" email and only the recipient the "said yes" one; the request must still be waiting (or accepted) and under an hour old; and an atomic marker on the request (`emailed_at`, `answer_emailed_at`, invisible to members) means it is sent at most once however often it is called. If sending fails the marker is released so a later call can try again. Only your own verified address is used, and it is never shown to anyone.
+- **Best effort.** If the function isn't deployed or the email service is down, the request still works; the member just isn't emailed.
+- **No unsubscribe link yet.** Each email says how to turn them off (the switch above). A one-click unsubscribe endpoint is a possible later addition.
+
+To switch it on for your own project:
+
+1. Apply the migration `supabase/migrations/20261111130000_email_notifications.sql` (`npx supabase db push --linked`).
+2. Set the secrets: `npx supabase secrets set RESEND_API_KEY=... EMAIL_FROM="CaseLab <hello@yourdomain>" APP_URL=https://your-app.example` (the sender domain must be verified in Resend, as for sign-up emails; without `RESEND_API_KEY` the function sends nothing).
+3. Deploy the function: `npx supabase functions deploy notify-request`.
 
 ### Messages
 
@@ -438,7 +464,7 @@ its first messages. From then on either of you can write, from **Community → I
 person's profile (**Message *name***). There is no way to message someone you haven't agreed to case with, and no group chats.
 
 - **Two people, private.** One conversation per pair, readable only by them. The tables have no direct access for the API roles at all; reads and writes go through database functions that act only on your own conversations. No email address is stored or shown.
-- **Not live, and no email.** Messages arrive by polling: an open conversation looks for new ones every 5 seconds, and the count on the Community tab refreshes when you come back to the tab and once a minute. Nothing is emailed or pushed.
+- **Not live, and no email.** Messages arrive by polling: an open conversation looks for new ones every 5 seconds, and the count on the Community tab refreshes when you come back to the tab and once a minute. Messages are not emailed or pushed (only requests and acceptances are; see Email notifications).
 - **Count.** The Community tab and its Inbox view show one number: requests that need you plus *conversations* with new messages (not messages), not including muted or archived ones. The Dashboard's "Needs you" strip shows the two parts separately. Opening a conversation reads it.
 - **Controls.** **Mute** (no count), **Archive** (a new message brings it back), **Delete** your own messages (gone for both of you), **Block**, **Report**. Mute and archive affect only your own view.
 - **Blocking** stops messages and practice requests between you in both directions. The other person is never told: they just get "You can't message this member right now". Undo it under **Community → Inbox → Blocked members**.
@@ -531,6 +557,7 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **Accounts**: sign-up, verification, resend, expired links, password reset, onboarding with everything off by default
 - **Supabase layer**: row mapping that round-trips every field, a repository run against a fake Supabase (paging past 1000 rows, chunked upserts, replace-without-data-loss, errors surfaced), friendly error messages, configuration checks
 - **Calculations**: week boundaries, averages that ignore missing ratings, behavioral combining, trend windows, coverage, matrix, weekly history
+- **Email notifications**: the setting and the once-only markers in Postgres (private, on by default, own row only, no deletes or anonymous access, cascade on account delete, not part of any profile), the email logic with no live service (who is emailed and who isn't, callers who aren't a party, stale or replayed calls, simultaneous calls, a failed send that can be retried, the details, subjects, plain-text twin and escaping of everything a member typed), the app side (the background call, the setting) and the Profile & privacy switch
 - **Messages**: in Postgres (a conversation only opens when a request is accepted, seeded with the proposal, note and reply; one per pair; no direct table access; nobody else can read, write, mark, mute, archive or report; trimming and length limits; unread counts; mute and archive per person and a new message bringing one back; deleting only your own; silent blocks in both directions that also stop requests; the 30-in-10-minutes and 500-a-day limits; reports with a snapshot that survives deletions and can't be read by members or visitors; cascade on user delete; no email columns), the Supabase wrapper, the in-memory twin, and the screens (list, count, opening and reading, Enter and Shift+Enter, errors that keep what you typed, new messages on returning to the tab, delete, mute, archive, block, report, entry points, demo mode)
 - **Finding it**: five tabs in both navigation bars with people and messages together under Community (Members and Inbox views, the older `#/requests` and `#/messages` addresses still working), one count on the tab, and the Dashboard's "Needs you" strip (not shown in demo mode)
 - **Connected members**: a new request between two members with a conversation is refused by the database (both directions, after the generic refusal, leaving waiting requests alone), and in the app "Case again with …?" sends the case details as a message instead (from the profile and from Find a case; errors keep what you typed; a normal request to someone you aren't connected to is unchanged)

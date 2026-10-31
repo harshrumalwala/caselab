@@ -21,6 +21,9 @@ interface PracticeContextValue {
   markAnswersSeen(): Promise<void>;
   blocked(): Promise<BlockedMember[]>;
   unblock(userId: string): Promise<void>;
+  /** Whether you get an email about requests. */
+  emailRequests(): Promise<boolean>;
+  setEmailRequests(on: boolean): Promise<void>;
 }
 
 export const PracticeContext = createContext<PracticeContextValue | null>(null);
@@ -91,6 +94,8 @@ export function PracticeProvider({ practice, children }: { practice: PracticeRep
       async unblock(userId) {
         await practice.unblock(userId);
       },
+      emailRequests: () => practice.emailRequests(),
+      setEmailRequests: (on) => practice.setEmailRequests(on),
     }),
     [practice, status, loadError, requests, reload],
   );

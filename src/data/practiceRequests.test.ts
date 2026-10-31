@@ -86,6 +86,74 @@ describe('SupabasePractice', () => {
   });
 });
 
+describe('emailing the other member', () => {
+  /** A client that also records calls to the notify-request function, and can answer for notification_settings. */
+  function clientWithFunction(opts: { invokeFails?: boolean; sendAnswer?: Answer; setting?: { email_requests: boolean } | null } = {}) {
+    const calls: { name: string; body: unknown }[] = [];
+    const saved: unknown[] = [];
+    const f = fakeClient({ send_practice_request: opts.sendAnswer ?? { data: 'req-1', error: null } });
+    const client = {
+      ...(f.client as unknown as object),
+      functions: {
+        invoke: async (name: string, o: { body: unknown }) => {
+          calls.push({ name, body: o.body });
+          if (opts.invokeFails) throw new Error('function is down');
+          return { data: { ok: true }, error: null };
+        },
+      },
+      from: () => ({
+        select: () => ({ maybeSingle: async () => ({ data: opts.setting ?? null, error: null }) }),
+        upsert: async (row: unknown) => (saved.push(row), { error: null }),
+      }),
+    } as unknown as SupabaseClient;
+    const settle = () => new Promise((r) => setTimeout(r, 0));
+    return { client, calls, saved, settle };
+  }
+  const ask = { caseTitle: 'Airline profit', caseBook: '', when: '', message: '' };
+
+  it('asks for an email about a new request, naming the request the database just made', async () => {
+    const f = clientWithFunction();
+    await new SupabasePractice(f.client).send('bob', ask);
+    await f.settle();
+    expect(f.calls).toEqual([{ name: 'notify-request', body: { event: 'sent', requestId: 'req-1' } }]);
+  });
+
+  it('asks for an email when a request is accepted, but not when it is declined', async () => {
+    const f = clientWithFunction();
+    const p = new SupabasePractice(f.client);
+    await p.respond('r1', true, '');
+    await p.respond('r2', false, '');
+    await f.settle();
+    expect(f.calls).toEqual([{ name: 'notify-request', body: { event: 'answered', requestId: 'r1' } }]);
+  });
+
+  it('does not ask when the request itself failed', async () => {
+    const f = clientWithFunction({ sendAnswer: { data: null, error: { message: "This member can't be asked right now.", code: 'P0001' } } });
+    await expect(new SupabasePractice(f.client).send('bob', ask)).rejects.toThrow();
+    await f.settle();
+    expect(f.calls).toEqual([]);
+  });
+
+  it('never lets a problem with the email get in the way of the request', async () => {
+    const down = clientWithFunction({ invokeFails: true });
+    await expect(new SupabasePractice(down.client).send('bob', ask)).resolves.toBeUndefined();
+    await down.settle();
+    expect(down.calls).toHaveLength(1);
+    // And a deployment without the function at all (or an old client) is fine too.
+    await expect(new SupabasePractice(fakeClient({ send_practice_request: { data: 'req-1', error: null } }).client).send('bob', ask)).resolves.toBeUndefined();
+  });
+
+  it('reads the setting as on when you never chose, and saves your choice on your own row', async () => {
+    const none = clientWithFunction({ setting: null });
+    expect(await new SupabasePractice(none.client).emailRequests()).toBe(true);
+    expect(await new SupabasePractice(clientWithFunction({ setting: { email_requests: false } }).client).emailRequests()).toBe(false);
+    await new SupabasePractice(none.client).setEmailRequests(false);
+    expect(none.saved).toHaveLength(1);
+    expect(none.saved[0]).toMatchObject({ email_requests: false });
+    expect(Object.keys(none.saved[0] as object)).not.toContain('user_id'); // the database fills in whose it is
+  });
+});
+
 describe('the in-memory stand-in follows the same rules', () => {
   const members = [
     { userId: 'me', name: 'Me Myself', open: true },
@@ -135,5 +203,29 @@ describe('the in-memory stand-in follows the same rules', () => {
     expect((await db.as('me').list())[0]).toMatchObject({ status: 'accepted', reply: 'Zoom', answerSeen: false });
     await db.as('me').markAnswersSeen();
     expect((await db.as('me').list())[0].answerSeen).toBe(true);
+  });
+
+  it('records who would be emailed, and leaves out members who turned it off', async () => {
+    const db = createMemoryPractice(() => members);
+    const me = db.as('me');
+    const bob = db.as('bob');
+    await me.send('bob', ask);
+    const [r] = await bob.list();
+    await bob.respond(r.id, true, 'Yes');
+    expect(db.emailed).toEqual([
+      { to: 'bob', event: 'sent', requestId: r.id },
+      { to: 'me', event: 'answered', requestId: r.id },
+    ]);
+
+    expect(await me.emailRequests()).toBe(true);
+    await me.setEmailRequests(false);
+    expect(await me.emailRequests()).toBe(false);
+    expect(await bob.emailRequests()).toBe(true); // each member has their own
+    const db2 = createMemoryPractice(() => members);
+    await db2.as('bob').setEmailRequests(false);
+    await db2.as('me').send('bob', ask);
+    const [r2] = await db2.as('bob').list();
+    await db2.as('bob').respond(r2.id, false, '');
+    expect(db2.emailed).toEqual([]); // bob turned emails off, and a decline is never emailed
   });
 });
