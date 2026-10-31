@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type Route = 'dashboard' | 'log' | 'improve' | 'people';
+export type Route = 'dashboard' | 'log' | 'improve' | 'people' | 'warmup';
 
 export const ROUTES: { id: Route; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'log', label: 'My Case Log' },
   { id: 'improve', label: 'Improvement Areas' },
   { id: 'people', label: 'People' },
+  { id: 'warmup', label: 'Warm-up' },
 ];
 
 export interface Location {
@@ -17,7 +18,7 @@ export interface Location {
 
 function parse(): Location {
   const [first, second] = window.location.hash.replace(/^#\/?/, '').split('/');
-  if (first === 'log' || first === 'improve') return { route: first, param: undefined };
+  if (first === 'log' || first === 'improve' || first === 'warmup') return { route: first, param: undefined };
   if (first === 'people') return { route: 'people', param: second ? decodeURIComponent(second) : undefined };
   return { route: 'dashboard', param: undefined };
 }
