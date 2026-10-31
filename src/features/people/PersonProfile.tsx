@@ -179,11 +179,18 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
             Shares <strong className="font-semibold text-ink">{summary}</strong>
             {shared.length > 0 && <> · {shared.length} case{shared.length === 1 ? '' : 's'} visible</>}
           </p>
-          {!visitor && person.burnedBooks.length > 0 && (
+          {!visitor && (person.burnedBooks.length > 0 || person.burnedCases.length > 0) && (
             <p className="mt-1.5 flex items-start gap-1.5 text-sm text-ink-2">
               <Flame className="mt-0.5 size-4 shrink-0 text-accent-text" aria-hidden />
               <span>
-                Has burned <strong className="font-semibold text-ink">{person.burnedBooks.join(', ')}</strong>
+                Has burned{' '}
+                {person.burnedBooks.length > 0 && <strong className="font-semibold text-ink">{person.burnedBooks.join(', ')}</strong>}
+                {person.burnedBooks.length > 0 && person.burnedCases.length > 0 && ' and '}
+                {person.burnedCases.length > 0 && (
+                  <strong className="font-semibold text-ink">
+                    {person.burnedCases.length} {person.burnedCases.length === 1 ? 'case' : 'cases'}
+                  </strong>
+                )}
               </span>
             </p>
           )}

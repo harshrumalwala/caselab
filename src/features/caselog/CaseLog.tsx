@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, FileSpreadsheet, Filter, Lock, LockOpen, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ChevronDown, FileSpreadsheet, Filter, Flame, Lock, LockOpen, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { CASE_TYPES, INDUSTRIES } from '../../domain/constants';
 import {
   applyFilters,
@@ -95,7 +95,7 @@ const SELECT = 'field !py-2 text-sm';
 
 export function CaseLog() {
   const { cases, data, deleteCase } = useData();
-  const { viewCase, openLogCase, openImport } = useUI();
+  const { viewCase, openLogCase, openImport, openBurned } = useUI();
   const toast = useToast();
   const now = useNow();
 
@@ -171,6 +171,13 @@ export function CaseLog() {
           {active ? `${visible.length} of ${cases.length} cases` : `${cases.length} ${cases.length === 1 ? 'case' : 'cases'}`}
         </p>
         <p className="text-sm font-semibold text-accent-text">{logQuip(cases.length)}</p>
+        <button
+          type="button"
+          onClick={openBurned}
+          className="mt-1 inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-ink-2 underline decoration-dotted underline-offset-4 hover:text-accent-text"
+        >
+          <Flame className="size-4" aria-hidden /> Practiced solo? Burn cases without logging them
+        </button>
       </div>
 
       {/* ---- Toolbar ------------------------------------------------------------------ */}
