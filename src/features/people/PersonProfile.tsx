@@ -12,6 +12,7 @@ import { BurnedLine } from '../community/BurnedLine';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { useMyUserId } from '../../state/CommunityProvider';
 import { useConversationWith } from '../../state/MessagesProvider';
 import { usePractice } from '../../state/PracticeProvider';
 import type { NewRequest } from '../../domain/requests';
@@ -100,6 +101,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
   const [tab, setTab] = useState<Tab>(visitor ? 'cases' : 'find');
   const [filter, setFilter] = useState<CaseFilter>(NO_FILTER);
   const [ask, setAsk] = useState<Partial<NewRequest> | null>(null);
+  const me = useMyUserId();
 
   const load = useCallback(async () => {
     setState({ status: 'loading' });
@@ -218,7 +220,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
             {shared.length > 0 && <> · {shared.length} case{shared.length === 1 ? '' : 's'} visible</>}
           </p>
           {!visitor && <MessageButton person={person} />}
-          {!visitor && person.openToRequests && (
+          {!visitor && person.userId !== me && (
             <>
               <AskButton person={person} onAsk={() => setAsk({})} />
               {ask && <AskDialog person={person} prefill={ask} onClose={() => setAsk(null)} />}
@@ -261,7 +263,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
               person={person}
               theirs={shared}
               mine={mine}
-              onPropose={person.openToRequests ? (c) => setAsk({ caseTitle: c.title, caseBook: c.source }) : undefined}
+              onPropose={person.userId !== me ? (c) => setAsk({ caseTitle: c.title, caseBook: c.source }) : undefined}
             />
           ) : (
             casesPanel

@@ -25,7 +25,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     displayName: 'E2E Owner A',
     mbaClass: '',
     listed: true,
-    publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [], openToRequests: false,
+    publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [],
     sharing: NO_SHARING,
     ...over,
   });

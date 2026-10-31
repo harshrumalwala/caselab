@@ -20,6 +20,7 @@ import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
 import { CaseTypeCoverage, IndustryCoverage } from './Coverage';
 import { CoverageMatrix } from './CoverageMatrix';
+import { NeedsYou } from './NeedsYou';
 import { NextFocus } from './NextFocus';
 import { OverallTrend } from './OverallTrend';
 import { Overview } from './Overview';
@@ -28,7 +29,7 @@ import { SkillsPerformance } from './SkillsPerformance';
 import { WeeklyPractice } from './WeeklyPractice';
 
 export function Dashboard() {
-  const { cases, data, enterDemo } = useData();
+  const { cases, data, enterDemo, mode } = useData();
   const { openLogCase, openImport } = useUI();
   const now = useNow();
   const customs = data.customIndustries;
@@ -63,6 +64,9 @@ export function Dashboard() {
         </div>
         <QuipCard className="sm:max-w-xs" />
       </div>
+
+      {/* Real requests and messages have no place beside demo data. */}
+      {mode !== 'demo' && <NeedsYou />}
 
       {total === 0 && (
         <Card className="relative overflow-hidden">

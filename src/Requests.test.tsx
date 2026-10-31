@@ -17,13 +17,11 @@ const profile = (userId: string, displayName: string, over: Partial<Profile> = {
   publicLinkOnly: false,
   burnedBooks: [],
   burnedCases: [],
-  openToRequests: true,
   sharing: { ...NO_SHARING, cases: true },
   ...over,
 });
 const BOB = profile('bob', 'Bob Brown');
-const CAROL = profile('carol', 'Carol Chen', { openToRequests: false });
-const OPEN_ME = { ...MY_PROFILE, openToRequests: true };
+const CAROL = profile('carol', 'Carol Chen');
 
 const BOB_CASE: SharedCase = {
   caseId: 'b1',
@@ -57,44 +55,47 @@ beforeEach(() => {
   window.location.hash = '';
 });
 
-describe('turning requests on', () => {
-  it('is off until you switch it on, and the switch is saved to your profile', async () => {
+describe('nothing to switch on', () => {
+  it('has no requests switch in Profile & privacy: every member can be asked', async () => {
     const env = createFakeEnv();
-    const user = await openAt(env, '#/dashboard', 'Dashboard');
-    const mine = () => env.community.profiles.find((p) => p.userId === ME)!;
-    expect(mine().openToRequests).toBe(false);
-
-    await user.click(screen.getByRole('button', { name: 'Profile and privacy' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Profile & privacy' });
-    const toggle = within(dialog).getByRole('switch', { name: 'Let members ask me to case' });
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-    await user.click(toggle);
-    await waitFor(() => expect(mine().openToRequests).toBe(true));
-    expect(within(dialog).getByRole('switch', { name: 'Let members ask me to case' })).toHaveAttribute('aria-checked', 'true');
-  });
-
-  it('is withdrawn with the rest of your visibility when you stop appearing in People', async () => {
-    const env = createFakeEnv({ profile: OPEN_ME });
     const user = await openAt(env, '#/dashboard', 'Dashboard');
     await user.click(screen.getByRole('button', { name: 'Profile and privacy' }));
     const dialog = await screen.findByRole('dialog', { name: 'Profile & privacy' });
-    await user.click(within(dialog).getByRole('switch', { name: 'Appear in People search' }));
-    await waitFor(() => expect(env.community.profiles.find((p) => p.userId === ME)).toMatchObject({ listed: false, openToRequests: false }));
+    expect(within(dialog).getByRole('switch', { name: 'Appear in People search' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('switch', { name: /ask me to case/ })).not.toBeInTheDocument();
   });
 
-  it('tells you on the Requests screen when nobody can ask you, and takes you to the switch', async () => {
+  it('shows no "not taking requests" notice on the Requests screen, or a nudge on People', async () => {
     const env = createFakeEnv();
-    const user = await openAt(env, '#/requests', 'Requests');
-    expect(screen.getByRole('note')).toHaveTextContent("You're not taking requests");
-    await user.click(screen.getByRole('button', { name: /Change in Profile/ }));
-    expect(await screen.findByRole('dialog', { name: 'Profile & privacy' })).toBeInTheDocument();
+    await openAt(env, '#/requests', 'Requests');
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    window.location.hash = '#/people';
+    await screen.findByRole('heading', { name: 'People' });
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('can be asked as soon as you are signed in and listed: a member who set nothing up is reachable', async () => {
+    const env = createFakeEnv({ members: [BOB] });
+    await env.practice.as('bob').send(ME, ask);
+    await openAt(env, '#/requests', 'Requests');
+    expect(await screen.findByRole('heading', { name: /Waiting for your answer/ })).toHaveTextContent('(1)');
+  });
+
+  it('is withdrawn when you stop appearing in People: nobody can find or ask you', async () => {
+    const env = createFakeEnv({ members: [BOB] });
+    const i = env.community.profiles.findIndex((p) => p.userId === ME);
+    env.community.profiles[i] = { ...env.community.profiles[i], listed: false };
+    await expect(env.practice.as('bob').send(ME, ask)).rejects.toThrow(/can't be asked right now/);
   });
 });
 
 describe('asking someone to case', () => {
-  it('offers "Case with …?" only on the profile of a member who takes requests', async () => {
+  it('offers "Case with …?" on every other member\'s profile, but not on your own', async () => {
     const env = createFakeEnv({ members: [BOB, CAROL] });
     await openAt(env, '#/people/carol', 'Carol Chen');
+    expect(await screen.findByRole('button', { name: 'Case with Carol?' })).toBeInTheDocument();
+    window.location.hash = `#/people/${ME}`;
+    await screen.findByRole('heading', { name: MY_PROFILE.displayName });
     expect(screen.queryByRole('button', { name: /Case with/ })).not.toBeInTheDocument();
   });
 
@@ -142,7 +143,7 @@ describe('asking someone to case', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Case with Bob?' });
     await user.type(within(dialog).getByLabelText('Note'), 'Hello');
     const i = env.community.profiles.findIndex((p) => p.userId === 'bob');
-    env.community.profiles[i] = { ...env.community.profiles[i], openToRequests: false }; // Bob switches it off meanwhile
+    env.community.profiles[i] = { ...env.community.profiles[i], listed: false }; // Bob stops appearing in People meanwhile
     await user.click(within(dialog).getByRole('button', { name: 'Send request' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent("This member can't be asked right now.");
     expect(within(dialog).getByLabelText('Note')).toHaveValue('Hello');
@@ -152,7 +153,7 @@ describe('asking someone to case', () => {
 
 describe('answering requests', () => {
   async function withRequestFromBob() {
-    const env = createFakeEnv({ profile: OPEN_ME, members: [BOB] });
+    const env = createFakeEnv({ members: [BOB] });
     await env.practice.as('bob').send(ME, ask);
     const user = await openAt(env, '#/requests', 'Requests');
     return { env, user };
@@ -214,8 +215,9 @@ describe('following up on what you sent', () => {
     await env.practice.as('bob').respond(env.practice.rows[0].id, true, 'Zoom: example.com/room');
 
     const user = await openAt(env, '#/people', 'People');
-    // The answer and the reply that came with it: one request to look at, one conversation with something new.
-    expect(await screen.findAllByRole('link', { name: 'People, 1 request needs you and 1 conversation has new messages' })).toHaveLength(2);
+    // The answer and the reply that came with it: one request to look at on People, one conversation with something new on Messages.
+    expect(await screen.findAllByRole('link', { name: 'People, 1 request needs you' })).toHaveLength(2);
+    expect(await screen.findAllByRole('link', { name: 'Messages, 1 conversation has new messages' })).toHaveLength(2);
     await user.click(screen.getByRole('button', { name: 'Requests, 1 request needs you' }));
 
     await screen.findByRole('heading', { name: 'Requests' });
@@ -247,7 +249,7 @@ describe('following up on what you sent', () => {
 
 describe('noticing new requests', () => {
   it('picks up a request that arrives while the app is open, when you come back to the tab', async () => {
-    const env = createFakeEnv({ profile: OPEN_ME, members: [BOB] });
+    const env = createFakeEnv({ members: [BOB] });
     await openAt(env, '#/dashboard', 'Dashboard');
     expect(screen.queryByRole('link', { name: /request.* you/ })).not.toBeInTheDocument();
 
@@ -257,7 +259,7 @@ describe('noticing new requests', () => {
   });
 
   it('keeps what you see when a refresh fails, and shows an error with Retry when the first load fails', async () => {
-    const env = createFakeEnv({ profile: OPEN_ME, members: [BOB] });
+    const env = createFakeEnv({ members: [BOB] });
     await env.practice.as('bob').send(ME, ask);
     env.practice.mine.control.failing = true;
     const user = await openAt(env, '#/requests', 'Requests');
@@ -277,7 +279,7 @@ describe('noticing new requests', () => {
 
 describe('demo mode', () => {
   it("keeps your real requests out of demo mode", async () => {
-    const env = createFakeEnv({ profile: OPEN_ME, members: [BOB] });
+    const env = createFakeEnv({ members: [BOB] });
     await env.practice.as('bob').send(ME, ask);
     const user = await openAt(env, '#/dashboard', 'Dashboard');
     await user.click(screen.getByRole('button', { name: 'Data and settings' }));

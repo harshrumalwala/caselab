@@ -98,8 +98,6 @@ export interface Profile {
   burnedBooks: string[];
   /** Individual cases they've burned. Not practice cases: kept apart from the case log, so they never count in any total. */
   burnedCases: BurnedCase[];
-  /** Other members can send this member a practice request ("Case with me?"). Off until they switch it on. */
-  openToRequests: boolean;
   sharing: SharingPrefs;
 }
 

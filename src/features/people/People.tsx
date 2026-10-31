@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronRight, FlaskConical, Inbox, Loader2, MessageCircle, Search, Users } from 'lucide-react';
+import { ChevronRight, FlaskConical, Inbox, Loader2, Search, Users } from 'lucide-react';
 import type { CommunityReader } from '../../data/community';
 import { describeError } from '../../data/errors';
 import { publicSharingSummary, sharingSummary, type Profile } from '../../domain/community';
@@ -9,7 +9,6 @@ import { CountDot } from '../../components/ui/CountDot';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useCommunity } from '../../state/CommunityProvider';
 import { useData } from '../../state/DataProvider';
-import { chatsHaveNew } from '../../domain/messages';
 import { needYou } from '../../domain/requests';
 import { useNavBadge } from '../../state/badge';
 import { useUI } from '../../state/ui';
@@ -164,10 +163,6 @@ export function People() {
             <Button onClick={() => navigate('requests')} aria-label={badge.requests > 0 ? `Requests, ${needYou(badge.requests)}` : 'Requests'}>
               <Inbox className="size-4" /> Requests
               {badge.requests > 0 && <CountDot n={badge.requests} inline />}
-            </Button>
-            <Button onClick={() => navigate('messages')} aria-label={badge.chats > 0 ? `Messages, ${chatsHaveNew(badge.chats)}` : 'Messages'}>
-              <MessageCircle className="size-4" /> Messages
-              {badge.chats > 0 && <CountDot n={badge.chats} inline />}
             </Button>
           </div>
         </div>

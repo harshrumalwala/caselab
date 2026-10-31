@@ -12,8 +12,8 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **A public front page**: anyone, with no account, can search the members who chose to be visible and read what they share
 - **Warm-up**: an optional 60-second mental-math sprint for a break between cases (your best score and streak follow your account)
 - **People**: find a fellow member, see only what they've chosen to share, and work out which case to give them
-- **Practice requests**: ask a member to case (with a proposed case and time), and answer when someone asks you. Opt-in, and short notes only
-- **Messages**: once a request is accepted, a private conversation between the two of you, to settle a time, share a link or go over a case afterwards
+- **Practice requests**: ask a member to case (with a proposed case and time), and answer when someone asks you. Open to every member, and short notes only
+- **Messages**: once a request is accepted, a private conversation between the two of you, to settle a time, share a link or go over a case afterwards. It has its own tab, and the Dashboard tells you when something is waiting
 - **Profile & privacy**: switches for what other members can see, a per-case override, and a live preview
 - **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export and an Excel import that reads the MCG template are built in
 
@@ -351,24 +351,24 @@ A small way to line up a case without a chat. On a member's profile, **Case with
 optional proposed case and casebook, a time ("tonight 8pm"), and a note of up to 280 characters. They accept or decline, with an
 optional reply of up to 280 characters (a video link, how to reach them). Everything lives under **People → Requests**, and
 the People tab shows a count when something needs you (requests waiting for your answer, or answers you haven't seen yet; it
-refreshes when you come back to the tab and once a minute while the app is open). **Find a case for them** also offers "Ask to
-case this" on each case you could give them.
+refreshes when you come back to the tab and once a minute while the app is open), and so does a "Needs you" strip at the top of
+the Dashboard. **Find a case for them** also offers "Ask to case this" on each case you could give them.
 
-- **Opt-in.** You only receive requests after turning on **Let members ask me to case** in Profile & privacy. It is off by default and needs "Appear in People search". Only verified members can send or receive requests.
+- **Open to every member, with no switch.** Any signed-in, verified member can ask any other verified member who appears in People. Members who turn off "Appear in People search" can't be asked: unlisting means disappearing. To stop someone, decline with "don't let them ask again", or block them from a conversation.
 - **Private to the two people.** The tables have no direct access for the API roles at all; reads and writes go through database functions that act only on your own requests. Nobody else, and no visitor, can read one. No email address is stored or shown anywhere.
-- **Limits.** One waiting request per person, at most 5 waiting at a time and 20 sent in 24 hours. Declining can also stop that person asking again; their next request is refused with the same message as any other refusal, so they can't tell. You can undo that under "Not taking requests from".
+- **Limits.** One waiting request per person, at most 5 waiting at a time and 20 sent in 24 hours. Declining can also stop that person asking again; their next request is refused with the same message as any other refusal, so they can't tell. You can undo that under "Blocked members".
 - **No email notifications.** The count and the list come from `my_practice_requests()`. Accepting a request opens a conversation (see Messages).
 - Requests are not available in demo mode.
 
 ### Messages
 
 Accepting a practice request opens a private conversation between the two people: the request's proposal and note, and the reply, are
-its first messages. From then on either of you can write, from **People → Messages**, from the accepted request, or from the other
+its first messages. From then on either of you can write, from the **Messages** tab, from the accepted request, or from the other
 person's profile (**Message *name***). There is no way to message someone you haven't agreed to case with, and no group chats.
 
 - **Two people, private.** One conversation per pair, readable only by them. The tables have no direct access for the API roles at all; reads and writes go through database functions that act only on your own conversations. No email address is stored or shown.
-- **Not live, and no email.** Messages arrive by polling: an open conversation looks for new ones every 5 seconds, and the count on the People tab refreshes when you come back to the tab and once a minute. Nothing is emailed or pushed.
-- **Count.** The People tab and the Messages button count *conversations* with new messages (not messages), not including muted or archived ones. Opening a conversation reads it.
+- **Not live, and no email.** Messages arrive by polling: an open conversation looks for new ones every 5 seconds, and the count on the Messages tab refreshes when you come back to the tab and once a minute. Nothing is emailed or pushed.
+- **Count.** The Messages tab (and the Dashboard's "Needs you" strip) counts *conversations* with new messages (not messages), not including muted or archived ones. Opening a conversation reads it.
 - **Controls.** **Mute** (no count), **Archive** (a new message brings it back), **Delete** your own messages (gone for both of you), **Block**, **Report**. Mute and archive affect only your own view.
 - **Blocking** stops messages and practice requests between you in both directions. The other person is never told: they just get "You can't message this member right now". Undo it under **Requests → Blocked members**.
 - **Reporting.** A report keeps your reason and a snapshot of the last 30 messages, even if messages are deleted afterwards, and can optionally block as well. Reports go to a table only the database owner can read (Supabase dashboard → Table editor → `message_reports`); there is no in-app admin, so whoever runs CaseLab needs to check it.
@@ -460,7 +460,8 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **Supabase layer**: row mapping that round-trips every field, a repository run against a fake Supabase (paging past 1000 rows, chunked upserts, replace-without-data-loss, errors surfaced), friendly error messages, configuration checks
 - **Calculations**: week boundaries, averages that ignore missing ratings, behavioral combining, trend windows, coverage, matrix, weekly history
 - **Messages**: in Postgres (a conversation only opens when a request is accepted, seeded with the proposal, note and reply; one per pair; no direct table access; nobody else can read, write, mark, mute, archive or report; trimming and length limits; unread counts; mute and archive per person and a new message bringing one back; deleting only your own; silent blocks in both directions that also stop requests; the 30-in-10-minutes and 500-a-day limits; reports with a snapshot that survives deletions and can't be read by members or visitors; cascade on user delete; no email columns), the Supabase wrapper, the in-memory twin, and the screens (list, count, opening and reading, Enter and Shift+Enter, errors that keep what you typed, new messages on returning to the tab, delete, mute, archive, block, report, entry points, demo mode)
-- **Practice requests**: in Postgres (opt-in, private to the two people, no direct table access, one waiting per pair, the 5-waiting and 20-a-day limits, silent blocks that can be undone, length limits, nothing readable by visitors, cascade on user delete), the Supabase wrapper, and the screens (turning it on, asking, prefilled from Find a case, answering with a reply, declining and blocking, the badge, cancelling, errors, demo mode)
+- **Finding it**: the Messages tab in both navigation bars, separate counts on People (requests) and Messages (conversations), the Dashboard's "Needs you" strip (and not in demo mode)
+- **Practice requests**: in Postgres (open to every listed, verified member and no one else, private to the two people, no direct table access, one waiting per pair, the 5-waiting and 20-a-day limits, silent blocks that can be undone, length limits, nothing readable by visitors, cascade on user delete), the Supabase wrapper, and the screens (nothing to switch on, asking, prefilled from Find a case, answering with a reply, declining and blocking, the badge, cancelling, errors, demo mode)
 - **Warm-up**: question generation (seeded, so repeatable), answer reading and the 5% tolerance, scoring; the record in Postgres (own row only, no direct writes, raise-only, no visitor access, cascade on user delete); syncing between the account and this device (offline, first sign-in on a shared browser, demo mode); and the screen (timer, streaks, tips after a miss, end of round)
 - **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
 - **Backup and import**: lossless JSON round trip, merge semantics, CSV quoting; Excel import (a populated sample, a richer workbook with an Industry column, extra columns and filled-in Opportunity Areas, and the empty template), header and case-type matching, industry suggestions, and the review screen end to end

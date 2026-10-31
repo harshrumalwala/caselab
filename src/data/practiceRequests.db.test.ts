@@ -16,13 +16,13 @@ afterAll(async () => {
   await db.close();
 });
 
-/** Alice and Bob are listed and open to requests; Carol is listed but closed; Dave never verified his email. */
+/** Alice, Bob and Carol are listed members; Dave never verified his email. */
 beforeEach(async () => {
   await resetData(db);
   await as(db, 'postgres');
   await db.query(
-    `insert into public.profiles (user_id, display_name, listed, open_to_requests) values
-       ($1, 'Alice Adams', true, true), ($2, 'Bob Brown', true, true), ($3, 'Carol Chen', true, false)`,
+    `insert into public.profiles (user_id, display_name, listed) values
+       ($1, 'Alice Adams', true), ($2, 'Bob Brown', true), ($3, 'Carol Chen', true)`,
     [ALICE, BOB, CAROL],
   );
 });
@@ -84,20 +84,19 @@ describe('sending a request', () => {
     const reasons = async (to: string) => (await sendFails(to)).replace(/^.*?: /, '');
     await as(db, 'authenticated', ALICE);
     const msgs = new Set<string>();
-    msgs.add(await reasons(CAROL)); // listed but not open to requests
     msgs.add(await reasons(DAVE)); // no profile at all (and unverified)
     msgs.add(await reasons('99999999-9999-4999-8999-999999999999')); // nobody
     msgs.add(await reasons(ALICE)); // yourself
     await as(db, 'postgres');
-    await db.query(`update public.profiles set listed = false where user_id = $1`, [BOB]);
+    await db.query(`update public.profiles set listed = false where user_id = $1`, [CAROL]);
     await as(db, 'authenticated', ALICE);
-    msgs.add(await reasons(BOB)); // unlisted
+    msgs.add(await reasons(CAROL)); // unlisted: they chose to disappear
     expect([...msgs]).toEqual(["This member can't be asked right now."]);
   });
 
   it('does not let an unverified member be asked, or ask', async () => {
     await as(db, 'postgres');
-    await db.query(`insert into public.profiles (user_id, display_name, listed, open_to_requests) values ($1, 'Dave Diaz', true, true)`, [DAVE]);
+    await db.query(`insert into public.profiles (user_id, display_name, listed) values ($1, 'Dave Diaz', true)`, [DAVE]);
     await as(db, 'authenticated', ALICE);
     expect(await sendFails(DAVE)).toMatch(/can't be asked right now/);
     await as(db, 'authenticated', DAVE);
@@ -129,7 +128,7 @@ describe('sending a request', () => {
     const others = ['a', 'b', 'c', 'd', 'e'].map((c) => `${c.repeat(8)}-${c.repeat(4)}-4${c.repeat(3)}-8${c.repeat(3)}-${c.repeat(12)}`);
     for (const [i, id] of others.entries()) {
       await db.query(`insert into auth.users (id, email, email_confirmed_at) values ($1, $2, now())`, [id, `m${i}@example.com`]);
-      await db.query(`insert into public.profiles (user_id, display_name, listed, open_to_requests) values ($1, $2, true, true)`, [id, `Member ${i}`]);
+      await db.query(`insert into public.profiles (user_id, display_name, listed) values ($1, $2, true)`, [id, `Member ${i}`]);
     }
     await as(db, 'authenticated', ALICE);
     for (const id of others) await send(id);
@@ -296,23 +295,23 @@ describe('privacy and access', () => {
     expect(rows.map((r) => r.column_name).filter((c) => /mail/.test(c))).toEqual([]);
   });
 
-  it('is off by default for members, and a request can be answered after the recipient switches it off', async () => {
+  it('is open to every listed, verified member with nothing to switch on, even a brand-new profile', async () => {
     await as(db, 'postgres');
-    const { rows } = await db.query<{ open_to_requests: boolean }>(`select open_to_requests from public.profiles where user_id = $1`, [CAROL]);
-    expect(rows[0].open_to_requests).toBe(false);
     await db.query(`insert into auth.users (id, email, email_confirmed_at) values ('55555555-5555-4555-8555-555555555555', 'new@example.com', now())`);
     await db.query(`insert into public.profiles (user_id, display_name) values ('55555555-5555-4555-8555-555555555555', 'New Member')`);
-    expect((await db.query<{ open_to_requests: boolean }>(`select open_to_requests from public.profiles where display_name = 'New Member'`)).rows[0].open_to_requests).toBe(false);
+    await as(db, 'authenticated', ALICE);
+    await send('55555555-5555-4555-8555-555555555555');
+    await send(CAROL);
+    expect(await mine()).toHaveLength(2);
+  });
 
+  it('can still be answered after the recipient stops appearing in People, but no new ones can be sent to them', async () => {
     await as(db, 'authenticated', ALICE);
     const id = await send(BOB);
     await as(db, 'postgres');
-    await db.query(`update public.profiles set open_to_requests = false where user_id = $1`, [BOB]);
+    await db.query(`update public.profiles set listed = false where user_id = $1`, [BOB]);
     await as(db, 'authenticated', BOB);
     await respond(id, true); // still answerable
-    await as(db, 'authenticated', ALICE);
-    await as(db, 'postgres');
-    await db.query(`update public.practice_requests set status = 'declined'`);
     await as(db, 'authenticated', ALICE);
     expect(await sendFails(BOB)).toMatch(/can't be asked right now/); // but no new ones
   });

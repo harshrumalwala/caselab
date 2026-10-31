@@ -16,13 +16,13 @@ afterAll(async () => {
   await db.close();
 });
 
-/** Alice, Bob and Carol are listed and open to requests. */
+/** Alice, Bob and Carol are listed members. */
 beforeEach(async () => {
   await resetData(db);
   await as(db, 'postgres');
   await db.query(
-    `insert into public.profiles (user_id, display_name, listed, open_to_requests) values
-       ($1, 'Alice Adams', true, true), ($2, 'Bob Brown', true, true), ($3, 'Carol Chen', true, true)`,
+    `insert into public.profiles (user_id, display_name, listed) values
+       ($1, 'Alice Adams', true), ($2, 'Bob Brown', true), ($3, 'Carol Chen', true)`,
     [ALICE, BOB, CAROL],
   );
 });
