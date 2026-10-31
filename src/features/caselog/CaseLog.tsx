@@ -21,6 +21,8 @@ import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
 import { chipClass } from '../../components/ui/chips';
+import { useMyProfile } from '../../state/CommunityProvider';
+import { BurnedPanel } from './BurnedPanel';
 import { useTogglePrivate } from './useTogglePrivate';
 
 function ImprovementCell({ c }: { c: CaseRecord }) {
@@ -41,6 +43,34 @@ function logQuip(count: number): string {
   if (count < 15) return 'Getting somewhere. A pattern is forming, and so are opinions.';
   if (count < 30) return 'That is a serious stack of cases. Your case partners are impressed.';
   return 'Veteran status. Please remember to eat, sleep and occasionally not case.';
+}
+
+/** My cases, and the solo cases I've burned (which are listed here but never counted). */
+function LogTabs({ tab, onChange, burned }: { tab: 'cases' | 'burned'; onChange: (t: 'cases' | 'burned') => void; burned: number }) {
+  return (
+    <div role="tablist" aria-label="Case log views" className="flex flex-wrap gap-2">
+      {(
+        [
+          ['cases', 'My cases'],
+          ['burned', `Burned (${burned})`],
+        ] as const
+      ).map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          aria-selected={tab === id}
+          onClick={() => onChange(id)}
+          className={`inline-flex items-center gap-1.5 rounded-full border-2 border-ink/80 px-4 py-1.5 text-sm font-bold transition ${
+            tab === id ? 'bg-sun text-on-sun shadow-[2px_2px_0_0_rgb(28_26_24/0.85)]' : 'bg-surface text-ink-2 hover:bg-sun-soft'
+          }`}
+        >
+          {id === 'burned' && <Flame className="size-4" aria-hidden />}
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function PrivateBadge({ c }: { c: CaseRecord }) {
@@ -95,7 +125,9 @@ const SELECT = 'field !py-2 text-sm';
 
 export function CaseLog() {
   const { cases, data, deleteCase } = useData();
-  const { viewCase, openLogCase, openImport, openBurned } = useUI();
+  const { viewCase, openLogCase, openImport } = useUI();
+  const burnedCount = useMyProfile().burnedCases.length;
+  const [tab, setTab] = useState<'cases' | 'burned'>('cases');
   const toast = useToast();
   const now = useNow();
 
@@ -140,6 +172,9 @@ export function CaseLog() {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">My Case Log</h1>
+        <LogTabs tab={tab} onChange={setTab} burned={burnedCount} />
+        {tab === 'burned' && <BurnedPanel />}
+        {tab === 'cases' && (
         <div className="sticker bg-sun-soft">
           <EmptyState
             icon={<FileSpreadsheet className="size-6" />}
@@ -159,6 +194,7 @@ export function CaseLog() {
             your history comes with you.
           </EmptyState>
         </div>
+        )}
       </div>
     );
   }
@@ -169,17 +205,17 @@ export function CaseLog() {
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">My Case Log</h1>
         <p className="text-sm text-ink-2">
           {active ? `${visible.length} of ${cases.length} cases` : `${cases.length} ${cases.length === 1 ? 'case' : 'cases'}`}
+          {burnedCount > 0 && <span className="ml-2 font-semibold">· {burnedCount} burned, not counted</span>}
         </p>
         <p className="text-sm font-semibold text-accent-text">{logQuip(cases.length)}</p>
-        <button
-          type="button"
-          onClick={openBurned}
-          className="mt-1 inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-ink-2 underline decoration-dotted underline-offset-4 hover:text-accent-text"
-        >
-          <Flame className="size-4" aria-hidden /> Practiced solo? Burn cases without logging them
-        </button>
       </div>
 
+      <LogTabs tab={tab} onChange={setTab} burned={burnedCount} />
+
+      {tab === 'burned' && <BurnedPanel />}
+
+      {tab === 'cases' && (
+        <>
       {/* ---- Toolbar ------------------------------------------------------------------ */}
       <div className="sticker space-y-3 p-3 sm:p-4">
         <div className="flex gap-2">
@@ -401,6 +437,8 @@ export function CaseLog() {
               </li>
             ))}
           </ul>
+        </>
+      )}
         </>
       )}
 

@@ -20,6 +20,13 @@ export interface BurnedCase {
   book: string;
 }
 
+/** Burned cases grouped by book (no-book last), books A to Z, in the order they were added within a book. */
+export function groupBurnedCases(cases: readonly BurnedCase[]): [string, BurnedCase[]][] {
+  const byBook = new Map<string, BurnedCase[]>();
+  for (const c of cases) byBook.set(c.book, [...(byBook.get(c.book) ?? []), c]);
+  return [...byBook.entries()].sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)));
+}
+
 export const MAX_BURNED_CASES = 300;
 export const MAX_BURNED_TITLE = 200;
 

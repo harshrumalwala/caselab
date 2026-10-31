@@ -259,14 +259,83 @@ describe('burning individual cases (not practice)', () => {
     await waitFor(() => expect(mine(env).burnedCases.map((c) => c.title)).toEqual(['Airline profit', 'New one']));
   });
 
-  it('is one click from the Case Log', async () => {
-    const env = createFakeEnv();
-    await env.repo.insertCase(makeCase({ title: 'Airline profit' }));
+  it('shows them in the Case Log on a Burned tab, listed but not counted', async () => {
+    const env = createFakeEnv({
+      profile: { ...MY_PROFILE, burnedCases: [{ title: 'Airline profit', book: 'Cosentino' }, { title: 'Bank fees', book: 'Cosentino' }, { title: 'Piano tuners', book: '' }] },
+    });
+    await env.repo.insertCase(makeCase({ title: 'My real practice case' }));
     const { user } = await openApp(env);
     window.location.hash = '#/log';
-    await user.click(await screen.findByRole('button', { name: /Practiced solo\? Burn cases/ }));
-    const dialog = await screen.findByRole('dialog', { name: 'Profile & privacy' });
-    expect(within(dialog).getByLabelText('Case titles, one per line')).toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'My Case Log' });
+
+    // The log counts only real practice: one case, with the burned ones noted but not added in.
+    expect(screen.getByText('1 case')).toBeInTheDocument();
+    expect(screen.getByText(/3 burned, not counted/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: /Burned \(3\)/ }));
+    expect(screen.getByText(/Burned cases are for the record, not the scoreboard/)).toBeInTheDocument();
+    const cosentino = screen.getByRole('list', { name: 'Burned cases from Cosentino' });
+    expect(within(cosentino).getByText('Airline profit')).toBeInTheDocument();
+    expect(within(cosentino).getByText('Bank fees')).toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Burned cases' })).getByText('Piano tuners')).toBeInTheDocument();
+
+    // Back on the cases tab, nothing was added to them.
+    await user.click(screen.getByRole('tab', { name: 'My cases' }));
+    expect(screen.getAllByText('My real practice case').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Airline profit')).not.toBeInTheDocument();
+  });
+
+  it('lets you add and remove burned cases from that tab, without adding anything to the log or its total', async () => {
+    const env = createFakeEnv();
+    await env.repo.insertCase(makeCase({ title: 'My real practice case' }));
+    const { user } = await openApp(env);
+    window.location.hash = '#/log';
+    await user.click(await screen.findByRole('tab', { name: /Burned \(0\)/ }));
+
+    await user.type(screen.getByLabelText('Book for these cases'), 'Cosentino');
+    await user.type(screen.getByLabelText('Case titles, one per line'), 'Airline profit{enter}Bank fees');
+    await user.click(screen.getByRole('button', { name: 'Burn 2 cases' }));
+    await waitFor(() => expect(mine(env).burnedCases.map((c) => c.title)).toEqual(['Airline profit', 'Bank fees']));
+    expect(await screen.findByRole('tab', { name: /Burned \(2\)/ })).toBeInTheDocument();
+    expect((await env.repo.loadAll()).cases).toHaveLength(1); // still only the real one
+
+    await user.click(screen.getByRole('button', { name: 'Remove Bank fees' }));
+    await waitFor(() => expect(mine(env).burnedCases.map((c) => c.title)).toEqual(['Airline profit']));
+  });
+
+  it('is reachable even before you have logged any case', async () => {
+    const env = createFakeEnv({ profile: { ...MY_PROFILE, burnedCases: [{ title: 'Airline profit', book: '' }] } });
+    const { user } = await openApp(env);
+    window.location.hash = '#/log';
+    expect(await screen.findByText('No cases logged yet')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /Burned \(1\)/ }));
+    expect(screen.getByText('Airline profit')).toBeInTheDocument();
+    expect(screen.queryByText('No cases logged yet')).not.toBeInTheDocument();
+  });
+
+  it('is switched off in demo mode, so sample data never touches your real profile', async () => {
+    const env = createFakeEnv();
+    const { user } = await openApp(env);
+    await user.click(screen.getByRole('button', { name: 'Data and settings' }));
+    await user.click(await screen.findByRole('button', { name: 'Try demo mode' }));
+    window.location.hash = '#/log';
+    await user.click(await screen.findByRole('tab', { name: /Burned/ }));
+    expect(screen.getByText(/burning cases is switched off/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Case titles, one per line')).not.toBeInTheDocument();
+  });
+
+  it("lets other members see the cases someone has burned, grouped by book, and says they aren't counted", async () => {
+    const env = createFakeEnv({
+      members: [{ ...BOB, burnedBooks: [], burnedCases: [{ title: 'Airline profit', book: 'Cosentino' }, { title: 'Piano tuners', book: '' }] }],
+      shared: [BOB_SHARED],
+    });
+    const { user } = await openApp(env);
+    window.location.hash = '#/people/bob';
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    await user.click(screen.getByText('See the burned cases'));
+    expect(within(screen.getByRole('list', { name: 'Burned cases from Cosentino' })).getByText('Airline profit')).toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Burned cases' })).getByText('Piano tuners')).toBeInTheDocument();
+    expect(screen.getByText(/not counted in Bob's totals/)).toBeInTheDocument();
   });
 
   it("skips your cases that match ones they've burned, and says so", async () => {

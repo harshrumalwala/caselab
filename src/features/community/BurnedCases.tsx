@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Flame, Plus, X } from 'lucide-react';
-import { MAX_BOOK_NAME, MAX_BURNED_CASES, normalizeBurnedCases, parseBurnedTitles, type BurnedCase } from '../../domain/community';
+import { groupBurnedCases, MAX_BOOK_NAME, MAX_BURNED_CASES, normalizeBurnedCases, parseBurnedTitles, type BurnedCase } from '../../domain/community';
 import { Button } from '../../components/ui/Button';
 
 interface Props {
@@ -21,11 +21,7 @@ export function BurnedCases({ cases, suggestions, disabled = false, onChange }: 
   const titles = parseBurnedTitles(text);
   const full = cases.length >= MAX_BURNED_CASES;
 
-  const grouped = useMemo(() => {
-    const byBook = new Map<string, BurnedCase[]>();
-    for (const c of cases) byBook.set(c.book, [...(byBook.get(c.book) ?? []), c]);
-    return [...byBook.entries()].sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)));
-  }, [cases]);
+  const grouped = useMemo(() => groupBurnedCases(cases), [cases]);
 
   const add = (e: FormEvent) => {
     e.preventDefault();
@@ -42,8 +38,8 @@ export function BurnedCases({ cases, suggestions, disabled = false, onChange }: 
           <Flame className="size-4 text-accent-text" aria-hidden /> Cases I've burned
         </h3>
         <p className="mt-1 text-xs text-muted">
-          Solo cases you've already worked through. These are just for you: they don't go in your Case Log and don't count as practice.
-          Members choosing a case for you skip them. Only members who can see your profile can see this list.
+          Solo cases you've already worked through. You and other members can see them, but they aren't practice: they don't count in
+          your case total, ratings or coverage. Members choosing a case for you skip them.
         </p>
       </div>
 
