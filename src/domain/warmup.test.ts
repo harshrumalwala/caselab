@@ -7,6 +7,7 @@ import {
   endOfRoundLine,
   levelFor,
   makeQuestion,
+  mergeBest,
   NO_BEST,
   parseBest,
   pointsFor,
@@ -218,6 +219,11 @@ describe('best scores', () => {
     expect(updateBest({ score: 100, streak: 3 }, round)).toEqual({ best: { score: 100, streak: 4 }, newScore: false, newStreak: true });
     expect(updateBest({ score: 50, streak: 9 }, round)).toEqual({ best: { score: 90, streak: 9 }, newScore: true, newStreak: false });
     expect(updateBest(NO_BEST, round).newScore).toBe(true);
+  });
+
+  it('merges two copies of a record by taking the better of each', () => {
+    expect(mergeBest({ score: 100, streak: 3 }, { score: 40, streak: 9 })).toEqual({ score: 100, streak: 9 });
+    expect(mergeBest(NO_BEST, NO_BEST)).toEqual(NO_BEST);
   });
 
   it('does not call a zero round a record', () => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Banners } from './components/layout/Banners';
 import { BottomNav } from './components/layout/BottomNav';
 import { Header } from './components/layout/Header';
@@ -23,6 +23,7 @@ import { CommunityProvider, useCommunity } from './state/CommunityProvider';
 import { DataProvider, useData } from './state/DataProvider';
 import { useRoute } from './state/route';
 import { ThemeProvider } from './state/theme';
+import { WarmupSyncContext, type WarmupSync } from './state/warmupSync';
 import { ToastProvider } from './state/ToastProvider';
 import { UIContext, type UIContextValue } from './state/ui';
 
@@ -42,6 +43,7 @@ function Shell() {
   const { status, loadError, reload, mode } = useData();
   const { signOut } = useAuth();
   const session = useSession();
+  const warmupSync = useContext(WarmupSyncContext);
   const [location, navigate] = useRoute();
   const [logState, setLogState] = useState<LogState | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
@@ -109,7 +111,12 @@ function Shell() {
           {location.route === 'log' && <CaseLog />}
           {location.route === 'improve' && <ImprovementAreas />}
           {location.route === 'people' && <People />}
-          {location.route === 'warmup' && <Warmup />}
+          {location.route === 'warmup' && (
+            // Demo mode never touches the account, so the record stays on this device there.
+            <WarmupSyncContext.Provider value={mode === 'demo' ? null : warmupSync}>
+              <Warmup />
+            </WarmupSyncContext.Provider>
+          )}
         </main>
         <footer className="hidden border-t border-line px-6 py-5 text-center text-xs text-muted md:block">
           Saved to your account{session.email ? ` (${session.email})` : ''} and available on every device you sign in
@@ -164,7 +171,14 @@ function AuthGate({ backend }: { backend: Backend }) {
   const publicReader = useMemo(() => backend.createPublicCommunity(), [backend]);
   // One set of repositories per signed-in user; a different user never reuses another's.
   const repos = useMemo(
-    () => (userId ? { data: backend.createRepository(), community: backend.createCommunity(userId) } : null),
+    () =>
+      userId
+        ? {
+            data: backend.createRepository(),
+            community: backend.createCommunity(userId),
+            warmup: { repository: backend.createWarmup(userId), userId } satisfies WarmupSync,
+          }
+        : null,
     [backend, userId],
   );
 
@@ -175,7 +189,9 @@ function AuthGate({ backend }: { backend: Backend }) {
     <CommunityProvider key={state.session.userId} community={repos.community}>
       <ProfileGate>
         <DataProvider repository={repos.data}>
-          <Shell />
+          <WarmupSyncContext.Provider value={repos.warmup}>
+            <Shell />
+          </WarmupSyncContext.Provider>
         </DataProvider>
       </ProfileGate>
     </CommunityProvider>
