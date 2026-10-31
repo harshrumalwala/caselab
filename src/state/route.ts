@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type Route = 'dashboard' | 'log' | 'improve' | 'people' | 'warmup';
+export type Route = 'dashboard' | 'log' | 'improve' | 'people' | 'warmup' | 'requests';
+/** The screens that have a tab in the navigation. Requests lives under People. */
+export type NavRoute = Exclude<Route, 'requests'>;
 
-export const ROUTES: { id: Route; label: string }[] = [
+export const ROUTES: { id: NavRoute; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'log', label: 'My Case Log' },
   { id: 'improve', label: 'Improvement Areas' },
@@ -18,7 +20,7 @@ export interface Location {
 
 function parse(): Location {
   const [first, second] = window.location.hash.replace(/^#\/?/, '').split('/');
-  if (first === 'log' || first === 'improve' || first === 'warmup') return { route: first, param: undefined };
+  if (first === 'log' || first === 'improve' || first === 'warmup' || first === 'requests') return { route: first, param: undefined };
   if (first === 'people') return { route: 'people', param: second ? decodeURIComponent(second) : undefined };
   return { route: 'dashboard', param: undefined };
 }

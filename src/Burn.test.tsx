@@ -15,6 +15,7 @@ const BOB: Profile = {
   publicLinkOnly: false,
   burnedBooks: ['Cosentino'],
   burnedCases: [],
+  openToRequests: false,
   sharing: { ...NO_SHARING, cases: true },
 };
 const BOB_SHARED: SharedCase = {

@@ -12,6 +12,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **A public front page**: anyone, with no account, can search the members who chose to be visible and read what they share
 - **Warm-up**: an optional 60-second mental-math sprint for a break between cases (your best score and streak follow your account)
 - **People**: find a fellow member, see only what they've chosen to share, and work out which case to give them
+- **Practice requests**: ask a member to case (with a proposed case and time), and answer when someone asks you. Opt-in and short notes only, not a chat
 - **Profile & privacy**: switches for what other members can see, a per-case override, and a live preview
 - **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export and an Excel import that reads the MCG template are built in
 
@@ -223,6 +224,7 @@ These rules are tested directly against a real Postgres (see Tests), including a
 | `cases` | Your cases: date, title, source, case type, industry, partner, overall rating and feedback, the eight MCG skill ratings with feedback (one `skills` JSON column), takeaways, improvement tag, other notes, sharing override | Only you |
 | `opportunities` | Your hand-edited lists from the MCG "Opportunity Areas" tab | Only you |
 | `profiles` | Name, optional MBA class, listed and public flags, the sharing switches, burned books and cases. No email | Verified members (listed profiles) |
+| `practice_requests`, `practice_blocks` | Requests between two members (a proposed case, a time, a note and a reply, each short) and who you've stopped asking. No direct table access at all: only functions that act on your own requests | Only the two people involved |
 | `warmup_best` | Your best Warm-up score and streak (one row per member). Read-only for you; changed only by `record_warmup_best()`, which can only raise it | Only you |
 | `shared_cases` | The owner-approved projection of cases (see above). Written only by triggers | Verified members |
 | `public_profiles`, `public_shared_cases` | Copies for members who chose to be public (free text only if they opened everything; link-only members are excluded from table reads). Written only by triggers | Anyone, including visitors without an account |
@@ -335,6 +337,21 @@ Up to three suggestions, chosen by fixed rules that stay silent when there isn't
 - **Skills to improve** needs 3 cases, then ranks skills by: low recent average (under 3.5), declining trend, and how often you tagged it as your main improvement area in your last 10 cases. Skills rated 3.5+ that aren't declining or tagged never appear.
 - **Knowledge history** only contains what you typed under "Concepts I learned" (split by line or `;`), merged across cases and grouped by industry. Nothing is pre-populated.
 
+### Practice requests: "Case with me?"
+
+A small way to line up a case without a chat. On a member's profile, **Case with *name*?** sends them a short request: an
+optional proposed case and casebook, a time ("tonight 8pm"), and a note of up to 280 characters. They accept or decline, with an
+optional reply of up to 280 characters (a video link, how to reach them). Everything lives under **People → Requests**, and
+the People tab shows a count when something needs you (requests waiting for your answer, or answers you haven't seen yet; it
+refreshes when you come back to the tab and once a minute while the app is open). **Find a case for them** also offers "Ask to
+case this" on each case you could give them.
+
+- **Opt-in.** You only receive requests after turning on **Let members ask me to case** in Profile & privacy. It is off by default and needs "Appear in People search". Only verified members can send or receive requests.
+- **Private to the two people.** The tables have no direct access for the API roles at all; reads and writes go through database functions that act only on your own requests. Nobody else, and no visitor, can read one. No email address is stored or shown anywhere.
+- **Limits.** One waiting request per person, at most 5 waiting at a time and 20 sent in 24 hours. Declining can also stop that person asking again; their next request is refused with the same message as any other refusal, so they can't tell. You can undo that under "Not taking requests from".
+- **A nudge, not a chat.** There is no thread, no live delivery and no email notification: just the request and the one reply. (The count and the list come from `my_practice_requests()`.)
+- Requests are not available in demo mode.
+
 ### Warm-up: a 60-second mental-math sprint
 
 An optional extra, in the menu as **Warm-up** (`#/warmup`, signed-in members only). Quant is the skill most people rate lowest,
@@ -401,7 +418,7 @@ data, `createMemoryRepository` for demo mode and tests), the community through `
 (`src/data/community.ts`), and sign-in through `AuthApi` (`src/data/auth.ts`). The domain logic (including case matching in
 `src/domain/pairing.ts`) and the screens don't know Supabase exists.
 
-There is no group administration, messaging or social feed: members, profiles and sharing are all there is.
+There is no group administration, chat or social feed: members, profiles, sharing and short practice requests between two members are all there is.
 
 **Tech**: React 19, TypeScript, Vite, Tailwind CSS v4, Supabase (`@supabase/supabase-js`), Recharts (lazy-loaded),
 `read-excel-file` (loaded only when you import an Excel file), Vitest + Testing Library, PGlite for the database tests.
@@ -419,6 +436,7 @@ There is no group administration, messaging or social feed: members, profiles an
 - **Accounts**: sign-up, verification, resend, expired links, password reset, onboarding with everything off by default
 - **Supabase layer**: row mapping that round-trips every field, a repository run against a fake Supabase (paging past 1000 rows, chunked upserts, replace-without-data-loss, errors surfaced), friendly error messages, configuration checks
 - **Calculations**: week boundaries, averages that ignore missing ratings, behavioral combining, trend windows, coverage, matrix, weekly history
+- **Practice requests**: in Postgres (opt-in, private to the two people, no direct table access, one waiting per pair, the 5-waiting and 20-a-day limits, silent blocks that can be undone, length limits, nothing readable by visitors, cascade on user delete), the Supabase wrapper, and the screens (turning it on, asking, prefilled from Find a case, answering with a reply, declining and blocking, the badge, cancelling, errors, demo mode)
 - **Warm-up**: question generation (seeded, so repeatable), answer reading and the 5% tolerance, scoring; the record in Postgres (own row only, no direct writes, raise-only, no visitor access, cascade on user delete); syncing between the account and this device (offline, first sign-in on a shared browser, demo mode); and the screen (timer, streaks, tips after a miss, end of round)
 - **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
 - **Backup and import**: lossless JSON round trip, merge semantics, CSV quoting; Excel import (a populated sample, a richer workbook with an Industry column, extra columns and filled-in Opportunity Areas, and the empty template), header and case-type matching, industry suggestions, and the review screen end to end
