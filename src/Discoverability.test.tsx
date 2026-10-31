@@ -108,6 +108,18 @@ describe('five tabs, with people and messages together under Community', () => {
     expect(await screen.findByLabelText('Search members by name')).toBeInTheDocument();
   });
 
+  it('shows Members and Inbox as one control split evenly across the full width', async () => {
+    await openAt(createFakeEnv(), '#/people', 'Community');
+    const views = screen.getByRole('navigation', { name: 'Community' });
+    const [members, inbox] = within(views).getAllByRole('link');
+    expect(members).toHaveTextContent('Members');
+    expect(inbox).toHaveTextContent('Inbox');
+    expect(views).toHaveClass('flex'); // one row, not wrapping pills
+    expect(views).not.toHaveClass('flex-wrap');
+    expect(members).toHaveClass('flex-1'); // each half takes half the width
+    expect(inbox).toHaveClass('flex-1');
+  });
+
   it('shows requests and conversations together in the Inbox, in the order you would act on them', async () => {
     const env = await withThingsWaiting();
     await openAt(env, '#/inbox', 'Community');
