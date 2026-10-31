@@ -65,19 +65,19 @@ describe('nothing to switch on', () => {
     expect(within(dialog).queryByRole('switch', { name: /ask me to case/ })).not.toBeInTheDocument();
   });
 
-  it('shows no "not taking requests" notice on the Requests screen, or a nudge on People', async () => {
+  it('shows no "not taking requests" notice in the Inbox, or a nudge on Members', async () => {
     const env = createFakeEnv();
-    await openAt(env, '#/requests', 'Requests');
+    await openAt(env, '#/inbox', 'Community');
     expect(screen.queryByRole('note')).not.toBeInTheDocument();
     window.location.hash = '#/people';
-    await screen.findByRole('heading', { name: 'People' });
+    await waitFor(() => expect(screen.getByRole('link', { name: 'Members' })).toHaveAttribute('aria-current', 'page'));
     expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 
   it('can be asked as soon as you are signed in and listed: a member who set nothing up is reachable', async () => {
     const env = createFakeEnv({ members: [BOB] });
     await env.practice.as('bob').send(ME, ask);
-    await openAt(env, '#/requests', 'Requests');
+    await openAt(env, '#/inbox', 'Community');
     expect(await screen.findByRole('heading', { name: /Waiting for your answer/ })).toHaveTextContent('(1)');
   });
 
@@ -155,18 +155,18 @@ describe('answering requests', () => {
   async function withRequestFromBob() {
     const env = createFakeEnv({ members: [BOB] });
     await env.practice.as('bob').send(ME, ask);
-    const user = await openAt(env, '#/requests', 'Requests');
+    const user = await openAt(env, '#/inbox', 'Community');
     return { env, user };
   }
   const mineRow = (env: FakeEnv) => env.practice.rows[0];
 
-  it('shows who asked, what they proposed, and a badge on People while it waits', async () => {
+  it('shows who asked, what they proposed, and a count on Community while it waits', async () => {
     await withRequestFromBob();
     expect(await screen.findByRole('heading', { name: /Waiting for your answer/ })).toHaveTextContent('(1)');
     expect(screen.getByRole('link', { name: 'Bob Brown' })).toHaveAttribute('href', '#/people/bob');
     expect(screen.getByText('Airline profit (Cosentino) · tonight 8pm')).toBeInTheDocument();
     expect(screen.getByText('“Up for it?”')).toBeInTheDocument();
-    for (const link of screen.getAllByRole('link', { name: 'People, 1 request needs you' })) expect(link).toHaveAttribute('aria-current', 'page');
+    for (const link of screen.getAllByRole('link', { name: 'Community, 1 request needs you' })) expect(link).toHaveAttribute('aria-current', 'page');
   });
 
   it('accepts with a reply, and the request moves to Earlier', async () => {
@@ -176,7 +176,7 @@ describe('answering requests', () => {
     expect(await screen.findByText('You said yes to Bob')).toBeInTheDocument();
     expect(mineRow(env)).toMatchObject({ status: 'accepted', reply: 'Zoom: example.com/room' });
     expect(screen.queryByRole('heading', { name: /Waiting for your answer/ })).not.toBeInTheDocument();
-    const earlier = screen.getByRole('heading', { name: 'Earlier' }).closest('section')!;
+    const earlier = screen.getByRole('heading', { name: 'Earlier requests' }).closest('section')!;
     expect(within(earlier).getByText('Accepted')).toBeInTheDocument();
     expect(within(earlier).getByText(/You said:/).closest('p')).toHaveTextContent('You said: Zoom: example.com/room');
     expect(screen.queryByRole('link', { name: /request.* you/ })).not.toBeInTheDocument(); // the badge is gone
@@ -214,13 +214,13 @@ describe('following up on what you sent', () => {
     await env.practice.mine.send('bob', ask);
     await env.practice.as('bob').respond(env.practice.rows[0].id, true, 'Zoom: example.com/room');
 
-    const user = await openAt(env, '#/people', 'People');
-    // The answer and the reply that came with it: one request to look at on People, one conversation with something new on Messages.
-    expect(await screen.findAllByRole('link', { name: 'People, 1 request needs you' })).toHaveLength(2);
-    expect(await screen.findAllByRole('link', { name: 'Messages, 1 conversation has new messages' })).toHaveLength(2);
-    await user.click(screen.getByRole('button', { name: 'Requests, 1 request needs you' }));
+    const user = await openAt(env, '#/people', 'Community');
+    // The answer and the reply that came with it: one request to look at, one conversation with something new, on one tab.
+    const spoken = '1 request needs you and 1 conversation has new messages';
+    expect(await screen.findAllByRole('link', { name: `Community, ${spoken}` })).toHaveLength(2);
+    await user.click(screen.getByRole('link', { name: `Inbox, ${spoken}` }));
 
-    await screen.findByRole('heading', { name: 'Requests' });
+    await screen.findByRole('heading', { name: 'Community' });
     expect(await screen.findByText('New answer')).toBeInTheDocument();
     expect(screen.getByText('Accepted')).toBeInTheDocument();
     expect(screen.getByText(/Bob says:/).closest('p')).toHaveTextContent('Bob says: Zoom: example.com/room');
@@ -231,19 +231,19 @@ describe('following up on what you sent', () => {
   it('lists what you are waiting on and lets you cancel it', async () => {
     const env = createFakeEnv({ members: [BOB] });
     await env.practice.mine.send('bob', ask);
-    const user = await openAt(env, '#/requests', 'Requests');
+    const user = await openAt(env, '#/inbox', 'Community');
     const waiting = (await screen.findByRole('heading', { name: /You're waiting on/ })).closest('section')!;
     expect(within(waiting).getByText('Airline profit (Cosentino) · tonight 8pm')).toBeInTheDocument();
     await user.click(within(waiting).getByRole('button', { name: 'Cancel request' }));
     expect(await screen.findByText('Request cancelled')).toBeInTheDocument();
     expect(env.practice.rows[0].status).toBe('cancelled');
     expect(screen.queryByRole('heading', { name: /You're waiting on/ })).not.toBeInTheDocument();
-    expect(within(screen.getByRole('heading', { name: 'Earlier' }).closest('section')!).getByText('Cancelled')).toBeInTheDocument();
+    expect(within(screen.getByRole('heading', { name: 'Earlier requests' }).closest('section')!).getByText('Cancelled')).toBeInTheDocument();
   });
 
   it('says there is nothing yet when there is nothing', async () => {
-    await openAt(createFakeEnv(), '#/requests', 'Requests');
-    expect(await screen.findByText('No requests yet')).toBeInTheDocument();
+    await openAt(createFakeEnv(), '#/inbox', 'Community');
+    expect(await screen.findByText('Nothing in your inbox yet')).toBeInTheDocument();
   });
 });
 
@@ -255,14 +255,14 @@ describe('noticing new requests', () => {
 
     await env.practice.as('bob').send(ME, ask);
     act(() => void window.dispatchEvent(new Event('focus')));
-    expect(await screen.findAllByRole('link', { name: 'People, 1 request needs you' })).toHaveLength(2);
+    expect(await screen.findAllByRole('link', { name: 'Community, 1 request needs you' })).toHaveLength(2);
   });
 
   it('keeps what you see when a refresh fails, and shows an error with Retry when the first load fails', async () => {
     const env = createFakeEnv({ members: [BOB] });
     await env.practice.as('bob').send(ME, ask);
     env.practice.mine.control.failing = true;
-    const user = await openAt(env, '#/requests', 'Requests');
+    const user = await openAt(env, '#/inbox', 'Community');
     expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load your requests");
     env.practice.mine.control.failing = false;
     await user.click(screen.getByRole('button', { name: 'Try again' }));
@@ -285,8 +285,8 @@ describe('demo mode', () => {
     await user.click(screen.getByRole('button', { name: 'Data and settings' }));
     await user.click(await screen.findByRole('button', { name: 'Try demo mode' }));
     expect(await screen.findByText(/Demo mode\./)).toBeInTheDocument();
-    window.location.hash = '#/requests';
-    expect(await screen.findByText("Requests aren't available in demo mode")).toBeInTheDocument();
+    window.location.hash = '#/inbox';
+    expect(await screen.findByText("Requests and messages aren't available in demo mode")).toBeInTheDocument();
     expect(screen.queryByText('Airline profit (Cosentino) · tonight 8pm')).not.toBeInTheDocument();
   });
 });

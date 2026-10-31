@@ -14,12 +14,12 @@ export function NeedsYou() {
     <section aria-label="Needs you" className="sticker flex flex-wrap items-center gap-x-4 gap-y-2.5 bg-lilac-soft px-4 py-3">
       <p className="font-display text-sm font-extrabold text-ink">Needs you</p>
       {requests > 0 && (
-        <a href="#/requests" className={link}>
+        <a href="#/inbox" className={link}>
           <Inbox className="size-4" aria-hidden /> {requests} request{requests === 1 ? '' : 's'} to look at
         </a>
       )}
       {chats > 0 && (
-        <a href="#/messages" className={link}>
+        <a href="#/inbox" className={link}>
           <MessageCircle className="size-4" aria-hidden /> {chats} conversation{chats === 1 ? '' : 's'} with new messages
         </a>
       )}

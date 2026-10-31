@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Check, FlaskConical, Hourglass, Inbox, Loader2, MessageCircle, X } from 'lucide-react';
+import { Check, MessageCircle, X } from 'lucide-react';
 import type { BlockedMember } from '../../data/practiceRequests';
 import { describeError } from '../../data/errors';
-import { cleanReply, describeProposal, MAX_REQUEST_TEXT, sections, unseenAnswer, type PracticeRequest } from '../../domain/requests';
+import { cleanReply, describeProposal, MAX_REQUEST_TEXT, unseenAnswer, type PracticeRequest } from '../../domain/requests';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { useData } from '../../state/DataProvider';
 import { usePractice } from '../../state/PracticeProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useConversationWith } from '../../state/MessagesProvider';
@@ -36,7 +34,7 @@ function Proposal({ r }: { r: PracticeRequest }) {
 }
 
 /** Someone asked you: say yes or no, with a note back (a video link, how to reach you). */
-function AnswerCard({ r }: { r: PracticeRequest }) {
+export function AnswerCard({ r }: { r: PracticeRequest }) {
   const { respond } = usePractice();
   const toast = useToast();
   const [reply, setReply] = useState('');
@@ -107,7 +105,7 @@ function OpenConversation({ r }: { r: PracticeRequest }) {
 }
 
 /** One of your requests, still waiting or finished. */
-function HistoryRow({ r, onCancel }: { r: PracticeRequest; onCancel?: () => void }) {
+export function HistoryRow({ r, onCancel }: { r: PracticeRequest; onCancel?: () => void }) {
   const fresh = unseenAnswer(r);
   return (
     <li className="rounded-2xl border border-line bg-surface p-4">
@@ -145,7 +143,7 @@ function HistoryRow({ r, onCancel }: { r: PracticeRequest; onCancel?: () => void
   );
 }
 
-function Blocked() {
+export function Blocked() {
   const { blocked, unblock, requests } = usePractice();
   const toast = useToast();
   const [list, setList] = useState<BlockedMember[] | null>(null);
@@ -179,120 +177,5 @@ function Blocked() {
         ))}
       </ul>
     </Card>
-  );
-}
-
-/** Practice requests, both ways: ones waiting for your answer, ones you're waiting on, and what happened to the rest. */
-export function Requests() {
-  const { mode, exitDemo } = useData();
-  const { status, loadError, requests, reload, cancel, markAnswersSeen } = usePractice();
-  const toast = useToast();
-
-  const unseen = requests.some(unseenAnswer);
-  // Looking at this screen is seeing the answers: clear the "new answer" count (they stay marked here until you leave).
-  const [markedFresh, setMarkedFresh] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    if (!unseen) return;
-    setMarkedFresh(new Set(requests.filter(unseenAnswer).map((r) => r.id)));
-    void markAnswersSeen().catch(() => undefined);
-    // Only when answers arrive that haven't been seen.
-  }, [unseen]);
-
-  if (mode === 'demo') {
-    return (
-      <Card>
-        <EmptyState icon={<FlaskConical className="size-6" />} title="Requests aren't available in demo mode" actions={<Button variant="primary" onClick={exitDemo}>Exit demo mode</Button>}>
-          Demo mode uses sample data. Exit demo mode to see your real requests.
-        </EmptyState>
-      </Card>
-    );
-  }
-
-  const { toAnswer, waiting, earlier } = sections(requests);
-
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-1">
-        <a href="#/people" className="text-sm font-medium text-accent-text hover:underline">
-          ← People
-        </a>
-        <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Requests</h1>
-        <p className="text-sm text-ink-2">Ask someone to case, or answer when someone asks you. Short notes only: it's a nudge, not a chat.</p>
-      </div>
-
-      {status === 'loading' && (
-        <div className="flex items-center gap-2 py-6 text-sm text-muted" role="status">
-          <Loader2 className="size-4 animate-spin" /> Loading your requests…
-        </div>
-      )}
-
-      {status === 'error' && (
-        <Card>
-          <div role="alert" className="space-y-3 text-sm">
-            <p className="font-semibold text-ink">Couldn't load your requests</p>
-            <p className="text-ink-2">{loadError}</p>
-            <Button onClick={() => void reload()}>Try again</Button>
-          </div>
-        </Card>
-      )}
-
-      {status === 'ready' && requests.length === 0 && (
-        <Card>
-          <EmptyState icon={<Inbox className="size-6" />} title="No requests yet" compact>
-            Open someone's profile in People and choose "Case with …?" to ask them. When someone asks you, it shows up here.
-          </EmptyState>
-        </Card>
-      )}
-
-      {toAnswer.length > 0 && (
-        <section aria-labelledby="to-answer" className="space-y-3">
-          <h2 id="to-answer" className="text-lg font-bold tracking-tight text-ink">
-            Waiting for your answer <span className="num text-muted">({toAnswer.length})</span>
-          </h2>
-          <ul className="space-y-3">
-            {toAnswer.map((r) => (
-              <AnswerCard key={r.id} r={r} />
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {waiting.length > 0 && (
-        <section aria-labelledby="you-asked" className="space-y-3">
-          <h2 id="you-asked" className="flex items-center gap-2 text-lg font-bold tracking-tight text-ink">
-            <Hourglass className="size-4 text-muted" aria-hidden /> You're waiting on <span className="num text-muted">({waiting.length})</span>
-          </h2>
-          <ul className="space-y-3">
-            {waiting.map((r) => (
-              <HistoryRow
-                key={r.id}
-                r={r}
-                onCancel={() =>
-                  void cancel(r.id).then(
-                    () => toast({ title: 'Request cancelled' }),
-                    (e) => toast({ kind: 'error', title: 'Not cancelled', body: describeError(e) }),
-                  )
-                }
-              />
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {earlier.length > 0 && (
-        <section aria-labelledby="earlier" className="space-y-3">
-          <h2 id="earlier" className="text-lg font-bold tracking-tight text-ink">
-            Earlier
-          </h2>
-          <ul className="space-y-3">
-            {earlier.map((r) => (
-              <HistoryRow key={r.id} r={markedFresh.has(r.id) ? { ...r, answerSeen: false } : r} />
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <Blocked />
-    </div>
   );
 }

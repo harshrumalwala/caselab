@@ -5,23 +5,20 @@ import { MessagesContext } from './MessagesProvider';
 import { PracticeContext } from './PracticeProvider';
 
 export interface NavBadge {
-  /** Practice requests waiting for your answer, plus answers you haven't seen. Shown on People. */
+  /** Practice requests waiting for your answer, plus answers you haven't seen. */
   requests: number;
-  /** Conversations with new messages (not muted, not archived). Shown on Messages. */
+  /** Conversations with new messages (not muted, not archived). */
   chats: number;
-  /** For each link's spoken name, or null when there is nothing. */
-  requestsSpoken: string | null;
-  chatsSpoken: string | null;
+  /** What the number on the Community tab shows: both together. */
+  total: number;
+  /** For the tab's spoken name, or null when there is nothing. */
+  spoken: string | null;
 }
 
-/** The two counts. Zero (and no label) where requests and messages aren't loaded. */
+/** Requests that need you and conversations with new messages. Zero (and no label) where neither is loaded. */
 export function useNavBadge(): NavBadge {
   const requests = useContext(PracticeContext)?.badge ?? 0;
   const chats = useContext(MessagesContext)?.unreadChats ?? 0;
-  return {
-    requests,
-    chats,
-    requestsSpoken: requests > 0 ? needYou(requests) : null,
-    chatsSpoken: chats > 0 ? chatsHaveNew(chats) : null,
-  };
+  const parts = [requests > 0 && needYou(requests), chats > 0 && chatsHaveNew(chats)].filter(Boolean);
+  return { requests, chats, total: requests + chats, spoken: parts.length ? parts.join(' and ') : null };
 }

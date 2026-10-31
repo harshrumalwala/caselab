@@ -29,6 +29,14 @@ async function openAt(env: FakeEnv, hash: string, heading: string) {
   return user;
 }
 
+/** Like openAt, but hands back unmount so a test can look at several screens in turn. */
+async function openAtAndKeep(env: FakeEnv, hash: string, heading: string) {
+  window.location.hash = hash;
+  const view = render(<App backend={env.backend} />);
+  await screen.findByRole('heading', { name: heading });
+  return view;
+}
+
 /** Bob has asked me (waiting), and Carol and I agreed to case and she has written since. */
 async function withThingsWaiting() {
   const env = createFakeEnv({ members: [BOB, CAROL] });
@@ -44,42 +52,84 @@ beforeEach(() => {
   window.location.hash = '';
 });
 
-describe('Messages has its own place in the navigation', () => {
-  it('is in the top bar and the phone bar for everyone signed in, with no member needing to do anything first', async () => {
+describe('five tabs, with people and messages together under Community', () => {
+  it('has Dashboard, My Case Log, Improvement Areas, Community and Warm-up in the top bar and the phone bar', async () => {
     await openAt(createFakeEnv(), '#/dashboard', 'Dashboard');
-    const tabs = screen.getAllByRole('link', { name: 'Messages' }); // top bar and phone bar
-    expect(tabs).toHaveLength(2);
-    for (const tab of tabs) {
-      expect(tab).toHaveAttribute('href', '#/messages');
-      expect(tab).not.toHaveAttribute('aria-current');
+    for (const nav of screen.getAllByRole('navigation', { name: 'Primary' })) {
+      expect(within(nav).getAllByRole('link').map((l) => l.getAttribute('aria-label') ?? l.textContent)).toEqual([
+        'Dashboard',
+        'My Case Log',
+        'Improvement Areas',
+        'Community',
+        'Warm-up',
+      ]);
+    }
+    expect(screen.queryByRole('link', { name: /^Messages/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^People/ })).not.toBeInTheDocument();
+  });
+
+  it('marks Community as the current page on Members, the Inbox, and a conversation, and nothing else', async () => {
+    const env = await withThingsWaiting();
+    const [conversation] = await env.chat.mine.conversations();
+    for (const [hash, heading] of [
+      ['#/people', 'Community'],
+      ['#/inbox', 'Community'],
+      [`#/messages/${conversation.id}`, 'Carol Chen'],
+    ] as const) {
+      const { unmount } = await openAtAndKeep(env, hash, heading);
+      for (const tab of screen.getAllByRole('link', { name: /^Community/ })) expect(tab).toHaveAttribute('aria-current', 'page');
+      for (const tab of screen.getAllByRole('link', { name: /^(Dashboard|My Case Log|Improvement Areas|Warm-up)/ })) expect(tab).not.toHaveAttribute('aria-current');
+      unmount();
     }
   });
 
-  it('is marked as the current page on Messages and on a conversation, and People is not', async () => {
+  it('puts one count on Community, and the same on its Inbox view, naming both parts for screen readers', async () => {
     const env = await withThingsWaiting();
-    const [conversation] = await env.chat.mine.conversations();
-    await openAt(env, `#/messages/${conversation.id}`, 'Carol Chen');
-    for (const tab of screen.getAllByRole('link', { name: /^Messages/ })) expect(tab).toHaveAttribute('aria-current', 'page');
-    for (const tab of screen.getAllByRole('link', { name: /^People/ })) expect(tab).not.toHaveAttribute('aria-current');
+    await openAt(env, '#/people', 'Community');
+    const spoken = '1 request needs you and 1 conversation has new messages';
+    expect(await screen.findAllByRole('link', { name: `Community, ${spoken}` })).toHaveLength(2);
+    expect(screen.getByRole('link', { name: `Inbox, ${spoken}` })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Members' })).not.toHaveAccessibleName(/need|new/);
   });
 
-  it('keeps Requests under People, which stays marked as the current page there', async () => {
+  it('switches between Members and Inbox with the two views at the top of the page', async () => {
     const env = await withThingsWaiting();
-    await openAt(env, '#/requests', 'Requests');
-    for (const tab of screen.getAllByRole('link', { name: /^People/ })) expect(tab).toHaveAttribute('aria-current', 'page');
-    for (const tab of screen.getAllByRole('link', { name: /^Messages/ })) expect(tab).not.toHaveAttribute('aria-current');
+    const user = await openAt(env, '#/people', 'Community');
+    const views = within(screen.getByRole('navigation', { name: 'Community' }));
+    expect(views.getByRole('link', { name: 'Members' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByLabelText('Search members by name')).toBeInTheDocument();
+
+    await user.click(views.getByRole('link', { name: /^Inbox/ }));
+    expect(await screen.findByRole('heading', { name: /Waiting for your answer/ })).toBeInTheDocument();
+    expect(within(screen.getByRole('navigation', { name: 'Community' })).getByRole('link', { name: /^Inbox/ })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByLabelText('Search members by name')).not.toBeInTheDocument();
+
+    await user.click(within(screen.getByRole('navigation', { name: 'Community' })).getByRole('link', { name: 'Members' }));
+    expect(await screen.findByLabelText('Search members by name')).toBeInTheDocument();
   });
 
-  it('counts requests on People and conversations on Messages, each its own number', async () => {
+  it('shows requests and conversations together in the Inbox, in the order you would act on them', async () => {
     const env = await withThingsWaiting();
-    await openAt(env, '#/dashboard', 'Dashboard');
-    expect(await screen.findAllByRole('link', { name: 'People, 1 request needs you' })).toHaveLength(2);
-    expect(await screen.findAllByRole('link', { name: 'Messages, 1 conversation has new messages' })).toHaveLength(2);
+    await openAt(env, '#/inbox', 'Community');
+    const headings = (await screen.findAllByRole('heading', { level: 2 })).map((h) => h.textContent);
+    expect(headings.findIndex((t) => /Waiting for your answer/.test(t ?? ''))).toBeLessThan(headings.findIndex((t) => /Conversations/.test(t ?? '')));
+    expect(screen.getByRole('list', { name: 'Conversations' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Earlier requests/ })).toBeInTheDocument(); // the accepted one carries on as a conversation, and is also in the history
   });
 
-  it('leaves the People page with a Requests button only: Messages is in the navigation', async () => {
-    await openAt(createFakeEnv(), '#/people', 'People');
-    expect(screen.getByRole('button', { name: 'Requests' })).toBeInTheDocument();
+  it('still understands the older addresses for requests and messages', async () => {
+    const env = await withThingsWaiting();
+    for (const hash of ['#/requests', '#/messages']) {
+      const { unmount } = await openAtAndKeep(env, hash, 'Community');
+      expect(await screen.findByRole('heading', { name: /Waiting for your answer/ })).toBeInTheDocument();
+      expect(within(screen.getByRole('navigation', { name: 'Community' })).getByRole('link', { name: /^Inbox/ })).toHaveAttribute('aria-current', 'page');
+      unmount();
+    }
+  });
+
+  it('has nothing separate for Requests or Messages on the Members page', async () => {
+    await openAt(createFakeEnv(), '#/people', 'Community');
+    expect(screen.queryByRole('button', { name: /^Requests/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Messages/ })).not.toBeInTheDocument();
   });
 });
@@ -89,8 +139,8 @@ describe('the "needs you" strip on the Dashboard', () => {
     const env = await withThingsWaiting();
     await openAt(env, '#/dashboard', 'Dashboard');
     const strip = await screen.findByRole('region', { name: 'Needs you' });
-    expect(within(strip).getByRole('link', { name: '1 request to look at' })).toHaveAttribute('href', '#/requests');
-    expect(within(strip).getByRole('link', { name: '1 conversation with new messages' })).toHaveAttribute('href', '#/messages');
+    expect(within(strip).getByRole('link', { name: '1 request to look at' })).toHaveAttribute('href', '#/inbox');
+    expect(within(strip).getByRole('link', { name: '1 conversation with new messages' })).toHaveAttribute('href', '#/inbox');
   });
 
   it('shows only the part that applies', async () => {

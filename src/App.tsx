@@ -15,8 +15,7 @@ import { ImprovementAreas } from './features/improvement/ImprovementAreas';
 import { LogCaseDialog } from './features/logcase/LogCaseDialog';
 import { People } from './features/people/People';
 import { Warmup } from './features/warmup/Warmup';
-import { Messages } from './features/messages/Messages';
-import { Requests } from './features/requests/Requests';
+import { ConversationScreen, Inbox } from './features/inbox/Inbox';
 import { PublicSite } from './features/public/PublicSite';
 import { ImportDialog } from './features/import/ImportDialog';
 import { SettingsDialog } from './features/settings/SettingsDialog';
@@ -123,8 +122,8 @@ function Shell() {
           {location.route === 'log' && <CaseLog />}
           {location.route === 'improve' && <ImprovementAreas />}
           {location.route === 'people' && <People />}
-          {location.route === 'requests' && <Requests />}
-          {location.route === 'messages' && <Messages />}
+          {location.route === 'inbox' && <Inbox />}
+          {location.route === 'messages' && <ConversationScreen />}
           {location.route === 'warmup' && (
             // Demo mode never touches the account, so the record stays on this device there.
             <WarmupSyncContext.Provider value={mode === 'demo' ? null : warmupSync}>

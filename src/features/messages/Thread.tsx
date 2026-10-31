@@ -147,8 +147,8 @@ export function Thread({ conversationId }: { conversationId: string }) {
   }, []);
 
   const back = (
-    <a href="#/messages" className="text-sm font-medium text-accent-text hover:underline">
-      ← Messages
+    <a href="#/inbox" className="text-sm font-medium text-accent-text hover:underline">
+      ← Inbox
     </a>
   );
 
@@ -249,8 +249,8 @@ export function Thread({ conversationId }: { conversationId: string }) {
               onClick={() =>
                 void act(async () => {
                   await repository.setArchived(conv.id, !conv.archived);
-                  if (!conv.archived) navigate('messages');
-                }, conv.archived ? 'Moved back to Messages' : 'Archived. A new message brings it back.')
+                  if (!conv.archived) navigate('inbox');
+                }, conv.archived ? 'Moved back to your inbox' : 'Archived. A new message brings it back.')
               }
             >
               <Archive className="size-3.5" /> {conv.archived ? 'Unarchive' : 'Archive'}

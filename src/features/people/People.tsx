@@ -1,18 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronRight, FlaskConical, Inbox, Loader2, Search, Users } from 'lucide-react';
+import { ChevronRight, FlaskConical, Loader2, Search, Users } from 'lucide-react';
 import type { CommunityReader } from '../../data/community';
 import { describeError } from '../../data/errors';
 import { publicSharingSummary, sharingSummary, type Profile } from '../../domain/community';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { CountDot } from '../../components/ui/CountDot';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useCommunity } from '../../state/CommunityProvider';
 import { useData } from '../../state/DataProvider';
-import { needYou } from '../../domain/requests';
-import { useNavBadge } from '../../state/badge';
 import { useUI } from '../../state/ui';
 import { chipClass } from '../../components/ui/chips';
+import { CommunityTabs } from '../community/CommunityTabs';
 import { PersonProfile } from './PersonProfile';
 
 /** Search box and member list. Used for signed-in members and for visitors without an account. */
@@ -130,7 +128,6 @@ export function People() {
   const { routeParam, navigate } = useUI();
   const { community } = useCommunity();
   const { mode, exitDemo, cases } = useData();
-  const badge = useNavBadge();
 
   if (mode === 'demo') {
     return (
@@ -157,20 +154,13 @@ export function People() {
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-1">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">People</h1>
-          <div className="flex shrink-0 flex-wrap justify-end gap-2">
-            <Button onClick={() => navigate('requests')} aria-label={badge.requests > 0 ? `Requests, ${needYou(badge.requests)}` : 'Requests'}>
-              <Inbox className="size-4" /> Requests
-              {badge.requests > 0 && <CountDot n={badge.requests} inline />}
-            </Button>
-          </div>
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Community</h1>
         <p className="text-sm text-muted">
           Find a fellow member, see what they've chosen to share, and pick a case to give them. Members can choose to share with
           other members only, or with anyone.
         </p>
       </div>
+      <CommunityTabs current="members" />
       <Directory reader={community} onOpen={(id) => navigate('people', id)} />
     </div>
   );

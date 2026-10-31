@@ -1,5 +1,5 @@
 import { Moon, Plus, Settings, Sun, UserRound } from 'lucide-react';
-import { ROUTES, UNDER_PEOPLE } from '../../state/route';
+import { ROUTES, UNDER_COMMUNITY } from '../../state/route';
 import { useTheme } from '../../state/theme';
 import { useUI } from '../../state/ui';
 import { useNavBadge } from '../../state/badge';
@@ -34,9 +34,9 @@ export function Header() {
 
         <nav aria-label="Primary" className="ml-4 hidden items-center gap-0.5 lg:flex xl:gap-1">
           {ROUTES.map((r) => {
-            const on = route === r.id || (r.id === 'people' && UNDER_PEOPLE.includes(route)); // Requests lives under People
-            const waiting = r.id === 'people' ? badge.requests : r.id === 'messages' ? badge.chats : 0;
-            const spoken = r.id === 'people' ? badge.requestsSpoken : r.id === 'messages' ? badge.chatsSpoken : null;
+            const on = route === r.id || (r.id === 'people' && UNDER_COMMUNITY.includes(route)); // The Inbox and conversations live under Community
+            const waiting = r.id === 'people' ? badge.total : 0;
+            const spoken = r.id === 'people' ? badge.spoken : null;
             return (
               <a
                 key={r.id}

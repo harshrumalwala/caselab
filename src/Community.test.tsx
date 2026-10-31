@@ -484,11 +484,11 @@ describe('my own dashboard stays mine', () => {
 });
 
 describe('navigation', () => {
-  it('has Dashboard, My Case Log, Improvement Areas and People', async () => {
+  it('has Dashboard, My Case Log, Improvement Areas, Community and Warm-up', async () => {
     const env = createFakeEnv();
     await openApp(env);
     await screen.findByRole('heading', { name: 'Dashboard' });
-    for (const name of ['Dashboard', 'My Case Log', 'Improvement Areas', 'People']) {
+    for (const name of ['Dashboard', 'My Case Log', 'Improvement Areas', 'Community', 'Warm-up']) {
       expect(screen.getAllByRole('link', { name }).length).toBeGreaterThan(0);
     }
   });
