@@ -12,6 +12,16 @@ export function Card({
   );
 }
 
+// Section icons take turns being yellow, teal, coral, lilac and blue, chosen from the title so a card is always the same colour.
+const CHIPS = [
+  'bg-sun-soft text-sun-ink',
+  'bg-teal-soft text-teal-ink',
+  'bg-coral-soft text-coral-ink',
+  'bg-lilac-soft text-lilac-ink',
+  'bg-sky-soft text-sky-ink',
+];
+const chipFor = (title: string) => CHIPS[[...title].reduce((n, ch) => n + ch.charCodeAt(0), 0) % CHIPS.length];
+
 export function CardHeader({
   title,
   subtitle,
@@ -29,12 +39,12 @@ export function CardHeader({
     <div className="mb-5 flex items-start justify-between gap-4">
       <div className="flex min-w-0 items-start gap-3">
         {icon && (
-          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-text">
+          <span className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border-2 border-ink/80 ${chipFor(title)}`}>
             {icon}
           </span>
         )}
         <div className="min-w-0">
-          <h2 id={titleId} className="text-base font-semibold tracking-tight text-ink">
+          <h2 id={titleId} className="text-lg font-bold tracking-tight text-ink">
             {title}
           </h2>
           {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}

@@ -4,6 +4,13 @@ import { startOfWeek, toISODate, formatShortDate } from '../../domain/dates';
 import { weeklyHistory, type Overview as OverviewStats } from '../../domain/stats';
 import type { CaseRecord } from '../../domain/types';
 
+const METRIC_TONES = {
+  sun: { card: 'bg-sun-soft', chip: 'bg-sun text-on-sun', bar: 'bg-sun' },
+  teal: { card: 'bg-teal-soft', chip: 'bg-teal text-on-color', bar: 'bg-teal' },
+  coral: { card: 'bg-coral-soft', chip: 'bg-coral text-on-color', bar: 'bg-coral' },
+  lilac: { card: 'bg-lilac-soft', chip: 'bg-lilac text-on-color', bar: 'bg-lilac' },
+} as const;
+
 function Metric({
   label,
   icon,
@@ -11,7 +18,9 @@ function Metric({
   suffix,
   caption,
   progress,
+  tone,
 }: {
+  tone: keyof typeof METRIC_TONES;
   label: string;
   icon: ReactNode;
   value: number;
@@ -21,20 +30,20 @@ function Metric({
   progress?: number;
 }) {
   return (
-    <div className="card p-5">
+    <div className={`sticker p-5 ${METRIC_TONES[tone].card}`}>
       <div className="flex items-center justify-between">
-        <p className="eyebrow">{label}</p>
-        <span className="text-muted">{icon}</span>
+        <p className="eyebrow !text-ink-2">{label}</p>
+        <span className={`flex size-8 items-center justify-center rounded-lg border-2 border-ink/80 ${METRIC_TONES[tone].chip}`}>{icon}</span>
       </div>
-      <p className="num mt-3 flex items-baseline gap-1.5 text-4xl font-semibold tracking-tight text-ink">
+      <p className="num mt-3 flex items-baseline gap-1.5 font-display text-5xl font-extrabold tracking-tight text-ink">
         {value}
-        {suffix && <span className="text-lg font-medium text-muted">{suffix}</span>}
+        {suffix && <span className="text-lg font-semibold text-ink-2">{suffix}</span>}
       </p>
-      <p className="mt-1 text-sm text-muted">{caption}</p>
+      <p className="mt-1 text-sm text-ink-2">{caption}</p>
       {progress !== undefined && (
-        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-track" aria-hidden>
+        <div className="mt-4 h-2.5 overflow-hidden rounded-full border-2 border-ink/80 bg-surface" aria-hidden>
           <div
-            className="h-full rounded-full bg-accent transition-[width] duration-700 ease-out"
+            className={`h-full rounded-full ${METRIC_TONES[tone].bar} transition-[width] duration-700 ease-out`}
             style={{ width: `${Math.round(Math.min(1, progress) * 100)}%` }}
           />
         </div>
@@ -56,12 +65,14 @@ export function Overview({ stats, cases, now }: { stats: OverviewStats; cases: C
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4" aria-label="Overview">
       <Metric
+        tone="sun"
         label="Total cases"
         icon={<BookOpenCheck className="size-4" />}
         value={stats.total}
         caption={stats.total === 0 ? 'Nothing logged yet' : stats.total === 1 ? 'case practiced' : 'cases practiced'}
       />
       <Metric
+        tone="teal"
         label="This week"
         icon={<CalendarDays className="size-4" />}
         value={stats.thisWeek}
@@ -77,6 +88,7 @@ export function Overview({ stats, cases, now }: { stats: OverviewStats; cases: C
         }
       />
       <Metric
+        tone="coral"
         label="Case types"
         icon={<Layers className="size-4" />}
         value={stats.caseTypesCovered}
@@ -85,6 +97,7 @@ export function Overview({ stats, cases, now }: { stats: OverviewStats; cases: C
         progress={stats.caseTypesCovered / stats.caseTypesTotal}
       />
       <Metric
+        tone="lilac"
         label="Industries"
         icon={<Building2 className="size-4" />}
         value={stats.industriesCovered}

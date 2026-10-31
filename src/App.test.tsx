@@ -39,7 +39,7 @@ async function logCase(user: User, details: Parameters<typeof fillCase>[1]) {
 // Scope to the desktop table to keep queries unambiguous.
 const table = async () => within(await screen.findByRole('table'));
 
-const metric = (label: string) => screen.getByText(label, { selector: 'p' }).closest('div.card') as HTMLElement;
+const metric = (label: string) => screen.getByText(label, { selector: 'p' }).closest('div.sticker') as HTMLElement;
 
 describe('sign in', () => {
   it('shows the public page first, never the app, and requests no member data until you are signed in', async () => {

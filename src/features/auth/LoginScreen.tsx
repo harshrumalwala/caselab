@@ -1,7 +1,9 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowLeft, Loader2, MailCheck } from 'lucide-react';
 import { Logo } from '../../components/layout/Header';
 import { Button } from '../../components/ui/Button';
+import { Sparkle } from '../../components/ui/Doodles';
+import { quipOfTheDay } from '../../domain/quips';
 import { describeAuthError } from '../../data/errors';
 import { useAuth } from '../../state/AuthProvider';
 
@@ -11,9 +13,13 @@ export type Mode = 'signin' | 'signup' | 'forgot';
 type Sent = { kind: 'verify' | 'reset'; email: string } | null;
 
 function Shell({ children, onBack }: { children: ReactNode; onBack?: () => void }) {
+  const quip = useMemo(() => quipOfTheDay(), []);
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="w-full max-w-sm">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-sun-soft via-bg to-coral-soft px-4 py-10">
+      <Sparkle className="absolute left-[12%] top-[14%] size-8 text-coral" />
+      <Sparkle className="absolute right-[14%] top-[22%] size-5 text-lilac" />
+      <Sparkle className="absolute bottom-[16%] left-[18%] size-5 text-teal" />
+      <div className="relative w-full max-w-sm">
         {onBack && (
           <button type="button" onClick={onBack} className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-accent-text hover:underline">
             <ArrowLeft className="size-4" /> Back to CaseLab
@@ -23,6 +29,7 @@ function Shell({ children, onBack }: { children: ReactNode; onBack?: () => void 
           <Logo />
         </div>
         {children}
+        <p className="mt-8 text-center font-display text-sm font-semibold text-ink-2">{quip.text}</p>
       </div>
     </main>
   );
@@ -75,7 +82,7 @@ function CheckEmail({ sent, onBack }: { sent: NonNullable<Sent>; onBack: () => v
   };
 
   return (
-    <div className="card space-y-5 p-6 text-center sm:p-7" role="status">
+    <div className="sticker space-y-5 p-6 text-center sm:p-7" role="status">
       <span className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-accent-soft text-accent-text">
         <MailCheck className="size-6" />
       </span>
@@ -188,7 +195,7 @@ export function LoginScreen({ initialMode = 'signin', onBack }: { initialMode?: 
 
   return (
     <Shell onBack={onBack}>
-      <form onSubmit={submit} className="card space-y-5 p-6 sm:p-7" aria-labelledby="login-title">
+      <form onSubmit={submit} className="sticker space-y-5 p-6 sm:p-7" aria-labelledby="login-title">
         <div>
           <h1 id="login-title" className="text-xl font-semibold tracking-tight text-ink">
             {title}
@@ -322,7 +329,7 @@ export function SetNewPasswordScreen() {
 
   return (
     <Shell>
-      <form onSubmit={submit} className="card space-y-5 p-6 sm:p-7" aria-labelledby="new-password-title">
+      <form onSubmit={submit} className="sticker space-y-5 p-6 sm:p-7" aria-labelledby="new-password-title">
         <div>
           <h1 id="new-password-title" className="text-xl font-semibold tracking-tight text-ink">
             Choose a new password

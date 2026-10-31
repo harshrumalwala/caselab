@@ -7,14 +7,15 @@ import { Button, IconButton } from '../ui/Button';
 export function Logo() {
   return (
     <a href="#/dashboard" className="flex items-center gap-2.5 rounded-lg" aria-label="CaseLab home">
-      <span className="flex size-8 items-center justify-center rounded-[10px] bg-accent">
+      <span className="relative flex size-9 items-center justify-center rounded-xl border-2 border-ink/80 bg-accent shadow-[2px_2px_0_0_rgb(28_26_24/0.85)]">
         <svg viewBox="0 0 24 24" className="size-5" fill="none" aria-hidden>
           <rect x="3.5" y="12" width="4" height="8" rx="1.4" fill="#fff" fillOpacity=".55" />
           <rect x="10" y="8" width="4" height="12" rx="1.4" fill="#fff" fillOpacity=".8" />
           <rect x="16.5" y="3.5" width="4" height="16.5" rx="1.4" fill="#fff" />
         </svg>
+        <span className="absolute -right-1.5 -top-1.5 size-3.5 rounded-full border-2 border-ink/80 bg-sun" aria-hidden />
       </span>
-      <span className="text-[17px] font-semibold tracking-tight text-ink">CaseLab</span>
+      <span className="font-display text-xl font-extrabold tracking-tight text-ink">CaseLab</span>
     </a>
   );
 }
@@ -35,7 +36,7 @@ export function Header() {
               href={`#/${r.id}`}
               aria-current={route === r.id ? 'page' : undefined}
               className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
-                route === r.id ? 'bg-accent-soft text-accent-text' : 'text-ink-2 hover:bg-surface-2 hover:text-ink'
+                route === r.id ? 'bg-sun text-on-sun shadow-[2px_2px_0_0_rgb(28_26_24/0.85)] ring-2 ring-ink/80' : 'text-ink-2 hover:bg-sun-soft hover:text-ink'
               }`}
             >
               {r.label}

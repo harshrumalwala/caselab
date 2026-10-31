@@ -46,7 +46,7 @@ async function openApp(env: FakeEnv) {
   return { user, ...view };
 }
 
-const metric = (label: string) => screen.getByText(label, { selector: 'p' }).closest('div.card') as HTMLElement;
+const metric = (label: string) => screen.getByText(label, { selector: 'p' }).closest('div.sticker') as HTMLElement;
 
 async function goTo(hash: string) {
   window.location.hash = hash;

@@ -13,6 +13,8 @@ import {
 } from '../../domain/stats';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { HeroScene } from '../../components/ui/Doodles';
+import { QuipCard } from '../../components/ui/Quip';
 import { useData } from '../../state/DataProvider';
 import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
@@ -50,23 +52,27 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Dashboard</h1>
-        <p className="text-sm text-muted">
-          {total === 0
-            ? 'Your preparation command center. It fills in as you log cases.'
-            : `${total} ${total === 1 ? 'case' : 'cases'} logged. Here is where you stand.`}
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Dashboard</h1>
+          <p className="text-sm text-ink-2">
+            {total === 0
+              ? 'Your preparation command center. It fills in as you log cases.'
+              : `${total} ${total === 1 ? 'case' : 'cases'} logged. Here is where you stand.`}
+          </p>
+        </div>
+        <QuipCard className="sm:max-w-xs" />
       </div>
 
       {total === 0 && (
         <Card className="relative overflow-hidden">
+          <div className="grid items-center gap-6 md:grid-cols-[1.2fr_1fr]">
           <div className="max-w-xl">
             <h2 className="text-xl font-semibold tracking-tight text-ink">Your case prep starts here</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted">
               After each practice case, spend about a minute logging it: a title, case type, industry and a rating. Your
               dashboard builds itself from there. Nothing on this page is made up, so every number comes from cases you
-              log.
+              log. (Think of it as a gym log for your brain.)
             </p>
             <div className="mt-5 flex flex-wrap gap-2.5">
               <Button variant="primary" size="lg" onClick={() => openLogCase()}>
@@ -79,6 +85,8 @@ export function Dashboard() {
                 <Upload className="size-4" /> Import your Excel case log
               </Button>
             </div>
+          </div>
+          <HeroScene className="hidden w-full max-w-xs justify-self-center md:block" />
           </div>
           <ul className="mt-8 grid gap-3 sm:grid-cols-3">
             {[
