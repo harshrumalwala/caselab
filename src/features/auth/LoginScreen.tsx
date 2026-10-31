@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowLeft, Loader2, MailCheck } from 'lucide-react';
 import { Logo } from '../../components/layout/Header';
 import { Button } from '../../components/ui/Button';
-import { Sparkle } from '../../components/ui/Doodles';
+import { Sparkle, Sticky } from '../../components/ui/Doodles';
 import { quipOfTheDay } from '../../domain/quips';
 import { describeAuthError } from '../../data/errors';
 import { useAuth } from '../../state/AuthProvider';
@@ -19,6 +19,8 @@ function Shell({ children, onBack }: { children: ReactNode; onBack?: () => void 
       <Sparkle className="absolute left-[12%] top-[14%] size-8 text-coral" />
       <Sparkle className="absolute right-[14%] top-[22%] size-5 text-lilac" />
       <Sparkle className="absolute bottom-[16%] left-[18%] size-5 text-teal" />
+      <Sticky tone="sky" tilt={-7} className="absolute left-[8%] top-[44%] hidden lg:block">Quant 4/5</Sticky>
+      <Sticky tone="teal" tilt={6} className="absolute right-[9%] top-[38%] hidden lg:block">MECE ✓</Sticky>
       <div className="relative w-full max-w-sm">
         {onBack && (
           <button type="button" onClick={onBack} className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-accent-text hover:underline">

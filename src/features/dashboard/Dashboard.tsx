@@ -94,14 +94,14 @@ export function Dashboard() {
           </div>
           <ul className="mt-8 grid gap-3 sm:grid-cols-3">
             {[
-              { icon: Gauge, title: 'Skills', text: 'Averages for each MCG skill, ignoring anything you did not rate.' },
-              { icon: Layers, title: 'Coverage', text: 'Which case types and industries you have and have not seen.' },
-              { icon: Lightbulb, title: 'Next focus', text: 'Specific suggestions drawn from your own history.' },
-            ].map(({ icon: Icon, title, text }) => (
-              <li key={title} className="rounded-xl border border-line bg-surface-2/60 p-4">
-                <Icon className="size-4 text-accent-text" />
-                <p className="mt-2 text-sm font-semibold text-ink">{title}</p>
-                <p className="mt-0.5 text-xs leading-relaxed text-muted">{text}</p>
+              { icon: Gauge, title: 'Skills', text: 'Averages for each MCG skill, ignoring anything you did not rate.', tone: 'bg-sun-soft text-sun-ink' },
+              { icon: Layers, title: 'Coverage', text: 'Which case types and industries you have and have not seen.', tone: 'bg-teal-soft text-teal-ink' },
+              { icon: Lightbulb, title: 'Next focus', text: 'Specific suggestions drawn from your own history.', tone: 'bg-coral-soft text-coral-ink' },
+            ].map(({ icon: Icon, title, text, tone }) => (
+              <li key={title} className={`rounded-xl border-2 border-ink/80 p-4 ${tone}`}>
+                <Icon className="size-4" />
+                <p className="mt-2 font-display text-sm font-bold">{title}</p>
+                <p className="mt-0.5 text-xs leading-relaxed opacity-90">{text}</p>
               </li>
             ))}
           </ul>

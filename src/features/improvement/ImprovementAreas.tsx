@@ -186,12 +186,12 @@ export function ImprovementAreas() {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Improvement Areas</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Improvement Areas</h1>
         <p className="text-sm text-ink-2">Where your practice is thin, what to sharpen, and what you've learned so far. Think of it as honest friends with a spreadsheet.</p>
       </div>
 
       {/* ---- A. Limited exposure ------------------------------------------------------- */}
-      <Card aria-labelledby="exposure-title">
+      <Card strip="coral" aria-labelledby="exposure-title">
         <CardHeader
           titleId="exposure-title"
           title="Areas with limited exposure"
@@ -246,7 +246,7 @@ export function ImprovementAreas() {
       </Card>
 
       {/* ---- B. Skills to improve ------------------------------------------------------ */}
-      <Card aria-labelledby="skills-improve-title">
+      <Card strip="lilac" aria-labelledby="skills-improve-title">
         <CardHeader
           titleId="skills-improve-title"
           title="Skills to improve"
@@ -320,7 +320,7 @@ export function ImprovementAreas() {
       </Card>
 
       {/* ---- C. Knowledge & learning history ------------------------------------------- */}
-      <Card aria-labelledby="knowledge-title">
+      <Card strip="teal" aria-labelledby="knowledge-title">
         <CardHeader
           titleId="knowledge-title"
           title="Knowledge and learning history"
