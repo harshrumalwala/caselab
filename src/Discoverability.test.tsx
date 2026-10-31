@@ -108,6 +108,49 @@ describe('five tabs, with people and messages together under Community', () => {
     expect(await screen.findByLabelText('Search members by name')).toBeInTheDocument();
   });
 
+  it('shows Members and Inbox as one control split evenly across the full width', async () => {
+    await openAt(createFakeEnv(), '#/people', 'Community');
+    const views = screen.getByRole('navigation', { name: 'Community' });
+    const [members, inbox] = within(views).getAllByRole('link');
+    expect(members).toHaveTextContent('Members');
+    expect(inbox).toHaveTextContent('Inbox');
+    expect(views).toHaveClass('flex'); // one row, not wrapping pills
+    expect(views).not.toHaveClass('flex-wrap');
+    expect(members).toHaveClass('flex-1'); // each half takes half the width
+    expect(inbox).toHaveClass('flex-1');
+  });
+
+  it('gives the chosen half the same yellow, outlined look as the current page in the main navigation', async () => {
+    await openAt(createFakeEnv(), '#/people', 'Community');
+    const views = within(screen.getByRole('navigation', { name: 'Community' }));
+    const [members, inbox] = views.getAllByRole('link');
+    expect(screen.getByRole('navigation', { name: 'Community' })).toHaveClass('sticker');
+    expect(members).toHaveAttribute('aria-current', 'page');
+    expect(members).toHaveClass('bg-sun', 'ring-2'); // chosen
+    expect(inbox).not.toHaveClass('bg-sun'); // not chosen
+    expect(inbox).toHaveClass('hover:bg-sun-soft');
+    const mainNav = screen.getAllByRole('navigation', { name: 'Primary' })[0];
+    expect(within(mainNav).getByRole('link', { name: /^Community/ })).toHaveClass('bg-sun', 'ring-2'); // the same look up top
+  });
+
+  it('uses the same full-width split for the other two-way switches: the Case Log and a member profile', async () => {
+    const env = createFakeEnv({ members: [BOB] });
+    const { unmount } = await openAtAndKeep(env, '#/log', 'My Case Log');
+    const log = screen.getByRole('tablist', { name: 'Case log views' });
+    expect(within(log).getAllByRole('tab').map((t) => t.textContent)).toEqual(['My cases', 'Burned (0)']);
+    expect(log).toHaveClass('flex', 'sticker');
+    expect(log).not.toHaveClass('flex-wrap');
+    for (const tab of within(log).getAllByRole('tab')) expect(tab).toHaveClass('flex-1');
+    unmount();
+
+    await openAtAndKeep(env, '#/people/bob', 'Bob Brown');
+    const profile = await screen.findByRole('tablist', { name: 'Profile sections' });
+    expect(within(profile).getAllByRole('tab')).toHaveLength(2);
+    expect(profile).toHaveClass('flex', 'sticker');
+    expect(profile).not.toHaveClass('flex-wrap');
+    for (const tab of within(profile).getAllByRole('tab')) expect(tab).toHaveClass('flex-1');
+  });
+
   it('shows requests and conversations together in the Inbox, in the order you would act on them', async () => {
     const env = await withThingsWaiting();
     await openAt(env, '#/inbox', 'Community');
