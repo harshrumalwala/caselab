@@ -25,7 +25,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     displayName: 'E2E Owner A',
     mbaClass: '',
     listed: true,
-    publicProfile: false, publicLinkOnly: false,
+    publicProfile: false, publicLinkOnly: false, burnedBooks: [],
     sharing: NO_SHARING,
     ...over,
   });
@@ -136,6 +136,20 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     expect(JSON.stringify(row)).not.toContain('PRIVATE-PARTNER');
   });
 
+  it('shares burned books with members who can see the profile, never with visitors, and stops when unlisted', async () => {
+    await communityA.saveProfile(profile({ burnedBooks: ['Cosentino', 'Case in Point'] }));
+    expect((await communityB.getPerson(a.userId))?.burnedBooks).toEqual(['Cosentino', 'Case in Point']);
+
+    // Visitors: not in the public data, and the profiles table is closed to them.
+    await communityA.saveProfile(profile({ publicProfile: true, burnedBooks: ['Cosentino'] }));
+    expect((await new PublicCommunity(newClient()).getPerson(a.userId))?.burnedBooks).toEqual([]);
+    expect((await newClient().from('profiles').select('burned_books')).error).not.toBeNull();
+
+    await communityA.saveProfile(profile({ listed: false, burnedBooks: ['Cosentino'] }));
+    expect(await communityB.getPerson(a.userId)).toBeNull();
+    await communityA.saveProfile(profile()); // leave the account as it was found
+  });
+
   it('applies a privacy change immediately and keeps no old private data', async () => {
     await repoA.insertCase(testCase());
     await communityA.saveProfile(profile({ sharing: sharing(...(Object.keys(NO_SHARING) as (keyof SharingPrefs)[])) }));
@@ -233,7 +247,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     it('see a member who opted in: history and chosen scores, never written feedback or notes, and only until they opt out', async () => {
       const c = testCase();
       await repoA.insertCase(c);
-      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, sharing: sharing(...allButDetails) }));
+      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, burnedBooks: [], sharing: sharing(...allButDetails) }));
 
       const person = await visitor().getPerson(a.userId);
       expect(person).toMatchObject({ displayName: 'E2E Owner A', publicProfile: true });
@@ -245,10 +259,10 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
       expect(JSON.stringify(row)).not.toContain('PRIVATE-OTHER-NOTES');
       expect(row.partner).toBe('PRIVATE-PARTNER'); // "who cased me" was switched on above, and only then
 
-      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, sharing: sharing('cases', 'overall') }));
+      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, burnedBooks: [], sharing: sharing('cases', 'overall') }));
       expect((await visibleToVisitors())[0].partner).toBe(''); // switched off again: the name is gone at once
 
-      await communityA.saveProfile(profile({ publicProfile: false, publicLinkOnly: false, sharing: sharing('cases') }));
+      await communityA.saveProfile(profile({ publicProfile: false, publicLinkOnly: false, burnedBooks: [], sharing: sharing('cases') }));
       expect(await visibleToVisitors()).toEqual([]);
       expect(await visitor().getPerson(a.userId)).toBeNull();
     });
@@ -258,20 +272,20 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
       const newerPrivate = testCase({ date: '2026-09-09', shareMode: 'private' });
       await repoA.insertCase(shown);
       await repoA.insertCase(newerPrivate);
-      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, sharing: sharing('cases') }));
+      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, burnedBooks: [], sharing: sharing('cases') }));
 
       const mine = async () => (await visitor().recentPeople(50)).find((r) => r.person.userId === a.userId);
       expect((await mine())?.lastCased).toBe('2026-03-02'); // the private, newer case doesn't count
       expect((await visitor().recentPeople(1)).length).toBeLessThanOrEqual(1);
 
-      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, sharing: NO_SHARING })); // nothing shared any more
+      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, burnedBooks: [], sharing: NO_SHARING })); // nothing shared any more
       expect(await mine()).toBeUndefined();
     });
 
     it('link only: not found, listed or counted, but opens from the exact id; and back in the directory when switched off', async () => {
       const c = testCase();
       await repoA.insertCase(c);
-      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: true, sharing: sharing('cases', 'overall') }));
+      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: true, burnedBooks: [], sharing: sharing('cases', 'overall') }));
 
       const people = async () => (await visitor().searchPeople('E2E Owner A')).some((p) => p.userId === a.userId);
       const recent = async () => (await visitor().recentPeople(50)).some((r) => r.person.userId === a.userId);
@@ -288,10 +302,10 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
       expect([row.feedback, row.notes]).toEqual([null, null]);
       expect(await visitor().getPerson('00000000-0000-4000-8000-000000000000')).toBeNull(); // a made-up id finds nothing
 
-      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, sharing: sharing('cases', 'overall') }));
+      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, burnedBooks: [], sharing: sharing('cases', 'overall') }));
       expect(await people()).toBe(true);
 
-      await communityA.saveProfile(profile({ publicProfile: false, publicLinkOnly: false, sharing: sharing('cases') }));
+      await communityA.saveProfile(profile({ publicProfile: false, publicLinkOnly: false, burnedBooks: [], sharing: sharing('cases') }));
       expect(await visitor().getPerson(a.userId)).toBeNull();
       expect(await visibleToVisitors()).toEqual([]);
     });
@@ -299,7 +313,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
     it('open everything: visitors can read feedback, notes and other notes, and only until it is switched off', async () => {
       const c = testCase();
       await repoA.insertCase(c);
-      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, sharing: sharing('cases', 'details') }));
+      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, burnedBooks: [], sharing: sharing('cases', 'details') }));
 
       const [open] = await visibleToVisitors();
       expect(open.feedback?.overall).toBe(c.overallFeedback);
@@ -308,14 +322,14 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
       expect(open.partner).toBe(''); // the partner has its own switch
       expect(JSON.stringify(open)).not.toContain('PRIVATE-PARTNER');
 
-      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, sharing: sharing('cases') }));
+      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, burnedBooks: [], sharing: sharing('cases') }));
       const [closed] = await visibleToVisitors();
       expect([closed.feedback, closed.notes, closed.otherNotes]).toEqual([null, null, '']);
     });
 
     it('cannot read anything else, or write anything, through direct requests', async () => {
       await repoA.insertCase(testCase());
-      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, sharing: sharing('cases') }));
+      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, burnedBooks: [], sharing: sharing('cases') }));
       const anon = newClient();
       for (const table of ['cases', 'opportunities', 'profiles', 'shared_cases']) {
         expect((await anon.from(table).select('*')).error, table).not.toBeNull();
@@ -338,10 +352,10 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: privacy between two real accoun
       const secret = testCase({ title: `${TEST_PREFIX} secret one`, shareMode: 'private' });
       await repoA.insertCase(open);
       await repoA.insertCase(secret);
-      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, sharing: sharing('cases') }));
+      await communityA.saveProfile(profile({ publicProfile: true, publicLinkOnly: false, burnedBooks: [], sharing: sharing('cases') }));
       expect((await visibleToVisitors()).map((s) => s.title)).toEqual([open.title]);
 
-      await communityA.saveProfile(profile({ listed: false, publicProfile: true, publicLinkOnly: false, sharing: sharing('cases') })); // unlisting also withdraws public
+      await communityA.saveProfile(profile({ listed: false, publicProfile: true, publicLinkOnly: false, burnedBooks: [], sharing: sharing('cases') })); // unlisting also withdraws public
       expect(await visibleToVisitors()).toEqual([]);
     });
   });

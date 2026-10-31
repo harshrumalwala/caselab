@@ -1,5 +1,5 @@
 import type { Rating, SkillGroupKey, SkillKey, CaseType } from '../domain/constants';
-import type { Profile, ProfileInput, SharedCase } from '../domain/community';
+import { normalizeBurnedBooks, type Profile, type ProfileInput, type SharedCase } from '../domain/community';
 
 /** Read-only access to member profiles and shared cases. Visitors without an account only ever get this. */
 export interface CommunityReader {
@@ -42,6 +42,7 @@ export interface ProfileRow {
   listed: boolean;
   public_profile: boolean;
   public_link_only: boolean;
+  burned_books: string[];
   share_cases: boolean;
   share_overall: boolean;
   share_skills: boolean;
@@ -60,6 +61,7 @@ export function rowToProfile(r: ProfileRow): Profile {
     listed: r.listed,
     publicProfile: r.public_profile ?? false,
     publicLinkOnly: r.public_link_only ?? false,
+    burnedBooks: r.burned_books ?? [],
     sharing: {
       cases: r.share_cases,
       overall: r.share_overall,
@@ -80,6 +82,7 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
     listed: input.listed,
     public_profile: input.listed && input.publicProfile, // public needs listed (also a database rule)
     public_link_only: input.listed && input.publicProfile && input.publicLinkOnly, // link only needs public (also a database rule)
+    burned_books: normalizeBurnedBooks(input.burnedBooks),
     share_cases: input.sharing.cases,
     share_overall: input.sharing.overall,
     share_skills: input.sharing.skills,
@@ -119,6 +122,7 @@ export function rowToPublicProfile(r: PublicProfileRow): Profile {
     listed: true,
     publicProfile: true,
     publicLinkOnly: false,
+    burnedBooks: [], // never public
     sharing: {
       cases: r.share_cases,
       overall: r.share_overall,

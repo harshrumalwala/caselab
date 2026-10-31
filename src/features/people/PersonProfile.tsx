@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ArrowLeft, Loader2, UserRound } from 'lucide-react';
+import { ArrowLeft, Flame, Loader2, UserRound } from 'lucide-react';
 import type { CommunityReader } from '../../data/community';
 import { describeError } from '../../data/errors';
 import { publicSharingSummary, sharedToRecords, sharingSummary, type Profile, type SharedCase } from '../../domain/community';
@@ -178,6 +178,14 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
             Shares <strong className="font-semibold text-ink">{summary}</strong>
             {shared.length > 0 && <> · {shared.length} case{shared.length === 1 ? '' : 's'} visible</>}
           </p>
+          {!visitor && person.burnedBooks.length > 0 && (
+            <p className="mt-1.5 flex items-start gap-1.5 text-sm text-ink-2">
+              <Flame className="mt-0.5 size-4 shrink-0 text-accent-text" aria-hidden />
+              <span>
+                Has burned <strong className="font-semibold text-ink">{person.burnedBooks.join(', ')}</strong>
+              </span>
+            </p>
+          )}
         </div>
       </div>
 

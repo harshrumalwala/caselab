@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SharedCase } from './community';
-import { compareTitles, distinctValues, matchesFilter, NO_FILTER, pairCases, titleTokens } from './pairing';
+import { normalizeBurnedBooks, type SharedCase } from './community';
+import { compareTitles, distinctValues, matchesFilter, NO_FILTER, pairCases, sameBook, titleTokens } from './pairing';
 import { makeCase } from '../test/builders';
 
 const theirs = (title: string, over: Partial<SharedCase> = {}): SharedCase => ({
@@ -91,6 +91,65 @@ describe('pairing my cases with what someone shared', () => {
     expect(p.theyHaveDone).toEqual([]);
     expect(p.newToThem).toHaveLength(4);
     expect(p.caseTypeGaps.every((g) => g.theirCount === 0)).toBe(true);
+  });
+});
+
+describe('burned books', () => {
+  const book = (title: string, source: string, over: NonNullable<Parameters<typeof makeCase>[0]> = {}) =>
+    makeCase({ title, source, caseType: 'Profitability', industry: 'Transportation / Logistics', date: '2026-09-01', ...over });
+  const mine = [
+    book('Airline profitability', 'Cosentino'),
+    book('Bank fees', 'Case in Point', { caseType: 'Revenue', industry: 'Financial Services' }),
+    book('Hospital entry', 'Booth casebook 2026', { caseType: 'Market Entry', industry: 'Healthcare / Pharmaceuticals' }),
+    book('Loose case', ''),
+  ];
+
+  it('leaves out my cases from a book they have burned, and lists them separately', () => {
+    const p = pairCases(mine, [], ['Cosentino']);
+    expect(p.newToThem.map((c) => c.title).sort()).toEqual(['Bank fees', 'Hospital entry', 'Loose case']);
+    expect(p.burnedExcluded.map((c) => c.title)).toEqual(['Airline profitability']);
+  });
+
+  it('matches the book however it was typed', () => {
+    const p = pairCases(mine, [], ['  cosentino ', 'Booth Casebook 2026']);
+    expect(p.burnedExcluded.map((c) => c.title).sort()).toEqual(['Airline profitability', 'Hospital entry']);
+    expect(sameBook('Booth casebook', 'The Booth Casebook')).toBe(true);
+    expect(sameBook('Booth casebook', 'Cosentino')).toBe(false);
+    expect(sameBook('', '')).toBe(false);
+  });
+
+  it('never treats a case with no source as part of a burned book', () => {
+    const p = pairCases(mine, [], ['Cosentino', 'Case in Point', 'Booth casebook 2026']);
+    expect(p.newToThem.map((c) => c.title)).toEqual(['Loose case']);
+  });
+
+  it('keeps burned cases out of the gaps they could fill', () => {
+    // "Airline profitability" and "Loose case" are both Profitability / Transportation; burning Cosentino removes the first.
+    const offerable = (burned: string[]) => {
+      const p = pairCases(mine, [], burned);
+      return [
+        p.caseTypeGaps.find((g) => g.name === 'Profitability')?.offerable,
+        p.industryGaps.find((g) => g.name === 'Transportation / Logistics')?.offerable,
+      ];
+    };
+    expect(offerable([])).toEqual([2, 2]);
+    expect(offerable(['Cosentino'])).toEqual([1, 1]);
+  });
+
+  it('changes nothing when they have burned nothing', () => {
+    const none = pairCases(mine, []);
+    const empty = pairCases(mine, [], []);
+    expect(empty.newToThem.map((c) => c.id)).toEqual(none.newToThem.map((c) => c.id));
+    expect(none.burnedExcluded).toEqual([]);
+    expect(none.newToThem).toHaveLength(4);
+  });
+});
+
+describe('the burned books list', () => {
+  it('is tidied: trimmed, no blanks, no repeats ignoring case, names cut to length, at most 40', () => {
+    expect(normalizeBurnedBooks([' Cosentino ', 'cosentino', '', '   ', 'Case in Point'])).toEqual(['Cosentino', 'Case in Point']);
+    expect(normalizeBurnedBooks(['x'.repeat(150)])[0]).toHaveLength(100);
+    expect(normalizeBurnedBooks(Array.from({ length: 60 }, (_, i) => `Book ${i}`))).toHaveLength(40);
   });
 });
 

@@ -71,6 +71,8 @@ export interface Gap {
 export interface Pairing {
   /** Cases they've shared (what NOT to repeat). */
   theyHaveDone: TheyHaveDone[];
+  /** Mine left out because they have burned the book it comes from. */
+  burnedExcluded: CaseRecord[];
   /** Mine with no match in what they've shared: the best candidates to give them. */
   newToThem: CaseRecord[];
   /** Mine that look similar to one of theirs: worth checking before using. */
@@ -89,8 +91,20 @@ function distinctMine(mine: CaseRecord[]): CaseRecord[] {
   return out;
 }
 
-export function pairCases(mine: CaseRecord[], theirs: SharedCase[]): Pairing {
-  const myCases = distinctMine(mine);
+/** Whether two casebook names are the same book: equal once tidied, or the same words ("Booth casebook" and "Booth Casebook"). */
+export function sameBook(a: string, b: string): boolean {
+  const x = a.trim();
+  const y = b.trim();
+  if (!x || !y) return false;
+  return x.toLowerCase() === y.toLowerCase() || compareTitles(x, y) === 'same';
+}
+
+export function pairCases(mine: CaseRecord[], theirs: SharedCase[], theirBurnedBooks: readonly string[] = []): Pairing {
+  // A burned book is one they have already worked through, so none of its cases are worth offering.
+  const burned = (c: CaseRecord) => theirBurnedBooks.some((book) => sameBook(book, c.source));
+  const allMine = distinctMine(mine);
+  const burnedExcluded = allMine.filter(burned);
+  const myCases = allMine.filter((c) => !burned(c));
 
   const theyHaveDone: TheyHaveDone[] = theirs.map((shared) => {
     let best: TheyHaveDone['mine'] = null;
@@ -150,7 +164,7 @@ export function pairCases(mine: CaseRecord[], theirs: SharedCase[]): Pairing {
     .map((n): Gap => ({ name: n, theirCount: theirIndustries.get(n) ?? 0, offerable: offerableIndustries.get(n) ?? 0 }))
     .sort(gapsSort);
 
-  return { theyHaveDone, newToThem, mayOverlap, caseTypeGaps, industryGaps };
+  return { theyHaveDone, burnedExcluded, newToThem, mayOverlap, caseTypeGaps, industryGaps };
 }
 
 // ---------------------------------------------------------------------------------------

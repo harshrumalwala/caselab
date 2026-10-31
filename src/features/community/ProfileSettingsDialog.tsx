@@ -11,6 +11,7 @@ import { useCommunity, useMyProfile } from '../../state/CommunityProvider';
 import { useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
 import { AudienceSwitch, profileAddress } from './AudienceSwitch';
+import { BurnedBooks } from './BurnedBooks';
 import { SharedCaseRow } from './SharedCaseRow';
 import { SharingSwitches } from './SharingSwitches';
 
@@ -20,6 +21,9 @@ type Audience = 'members' | 'visitors';
  * What each audience can see right now, read back the way that audience would read it, so the preview can't
  * drift from reality: members through their signed-in session, visitors through a request with no account at all.
  */
+/** Distinct casebook names from your own cases, to suggest as you type. */
+const distinctSources = (cases: { source: string }[]) => [...new Set(cases.map((c) => c.source.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
 function Preview({ profile }: { profile: Profile }) {
   const { community } = useCommunity();
   const { cases } = useData();
@@ -132,6 +136,7 @@ function Preview({ profile }: { profile: Profile }) {
 export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
   const profile = useMyProfile();
   const { saveProfile } = useCommunity();
+  const { cases } = useData();
   const toast = useToast();
 
   const [name, setName] = useState(profile.displayName);
@@ -158,6 +163,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
         publicProfile,
         // Link only needs public, so withdrawing public visibility clears it too.
         publicLinkOnly: publicProfile && (next.publicLinkOnly ?? profile.publicLinkOnly),
+        burnedBooks: next.burnedBooks ?? profile.burnedBooks,
         sharing: next.sharing ?? profile.sharing,
       });
       if (success) toast({ title: success });
@@ -255,9 +261,16 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
             <SharingSwitches value={profile.sharing} onChange={setSharing} disabled={saving || !profile.listed} />
             <p className="text-xs text-muted">
               You can override any single case when you log or edit it: keep it private, share only its name, or share it in
-              full. "Other notes" are never shared, and your practice partner's name only appears if you turn on "Who cased me".
+              full. "Other notes" stay private unless you turn on "Open everything", and your practice partner's name only appears if you turn on "Who cased me".
             </p>
           </section>
+
+          <BurnedBooks
+            books={profile.burnedBooks}
+            suggestions={distinctSources(cases)}
+            disabled={saving}
+            onChange={(burnedBooks) => void save({ burnedBooks })}
+          />
 
           <Preview profile={profile} />
           {profile.listed && <Badge tone="neutral">Changes apply as soon as they're saved.</Badge>}

@@ -14,6 +14,23 @@ export interface SharingPrefs {
   details: boolean; // open everything: scores, feedback, learning notes and other notes on every shared case
 }
 
+export const MAX_BURNED_BOOKS = 40;
+export const MAX_BOOK_NAME = 100;
+
+/** A tidy list of casebook names: trimmed, no blanks, no repeats (ignoring case), each cut to length, at most 40. */
+export function normalizeBurnedBooks(books: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of books) {
+    const name = raw.trim().slice(0, MAX_BOOK_NAME).trim();
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out.slice(0, MAX_BURNED_BOOKS);
+}
+
 export const NO_SHARING: SharingPrefs = {
   cases: false,
   overall: false,
@@ -36,6 +53,8 @@ export interface Profile {
   publicProfile: boolean;
   /** Visible without an account, but only to people who have this member's profile address. Needs `publicProfile`. */
   publicLinkOnly: boolean;
+  /** Casebooks this member has already burned (for example solo). Others picking a case for them skip these. */
+  burnedBooks: string[];
   sharing: SharingPrefs;
 }
 

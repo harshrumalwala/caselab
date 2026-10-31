@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Lock, LockOpen, Pencil, Trash2 } from 'lucide-react';
 import { RATING_LABELS, SHARE_MODES, SKILLS, skillGroupLabel, type Rating } from '../../domain/constants';
 import { formatDate } from '../../domain/dates';
 import { describeError } from '../../data/errors';
@@ -11,6 +11,7 @@ import { Dialog } from '../../components/ui/Dialog';
 import { useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
+import { useTogglePrivate } from './useTogglePrivate';
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -35,6 +36,7 @@ export function CaseDetail({ caseId, onClose }: { caseId: string; onClose: () =>
   const { cases, deleteCase } = useData();
   const { editCase } = useUI();
   const toast = useToast();
+  const togglePrivate = useTogglePrivate();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -73,13 +75,20 @@ export function CaseDetail({ caseId, onClose }: { caseId: string; onClose: () =>
           <div className="flex flex-wrap gap-1.5">
             <Badge>{c.caseType}</Badge>
             {c.industry && <Badge>{c.industry}</Badge>}
+            {c.shareMode === 'private' && <Badge>Private</Badge>}
           </div>
         }
         footer={
           <div className="flex justify-between gap-2">
-            <Button variant="ghost" className="hover:!text-bad" onClick={() => setConfirming(true)}>
-              <Trash2 className="size-4" /> Delete
-            </Button>
+            <div className="flex gap-1">
+              <Button variant="ghost" className="hover:!text-bad" onClick={() => setConfirming(true)}>
+                <Trash2 className="size-4" /> Delete
+              </Button>
+              <Button variant="ghost" onClick={() => void togglePrivate(c)}>
+                {c.shareMode === 'private' ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
+                {c.shareMode === 'private' ? 'Stop keeping private' : 'Make private'}
+              </Button>
+            </div>
             <Button
               variant="primary"
               onClick={() => {

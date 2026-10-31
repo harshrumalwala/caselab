@@ -478,3 +478,74 @@ describe('hardening from the independent security review', () => {
     expect(await sharedAs(BOB)).toEqual([]); // ...but the read policy refuses to serve it
   });
 });
+
+describe('burned books', () => {
+  const burnedOf = async (viewer: string, owner: string) => {
+    await as(db, 'authenticated', viewer);
+    return (await db.query<{ burned_books: string[] }>('select burned_books from public.profiles where user_id = $1', [owner])).rows;
+  };
+  const setBurned = async (uid: string, books: string[]) => {
+    await as(db, 'authenticated', uid);
+    await db.query('update public.profiles set burned_books = $2 where user_id = $1', [uid, books]);
+  };
+
+  it('starts empty for everyone, so nothing is shared until a member adds a book', async () => {
+    await createProfile(ALICE, 'Alice');
+    expect(await burnedOf(ALICE, ALICE)).toEqual([{ burned_books: [] }]);
+    expect(await burnedOf(BOB, ALICE)).toEqual([{ burned_books: [] }]);
+  });
+
+  it('lets verified members read the list of a member who is listed, and nobody else', async () => {
+    await createProfile(ALICE, 'Alice');
+    await setBurned(ALICE, ['Cosentino', 'Case in Point']);
+    expect(await burnedOf(BOB, ALICE)).toEqual([{ burned_books: ['Cosentino', 'Case in Point'] }]);
+
+    await setPrefs(ALICE, { listed: false });
+    expect(await burnedOf(BOB, ALICE)).toEqual([]); // unlisted: not even the profile row is visible
+    expect(await burnedOf(ALICE, ALICE)).toHaveLength(1); // the owner still sees her own
+  });
+
+  it('is never readable by visitors without an account, and is not in the public tables', async () => {
+    await createProfile(ALICE, 'Alice');
+    await setBurned(ALICE, ['Cosentino']);
+    await as(db, 'anon');
+    expect(await fails('select burned_books from public.profiles')).toMatch(/permission denied/);
+    await as(db, 'postgres');
+    const cols = (
+      await db.query<{ column_name: string }>(
+        `select column_name from information_schema.columns where table_name in ('public_profiles', 'public_shared_cases', 'shared_cases')`,
+      )
+    ).rows.map((c) => c.column_name);
+    expect(cols).not.toContain('burned_books');
+  });
+
+  it("does not let another member change someone's list", async () => {
+    await createProfile(ALICE, 'Alice');
+    await setBurned(ALICE, ['Cosentino']);
+    await as(db, 'authenticated', BOB);
+    expect((await db.query(`update public.profiles set burned_books = '{}' where user_id = $1 returning user_id`, [ALICE])).rows).toEqual([]);
+    expect(await burnedOf(BOB, ALICE)).toEqual([{ burned_books: ['Cosentino'] }]);
+  });
+
+  it('limits the list to 40 books and 2000 characters', async () => {
+    await createProfile(ALICE, 'Alice');
+    await setBurned(ALICE, Array.from({ length: 40 }, (_, i) => `Book ${i}`));
+    await as(db, 'authenticated', ALICE);
+    await expect(
+      db.query('update public.profiles set burned_books = $2 where user_id = $1', [ALICE, Array.from({ length: 41 }, (_, i) => `Book ${i}`)]),
+    ).rejects.toThrow(/profiles_burned_books_size/);
+    await as(db, 'authenticated', ALICE);
+    await expect(
+      db.query('update public.profiles set burned_books = $2 where user_id = $1', [ALICE, Array.from({ length: 21 }, () => 'x'.repeat(100))]),
+    ).rejects.toThrow(/profiles_burned_books_size/);
+  });
+
+  it("does not change what is shared about cases when the list changes", async () => {
+    await createProfile(ALICE, 'Alice', ['share_cases']);
+    await addCase(ALICE, { source: 'Cosentino' });
+    await setBurned(ALICE, ['Cosentino']);
+    const rows = await sharedAs(BOB);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source).toBe('Cosentino');
+  });
+});

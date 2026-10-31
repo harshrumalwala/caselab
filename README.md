@@ -136,6 +136,18 @@ too once your profile is public (a "full" case shows its scores and improvement 
 previews each audience separately. Turning it off, or no longer appearing in People, withdraws you from the public page at once. Each switch saves the
 moment you flip it, and **"What other members see"** at the bottom shows exactly what the database is serving about you.
 
+**One-click private.** Any case can be hidden from every other member, whatever your profile shares: switch on **Keep this case
+private** when you log or edit it, or click the lock on its row in the Case Log (or **Make private** in the case detail). A private case
+shows a **Private** badge in your log, is removed from the shared copy straight away, and stays hidden from visitors too. Imported cases
+can also start private (see the import options).
+
+**Burned books.** If you have already worked through a casebook (for example on your own), add it under **Books I've burned** in Profile &
+privacy, or tick **I've burned this book** when you log a case from it. When another member opens your profile and picks a case for you,
+their suggestions skip their cases from those books, and say how many were left out. Your profile shows "Has burned ..." to members who can
+see it. It is advice, not a lock (it only changes what that screen suggests), it only names casebooks you typed yourself, and it is never
+shown to visitors without an account. Books are matched by name ignoring case and filler words ("Booth casebook" and "The Booth Casebook"
+are the same book).
+
 **Per case.** When you log or edit a case, an optional **Sharing for this case** section lets you override your defaults:
 use your profile settings (the default), keep this case private, share only its name, or share it in full (its scores,
 feedback and notes, even if your profile shares none of those). Nobody has to touch it when logging.
@@ -202,7 +214,7 @@ These rules are tested directly against a real Postgres (see Tests), including a
 | --- | --- | --- |
 | `cases` | Your cases: date, title, source, case type, industry, partner, overall rating and feedback, the eight MCG skill ratings with feedback (one `skills` JSON column), takeaways, improvement tag, other notes, sharing override | Only you |
 | `opportunities` | Your hand-edited lists from the MCG "Opportunity Areas" tab | Only you |
-| `profiles` | Name, optional MBA class, listed and public flags, the sharing switches. No email | Verified members (listed profiles) |
+| `profiles` | Name, optional MBA class, listed and public flags, the sharing switches, burned books. No email | Verified members (listed profiles) |
 | `shared_cases` | The owner-approved projection of cases (see above). Written only by triggers | Verified members |
 | `public_profiles`, `public_shared_cases` | Copies for members who chose to be public (free text only if they opened everything; link-only members are excluded from table reads). Written only by triggers | Anyone, including visitors without an account |
 

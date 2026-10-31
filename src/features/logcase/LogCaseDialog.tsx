@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ChevronDown, MessageSquarePlus } from 'lucide-react';
+import { ChevronDown, Flame, Lock, MessageSquarePlus } from 'lucide-react';
 import {
   CASE_TYPES,
   INDUSTRIES,
@@ -24,8 +24,12 @@ import { canonicalIndustry, caseTypeCounts, overview } from '../../domain/stats'
 import type { CaseInput, CaseRecord } from '../../domain/types';
 import { Button } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
+import { Switch } from '../../components/ui/Switch';
 import { RatingInput } from '../../components/ui/RatingInput';
 import { describeError } from '../../data/errors';
+import { sameBook } from '../../domain/pairing';
+import { normalizeBurnedBooks } from '../../domain/community';
+import { useCommunity, useMyProfile } from '../../state/CommunityProvider';
 import { DRAFT_KEY, useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
@@ -121,6 +125,8 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
   const { cases, data, mode, addCase, updateCase } = useData();
   const { navigate } = useUI();
   const toast = useToast();
+  const profile = useMyProfile();
+  const { saveProfile } = useCommunity();
 
   const editing = useMemo(() => (editId ? (cases.find((c) => c.id === editId) ?? null) : null), [editId, cases]);
 
@@ -132,6 +138,8 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
   });
 
   const [input, setInput] = useState<CaseInput>(initial);
+  // Burning a book is a setting on your profile, not on the case; null means "leave it as it is".
+  const [burnChoice, setBurnChoice] = useState<boolean | null>(null);
   const [errors, setErrors] = useState<CaseErrors>({});
   const [showSkills, setShowSkills] = useState(() =>
     editing ? SKILLS.some((s) => initial.skills[s.key].rating !== null || initial.skills[s.key].feedback !== '') : false,
@@ -196,6 +204,23 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
     }
   };
 
+  const isBurned = input.source.trim() !== '' && profile.burnedBooks.some((b) => sameBook(b, input.source));
+  const wantsBurn = burnChoice ?? isBurned;
+
+  /** Adds or removes this case's book from your burned list when you changed it here. Never blocks saving the case. */
+  const applyBurn = async () => {
+    const source = input.source.trim();
+    if (mode !== 'real' || !source || wantsBurn === isBurned) return;
+    const { userId: _userId, ...rest } = profile;
+    const next = wantsBurn ? [...profile.burnedBooks, source] : profile.burnedBooks.filter((b) => !sameBook(b, source));
+    try {
+      await saveProfile({ ...rest, burnedBooks: normalizeBurnedBooks(next) });
+      toast({ title: wantsBurn ? `${source} marked as burned` : `${source} is no longer marked as burned` });
+    } catch (err) {
+      toast({ kind: 'error', title: "The case was saved, but your burned books weren't updated", body: describeError(err) });
+    }
+  };
+
   const submit = async (e?: FormEvent) => {
     e?.preventDefault();
     if (saving) return;
@@ -211,6 +236,7 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
     try {
       if (editing) {
         await updateCase(editing.id, input);
+        await applyBurn();
         toast({ title: 'Changes saved', body: input.title.trim() });
         onClose();
         return;
@@ -221,6 +247,7 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
       const record = await addCase(input);
       const after = [...before, record];
       saveDraft(null);
+      await applyBurn();
 
       const industry = canonicalIndustry(record.industry, data.customIndustries);
       const sameIndustry = (c: CaseRecord) => canonicalIndustry(c.industry, data.customIndustries) === industry;
@@ -497,6 +524,25 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
             </Field>
           </div>
 
+          {mode === 'real' && input.source.trim() !== '' && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line px-3.5 py-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-[var(--accent)]"
+                checked={wantsBurn}
+                onChange={(e) => setBurnChoice(e.target.checked)}
+              />
+              <span>
+                <span className="flex items-center gap-1.5 font-medium text-ink">
+                  <Flame className="size-4 text-accent-text" aria-hidden /> I've burned this book
+                </span>
+                <span className="block text-xs text-muted">
+                  Members picking a case for you will skip {input.source.trim()}. You can change this any time in Profile &amp; privacy.
+                </span>
+              </span>
+            </label>
+          )}
+
           <div>
             <div className="mb-1.5 flex items-center justify-between">
               <span className="label !mb-0" id="overall-label">
@@ -682,6 +728,21 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
             </div>
           )}
         </section>
+
+        {/* ---- One-click private ---------------------------------------------------------- */}
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-line px-4 py-3.5">
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+              <Lock className="size-4 text-accent-text" aria-hidden /> Keep this case private
+            </p>
+            <p className="text-xs text-muted">Hidden from every other member, whatever your profile shares.</p>
+          </div>
+          <Switch
+            label="Keep this case private"
+            checked={input.shareMode === 'private'}
+            onChange={(on) => set('shareMode', on ? 'private' : 'profile')}
+          />
+        </div>
 
         {/* ---- Sharing for this case (collapsed; defaults to your profile settings) -------- */}
         <section aria-label="Sharing" className="rounded-2xl border border-line">
