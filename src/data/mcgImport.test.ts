@@ -205,3 +205,33 @@ describe('MCG Excel import', () => {
     expect(cellToISODate(null)).toBeNull();
   });
 });
+
+describe('the extra columns CaseLab\'s own export adds beside the template', () => {
+  const header = ['#', 'Date', 'Case Title', 'Case Type', 'Overall', null, 'Industry', 'What went well', 'What I struggled with', 'Concepts I learned', 'Next focus', 'Improvement focus'];
+
+  it('puts each one in its own field, not in the case\'s other notes', () => {
+    const rows = [header, [1, '2026-10-12', 'Airline profit', 'Revenue', 4, '', 'Insurance', 'Clean tree', 'Quick maths', 'Load factor', 'Daily drills', 'Quant / Math']];
+    const { cases, rows: detail } = mcgRowsToCases(rows);
+    expect(cases[0]).toMatchObject({
+      industry: 'Insurance',
+      wentWell: 'Clean tree',
+      struggled: 'Quick maths',
+      concepts: 'Load factor',
+      nextFocus: 'Daily drills',
+      improvementArea: 'quant',
+      otherNotes: '',
+    });
+    expect(detail[0].notes).toEqual([]);
+  });
+
+  it('understands the improvement focus however it is spelled, and says so when it is none of the skill areas', () => {
+    const at = (text: string) => mcgRowsToCases([header, [1, '2026-10-12', 'X', 'Revenue', 4, '', '', '', '', '', '', text]]);
+    expect(at('quant').cases[0].improvementArea).toBe('quant');
+    expect(at('Prompt / Pre-framework').cases[0].improvementArea).toBe('prompt');
+    expect(at('BEHAVIORAL').cases[0].improvementArea).toBe('behavioral');
+    expect(at('').cases[0].improvementArea).toBeNull();
+    const odd = at('Vibes');
+    expect(odd.cases[0].improvementArea).toBeNull();
+    expect(odd.rows[0].notes).toEqual(['Improvement focus “Vibes” isn\'t one of the skill areas, so it was left blank.']);
+  });
+});

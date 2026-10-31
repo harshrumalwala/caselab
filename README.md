@@ -15,7 +15,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **Practice requests**: ask a member to case (with a proposed case and time), and answer when someone asks you. Open to every member, and short notes only
 - **Messages**: once a request is accepted, a private conversation between the two of you, to settle a time, share a link or go over a case afterwards. It lives in the Community tab's Inbox, and the Dashboard tells you when something is waiting
 - **Profile & privacy**: switches for what other members can see, a per-case override, and a live preview
-- **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export and an Excel import that reads the MCG template are built in
+- **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export, an Excel import that reads the MCG template, and an Excel export that fills in the real MCG workbook are built in
 
 ---
 
@@ -292,6 +292,27 @@ How it copes with real spreadsheets:
 
 ---
 
+## Exporting to Excel (the real MCG workbook)
+
+**Export to Excel** (on the Case Log and in Settings) fills in the actual MCG workbook, not a lookalike. The template's four tabs,
+column order, merged skill headers, widths, frozen panes, the case-type dropdown, the date check, the Dashboard's formulas, pie chart
+and logo are all kept exactly as MCG made them (the file is `src/data/mcg-case-log-template.xlsx`, a copy of the reference template, and
+the export edits a copy of it in your browser: nothing is uploaded).
+
+- **Log**: every case on its own row, oldest first, in the template's exact columns: `#`, Date (a real Excel date), Case Title, Case Source,
+  Case Type, Interviewer, then **Overall** and each skill (Behavioral 1, Behavioral 2, Prompt / Pre-framework, Framework, Quant / Math,
+  Exhibits & Charts, Brainstorm(s), Recommendation) as a rating column followed by its **feedback** column, then **Other**. Rows grow
+  tall enough to show long feedback.
+- **Extra columns to the right of "Other"**, for what CaseLab keeps and the template has no place for: **Industry**, **What went well**,
+  **What I struggled with**, **Concepts I learned**, **Next focus**, **Improvement focus**. The template's own columns are untouched.
+- **Dashboard**: your name beside "Name:", and the template's own formulas (total cases, cases in the past week, per-skill averages, count
+  per case type, the pie chart) do their work on your cases. The file asks Excel to recalculate when it opens, and the current numbers are
+  stored too so a previewer shows them. The formulas are the template's, so the Dashboard tab keeps its quirks (for example its Behavioral
+  average reads Behavioral 1 only); CaseLab's own Dashboard combines both.
+- **Opportunity Areas**: your two lists under their headings. **Data Validation**: untouched.
+- **Import reads it back**, including the extra columns, so a CaseLab export round-trips with nothing lost. (Sharing choices and burned
+  cases are CaseLab-only and live in the JSON backup, which is still the complete copy.)
+
 ## How it maps to the MCG template
 
 The MCG workbook (`MCG Case Log Template.xlsx`, kept in this repo as the reference) has four tabs:
@@ -445,7 +466,7 @@ data, `createMemoryRepository` for demo mode and tests), the community through `
 There is no group administration, group chat or social feed: members, profiles, sharing, practice requests, and private conversations between two members who agreed to case are all there is.
 
 **Tech**: React 19, TypeScript, Vite, Tailwind CSS v4, Supabase (`@supabase/supabase-js`), Recharts (lazy-loaded),
-`read-excel-file` (loaded only when you import an Excel file), Vitest + Testing Library, PGlite for the database tests.
+`read-excel-file` (loaded only when you import an Excel file), `fflate` (loaded only when you export one: it opens and re-packs the template), Vitest + Testing Library, PGlite for the database tests.
 
 ---
 
@@ -466,6 +487,7 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **Practice requests**: in Postgres (open to every listed, verified member and no one else, private to the two people, no direct table access, one waiting per pair, the 5-waiting and 20-a-day limits, silent blocks that can be undone, length limits, nothing readable by visitors, cascade on user delete), the Supabase wrapper, and the screens (nothing to switch on, asking, prefilled from Find a case, answering with a reply, declining and blocking, the badge, cancelling, errors, demo mode)
 - **Warm-up**: question generation (seeded, so repeatable), answer reading and the 5% tolerance, scoring; the record in Postgres (own row only, no direct writes, raise-only, no visitor access, cascade on user delete); syncing between the account and this device (offline, first sign-in on a shared browser, demo mode); and the screen (timer, streaks, tips after a miss, end of round)
 - **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
+- **Excel export**: fills the real MCG template (all four tabs, charts, logo, dropdowns, merged headers, widths and panes kept byte for byte where untouched), the exact column layout, a real date, every skill's rating and feedback, the extra columns, rows tall enough for long text, oldest first, Dashboard name and numbers (and formulas stretched past 997 cases), Opportunity Areas, awkward text (accents, ampersands, line breaks, leading spaces, forbidden characters, the 32,767-character cell limit), well-formed XML, the template left unchanged, and a lossless round trip through the importer; opened and checked with an independent parser too
 - **Backup and import**: lossless JSON round trip, merge semantics, CSV quoting; Excel import (a populated sample, a richer workbook with an Industry column, extra columns and filled-in Opportunity Areas, and the empty template), header and case-type matching, industry suggestions, and the review screen end to end
 - **The app end to end** against a fake Supabase: sign-in and sign-out, nothing requested before sign-in, create / edit / delete with confirmation, data surviving a refresh, a failed save keeping what you typed, a failed delete, a failed load with Retry, a missing-tables message, demo mode never touching the database, export then restore, clear-all
 
