@@ -11,6 +11,7 @@ import {
 } from '../../domain/pairing';
 import type { CaseRecord } from '../../domain/types';
 import { Badge } from '../../components/ui/Badge';
+import { chipClass } from '../../components/ui/chips';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { CaseFilterBar } from '../community/CaseFilterBar';
 import { SharedCaseRow } from '../community/SharedCaseRow';
@@ -19,9 +20,12 @@ const first = (name: string) => name.trim().split(/\s+/)[0] || name;
 
 function MyCaseRow({ c, note }: { c: CaseRecord; note?: string }) {
   return (
-    <li className="rounded-2xl border border-line bg-surface p-4">
-      <p className="font-semibold text-ink">{c.title}</p>
-      <p className="mt-0.5 text-xs text-muted">{[c.caseType, c.industry, c.source].filter(Boolean).join(' · ')}</p>
+    <li className="sticker p-4">
+      <p className="font-display text-lg font-bold text-ink">{c.title}</p>
+      <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+        <span className={`rounded-full px-2.5 py-0.5 font-bold ${chipClass(c.caseType)}`}>{c.caseType}</span>
+        {[c.industry, c.source].filter(Boolean).join(' · ')}
+      </p>
       {note && <p className="mt-2 text-xs text-warn">{note}</p>}
     </li>
   );
@@ -138,7 +142,7 @@ export function FindCase({ person, theirs, mine }: { person: Profile; theirs: Sh
         <CardHeader
           titleId="offer-title"
           title={`Cases you've done that ${name} hasn't shared`}
-          subtitle="Good candidates to give them: you already know how they run."
+          subtitle="Good candidates to give them: you already know where the traps are."
           icon={<Compass className="size-4" />}
         />
         {offer.length === 0 ? (
@@ -196,7 +200,7 @@ export function FindCase({ person, theirs, mine }: { person: Profile; theirs: Sh
         <CardHeader
           titleId="done-title"
           title={`Cases ${name} has shared`}
-          subtitle="Avoid repeating these."
+          subtitle="Please do not repeat these. They remember."
           icon={<Check className="size-4" />}
         />
         {done.length === 0 ? (

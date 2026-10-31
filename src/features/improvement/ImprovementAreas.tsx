@@ -187,7 +187,7 @@ export function ImprovementAreas() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Improvement Areas</h1>
-        <p className="text-sm text-muted">Where your practice is thin, what to sharpen, and what you've learned so far.</p>
+        <p className="text-sm text-ink-2">Where your practice is thin, what to sharpen, and what you've learned so far. Think of it as honest friends with a spreadsheet.</p>
       </div>
 
       {/* ---- A. Limited exposure ------------------------------------------------------- */}
@@ -195,13 +195,13 @@ export function ImprovementAreas() {
         <CardHeader
           titleId="exposure-title"
           title="Areas with limited exposure"
-          subtitle="Click any item to log a case in it. “Not practiced” and “practiced once” are different things."
+          subtitle="Click any item to log a case in it. “Not practiced” and “practiced once” are different things (one is a gap, the other is a rumour)."
           icon={<Compass className="size-4" />}
         />
         <div className="grid gap-7 md:grid-cols-2">
           <ExposureGroup
             title="Case types not practiced"
-            hint="No exposure yet"
+            hint="Uncharted territory"
             tone={exposureOf('bad')}
             items={exposure.caseTypesNone.map((name) => ({ name }))}
             emptyText="Every main case type has at least one case."
@@ -250,14 +250,14 @@ export function ImprovementAreas() {
         <CardHeader
           titleId="skills-improve-title"
           title="Skills to improve"
-          subtitle="Ranked from your recent ratings, declines and the improvement tags you chose"
+          subtitle="Ranked from your recent ratings, declines and the improvement tags you chose. Gentle, mostly."
           icon={<Target className="size-4" />}
         />
 
         {total < MIN_CASES_FOR_SKILL_INSIGHTS ? (
           <p className="rounded-xl bg-surface-2 px-4 py-6 text-center text-sm text-muted">
             Skill insights appear after {MIN_CASES_FOR_SKILL_INSIGHTS} logged cases
-            {total > 0 ? ` (${total} so far)` : ''}, so a single tough case doesn't look like a pattern.
+            {total > 0 ? ` (${total} so far)` : ''}, so one rough case doesn't get to define you.
           </p>
         ) : priorities.length === 0 ? (
           <p className="rounded-xl bg-surface-2 px-4 py-6 text-center text-sm text-muted">
@@ -324,14 +324,14 @@ export function ImprovementAreas() {
         <CardHeader
           titleId="knowledge-title"
           title="Knowledge and learning history"
-          subtitle="Everything you noted under “Concepts I learned”, grouped by industry"
+          subtitle="Everything you noted under “Concepts I learned”, grouped by industry. Your future cheat sheet."
           icon={<BookMarked className="size-4" />}
         />
 
         {concepts.length === 0 ? (
           <EmptyState title="No concepts recorded yet" compact>
             Add what you learn in the “Concepts I learned” box when logging a case, one per line (for example, “Load
-            factor” after an airline case). They collect here automatically.
+            factor” after an airline case). They collect here automatically, like a very organised friend.
           </EmptyState>
         ) : (
           <>

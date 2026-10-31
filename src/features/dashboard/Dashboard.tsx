@@ -57,8 +57,8 @@ export function Dashboard() {
           <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Dashboard</h1>
           <p className="text-sm text-ink-2">
             {total === 0
-              ? 'Your preparation command center. It fills in as you log cases.'
-              : `${total} ${total === 1 ? 'case' : 'cases'} logged. Here is where you stand.`}
+              ? 'Your prep command center. It is a little empty in here, which is fine. Log a case and it fills up.'
+              : `${total} ${total === 1 ? 'case' : 'cases'} logged. Here is how you are really doing.`}
           </p>
         </div>
         <QuipCard className="sm:max-w-xs" />
