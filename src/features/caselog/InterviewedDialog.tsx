@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { CASE_TYPES, INDUSTRIES } from '../../domain/constants';
 import { describeError } from '../../data/errors';
 import { cleanInterviewed, INTERVIEWED_LIMITS, type InterviewedCase, type InterviewedInput } from '../../domain/interviewed';
 import { toISODate } from '../../domain/dates';
 import { Button } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
+import { useMemberSuggestions } from '../community/useMemberSuggestions';
 import { useInterviewed } from '../../state/InterviewedProvider';
 import { useToast } from '../../state/ToastProvider';
 
@@ -22,7 +23,7 @@ function Field({ label, htmlFor, children, hint }: { label: string; htmlFor: str
 
 /** Log a case you ran as the interviewer, or change one you logged. Only a title is needed. */
 export function InterviewedDialog({ editing, onClose }: { editing: InterviewedCase | null; onClose: () => void }) {
-  const { add, update } = useInterviewed();
+  const { add, update, items } = useInterviewed();
   const toast = useToast();
   const [form, setForm] = useState<InterviewedInput>(() =>
     editing
@@ -32,6 +33,12 @@ export function InterviewedDialog({ editing, onClose }: { editing: InterviewedCa
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof InterviewedInput>(key: K, value: InterviewedInput[K]) => setForm((f) => ({ ...f, [key]: value }));
+  const members = useMemberSuggestions(form.partner);
+  // People you interviewed before, then community members who match what you are typing. Anyone else can still be typed in.
+  const people = useMemo(() => {
+    const before = [...new Set(items.map((c) => c.partner).filter(Boolean))];
+    return [...before.map((name) => ({ name, detail: '' })), ...members.filter((m) => !before.includes(m.name))];
+  }, [items, members]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -107,7 +114,20 @@ export function InterviewedDialog({ editing, onClose }: { editing: InterviewedCa
             <input id="int-source" className="field" value={form.source} maxLength={INTERVIEWED_LIMITS.source} onChange={(e) => set('source', e.target.value)} placeholder="e.g. Darden 2019" />
           </Field>
           <Field label="Who you interviewed" htmlFor="int-partner">
-            <input id="int-partner" className="field" value={form.partner} maxLength={INTERVIEWED_LIMITS.partner} onChange={(e) => set('partner', e.target.value)} />
+            <input
+              id="int-partner"
+              className="field"
+              list="int-partner-options"
+              autoComplete="off"
+              value={form.partner}
+              maxLength={INTERVIEWED_LIMITS.partner}
+              onChange={(e) => set('partner', e.target.value)}
+            />
+            <datalist id="int-partner-options">
+              {people.map((p) => (
+                <option key={p.name} value={p.name} label={p.detail || undefined} />
+              ))}
+            </datalist>
           </Field>
         </div>
         <Field label="What you told them" htmlFor="int-feedback">

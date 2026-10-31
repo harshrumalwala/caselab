@@ -185,6 +185,11 @@ feedback and notes, even if your profile shares none of those). Nobody has to to
 partner name appears on every one of your cases that is shared at all, to members and (if your profile is public) to visitors; a case set to
 "keep this case private" never shows it. The casebook or source of each case is part of **Case history**, so it is shown with it.
 
+**Typing a name.** The "Interviewer / practice partner" box on a case, and "Who you interviewed" on an interviewed case, suggest the names you
+used before and any community member whose name matches what you type (with their class beside it). It only suggests: anyone who isn't on CaseLab
+can be typed in as plain text, and nothing is linked or stored except the name that ends up in the box. Suggestions are off in demo mode and quietly
+absent if the member search fails.
+
 **Interviewed cases** is its own switch, **off by default**, and it does not need Case history. When on, other *members* (never visitors) see how
 many cases you have interviewed ("Has interviewed 7 cases") and a list of them on your profile, so they know whom to ask and which cases you
 already know from the other side. Only the case itself is shown: its title, book, type, industry and date. **Who you interviewed, what you told

@@ -31,6 +31,7 @@ import { sameBook } from '../../domain/pairing';
 import { normalizeBurnedBooks } from '../../domain/community';
 import { useCommunity, useMyProfile } from '../../state/CommunityProvider';
 import { DRAFT_KEY, useData } from '../../state/DataProvider';
+import { useMemberSuggestions } from '../community/useMemberSuggestions';
 import { useGoal } from '../../state/GoalProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
@@ -189,7 +190,12 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
   }, [data.customIndustries, input.industry, customIndustry]);
 
   const sources = useMemo(() => mostUsed(cases, (c) => c.source), [cases]);
-  const partners = useMemo(() => mostUsed(cases, (c) => c.partner), [cases]);
+  const members = useMemberSuggestions(input.partner);
+  // Names you have used before, then community members who match what you are typing. Anyone else can still be typed in.
+  const partners = useMemo(() => {
+    const used = mostUsed(cases, (c) => c.partner);
+    return [...used.map((name) => ({ name, detail: '' })), ...members.filter((m) => !used.includes(m.name))];
+  }, [cases, members]);
 
   // ---- submit ------------------------------------------------------------------------------
   const focusFirstError = (errs: CaseErrors) => {
@@ -522,7 +528,7 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
               />
               <datalist id="partner-options">
                 {partners.map((p) => (
-                  <option key={p} value={p} />
+                  <option key={p.name} value={p.name} label={p.detail || undefined} />
                 ))}
               </datalist>
             </Field>
