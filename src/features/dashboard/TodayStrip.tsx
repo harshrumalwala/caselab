@@ -130,15 +130,19 @@ export function TodayStrip({ cases, now, next }: { cases: CaseRecord[]; now: Dat
               </span>
             </p>
           )}
-          {next && needsWarmup(next) && <WarmupLink className="mt-2" />}
-          {ready && !picking && (
-            <button
-              type="button"
-              onClick={() => setPicking(true)}
-              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-accent-text hover:underline"
-            >
-              <Target className="size-4" aria-hidden /> {goal ? 'Change weekly goal' : 'Set a weekly goal'}
-            </button>
+          {((next && needsWarmup(next)) || (ready && !picking)) && (
+            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+              {next && needsWarmup(next) && <WarmupLink />}
+              {ready && !picking && (
+                <button
+                  type="button"
+                  onClick={() => setPicking(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full border-2 border-ink/80 bg-surface px-3 py-1 text-xs font-bold text-ink shadow-[1px_2px_0_0_rgb(28_26_24/0.85)] transition hover:bg-sun-soft"
+                >
+                  <Target className="size-3.5" aria-hidden /> {goal ? 'Change weekly goal' : 'Set a weekly goal'}
+                </button>
+              )}
+            </div>
           )}
           {picking && <GoalPicker current={goal} onDone={() => setPicking(false)} />}
         </div>
