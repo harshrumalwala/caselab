@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { ArrowLeft, Flame, Loader2, UserRound } from 'lucide-react';
 import type { CommunityReader } from '../../data/community';
 import { describeError } from '../../data/errors';
-import { publicSharingSummary, sharedToRecords, sharingSummary, type Profile, type SharedCase } from '../../domain/community';
+import { groupBurnedCases, publicSharingSummary, sharedToRecords, sharingSummary, type Profile, type SharedCase } from '../../domain/community';
 import { distinctValues, matchesFilter, NO_FILTER, type CaseFilter } from '../../domain/pairing';
 import { round1, skillStats } from '../../domain/stats';
 import type { CaseRecord } from '../../domain/types';
@@ -54,6 +54,8 @@ interface Props {
   /** Shown to visitors in place of "Find a case for them". */
   signInPrompt?: (person: Profile) => ReactNode;
 }
+
+const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 
 export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Props) {
   const visitor = mine === null;
@@ -193,6 +195,28 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
                 )}
               </span>
             </p>
+          )}
+          {!visitor && person.burnedCases.length > 0 && (
+            <details className="mt-2 text-sm">
+              <summary className="cursor-pointer text-xs font-semibold text-accent-text hover:underline">
+                See the burned {person.burnedCases.length === 1 ? 'case' : 'cases'}
+              </summary>
+              <div className="mt-2 space-y-2">
+                {groupBurnedCases(person.burnedCases).map(([book, items]) => (
+                  <div key={book || '(no book)'}>
+                    <p className="eyebrow">{book || 'No book'}</p>
+                    <ul className="mt-1 flex flex-wrap gap-1.5" aria-label={`Burned cases${book ? ` from ${book}` : ''}`}>
+                      {items.map((c) => (
+                        <li key={c.title} className="rounded-full bg-surface px-2.5 py-0.5 text-xs text-ink-2">
+                          {c.title}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-muted">Burned cases are solo practice. They are not counted in {firstName(person.displayName)}'s totals.</p>
+            </details>
           )}
         </div>
       </div>
