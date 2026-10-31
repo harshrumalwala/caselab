@@ -11,6 +11,7 @@ import type { Profile } from '../../domain/community';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { useAuth } from '../../state/AuthProvider';
+import { rememberImportIntent } from '../../state/afterSignup';
 import { LoginScreen } from '../auth/LoginScreen';
 import { Directory } from '../people/People';
 import { PersonProfile } from '../people/PersonProfile';
@@ -183,7 +184,7 @@ function ImportCallout() {
             lists all come across, so there is nothing to retype and you never start from zero.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
-            <a href="#/signup" className={PRIMARY}>
+            <a href="#/signup" className={PRIMARY} onClick={() => rememberImportIntent()}>
               Create account and import <ArrowRight className="size-4" aria-hidden />
             </a>
             <span className="text-sm font-medium text-ink-2">Cases already in your log are skipped, so it is safe to try.</span>
