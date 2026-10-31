@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createSupabaseAuth, type AuthApi } from './auth';
 import type { CommunityRepository, PublicReader } from './community';
 import type { CaseLabRepository } from './repository';
+import { SupabaseGoal, type GoalRepository } from './weeklyGoal';
 import { SupabaseWarmup, type WarmupRepository } from './warmupBest';
 import { PublicCommunity, SupabaseCommunity } from './supabaseCommunity';
 import { SupabaseMessages, type MessagesRepository } from './messages';
@@ -19,6 +20,8 @@ export interface Backend {
   createMessages(): MessagesRepository;
   /** The signed-in member's best Warm-up score and streak. */
   createWarmup(userId: string): WarmupRepository;
+  /** The signed-in member's private weekly practice goal. */
+  createGoal(userId: string): GoalRepository;
   /** Read-only access for people without an account (the landing page). */
   createPublicCommunity(): PublicReader;
   /** Set when the page was opened from an email link that failed (expired, already used). */
@@ -79,6 +82,7 @@ export function createSupabaseBackend(
       createPractice: () => new SupabasePractice(client),
       createMessages: () => new SupabaseMessages(client),
       createWarmup: () => new SupabaseWarmup(client),
+      createGoal: (userId) => new SupabaseGoal(client, userId),
       createPublicCommunity: () => new PublicCommunity(anon),
       linkProblem,
     },

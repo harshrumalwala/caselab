@@ -26,6 +26,7 @@ import { useRoute } from './state/route';
 import { MessagesProvider } from './state/MessagesProvider';
 import { PracticeProvider } from './state/PracticeProvider';
 import { ThemeProvider } from './state/theme';
+import { GoalProvider } from './state/GoalProvider';
 import { WarmupSyncContext, type WarmupSync } from './state/warmupSync';
 import { ToastProvider } from './state/ToastProvider';
 import { UIContext, type UIContextValue } from './state/ui';
@@ -190,6 +191,7 @@ function AuthGate({ backend }: { backend: Backend }) {
             data: backend.createRepository(),
             community: backend.createCommunity(userId),
             warmup: { repository: backend.createWarmup(userId), userId } satisfies WarmupSync,
+            goal: backend.createGoal(userId),
             practice: backend.createPractice(),
             messages: backend.createMessages(),
           }
@@ -205,11 +207,13 @@ function AuthGate({ backend }: { backend: Backend }) {
       <ProfileGate>
         <DataProvider repository={repos.data}>
           <WarmupSyncContext.Provider value={repos.warmup}>
-            <PracticeProvider practice={repos.practice}>
-              <MessagesProvider messages={repos.messages}>
-                <Shell />
-              </MessagesProvider>
-            </PracticeProvider>
+            <GoalProvider repository={repos.goal}>
+              <PracticeProvider practice={repos.practice}>
+                <MessagesProvider messages={repos.messages}>
+                  <Shell />
+                </MessagesProvider>
+              </PracticeProvider>
+            </GoalProvider>
           </WarmupSyncContext.Provider>
         </DataProvider>
       </ProfileGate>

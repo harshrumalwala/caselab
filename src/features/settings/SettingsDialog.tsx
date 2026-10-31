@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { backupToJSON, ImportError, parseBackup, type ParsedBackup } from '../../data/backup';
 import { casesToCSV } from '../../data/csv';
+import { useExportExcel } from '../caselog/useExportExcel';
 import { backupFilename, downloadText } from '../../data/download';
 import { describeError } from '../../data/errors';
 import { Button } from '../../components/ui/Button';
@@ -47,6 +48,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
 
   const demo = mode === 'demo';
+  const { exportExcel, busy: exporting } = useExportExcel();
 
   const exportJSON = () => {
     downloadText(backupFilename('caselab-backup', 'json'), backupToJSON(data), 'application/json');
@@ -147,6 +149,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               <Button onClick={() => jsonInput.current?.click()} disabled={demo || busy}>
                 <Upload className="size-4" /> Import backup (JSON)
               </Button>
+              <Button onClick={() => void exportExcel()} disabled={demo || cases.length === 0 || exporting}>
+                <FileSpreadsheet className="size-4" /> Export to Excel
+              </Button>
               <Button onClick={exportCSV} disabled={demo || cases.length === 0}>
                 <Table2 className="size-4" /> Export cases (CSV)
               </Button>
@@ -162,7 +167,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             </div>
             <p className="mt-3 text-xs leading-relaxed text-muted">
               Your data already lives in your account; a JSON download is an extra copy that contains everything (every
-              case, rating, feedback note, learning and list item) and can be restored here. CSV is a one-row-per-case
+              case, rating, feedback note, learning and list item) and can be restored here. Export to Excel writes your log in the
+              MCG template layout (ratings, feedback and your two lists), ready to open or import again. CSV is a one-row-per-case
               spreadsheet. Import from Excel brings in a case log shaped like the MCG template, after a preview.
             </p>
             <input
