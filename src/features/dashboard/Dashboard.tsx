@@ -119,7 +119,7 @@ export function Dashboard() {
               </p>
             </div>
           </div>
-          <Button size="lg" className="shrink-0 self-start sm:self-center" onClick={openImport}>
+          <Button size="lg" className="shrink-0 self-start sm:self-center" onClick={openImport} data-tour="import">
             <Upload className="size-4" /> Import your Excel case log
           </Button>
         </section>

@@ -43,6 +43,7 @@ export function Header() {
                 href={`#/${r.id}`}
                 aria-current={on ? 'page' : undefined}
                 aria-label={waiting > 0 && spoken ? `${r.label}, ${spoken}` : r.label}
+                data-tour={r.id === 'people' ? 'community' : undefined}
                 className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition xl:px-3.5 ${
                   on ? 'bg-sun text-on-sun shadow-[2px_2px_0_0_rgb(28_26_24/0.85)] ring-2 ring-ink/80' : 'text-ink-2 hover:bg-sun-soft hover:text-ink'
                 }`}
@@ -56,7 +57,7 @@ export function Header() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1.5">
-          <Button variant="primary" onClick={() => openLogCase()} aria-label="Log case">
+          <Button variant="primary" onClick={() => openLogCase()} aria-label="Log case" title="Log a case (press N)" data-tour="log">
             <Plus className="size-4" />
             <span>
               Log Case<span className="hidden sm:inline"> </span>

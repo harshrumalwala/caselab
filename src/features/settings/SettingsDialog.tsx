@@ -5,13 +5,16 @@ import {
   FileJson,
   FileSpreadsheet,
   FlaskConical,
+  Keyboard,
   LogOut,
+  MonitorSmartphone,
   Table2,
   Trash2,
   Upload,
 } from 'lucide-react';
 import { backupToJSON, ImportError, parseBackup, type ParsedBackup } from '../../data/backup';
 import { casesToCSV } from '../../data/csv';
+import { useInstall } from '../../state/install';
 import { useExportExcel } from '../caselog/useExportExcel';
 import { backupFilename, downloadText } from '../../data/download';
 import { describeError } from '../../data/errors';
@@ -41,7 +44,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const { signOut } = useAuth();
   const session = useSession();
   const toast = useToast();
-  const { openImport } = useUI();
+  const { openImport, openShortcuts } = useUI();
+  const install = useInstall();
   const jsonInput = useRef<HTMLInputElement>(null);
   const [pendingBackup, setPendingBackup] = useState<ParsedBackup | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -139,6 +143,31 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 <LogOut className="size-4" /> Sign out
               </Button>
             </div>
+          </Section>
+
+          <Section title="Shortcuts and install" icon={<Keyboard className="size-4" />}>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                onClick={() => {
+                  onClose();
+                  openShortcuts();
+                }}
+              >
+                <Keyboard className="size-4" /> Keyboard shortcuts
+              </Button>
+              {install.available && (
+                <Button variant="primary" onClick={() => void install.install()}>
+                  <MonitorSmartphone className="size-4" /> Install CaseLab
+                </Button>
+              )}
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-muted">
+              {install.installedApp
+                ? 'You are using the installed app.'
+                : install.available
+                  ? 'Install CaseLab to open it from your home screen or desktop like any other app, with no browser bars.'
+                  : 'To open CaseLab like an app: on an iPhone tap Share, then Add to Home Screen. On Android or Chrome, use the browser menu and choose Install app.'}
+            </p>
           </Section>
 
           <Section title="Download and import" icon={<FileJson className="size-4" />}>

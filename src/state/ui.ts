@@ -18,6 +18,8 @@ export interface UIContextValue {
   openProfile(): void;
   /** Profile & privacy, scrolled to the cases and books you've burned. */
   openBurned(): void;
+  /** The list of keyboard shortcuts. */
+  openShortcuts(): void;
 }
 
 export const UIContext = createContext<UIContextValue | null>(null);
