@@ -42,7 +42,7 @@ export const MY_PROFILE: Profile = {
   displayName: 'Test User',
   mbaClass: 'Class of 2027',
   listed: true,
-  publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [], openToRequests: false,
+  publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [],
   sharing: NO_SHARING,
 };
 
@@ -137,7 +137,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
 
   const warmup = createMemoryWarmup();
   const practice = createMemoryPractice(() =>
-    community.profiles.map((p) => ({ userId: p.userId, name: p.displayName, open: p.listed && p.openToRequests })),
+    community.profiles.map((p) => ({ userId: p.userId, name: p.displayName, open: p.listed })),
   );
   const myPractice = practice.as(TEST_USER.userId);
   const chat = createMemoryMessages(practice, () => community.profiles.map((p) => ({ userId: p.userId, name: p.displayName })));

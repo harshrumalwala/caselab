@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BellRing, Check, FlaskConical, Hourglass, Inbox, Loader2, MessageCircle, X } from 'lucide-react';
+import { Check, FlaskConical, Hourglass, Inbox, Loader2, MessageCircle, X } from 'lucide-react';
 import type { BlockedMember } from '../../data/practiceRequests';
 import { describeError } from '../../data/errors';
 import { cleanReply, describeProposal, MAX_REQUEST_TEXT, sections, unseenAnswer, type PracticeRequest } from '../../domain/requests';
@@ -7,12 +7,10 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { useCommunity } from '../../state/CommunityProvider';
 import { useData } from '../../state/DataProvider';
 import { usePractice } from '../../state/PracticeProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useConversationWith } from '../../state/MessagesProvider';
-import { useUI } from '../../state/ui';
 
 const first = (name: string) => name.trim().split(/\s+/)[0] || name;
 
@@ -187,8 +185,6 @@ function Blocked() {
 /** Practice requests, both ways: ones waiting for your answer, ones you're waiting on, and what happened to the rest. */
 export function Requests() {
   const { mode, exitDemo } = useData();
-  const { profile } = useCommunity();
-  const { openProfile } = useUI();
   const { status, loadError, requests, reload, cancel, markAnswersSeen } = usePractice();
   const toast = useToast();
 
@@ -223,17 +219,6 @@ export function Requests() {
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Requests</h1>
         <p className="text-sm text-ink-2">Ask someone to case, or answer when someone asks you. Short notes only: it's a nudge, not a chat.</p>
       </div>
-
-      {profile && !profile.openToRequests && (
-        <div role="note" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-ink/80 bg-lilac-soft px-4 py-3 text-sm text-ink">
-          <p className="flex items-center gap-2">
-            <BellRing className="size-4 shrink-0" aria-hidden /> You're not taking requests, so nobody can ask you to case.
-          </p>
-          <Button size="sm" onClick={openProfile}>
-            Change in Profile &amp; privacy
-          </Button>
-        </div>
-      )}
 
       {status === 'loading' && (
         <div className="flex items-center gap-2 py-6 text-sm text-muted" role="status">

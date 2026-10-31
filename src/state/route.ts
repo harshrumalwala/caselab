@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 
 export type Route = 'dashboard' | 'log' | 'improve' | 'people' | 'warmup' | 'requests' | 'messages';
-/** The screens that have a tab in the navigation. Requests and Messages live under People. */
-export type NavRoute = Exclude<Route, 'requests' | 'messages'>;
+/** The screens that have a tab in the navigation. Requests lives under People. */
+export type NavRoute = Exclude<Route, 'requests'>;
 
 /** The screens that sit under the People tab. */
-export const UNDER_PEOPLE: readonly Route[] = ['requests', 'messages'];
+export const UNDER_PEOPLE: readonly Route[] = ['requests'];
 
-export const ROUTES: { id: NavRoute; label: string }[] = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'log', label: 'My Case Log' },
-  { id: 'improve', label: 'Improvement Areas' },
-  { id: 'people', label: 'People' },
-  { id: 'warmup', label: 'Warm-up' },
+export const ROUTES: { id: NavRoute; label: string; /** For tight spaces (the phone bar, a narrow top bar). */ short: string }[] = [
+  { id: 'dashboard', label: 'Dashboard', short: 'Dashboard' },
+  { id: 'log', label: 'My Case Log', short: 'My Cases' },
+  { id: 'improve', label: 'Improvement Areas', short: 'Improve' },
+  { id: 'people', label: 'People', short: 'People' },
+  { id: 'messages', label: 'Messages', short: 'Messages' },
+  { id: 'warmup', label: 'Warm-up', short: 'Warm-up' },
 ];
 
 export interface Location {

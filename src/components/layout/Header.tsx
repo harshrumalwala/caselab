@@ -32,21 +32,23 @@ export function Header() {
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:px-6">
         <Logo />
 
-        <nav aria-label="Primary" className="ml-4 hidden items-center gap-1 md:flex">
+        <nav aria-label="Primary" className="ml-4 hidden items-center gap-0.5 lg:flex xl:gap-1">
           {ROUTES.map((r) => {
-            const on = route === r.id || (r.id === 'people' && UNDER_PEOPLE.includes(route)); // Requests and Messages live under People
-            const waiting = r.id === 'people' ? badge.total : 0;
+            const on = route === r.id || (r.id === 'people' && UNDER_PEOPLE.includes(route)); // Requests lives under People
+            const waiting = r.id === 'people' ? badge.requests : r.id === 'messages' ? badge.chats : 0;
+            const spoken = r.id === 'people' ? badge.requestsSpoken : r.id === 'messages' ? badge.chatsSpoken : null;
             return (
               <a
                 key={r.id}
                 href={`#/${r.id}`}
                 aria-current={on ? 'page' : undefined}
-                aria-label={waiting > 0 && badge.spoken ? `${r.label}, ${badge.spoken}` : undefined}
-                className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+                aria-label={waiting > 0 && spoken ? `${r.label}, ${spoken}` : r.label}
+                className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition xl:px-3.5 ${
                   on ? 'bg-sun text-on-sun shadow-[2px_2px_0_0_rgb(28_26_24/0.85)] ring-2 ring-ink/80' : 'text-ink-2 hover:bg-sun-soft hover:text-ink'
                 }`}
               >
-                {r.label}
+                <span className="xl:hidden">{r.short}</span>
+                <span className="hidden xl:inline">{r.label}</span>
                 {waiting > 0 && <CountDot n={waiting} inline />}
               </a>
             );

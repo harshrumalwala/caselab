@@ -10,10 +10,10 @@ const BOB: Profile = {
   displayName: 'Bob Brown',
   mbaClass: 'Class of 2027',
   listed: true,
-  publicProfile: true, publicLinkOnly: false, burnedBooks: [], burnedCases: [], openToRequests: false,
+  publicProfile: true, publicLinkOnly: false, burnedBooks: [], burnedCases: [],
   sharing: { ...NO_SHARING, cases: true, overall: true, feedback: true, notes: true },
 };
-const CAROL: Profile = { userId: 'carol', displayName: 'Carol Chen', mbaClass: '', listed: true, publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [], openToRequests: false, sharing: { ...NO_SHARING, cases: true } };
+const CAROL: Profile = { userId: 'carol', displayName: 'Carol Chen', mbaClass: '', listed: true, publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [], sharing: { ...NO_SHARING, cases: true } };
 
 const row = (over: Partial<SharedCase> & Pick<SharedCase, 'caseId' | 'title'>): SharedCase => ({
   ownerId: 'bob',
@@ -317,7 +317,7 @@ describe('choosing to be visible without an account', () => {
     const mineShared: SharedCase[] = [
       row({ caseId: 'm1', ownerId: TEST_USER.userId, title: 'My airline case', overall: 5, feedback: { overall: 'MEMBERS-ONLY-TEXT' } }),
     ];
-    const env = createFakeEnv({ profile: { ...MY_PROFILE, publicProfile: true, publicLinkOnly: false, burnedBooks: [], burnedCases: [], openToRequests: false, sharing: { ...NO_SHARING, cases: true, overall: true, feedback: true } }, shared: mineShared });
+    const env = createFakeEnv({ profile: { ...MY_PROFILE, publicProfile: true, publicLinkOnly: false, burnedBooks: [], burnedCases: [], sharing: { ...NO_SHARING, cases: true, overall: true, feedback: true } }, shared: mineShared });
     const { user, dialog } = await openProfile(env);
 
     // Members tab (default) can include written feedback.

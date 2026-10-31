@@ -180,7 +180,6 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
         publicLinkOnly: publicProfile && (next.publicLinkOnly ?? profile.publicLinkOnly),
         burnedBooks: next.burnedBooks ?? profile.burnedBooks,
         burnedCases: next.burnedCases ?? profile.burnedCases,
-        openToRequests: listed && (next.openToRequests ?? profile.openToRequests),
         sharing: next.sharing ?? profile.sharing,
       });
       if (success) toast({ title: success });
@@ -270,22 +269,6 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
               onLinkOnlyChange={(linkOnly) => void save({ publicLinkOnly: linkOnly }, linkOnly ? 'Now only people with your link can find you' : 'Now on the front page')}
               profileLink={profileAddress(profile.userId)}
             />
-
-            <div className="flex items-center justify-between gap-4 rounded-2xl border border-line px-4 py-3.5">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-ink">Let members ask me to case</p>
-                <p className="text-xs text-muted">
-                  Adds a "Case with me?" button to your profile. Requests are short notes you can accept or decline, and you can stop anyone asking again. Needs
-                  "Appear in People search". Off until you turn it on.
-                </p>
-              </div>
-              <Switch
-                label="Let members ask me to case"
-                checked={profile.openToRequests}
-                disabled={saving || !profile.listed}
-                onChange={(openToRequests) => void save({ openToRequests }, openToRequests ? 'Members can now ask you to case' : 'Members can no longer ask you to case')}
-              />
-            </div>
 
             <p className="pt-1 text-xs text-muted">
               What to share. Everything starts off, and each change applies immediately. These choices apply to the audiences

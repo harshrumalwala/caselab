@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import { NO_SHARING, type Profile } from './domain/community';
-import { createFakeEnv, MY_PROFILE, TEST_USER, type FakeEnv } from './test/fakeBackend';
+import { createFakeEnv, TEST_USER, type FakeEnv } from './test/fakeBackend';
 
 const ME = TEST_USER.userId;
 
@@ -16,18 +16,16 @@ const member = (userId: string, displayName: string): Profile => ({
   publicLinkOnly: false,
   burnedBooks: [],
   burnedCases: [],
-  openToRequests: true,
   sharing: { ...NO_SHARING, cases: true },
 });
 const BOB = member('bob', 'Bob Brown');
 const CAROL = member('carol', 'Carol Chen');
-const OPEN_ME = { ...MY_PROFILE, openToRequests: true };
 
 const ask = { caseTitle: 'Airline profit', caseBook: 'Cosentino', when: 'tonight 8pm', message: 'Up for it?' };
 
 /** A world where Bob asked me and I accepted, so there is a conversation. */
 async function withConversation(extra: Profile[] = []) {
-  const env = createFakeEnv({ profile: OPEN_ME, members: [BOB, ...extra] });
+  const env = createFakeEnv({ members: [BOB, ...extra] });
   await env.practice.as('bob').send(ME, ask);
   await env.practice.mine.respond(env.practice.rows[0].id, true, 'Zoom: example.com/room');
   const [conversation] = await env.chat.mine.conversations();
@@ -50,7 +48,7 @@ beforeEach(() => {
 
 describe('starting a conversation', () => {
   it('opens when you accept a request, and takes you to it from the request', async () => {
-    const env = createFakeEnv({ profile: OPEN_ME, members: [BOB] });
+    const env = createFakeEnv({ members: [BOB] });
     await env.practice.as('bob').send(ME, ask);
     const user = await openAt(env, '#/requests', 'Requests');
     await user.type(await screen.findByLabelText(/^Reply/), 'Zoom: example.com/room');
@@ -68,7 +66,7 @@ describe('starting a conversation', () => {
   });
 
   it('does not offer a conversation for a request that was declined or is still waiting', async () => {
-    const env = createFakeEnv({ profile: OPEN_ME, members: [BOB] });
+    const env = createFakeEnv({ members: [BOB] });
     await env.practice.as('bob').send(ME, ask);
     await openAt(env, '#/requests', 'Requests');
     expect(screen.queryByRole('link', { name: /^Message / })).not.toBeInTheDocument();
@@ -95,12 +93,14 @@ describe('the list', () => {
     await waitFor(async () => expect((await env.chat.mine.conversations())[0].unread).toBe(0));
   });
 
-  it('puts the People tab and the Messages button on the count, and clears it once read', async () => {
+  it('puts the count on the Messages tab (not on People), and clears it once read', async () => {
     const { env, id } = await withConversation();
     await env.chat.as('bob').send(id, 'new one');
     const user = await openAt(env, '#/people', 'People');
-    expect(await screen.findAllByRole('link', { name: 'People, 1 conversation has new messages' })).toHaveLength(2);
-    await user.click(screen.getByRole('button', { name: 'Messages, 1 conversation has new messages' }));
+    const tabs = await screen.findAllByRole('link', { name: 'Messages, 1 conversation has new messages' }); // top bar and phone bar
+    expect(tabs).toHaveLength(2);
+    expect(screen.queryByRole('link', { name: /^People, / })).not.toBeInTheDocument();
+    await user.click(tabs[0]);
     await user.click(await screen.findByRole('link', { name: 'Bob Brown, 1 unread' }));
     await screen.findByText('new one');
     await waitFor(() => expect(screen.queryByRole('link', { name: /conversation.* new messages/ })).not.toBeInTheDocument());
@@ -193,7 +193,7 @@ describe('talking', () => {
   });
 
   it('says so for a conversation that is not yours or does not exist', async () => {
-    const env = createFakeEnv({ profile: OPEN_ME, members: [BOB] });
+    const env = createFakeEnv({ members: [BOB] });
     window.location.hash = '#/messages/nope';
     render(<App backend={env.backend} />);
     expect(await screen.findByText("This conversation isn't available")).toBeInTheDocument();

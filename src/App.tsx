@@ -118,7 +118,7 @@ function Shell() {
       <div className="flex min-h-screen flex-col">
         <Header />
         <Banners />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 sm:px-6 sm:pt-8 md:pb-12">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 sm:px-6 sm:pt-8 lg:pb-12">
           {location.route === 'dashboard' && <Dashboard />}
           {location.route === 'log' && <CaseLog />}
           {location.route === 'improve' && <ImprovementAreas />}
@@ -132,7 +132,7 @@ function Shell() {
             </WarmupSyncContext.Provider>
           )}
         </main>
-        <footer className="hidden border-t border-line px-6 py-5 text-center text-xs text-muted md:block">
+        <footer className="hidden border-t border-line px-6 py-5 text-center text-xs text-muted lg:block">
           Saved to your account{session.email ? ` (${session.email})` : ''} and available on every device you sign in
           on. Your cases are private unless you choose to share them in{' '}
           <button type="button" className="font-semibold text-accent-text hover:underline" onClick={ui.openProfile}>

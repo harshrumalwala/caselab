@@ -65,6 +65,11 @@ export function useCommunity(): CommunityContextValue {
   return ctx;
 }
 
+/** Your own user id, or undefined where nobody is signed in (visitors read profiles without a CommunityProvider). */
+export function useMyUserId(): string | undefined {
+  return useContext(CommunityContext)?.profile?.userId;
+}
+
 /** Your profile, which exists once onboarding is done (everything past the onboarding gate can rely on it). */
 export function useMyProfile(): Profile {
   const { profile } = useCommunity();
