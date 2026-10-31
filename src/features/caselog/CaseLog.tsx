@@ -21,6 +21,7 @@ import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
 import { chipClass } from '../../components/ui/chips';
+import { pillTabClass } from '../../components/ui/pillTab';
 import { useMyProfile } from '../../state/CommunityProvider';
 import { BurnedPanel } from './BurnedPanel';
 import { useTogglePrivate } from './useTogglePrivate';
@@ -31,8 +32,8 @@ function ImprovementCell({ c }: { c: CaseRecord }) {
   return k.source === 'tag' ? (
     <Badge tone="accent">{k.label}</Badge>
   ) : (
-    <span className="text-xs text-muted" title="Your lowest-rated skill in this case">
-      {k.label} <span className="opacity-70">(lowest)</span>
+    <span className="text-xs text-muted" title={`Your lowest-rated skill in this case: ${k.label}`}>
+      {k.label}
     </span>
   );
 }
@@ -61,9 +62,7 @@ function LogTabs({ tab, onChange, burned }: { tab: 'cases' | 'burned'; onChange:
           role="tab"
           aria-selected={tab === id}
           onClick={() => onChange(id)}
-          className={`inline-flex items-center gap-1.5 rounded-full border-2 border-ink/80 px-4 py-1.5 text-sm font-bold transition ${
-            tab === id ? 'bg-sun text-on-sun shadow-[2px_2px_0_0_rgb(28_26_24/0.85)]' : 'bg-surface text-ink-2 hover:bg-sun-soft'
-          }`}
+          className={pillTabClass(tab === id)}
         >
           {id === 'burned' && <Flame className="size-4" aria-hidden />}
           {label}
@@ -357,7 +356,7 @@ export function CaseLog() {
                   <th className="px-3 py-3">Industry</th>
                   <th className="hidden px-3 py-3 xl:table-cell">Partner</th>
                   <th className="px-3 py-3 text-center">Overall</th>
-                  <th className="px-3 py-3">Key improvement</th>
+                  <th className="px-3 py-3">Work on</th>
                   <th className="w-24 px-3 py-3">
                     <span className="sr-only">Actions</span>
                   </th>
@@ -370,10 +369,10 @@ export function CaseLog() {
                     className="group cursor-pointer transition hover:bg-sun-soft/60"
                     onClick={() => viewCase(c.id)}
                   >
-                    <td className="max-w-72 px-5 py-3.5">
+                    <td className="max-w-80 px-5 py-3.5">
                       <button
                         type="button"
-                        className="block max-w-full truncate text-left font-display text-base font-bold text-ink hover:text-accent-text"
+                        className="line-clamp-2 max-w-full break-words text-left font-display text-base font-bold leading-snug text-ink hover:text-accent-text"
                         onClick={(e) => {
                           e.stopPropagation();
                           viewCase(c.id);
@@ -415,7 +414,7 @@ export function CaseLog() {
               <li key={c.id} className="sticker group p-4">
                 <div className="flex items-start justify-between gap-3">
                   <button type="button" className="min-w-0 text-left" onClick={() => viewCase(c.id)}>
-                    <span className="block truncate font-display text-lg font-bold text-ink">{c.title || 'Untitled case'}</span>
+                    <span className="line-clamp-2 break-words font-display text-lg font-bold leading-snug text-ink">{c.title || 'Untitled case'}</span>
                     <span className="num mt-0.5 block text-xs text-muted">{formatDate(c.date)}</span>
                   </button>
                   <RatingBadge value={c.overall} />

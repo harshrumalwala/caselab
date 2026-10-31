@@ -1,4 +1,5 @@
 import { CountDot } from '../../components/ui/CountDot';
+import { pillTabClass } from '../../components/ui/pillTab';
 import { useNavBadge } from '../../state/badge';
 
 /**
@@ -7,18 +8,16 @@ import { useNavBadge } from '../../state/badge';
  */
 export function CommunityTabs({ current }: { current: 'members' | 'inbox' }) {
   const badge = useNavBadge();
-  const item = (on: boolean) =>
-    `flex flex-1 items-center justify-center rounded-lg px-3 py-2 transition ${on ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'}`;
   return (
-    <nav aria-label="Community" className="flex gap-1 rounded-xl bg-surface-2 p-1 text-sm font-medium">
-      <a href="#/people" aria-current={current === 'members' ? 'page' : undefined} className={item(current === 'members')}>
+    <nav aria-label="Community" className="flex flex-wrap gap-2">
+      <a href="#/people" aria-current={current === 'members' ? 'page' : undefined} className={pillTabClass(current === 'members')}>
         Members
       </a>
       <a
         href="#/inbox"
         aria-current={current === 'inbox' ? 'page' : undefined}
         aria-label={badge.total > 0 && badge.spoken ? `Inbox, ${badge.spoken}` : 'Inbox'}
-        className={item(current === 'inbox')}
+        className={pillTabClass(current === 'inbox')}
       >
         Inbox
         {badge.total > 0 && <CountDot n={badge.total} inline />}

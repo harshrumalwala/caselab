@@ -1,11 +1,33 @@
 import type { ReactNode } from 'react';
 import { chipClass } from './chips';
 
+const STRIP = {
+  sun: 'bg-sun',
+  teal: 'bg-teal',
+  coral: 'bg-coral',
+  lilac: 'bg-lilac',
+  sky: 'bg-sky',
+} as const;
+
 export function Card({
   children,
   className = '',
+  strip,
   ...rest
-}: { children: ReactNode; className?: string } & React.HTMLAttributes<HTMLElement>) {
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Draws the card as a sticker with a coloured band across the top. */
+  strip?: keyof typeof STRIP;
+} & React.HTMLAttributes<HTMLElement>) {
+  if (strip) {
+    return (
+      <section className={`sticker overflow-hidden ${className}`} {...rest}>
+        <div className={`h-3 border-b-2 border-ink/80 ${STRIP[strip]}`} aria-hidden />
+        <div className="p-5 sm:p-6 font-sans">{children}</div>
+      </section>
+    );
+  }
   return (
     <section className={`card p-5 sm:p-6 ${className}`} {...rest}>
       {children}

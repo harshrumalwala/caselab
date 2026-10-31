@@ -211,10 +211,15 @@ export function publicSharingSummary(sharing: SharingPrefs): string {
   return sharingSummary({ ...NO_SHARING, ...Object.fromEntries(PUBLIC_SHARING_KEYS.map((k) => [k, sharing[k]])) } as SharingPrefs);
 }
 
+/** What is switched on, in short phrases ("case history", "overall scores"), for a sentence or a row of chips. */
+export function sharedParts(sharing: SharingPrefs): string[] {
+  // "Open everything" covers the single detail switches, so they aren't listed separately when it is on.
+  return SHARING_OPTIONS.filter((o) => sharing[o.key] && !(sharing.details && INCLUDED_IN_DETAILS.includes(o.key))).map((o) => o.short);
+}
+
 /** "case history and overall scores", or "nothing" when nothing is on. */
 export function sharingSummary(sharing: SharingPrefs): string {
-  // "Open everything" covers the single detail switches, so they aren't listed separately when it is on.
-  const on = SHARING_OPTIONS.filter((o) => sharing[o.key] && !(sharing.details && INCLUDED_IN_DETAILS.includes(o.key))).map((o) => o.short);
+  const on = sharedParts(sharing);
   if (on.length === 0) return 'nothing yet';
   if (on.length === 1) return on[0];
   return `${on.slice(0, -1).join(', ')} and ${on[on.length - 1]}`;

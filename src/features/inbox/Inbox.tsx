@@ -64,7 +64,7 @@ export function Inbox() {
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Community</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Community</h1>
         <p className="text-sm text-muted">Ask someone to case, answer when someone asks you, and talk with the people you've agreed to case with.</p>
       </div>
       <CommunityTabs current="inbox" />
@@ -96,11 +96,11 @@ export function Inbox() {
       )}
 
       {nothingYet && (
-        <Card>
+        <div className="sticker bg-sky-soft">
           <EmptyState icon={<InboxIcon className="size-6" />} title="Nothing in your inbox yet" compact actions={<Button onClick={() => (window.location.hash = '#/people')}>Find members</Button>}>
-            Open someone's profile and choose "Case with …?" to ask them. When someone accepts, you can talk here.
+            Quiet in here. Open someone's profile and choose "Case with …?" to ask them. When someone accepts, you can talk here.
           </EmptyState>
-        </Card>
+        </div>
       )}
 
       {toAnswer.length > 0 && (
