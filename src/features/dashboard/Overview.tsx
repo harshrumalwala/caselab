@@ -1,5 +1,6 @@
 import { BookOpenCheck, CalendarDays, Layers, Building2 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { CountUp, GrowBar } from '../../components/ui/Motion';
 import { startOfWeek, toISODate, formatShortDate } from '../../domain/dates';
 import { weeklyHistory, type Overview as OverviewStats } from '../../domain/stats';
 import type { CaseRecord } from '../../domain/types';
@@ -36,16 +37,13 @@ function Metric({
         <span className={`flex size-8 items-center justify-center rounded-lg border-2 border-ink/80 ${METRIC_TONES[tone].chip}`}>{icon}</span>
       </div>
       <p className="num mt-3 flex items-baseline gap-1.5 font-display text-5xl font-extrabold tracking-tight text-ink">
-        {value}
+        <CountUp value={value} />
         {suffix && <span className="text-lg font-semibold text-ink-2">{suffix}</span>}
       </p>
       <p className="mt-1 text-sm text-ink-2">{caption}</p>
       {progress !== undefined && (
         <div className="mt-4 h-2.5 overflow-hidden rounded-full border-2 border-ink/80 bg-surface" aria-hidden>
-          <div
-            className={`h-full rounded-full ${METRIC_TONES[tone].bar} transition-[width] duration-700 ease-out`}
-            style={{ width: `${Math.round(Math.min(1, progress) * 100)}%` }}
-          />
+          <GrowBar className={`h-full rounded-full ${METRIC_TONES[tone].bar}`} pct={Math.round(Math.min(1, progress) * 100)} />
         </div>
       )}
     </div>

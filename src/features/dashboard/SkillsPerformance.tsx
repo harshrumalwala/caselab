@@ -2,6 +2,7 @@ import { ArrowDownRight, ArrowUpRight, Gauge, Minus } from 'lucide-react';
 import { RATINGS, RATING_LABELS } from '../../domain/constants';
 import { round1, type SkillStat } from '../../domain/stats';
 import { Card, CardHeader } from '../../components/ui/Card';
+import { GrowBar } from '../../components/ui/Motion';
 import { TONE, scoreTone } from '../../components/ui/tones';
 
 const fmt = (n: number) => round1(n).toFixed(1);
@@ -62,10 +63,7 @@ function SkillRow({ stat, emphasis }: { stat: SkillStat; emphasis?: boolean }) {
             : `${stat.label}: average ${fmt(stat.average)} out of 5${stat.recentAverage !== null ? `, last five ${fmt(stat.recentAverage)}` : ''}`
         }
       >
-        <div
-          className={`h-full rounded-full ${tone.solid} transition-[width] duration-700 ease-out`}
-          style={{ width: `${avgPct}%` }}
-        />
+        <GrowBar className={`h-full rounded-full ${tone.solid}`} pct={avgPct} />
         {recentPct !== null && (
           <span
             className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[3px] border-2 border-surface bg-ink shadow-sm"
