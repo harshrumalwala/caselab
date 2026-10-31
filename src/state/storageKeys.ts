@@ -8,6 +8,8 @@ export const THEME_KEY = 'caselab:v1:theme';
 export const WARMUP_KEY = 'caselab:v1:warmup';
 export const warmupKeyFor = (userId: string) => `${WARMUP_KEY}:${userId}`;
 
+import { tourKey } from '../features/tour/seen';
+
 /** Forget everything that is private to the signed-in user. */
 export function clearUserBrowserState(): void {
   try {
@@ -16,6 +18,18 @@ export function clearUserBrowserState(): void {
       if (key.startsWith(`${WARMUP_KEY}:`)) window.localStorage.removeItem(key); // a member's cached Warm-up record
     }
     window.sessionStorage.removeItem(MODE_KEY);
+  } catch {
+    /* storage unavailable: nothing to clear */
+  }
+}
+
+/** After an account is deleted: everything signing out forgets, plus the rest this browser kept for that member. */
+export function clearAccountBrowserState(userId: string | null): void {
+  clearUserBrowserState();
+  if (!userId) return;
+  try {
+    window.localStorage.removeItem(tourKey(userId));
+    window.localStorage.removeItem(warmupKeyFor(userId));
   } catch {
     /* storage unavailable: nothing to clear */
   }
