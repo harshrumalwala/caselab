@@ -453,7 +453,7 @@ else does).
 
 To switch it on for your own project:
 
-1. Apply the migration `supabase/migrations/20261111120000_email_notifications.sql` (`npx supabase db push --linked`).
+1. Apply the migration `supabase/migrations/20261111130000_email_notifications.sql` (`npx supabase db push --linked`).
 2. Set the secrets: `npx supabase secrets set RESEND_API_KEY=... EMAIL_FROM="CaseLab <hello@yourdomain>" APP_URL=https://your-app.example` (the sender domain must be verified in Resend, as for sign-up emails; without `RESEND_API_KEY` the function sends nothing).
 3. Deploy the function: `npx supabase functions deploy notify-request`.
 
