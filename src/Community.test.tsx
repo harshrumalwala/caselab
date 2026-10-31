@@ -315,7 +315,7 @@ describe('Find a case for another student', () => {
     expect(offer.getByText('Hospital market entry')).toBeInTheDocument();
     expect(offer.getByText('Piano tuners')).toBeInTheDocument();
     expect(offer.queryByText('Airline profit case')).not.toBeInTheDocument(); // same case as their "Airline profitability"
-  });
+  }, 20000); // the first test to open a profile pays for loading the whole app, which can pass 5 seconds when the full suite is running
 
   it('flags a similar-looking case as worth checking, rather than calling it new or repeated', async () => {
     await openBob();

@@ -13,6 +13,7 @@ export interface SharingPrefs {
   partner: boolean; // who cased you (practice partner / interviewer) on each shared case
   details: boolean; // open everything: scores, feedback, learning notes and other notes on every shared case
   burned: boolean; // also show burned books and cases to visitors without an account (members always see them)
+  interviewed: boolean; // show other members the cases I have interviewed (members only, never who or my notes)
 }
 
 /** A case worked through on its own, and the book it came from (which may be blank). */
@@ -81,6 +82,7 @@ export const NO_SHARING: SharingPrefs = {
   partner: false,
   details: false,
   burned: false,
+  interviewed: false,
 };
 
 export interface Profile {
@@ -187,6 +189,13 @@ export const SHARING_OPTIONS: {
     short: 'all case detail',
     hint: 'Show every detail of each case you share: scores, improvement focus, written feedback, learning notes and your other notes. Visitors can open each case to read it.',
     needsCases: true,
+  },
+  {
+    key: 'interviewed',
+    label: 'Interviewed cases',
+    short: 'interviewed cases',
+    hint: "Show other members how many cases you've interviewed, with each one's title, book, type and industry, so they know whom to ask. Never who you interviewed or what you told them. Members only, not visitors.",
+    needsCases: false,
   },
   {
     key: 'burned',

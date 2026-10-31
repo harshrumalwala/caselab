@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ArrowLeft, Hand, Loader2, MessageCircle, UserRound } from 'lucide-react';
+import { ArrowLeft, Hand, Loader2, MessageCircle, Mic, UserRound } from 'lucide-react';
 import type { CommunityReader } from '../../data/community';
 import { describeError } from '../../data/errors';
 import { publicSharingSummary, sharedToRecords, sharingSummary, type Profile, type SharedCase } from '../../domain/community';
@@ -10,6 +10,8 @@ import { Badge, RatingBadge } from '../../components/ui/Badge';
 import { chipClass } from '../../components/ui/chips';
 import { splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
 import { BurnedLine } from '../community/BurnedLine';
+import { InterviewedCard } from './InterviewedCard';
+import type { SharedInterviewed } from '../../domain/interviewed';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -98,7 +100,7 @@ const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Props) {
   const visitor = mine === null;
   const [state, setState] = useState<
-    { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; person: Profile | null; shared: SharedCase[] }
+    { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; person: Profile | null; shared: SharedCase[]; interviewed: SharedInterviewed[] }
   >({ status: 'loading' });
   const [tab, setTab] = useState<Tab>(visitor ? 'cases' : 'find');
   const [filter, setFilter] = useState<CaseFilter>(NO_FILTER);
@@ -111,11 +113,13 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
       const person = await reader.getPerson(userId);
       // A member who isn't visible to you (unlisted, not public, or no such member) looks exactly the same as one who doesn't exist.
       const shared = person ? await reader.getSharedCases(userId) : [];
-      setState({ status: 'ready', person, shared });
+      // Only members can see this, and only if they switched it on: don't even ask for a visitor or when it is off.
+      const interviewed = person && !visitor && person.sharing.interviewed ? await reader.getInterviewed(userId) : [];
+      setState({ status: 'ready', person, shared, interviewed });
     } catch (e) {
       setState({ status: 'error', message: describeError(e) });
     }
-  }, [reader, userId]);
+  }, [reader, userId, visitor]);
 
   useEffect(() => {
     void load();
@@ -153,7 +157,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
     );
   }
 
-  const { person, shared } = state;
+  const { person, shared, interviewed } = state;
   if (!person) {
     return (
       <div className="space-y-4">
@@ -223,6 +227,11 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
               {shared.length > 0 && <> · {shared.length} case{shared.length === 1 ? '' : 's'} visible</>}
             </p>
             <BurnedLine books={person.burnedBooks} cases={person.burnedCases} name={firstName(person.displayName)} />
+            {interviewed.length > 0 && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink">
+                <Mic className="size-4 text-teal-ink" aria-hidden /> Has interviewed {interviewed.length} case{interviewed.length === 1 ? '' : 's'}
+              </p>
+            )}
           </div>
         </div>
         {/* One row: the main action first, then the conversation. On a phone the buttons share the card's full width, or stack at full width; no space when there is neither. */}
@@ -238,6 +247,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
       </div>
 
       <SharedPerformance shared={shared} />
+      <InterviewedCard name={firstName(person.displayName)} items={interviewed} />
 
       {visitor ? (
         <>
