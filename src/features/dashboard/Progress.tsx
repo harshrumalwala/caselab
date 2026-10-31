@@ -12,7 +12,7 @@ export function ProgressOverTime({ stats }: { stats: SkillStat[] }) {
   const overall = stats.find((s) => s.key === 'overall');
 
   return (
-    <Card aria-labelledby="progress-title">
+    <Card strip="coral" aria-labelledby="progress-title">
       <CardHeader
         titleId="progress-title"
         title="Progress over time"
@@ -63,7 +63,7 @@ export function Milestones({ achieved, total }: { achieved: Milestone[]; total: 
   const latest = [...achieved].reverse().slice(0, 4);
 
   return (
-    <Card aria-labelledby="milestones-title">
+    <Card strip="sun" aria-labelledby="milestones-title">
       <CardHeader
         titleId="milestones-title"
         title="Milestones"

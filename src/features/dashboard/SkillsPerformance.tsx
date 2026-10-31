@@ -5,6 +5,8 @@ import { Card, CardHeader } from '../../components/ui/Card';
 import { GrowBar } from '../../components/ui/Motion';
 import { TONE, scoreTone } from '../../components/ui/tones';
 
+const BAR_COLOURS = ['bg-sun', 'bg-teal', 'bg-coral', 'bg-lilac', 'bg-sky'] as const;
+
 const fmt = (n: number) => round1(n).toFixed(1);
 
 function TrendChip({ stat }: { stat: SkillStat }) {
@@ -29,7 +31,7 @@ function TrendChip({ stat }: { stat: SkillStat }) {
   );
 }
 
-function SkillRow({ stat, emphasis }: { stat: SkillStat; emphasis?: boolean }) {
+function SkillRow({ stat, emphasis, colour }: { stat: SkillStat; emphasis?: boolean; colour: string }) {
   const tone = TONE[scoreTone(stat.average)];
   const avgPct = stat.average === null ? 0 : (stat.average / 5) * 100;
   const recentPct = stat.recentAverage === null ? null : (stat.recentAverage / 5) * 100;
@@ -49,7 +51,7 @@ function SkillRow({ stat, emphasis }: { stat: SkillStat; emphasis?: boolean }) {
           </span>
         )}
         <TrendChip stat={stat} />
-        <span className="num min-w-9 text-right text-sm font-semibold text-ink">
+        <span className={`num min-w-9 text-right text-sm font-semibold ${stat.average === null ? 'text-ink' : tone.text}`}>
           {stat.average === null ? <span className="text-xs font-normal text-muted">not rated</span> : fmt(stat.average)}
         </span>
       </div>
@@ -63,7 +65,7 @@ function SkillRow({ stat, emphasis }: { stat: SkillStat; emphasis?: boolean }) {
             : `${stat.label}: average ${fmt(stat.average)} out of 5${stat.recentAverage !== null ? `, last five ${fmt(stat.recentAverage)}` : ''}`
         }
       >
-        <GrowBar className={`h-full rounded-full ${tone.solid}`} pct={avgPct} />
+        <GrowBar className={`h-full rounded-full ${colour}`} pct={avgPct} />
         {recentPct !== null && (
           <span
             className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[3px] border-2 border-surface bg-ink shadow-sm"
@@ -81,7 +83,7 @@ export function SkillsPerformance({ stats, total }: { stats: SkillStat[]; total:
   const anyRated = stats.some((s) => s.count > 0);
 
   return (
-    <Card aria-labelledby="skills-title">
+    <Card strip="sun" aria-labelledby="skills-title">
       <CardHeader
         titleId="skills-title"
         title="Skills performance"
@@ -98,10 +100,10 @@ export function SkillsPerformance({ stats, total }: { stats: SkillStat[]; total:
       ) : (
         <>
           <ul className="space-y-5">
-            <SkillRow stat={overall} emphasis />
+            <SkillRow stat={overall} emphasis colour="bg-accent" />
             <li className="border-t border-line" aria-hidden />
-            {rest.map((s) => (
-              <SkillRow key={s.key} stat={s} />
+            {rest.map((s, i) => (
+              <SkillRow key={s.key} stat={s} colour={BAR_COLOURS[i % BAR_COLOURS.length]} />
             ))}
           </ul>
 

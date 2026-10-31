@@ -18,6 +18,7 @@ import { QuipCard } from '../../components/ui/Quip';
 import { useData } from '../../state/DataProvider';
 import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
+import { TodayStrip } from './TodayStrip';
 import { CaseTypeCoverage, IndustryCoverage } from './Coverage';
 import { CoverageMatrix } from './CoverageMatrix';
 import { NeedsYou } from './NeedsYou';
@@ -69,7 +70,7 @@ export function Dashboard() {
       {mode !== 'demo' && <NeedsYou />}
 
       {total === 0 && (
-        <Card className="relative overflow-hidden">
+        <Card strip="sun" className="relative">
           <div className="grid items-center gap-6 md:grid-cols-[1.2fr_1fr]">
           <div className="max-w-xl">
             <h2 className="text-xl font-semibold tracking-tight text-ink">Your case prep starts here</h2>
@@ -107,6 +108,8 @@ export function Dashboard() {
           </ul>
         </Card>
       )}
+
+      {total > 0 && <TodayStrip thisWeek={view.overview.thisWeek} next={view.suggestions[0]} />}
 
       <Overview stats={view.overview} cases={cases} now={now} />
 

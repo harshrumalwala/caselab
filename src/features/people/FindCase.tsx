@@ -16,6 +16,8 @@ import { Card, CardHeader } from '../../components/ui/Card';
 import { CaseFilterBar } from '../community/CaseFilterBar';
 import { SharedCaseRow } from '../community/SharedCaseRow';
 
+const OFFER_PREVIEW = 4;
+
 const first = (name: string) => name.trim().split(/\s+/)[0] || name;
 
 function MyCaseRow({ c, note, onPropose }: { c: CaseRecord; note?: string; onPropose?: (c: CaseRecord) => void }) {
@@ -102,6 +104,7 @@ export function FindCase({
 }) {
   const name = first(person.displayName);
   const [filter, setFilter] = useState<CaseFilter>(NO_FILTER);
+  const [showAll, setShowAll] = useState(false);
 
   const pairing = useMemo(() => pairCases(mine, theirs, person.burnedBooks, person.burnedCases), [mine, theirs, person.burnedBooks, person.burnedCases]);
   const industries = useMemo(() => distinctValues([...mine, ...theirs], 'industry'), [mine, theirs]);
@@ -112,15 +115,14 @@ export function FindCase({
   const done = pairing.theyHaveDone.filter((t) => matchesFilter(t.shared, filter));
 
   const sharesNothing = theirs.length === 0;
+  // Lead with a handful; a long grid of look-alike cards is hard to scan. A filter shows everything it matches.
+  const filtering = filter.caseType !== 'all' || filter.industry !== 'all' || filter.source !== 'all' || filter.query !== '';
+  const shownOffer = showAll || filtering ? offer : offer.slice(0, OFFER_PREVIEW);
 
   return (
     <div className="space-y-5">
-      <div
-        className={`flex gap-3 rounded-2xl border px-4 py-3.5 text-sm ${
-          sharesNothing ? 'border-warn/40 bg-warn-soft' : 'border-line bg-surface-2/60'
-        }`}
-        role="note"
-      >
+      <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface-2/60">
+      <div className={`flex gap-3 px-4 py-3.5 text-sm ${sharesNothing ? 'bg-warn-soft' : ''}`} role="note">
         {sharesNothing ? <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warn" /> : <Info className="mt-0.5 size-4 shrink-0 text-muted" />}
         <p className="leading-relaxed text-ink-2">
           {sharesNothing ? (
@@ -139,7 +141,7 @@ export function FindCase({
       </div>
 
       {person.burnedBooks.length === 0 && person.burnedCases.length > 0 && (
-        <div className="flex gap-3 rounded-2xl border border-line bg-surface-2/60 px-4 py-3.5 text-sm" role="note">
+        <div className="flex gap-3 px-4 py-3.5 text-sm" role="note">
           <Flame className="mt-0.5 size-4 shrink-0 text-accent-text" aria-hidden />
           <p className="leading-relaxed text-ink-2">
             <strong className="font-semibold text-ink">
@@ -153,7 +155,7 @@ export function FindCase({
       )}
 
       {person.burnedBooks.length > 0 && (
-        <div className="flex gap-3 rounded-2xl border border-line bg-surface-2/60 px-4 py-3.5 text-sm" role="note">
+        <div className="flex gap-3 px-4 py-3.5 text-sm" role="note">
           <Flame className="mt-0.5 size-4 shrink-0 text-accent-text" aria-hidden />
           <p className="leading-relaxed text-ink-2">
             <strong className="font-semibold text-ink">{name} has burned {person.burnedBooks.join(', ')}.</strong>{' '}
@@ -174,10 +176,11 @@ export function FindCase({
           </p>
         </div>
       )}
+      </div>
 
       <CaseFilterBar value={filter} onChange={setFilter} industries={industries} sources={sources} />
 
-      <Card aria-labelledby="offer-title">
+      <Card strip="teal" aria-labelledby="offer-title">
         <CardHeader
           titleId="offer-title"
           title={`Cases you've done that ${name} hasn't shared`}
@@ -192,10 +195,15 @@ export function FindCase({
           </p>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2">
-            {offer.map((c) => (
+            {shownOffer.map((c) => (
               <MyCaseRow key={c.id} c={c} onPropose={onPropose} />
             ))}
           </ul>
+        )}
+        {offer.length > shownOffer.length && (
+          <button type="button" onClick={() => setShowAll(true)} className="mt-3 inline-flex items-center gap-1.5 rounded-full border-2 border-ink/80 bg-surface px-4 py-1.5 text-sm font-bold text-ink-2 transition hover:bg-sun-soft">
+            Show all {offer.length}
+          </button>
         )}
 
         {maybe.length > 0 && (
@@ -211,7 +219,7 @@ export function FindCase({
         )}
       </Card>
 
-      <Card aria-labelledby="gaps-title">
+      <Card strip="lilac" aria-labelledby="gaps-title">
         <CardHeader
           titleId="gaps-title"
           title="Where their shared history is thin"
@@ -235,7 +243,7 @@ export function FindCase({
         <p className="mt-4 text-xs text-muted">Counts reflect only the cases {name} has shared.</p>
       </Card>
 
-      <Card aria-labelledby="done-title">
+      <Card strip="sun" aria-labelledby="done-title">
         <CardHeader
           titleId="done-title"
           title={`Cases ${name} has shared`}

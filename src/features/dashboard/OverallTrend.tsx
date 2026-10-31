@@ -11,7 +11,7 @@ export function OverallTrend({ points }: { points: TrendPoint[] }) {
   const enough = points.length >= MIN_POINTS;
 
   return (
-    <Card aria-labelledby="trend-title">
+    <Card strip="teal" aria-labelledby="trend-title">
       <CardHeader
         titleId="trend-title"
         title="Overall performance over time"
