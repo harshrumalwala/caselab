@@ -9,6 +9,7 @@ import { Dialog } from '../../components/ui/Dialog';
 import { Switch } from '../../components/ui/Switch';
 import { useCommunity, useMyProfile } from '../../state/CommunityProvider';
 import { useData } from '../../state/DataProvider';
+import { usePractice } from '../../state/PracticeProvider';
 import { useToast } from '../../state/ToastProvider';
 import { AudienceSwitch, profileAddress } from './AudienceSwitch';
 import { BurnedBooks } from './BurnedBooks';
@@ -137,6 +138,53 @@ function Preview({ profile }: { profile: Profile }) {
           )}
         </div>
       )}
+    </section>
+  );
+}
+
+/** Whether CaseLab emails you about practice requests. Private to you, and on unless you turn it off. */
+function EmailSwitch() {
+  const { emailRequests, setEmailRequests } = usePractice();
+  const toast = useToast();
+  const [on, setOn] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let current = true;
+    emailRequests()
+      .then((value) => current && setOn(value))
+      .catch(() => current && setOn(true));
+    return () => {
+      current = false;
+    };
+  }, [emailRequests]);
+
+  const change = async (next: boolean) => {
+    setSaving(true);
+    try {
+      await setEmailRequests(next);
+      setOn(next);
+    } catch (e) {
+      toast({ kind: 'error', title: 'Not saved', body: describeError(e) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section aria-labelledby="email-title" className="space-y-3">
+      <h3 id="email-title" className="text-sm font-semibold text-ink">
+        Email
+      </h3>
+      <div className="flex items-center justify-between gap-4 rounded-2xl border border-line px-4 py-3.5">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-ink">Email me about requests</p>
+          <p className="text-xs text-muted">
+            Get an email when someone asks you to case, and when someone says yes to your request. Only you see this choice.
+          </p>
+        </div>
+        <Switch label="Email me about requests" checked={on ?? true} disabled={on === null || saving} onChange={(next) => void change(next)} />
+      </div>
     </section>
   );
 }
@@ -280,6 +328,8 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
               full. "Other notes" stay private unless you turn on "Open everything", and your practice partner's name only appears if you turn on "Who cased me".
             </p>
           </section>
+
+          <EmailSwitch />
 
           <BurnedBooks
             books={profile.burnedBooks}

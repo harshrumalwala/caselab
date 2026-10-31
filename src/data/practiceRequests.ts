@@ -23,6 +23,9 @@ export interface PracticeRepository {
   markAnswersSeen(): Promise<void>;
   blocked(): Promise<BlockedMember[]>;
   unblock(userId: string): Promise<void>;
+  /** Whether you get an email when someone asks you to case or accepts your request. On unless you turned it off. */
+  emailRequests(): Promise<boolean>;
+  setEmailRequests(on: boolean): Promise<void>;
 }
 
 interface RequestRow {
@@ -76,7 +79,7 @@ export class SupabasePractice implements PracticeRepository {
 
   async send(to: string, request: NewRequest): Promise<void> {
     const r = cleanRequest(request);
-    const { error } = await this.client.rpc('send_practice_request', {
+    const { data, error } = await this.client.rpc('send_practice_request', {
       p_to: to,
       p_case_title: r.caseTitle,
       p_case_book: r.caseBook,
@@ -84,6 +87,19 @@ export class SupabasePractice implements PracticeRepository {
       p_message: r.message,
     });
     if (error) fail(error);
+    this.notify('sent', data as string);
+  }
+
+  /**
+   * Ask the notify-request function to email the other member. Best effort and in the background: the request itself is already
+   * saved, and if the email can't go out (function not deployed, offline) nobody needs to know. The function decides whether an email
+   * is really sent, and what it says.
+   */
+  private notify(event: 'sent' | 'answered', requestId: string): void {
+    if (typeof requestId !== 'string') return;
+    void Promise.resolve()
+      .then(() => this.client.functions.invoke('notify-request', { body: { event, requestId } }))
+      .catch(() => undefined);
   }
 
   async respond(id: string, accept: boolean, reply: string, blockAsker = false): Promise<void> {
@@ -94,6 +110,7 @@ export class SupabasePractice implements PracticeRepository {
       p_block: !accept && blockAsker,
     });
     if (error) fail(error);
+    if (accept) this.notify('answered', id);
   }
 
   async cancel(id: string): Promise<void> {
@@ -114,6 +131,17 @@ export class SupabasePractice implements PracticeRepository {
 
   async unblock(userId: string): Promise<void> {
     const { error } = await this.client.rpc('unblock_practice_asker', { p_user: userId });
+    if (error) throw error;
+  }
+
+  async emailRequests(): Promise<boolean> {
+    const { data, error } = await this.client.from('notification_settings').select('email_requests').maybeSingle();
+    if (error) throw error;
+    return data?.email_requests ?? true; // no row yet: never chose, so on
+  }
+
+  async setEmailRequests(on: boolean): Promise<void> {
+    const { error } = await this.client.from('notification_settings').upsert({ email_requests: on, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
     if (error) throw error;
   }
 }
@@ -151,6 +179,13 @@ export function createMemoryPractice(members: () => MemoryMember[]) {
   const rows: Stored[] = [];
   const blocks: { blocker: string; blocked: string }[] = [];
   const acceptListeners: ((r: AcceptedRequest) => void)[] = [];
+  /** Members who turned the request emails off (the default is on). */
+  const emailsOff = new Set<string>();
+  /** The emails the real function would send, for tests: who is told, and why. */
+  const emailed: { to: string; event: 'sent' | 'answered'; requestId: string }[] = [];
+  const tell = (to: string, event: 'sent' | 'answered', requestId: string) => {
+    if (!emailsOff.has(to)) emailed.push({ to, event, requestId });
+  };
   /** Whether two members already have a conversation (set by the messages twin). Connected members message each other instead. */
   let connected: (a: string, b: string) => boolean = () => false;
   let next = 1;
@@ -185,7 +220,9 @@ export function createMemoryPractice(members: () => MemoryMember[]) {
         if (rows.some((r) => r.from === me && r.to === to && r.status === 'pending')) throw new DataError('You already have a request waiting with this member.');
         if (rows.filter((r) => r.from === me && r.status === 'pending').length >= 5) throw new DataError('You have 5 requests waiting. Wait for answers or cancel one first.');
         const c = cleanRequest(request);
-        rows.push({ id: `req-${next++}`, from: me, to, caseTitle: c.caseTitle, caseBook: c.caseBook, when: c.when, message: c.message, status: 'pending', reply: '', createdAt: new Date().toISOString(), respondedAt: null, fromSeen: false });
+        const id = `req-${next++}`;
+        rows.push({ id, from: me, to, caseTitle: c.caseTitle, caseBook: c.caseBook, when: c.when, message: c.message, status: 'pending', reply: '', createdAt: new Date().toISOString(), respondedAt: null, fromSeen: false });
+        tell(to, 'sent', id);
       },
       async respond(id, accept, reply, blockAsker = false) {
         guard();
@@ -194,6 +231,7 @@ export function createMemoryPractice(members: () => MemoryMember[]) {
         r.status = accept ? 'accepted' : 'declined';
         r.reply = cleanReply(reply);
         r.respondedAt = new Date().toISOString();
+        if (accept) tell(r.from, 'answered', r.id);
         if (!accept && blockAsker && !blocks.some((b) => b.blocker === me && b.blocked === r.from)) blocks.push({ blocker: me, blocked: r.from });
         const blockedEitherWay = blocks.some((b) => (b.blocker === me && b.blocked === r.from) || (b.blocker === r.from && b.blocked === me));
         if (accept && !blockedEitherWay) {
@@ -220,6 +258,15 @@ export function createMemoryPractice(members: () => MemoryMember[]) {
         const i = blocks.findIndex((b) => b.blocker === me && b.blocked === userId);
         if (i >= 0) blocks.splice(i, 1);
       },
+      async emailRequests() {
+        guard();
+        return !emailsOff.has(me);
+      },
+      async setEmailRequests(on) {
+        guard();
+        if (on) emailsOff.delete(me);
+        else emailsOff.add(me);
+      },
     };
     return Object.assign(repo, { control });
   }
@@ -228,6 +275,7 @@ export function createMemoryPractice(members: () => MemoryMember[]) {
     as: view,
     rows,
     blocks,
+    emailed,
     onAccept: (listen: (r: AcceptedRequest) => void) => void acceptListeners.push(listen),
     setConnected: (fn: (a: string, b: string) => boolean) => void (connected = fn),
   };

@@ -55,6 +55,40 @@ beforeEach(() => {
   window.location.hash = '';
 });
 
+describe('emails about requests', () => {
+  const openSettings = async (env: FakeEnv) => {
+    const user = await openAt(env, '#/dashboard', 'Dashboard');
+    await user.click(screen.getByRole('button', { name: 'Profile and privacy' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Profile & privacy' });
+    return { user, dialog };
+  };
+
+  it('is on until you turn it off, and your choice is kept', async () => {
+    const env = createFakeEnv();
+    const { user, dialog } = await openSettings(env);
+    const sw = await within(dialog).findByRole('switch', { name: 'Email me about requests' });
+    await waitFor(() => expect(sw).toBeEnabled());
+    expect(sw).toBeChecked();
+
+    await user.click(sw);
+    await waitFor(() => expect(sw).not.toBeChecked());
+    expect(await env.practice.mine.emailRequests()).toBe(false);
+
+    await user.click(sw);
+    await waitFor(() => expect(sw).toBeChecked());
+    expect(await env.practice.mine.emailRequests()).toBe(true);
+  });
+
+  it('shows it as off when you turned it off before', async () => {
+    const env = createFakeEnv();
+    await env.practice.mine.setEmailRequests(false);
+    const { dialog } = await openSettings(env);
+    const sw = await within(dialog).findByRole('switch', { name: 'Email me about requests' });
+    await waitFor(() => expect(sw).toBeEnabled());
+    expect(sw).not.toBeChecked();
+  });
+});
+
 describe('nothing to switch on', () => {
   it('has no requests switch in Profile & privacy: every member can be asked', async () => {
     const env = createFakeEnv();

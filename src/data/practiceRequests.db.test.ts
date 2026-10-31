@@ -339,7 +339,9 @@ describe('privacy and access', () => {
       `select column_name from information_schema.columns where table_schema = 'public' and table_name in ('practice_requests', 'practice_blocks')`,
     );
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.map((r) => r.column_name).filter((c) => /mail/.test(c))).toEqual([]);
+    // `emailed_at` and `answer_emailed_at` only record WHEN a notification went out (see emailNotifications.db.test.ts); no address.
+    const markers = ['emailed_at', 'answer_emailed_at'];
+    expect(rows.map((r) => r.column_name).filter((c) => /mail/.test(c) && !markers.includes(c))).toEqual([]);
   });
 
   it('is open to every listed, verified member with nothing to switch on, even a brand-new profile', async () => {
