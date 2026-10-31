@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, FileSpreadsheet, Filter, Flame, Lock, LockOpen, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ChevronDown, Download, FileSpreadsheet, Filter, Flame, Lock, LockOpen, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { CASE_TYPES, INDUSTRIES } from '../../domain/constants';
 import {
   applyFilters,
@@ -24,6 +24,7 @@ import { chipClass } from '../../components/ui/chips';
 import { pillTabClass } from '../../components/ui/pillTab';
 import { useMyProfile } from '../../state/CommunityProvider';
 import { BurnedPanel } from './BurnedPanel';
+import { useExportExcel } from './useExportExcel';
 import { useTogglePrivate } from './useTogglePrivate';
 
 function ImprovementCell({ c }: { c: CaseRecord }) {
@@ -129,6 +130,7 @@ export function CaseLog() {
   const [tab, setTab] = useState<'cases' | 'burned'>('cases');
   const toast = useToast();
   const now = useNow();
+  const { exportExcel, busy: exporting } = useExportExcel();
 
   const [filters, setFilters] = useState<CaseFilters>(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
@@ -200,6 +202,7 @@ export function CaseLog() {
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">My Case Log</h1>
         <p className="text-sm text-ink-2">
@@ -207,6 +210,10 @@ export function CaseLog() {
           {burnedCount > 0 && <span className="ml-2 font-semibold">· {burnedCount} burned, not counted</span>}
         </p>
         <p className="text-sm font-semibold text-accent-text">{logQuip(cases.length)}</p>
+      </div>
+      <Button onClick={() => void exportExcel()} disabled={exporting} title="Download your log as an Excel file in the MCG layout">
+        <Download className="size-4" /> Export to Excel
+      </Button>
       </div>
 
       <LogTabs tab={tab} onChange={setTab} burned={burnedCount} />

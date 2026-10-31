@@ -13,6 +13,8 @@ export interface SavedInfo {
   firstInIndustry: boolean;
   milestones: Milestone[];
   next: Suggestion | null;
+  /** Your weekly goal after this save; `hit` is true when this very case is the one that reached it. */
+  goal?: { goal: number; count: number; hit: boolean; streak: number } | null;
 }
 
 /** One of these under "Case saved", picked by how many cases you now have so it changes as you go. */
@@ -33,7 +35,7 @@ export function SavedPanel({ info, onUseSuggestion }: { info: SavedInfo; onUseSu
   return (
     <div role="status" className="animate-rise">
       {/* A milestone (10th case, first of an industry, every main case type) gets confetti. */}
-      {(info.milestones.length > 0 || info.firstInIndustry) && <Confetti />}
+      {(info.milestones.length > 0 || info.firstInIndustry || info.goal?.hit) && <Confetti />}
       <div className="flex items-center gap-3">
         <span className="flex size-11 items-center justify-center rounded-full bg-good-soft text-good">
           <CheckCircle2 className="size-6" />
@@ -47,6 +49,15 @@ export function SavedPanel({ info, onUseSuggestion }: { info: SavedInfo; onUseSu
         </span>
       </div>
       <p className="mt-3 text-sm font-semibold text-accent-text">{CHEERS[info.total % CHEERS.length]}</p>
+      {info.goal && (
+        <p className={`mt-1.5 text-sm font-semibold ${info.goal.hit ? 'text-good' : 'text-ink-2'}`}>
+          {info.goal.hit
+            ? `Weekly goal hit: ${info.goal.count} of ${info.goal.goal}.${info.goal.streak > 1 ? ` That is ${info.goal.streak} weeks in a row.` : ''}`
+            : info.goal.count < info.goal.goal
+              ? `Weekly goal: ${info.goal.count} of ${info.goal.goal}. ${info.goal.goal - info.goal.count} to go.`
+              : `Weekly goal: already hit, and now ${info.goal.count} of ${info.goal.goal}. Overachiever.`}
+        </p>
+      )}
 
       <ul className="mt-6 divide-y divide-line rounded-2xl border border-line bg-surface-2/50 text-sm">
         <li className="flex items-center justify-between gap-4 px-4 py-3">

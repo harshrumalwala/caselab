@@ -31,8 +31,10 @@ import { sameBook } from '../../domain/pairing';
 import { normalizeBurnedBooks } from '../../domain/community';
 import { useCommunity, useMyProfile } from '../../state/CommunityProvider';
 import { DRAFT_KEY, useData } from '../../state/DataProvider';
+import { useGoal } from '../../state/GoalProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
+import { goalProgress } from '../../domain/goal';
 import { SavedPanel, type SavedInfo } from './SavedPanel';
 
 const CUSTOM = '__custom__';
@@ -124,6 +126,7 @@ interface Props {
 export function LogCaseDialog({ editId, prefill, onClose }: Props) {
   const { cases, data, mode, addCase, updateCase } = useData();
   const { navigate } = useUI();
+  const { goal } = useGoal();
   const toast = useToast();
   const profile = useMyProfile();
   const { saveProfile } = useCommunity();
@@ -261,6 +264,7 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
         firstInIndustry: !before.some(sameIndustry),
         milestones: newMilestones(before, after),
         next: nextPracticeFocus(after)[0] ?? null,
+        goal: goal ? (({ count, met, streak }) => ({ goal, count, hit: met && count === goal, streak }))(goalProgress(after, new Date(), goal)) : null,
       });
     } catch (err) {
       // Keep the form exactly as it is so nothing typed is lost; the user can retry.

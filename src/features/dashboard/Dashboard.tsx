@@ -109,7 +109,7 @@ export function Dashboard() {
         </Card>
       )}
 
-      {total > 0 && <TodayStrip thisWeek={view.overview.thisWeek} next={view.suggestions[0]} />}
+      {total > 0 && <TodayStrip cases={cases} now={now} next={view.suggestions[0]} />}
 
       <Overview stats={view.overview} cases={cases} now={now} />
 
