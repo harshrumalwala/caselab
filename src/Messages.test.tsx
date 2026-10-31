@@ -288,6 +288,16 @@ describe('finding the conversation from elsewhere', () => {
     expect(screen.queryByRole('link', { name: /Message Carol/ })).not.toBeInTheDocument();
   });
 
+  it('puts "Case with …?" and "Message …" side by side in one row, the main action first', async () => {
+    const { env } = await withConversation();
+    await openAt(env, '#/people/bob', 'Bob Brown');
+    const ask = await screen.findByRole('button', { name: 'Case with Bob?' });
+    const message = await screen.findByRole('link', { name: /Message Bob/ });
+    expect(ask.parentElement).toBe(message.parentElement);
+    expect(ask.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(ask.parentElement).toHaveClass('flex', 'flex-wrap');
+  });
+
   it('shows the count on the profile button', async () => {
     const { env, id } = await withConversation();
     await env.chat.as('bob').send(id, 'a');
