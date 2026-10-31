@@ -87,7 +87,7 @@ function Shell() {
     return () => document.removeEventListener('keydown', onKey);
   }, [ui]);
 
-  if (status === 'loading') return <Splash label="Loading your cases…" />;
+  if (status === 'loading') return <Splash label="Dusting off your case log…" />;
   if (status === 'error') {
     return (
       <LoadFailed
@@ -140,7 +140,7 @@ function Shell() {
 function ProfileGate({ children }: { children: ReactNode }) {
   const { status, loadError, profile, reload } = useCommunity();
   const { signOut } = useAuth();
-  if (status === 'loading') return <Splash label="Loading your profile…" />;
+  if (status === 'loading') return <Splash label="Warming up your profile…" />;
   if (status === 'error') {
     return (
       <LoadFailed

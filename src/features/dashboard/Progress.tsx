@@ -16,7 +16,7 @@ export function ProgressOverTime({ stats }: { stats: SkillStat[] }) {
       <CardHeader
         titleId="progress-title"
         title="Progress over time"
-        subtitle="Your first five ratings vs. your latest five"
+        subtitle="Your first five ratings vs. your latest five. The glow-up, measured."
         icon={<TrendingUp className="size-4" />}
       />
       {comparable.length === 0 ? (
@@ -67,7 +67,7 @@ export function Milestones({ achieved, total }: { achieved: Milestone[]; total: 
       <CardHeader
         titleId="milestones-title"
         title="Milestones"
-        subtitle="Quiet markers of progress"
+        subtitle="Tiny trophies for showing up"
         icon={<Flag className="size-4" />}
       />
       {next && (

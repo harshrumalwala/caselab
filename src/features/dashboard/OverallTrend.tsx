@@ -15,7 +15,7 @@ export function OverallTrend({ points }: { points: TrendPoint[] }) {
       <CardHeader
         titleId="trend-title"
         title="Overall performance over time"
-        subtitle={enough ? 'Each dot is a case · dashed line is the 5-case rolling average' : undefined}
+        subtitle={enough ? 'Each dot is a case · dashed line is the 5-case rolling average · up and to the right is the dream' : undefined}
         icon={<LineIcon className="size-4" />}
       />
       {!enough ? (

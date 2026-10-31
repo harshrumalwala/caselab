@@ -9,6 +9,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { useCommunity } from '../../state/CommunityProvider';
 import { useData } from '../../state/DataProvider';
 import { useUI } from '../../state/ui';
+import { chipClass } from '../../components/ui/chips';
 import { PersonProfile } from './PersonProfile';
 
 /** Search box and member list. Used for signed-in members and for visitors without an account. */
@@ -98,10 +99,10 @@ export function Directory({
                 <button
                   type="button"
                   onClick={() => onOpen(p.userId)}
-                  className="card flex w-full items-center justify-between gap-4 p-4 text-left transition hover:bg-surface-2/60"
+                  className="sticker flex w-full items-center justify-between gap-4 p-4 text-left transition hover:-translate-y-0.5 hover:bg-sun-soft"
                 >
                   <span className="flex min-w-0 items-center gap-3.5">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft font-semibold text-accent-text" aria-hidden>
+                    <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl border-2 border-ink/80 font-display font-bold ${chipClass(p.displayName)}`} aria-hidden>
                       {p.displayName.trim().charAt(0).toUpperCase()}
                     </span>
                     <span className="min-w-0">
