@@ -113,36 +113,37 @@ describe('Warm-up: playing', () => {
     expect(stat('Streak')).toBe('0');
   });
 
-  it('after a miss, shows the answer and the quick way, breaks the streak, and waits for you', async () => {
+  it('after a miss, breaks the streak and moves straight on: no tip, no pause, the clock keeps running', async () => {
     const next = questions();
-    const { start, submit, stat, tick, user } = setup();
+    const { start, submit, stat, tick } = setup();
     await start();
     await submit(typeOf(next()));
     const second = next();
     await submit(WRONG);
 
-    expect(screen.getByText(`The answer was ${second.display}.`)).toBeInTheDocument();
-    expect(screen.getByText(/Here’s the quick way:/)).toBeInTheDocument();
-    expect(screen.getByText(second.tip, { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Missed. On to the next.');
     expect(stat('Streak')).toBe('0');
     expect(stat('Score')).toBe('12');
-    expect(screen.queryByLabelText(/Your answer/)).not.toBeInTheDocument();
-
-    // The clock does not run while you read the tip.
-    const before = screen.getByRole('timer').textContent;
-    tick(15_000);
-    expect(screen.getByRole('timer')).toHaveTextContent(before!);
-
-    await user.click(screen.getByRole('button', { name: 'Next question' }));
+    // The next question is already up, and nothing about the one you missed is shown mid-round.
     expect(screen.getByText(next().prompt)).toBeInTheDocument();
+    expect(screen.queryByText(second.tip, { exact: false })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Quick way/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Next question' })).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Your answer/)).toHaveFocus();
+
+    const before = Number(screen.getByRole('timer').textContent!.replace('s', ''));
+    tick(5_000);
+    expect(screen.getByRole('timer')).toHaveTextContent(`${before - 5}s`);
   });
 
-  it('counts a skip as a miss and shows how to do it', async () => {
+  it('counts a skip as a miss and moves on', async () => {
+    const next = questions();
     const { start, user, stat } = setup();
     await start();
+    next();
     await user.click(screen.getByRole('button', { name: 'Skip' }));
-    expect(screen.getByText(/Here’s the quick way:/)).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Skipped. On to the next.');
+    expect(screen.getByText(next().prompt)).toBeInTheDocument();
     expect(stat('Streak')).toBe('0');
   });
 
@@ -153,7 +154,7 @@ describe('Warm-up: playing', () => {
     await submit('about thirty');
     expect(screen.getByRole('alert')).toHaveTextContent(/Type a number/);
     expect(screen.getByText(next().prompt)).toBeInTheDocument();
-    expect(screen.queryByText(/Here’s the quick way:/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).toHaveTextContent('');
     expect(stat('Streak')).toBe('0');
   });
 
@@ -183,6 +184,49 @@ describe('Warm-up: the end of a round', () => {
     expect(screen.getByText(/Best so far:/)).toHaveTextContent('42 points, streak of 3');
     expect(screen.getByRole('link', { name: 'Back to the dashboard' })).toHaveAttribute('href', '#/dashboard');
     expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+  });
+
+  it('reviews every miss and skip at the end, with what you said, the answer and the quick way', async () => {
+    const next = questions();
+    const s = setup();
+    await s.start();
+    await s.submit(typeOf(next())); // right
+    const missed = next();
+    await s.submit(WRONG); // wrong
+    const skipped = next();
+    await s.user.click(screen.getByRole('button', { name: 'Skip' }));
+    s.tick(ROUND_SECONDS * 1000);
+
+    expect(screen.getByRole('heading', { name: /Review your misses \(2\)/ })).toBeInTheDocument();
+    const items = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent(missed.prompt);
+    expect(items[0]).toHaveTextContent(`You said ${WRONG}.`);
+    expect(items[0]).toHaveTextContent(`Answer: ${missed.display}.`);
+    expect(items[0]).toHaveTextContent(`Quick way: ${missed.tip}`);
+    expect(items[1]).toHaveTextContent(skipped.prompt);
+    expect(items[1]).toHaveTextContent('You skipped it.');
+    expect(items[1]).toHaveTextContent(`Answer: ${skipped.display}.`);
+    expect(screen.queryByText(/clean sheet/)).not.toBeInTheDocument();
+  });
+
+  it('has nothing to review after a clean round, and the review is gone after going again', async () => {
+    const s = await playRound(2);
+    expect(screen.getByText(/clean sheet/)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Review your misses/ })).not.toBeInTheDocument();
+
+    await s.user.click(screen.getByRole('button', { name: 'Go again' }));
+    await s.submit(WRONG);
+    s.tick(ROUND_SECONDS * 1000);
+    expect(screen.getByRole('heading', { name: /Review your misses \(1\)/ })).toBeInTheDocument();
+    await s.user.click(screen.getByRole('button', { name: 'Go again' }));
+    expect(screen.queryByRole('heading', { name: /Review your misses/ })).not.toBeInTheDocument();
+  });
+
+  it('has no review, and no clean sheet, when nothing was answered', async () => {
+    await playRound(0);
+    expect(screen.queryByRole('heading', { name: /Review your misses/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/clean sheet/)).not.toBeInTheDocument();
   });
 
   it('keeps an older, better record and does not say "new best"', async () => {

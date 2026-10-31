@@ -87,6 +87,7 @@ describe('question generation', () => {
       const [fixed, price, variable] = nums;
       expect(b.answer).toBeCloseTo(fixed / (price - variable), 6);
       expect(price).toBeGreaterThan(variable);
+      expect(b.tip).toMatch(Number.isInteger(b.answer) ? /÷ \$[\d.]+k? = [\d,]+\.$/ : /÷ \$[\d.]+k? ≈ [\d,]+\.$/);
     }
   });
 
