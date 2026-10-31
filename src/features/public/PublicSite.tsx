@@ -156,7 +156,7 @@ function RecentCasers({ reader, onOpen }: { reader: PublicReader; onOpen: (id: s
 
 const IMPORT_STEPS: { title: string; text: string; tone: Tone }[] = [
   { title: 'Create your free account', text: 'It takes a minute.', tone: 'coral' },
-  { title: 'Choose your Excel file', text: 'Your MCG case log template, as an .xlsx file.', tone: 'sun' },
+  { title: 'Choose your Excel file', text: 'Your case log, saved as an .xlsx file.', tone: 'sun' },
   { title: 'Review, then import', text: 'You see everything first. Nothing is saved until you say so.', tone: 'teal' },
 ];
 
@@ -179,7 +179,7 @@ function ImportCallout() {
             Bring your whole case log with you
           </h2>
           <p className="mt-3 text-base leading-relaxed text-ink-2">
-            Already logging cases in the MCG Excel template? Import it in one step. Your cases, ratings, feedback and Opportunity Areas
+            Already logging cases in Excel? Import it in one step. Your cases, ratings, feedback and Opportunity Areas
             lists all come across, so there is nothing to retype and you never start from zero.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
