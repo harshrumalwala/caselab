@@ -14,6 +14,7 @@ const BOB: Profile = {
   publicProfile: false,
   publicLinkOnly: false,
   burnedBooks: ['Cosentino'],
+  burnedCases: [],
   sharing: { ...NO_SHARING, cases: true },
 };
 const BOB_SHARED: SharedCase = {
@@ -143,10 +144,10 @@ describe('burning a book', () => {
     await user.click(screen.getByRole('button', { name: 'Log case' }));
     const dialog = await screen.findByRole('dialog', { name: 'Log a case' });
     await fillRequired(user, dialog, 'Solo case');
-    expect(within(dialog).queryByRole('checkbox', { name: /I've burned this book/ })).not.toBeInTheDocument(); // needs a source first
+    expect(within(dialog).queryByRole('checkbox', { name: /I've finished this whole book/ })).not.toBeInTheDocument(); // needs a source first
 
     await user.type(within(dialog).getByLabelText('Case source'), 'Cosentino');
-    const burn = within(dialog).getByRole('checkbox', { name: /I've burned this book/ });
+    const burn = within(dialog).getByRole('checkbox', { name: /I've finished this whole book/ });
     expect(burn).not.toBeChecked();
     await user.click(burn);
     await user.click(within(dialog).getByRole('button', { name: 'Save case' }));
@@ -162,7 +163,7 @@ describe('burning a book', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Log a case' });
     await fillRequired(user, dialog, 'Another one');
     await user.type(within(dialog).getByLabelText('Case source'), 'cosentino');
-    const burn = within(dialog).getByRole('checkbox', { name: /I've burned this book/ });
+    const burn = within(dialog).getByRole('checkbox', { name: /I've finished this whole book/ });
     expect(burn).toBeChecked();
     await user.click(burn);
     await user.click(within(dialog).getByRole('button', { name: 'Save case' }));
@@ -220,5 +221,91 @@ describe("other members' burned books", () => {
     expect(screen.queryByText(/Has burned/)).not.toBeInTheDocument();
     expect(screen.queryByText(/has burned/)).not.toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: /Cases you've done that Bob hasn't shared/ })).getByText('Airline profit')).toBeInTheDocument();
+  });
+});
+
+describe('burning individual cases (not practice)', () => {
+  it("lets you paste titles under a book, keeps them out of your Case Log and totals, and lets you remove them", async () => {
+    const env = createFakeEnv();
+    const { user } = await openApp(env);
+    await user.click(screen.getByRole('button', { name: 'Profile and privacy' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Profile & privacy' });
+
+    await user.type(within(dialog).getByLabelText('Book for these cases'), 'Cosentino');
+    await user.type(within(dialog).getByLabelText('Case titles, one per line'), '1. Airline profit{enter}- Bank fees{enter}{enter}Piano tuners');
+    expect(within(dialog).getByText('3 cases ready to add.')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Burn 3 cases' }));
+
+    await waitFor(() => expect(mine(env).burnedCases).toHaveLength(3));
+    expect(mine(env).burnedCases).toEqual([
+      { title: 'Airline profit', book: 'Cosentino' },
+      { title: 'Bank fees', book: 'Cosentino' },
+      { title: 'Piano tuners', book: 'Cosentino' },
+    ]);
+    // They are not practice: nothing was added to the case log.
+    expect((await env.repo.loadAll()).cases).toEqual([]);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Remove Bank fees' }));
+    await waitFor(() => expect(mine(env).burnedCases.map((c) => c.title)).toEqual(['Airline profit', 'Piano tuners']));
+  });
+
+  it('does not add repeats, and works without a book', async () => {
+    const env = createFakeEnv({ profile: { ...MY_PROFILE, burnedCases: [{ title: 'Airline profit', book: '' }] } });
+    const { user } = await openApp(env);
+    await user.click(screen.getByRole('button', { name: 'Profile and privacy' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Profile & privacy' });
+    await user.type(within(dialog).getByLabelText('Case titles, one per line'), 'airline profit{enter}New one');
+    await user.click(within(dialog).getByRole('button', { name: 'Burn 2 cases' }));
+    await waitFor(() => expect(mine(env).burnedCases.map((c) => c.title)).toEqual(['Airline profit', 'New one']));
+  });
+
+  it('is one click from the Case Log', async () => {
+    const env = createFakeEnv();
+    await env.repo.insertCase(makeCase({ title: 'Airline profit' }));
+    const { user } = await openApp(env);
+    window.location.hash = '#/log';
+    await user.click(await screen.findByRole('button', { name: /Practiced solo\? Burn cases/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Profile & privacy' });
+    expect(within(dialog).getByLabelText('Case titles, one per line')).toBeInTheDocument();
+  });
+
+  it("skips your cases that match ones they've burned, and says so", async () => {
+    const env = createFakeEnv({
+      members: [{ ...BOB, burnedBooks: [], burnedCases: [{ title: 'Airline profit case', book: 'Cosentino' }, { title: 'Something else', book: '' }] }],
+      shared: [BOB_SHARED],
+    });
+    for (const c of [makeCase({ title: 'Airline profitability', source: 'Booth casebook' }), makeCase({ title: 'Hospital entry', source: 'Booth casebook' })]) {
+      await env.repo.insertCase(c);
+    }
+    await openApp(env);
+    window.location.hash = '#/people/bob';
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    expect(screen.getByText(/Has burned/)).toHaveTextContent('Has burned 2 cases');
+    const offer = within(screen.getByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
+    expect(offer.getByText('Hospital entry')).toBeInTheDocument();
+    expect(offer.queryByText('Airline profitability')).not.toBeInTheDocument();
+    const note = screen.getByText(/Bob has burned 2 cases on their own/).closest('[role="note"]')!;
+    expect(note).toHaveTextContent('1 of your cases is left out below.');
+  });
+
+  it('says both when they have burned books and individual cases', async () => {
+    const env = createFakeEnv({
+      members: [{ ...BOB, burnedBooks: ['Cosentino'], burnedCases: [{ title: 'Hospital entry', book: '' }] }],
+      shared: [BOB_SHARED],
+    });
+    for (const c of [makeCase({ title: 'Airline profit', source: 'Cosentino' }), makeCase({ title: 'Hospital entry', source: 'Booth casebook' }), makeCase({ title: 'Piano tuners', source: 'Case in Point' })]) {
+      await env.repo.insertCase(c);
+    }
+    await openApp(env);
+    window.location.hash = '#/people/bob';
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    expect(screen.getByText(/Has burned/)).toHaveTextContent('Has burned Cosentino and 1 case');
+    const note = screen.getByText(/Bob has burned Cosentino/).closest('[role="note"]')!;
+    expect(note).toHaveTextContent('1 of your cases from that book is left out below');
+    expect(note).toHaveTextContent('Bob has also burned 1 case on their own, and 1 more of yours is left out.');
+    const offer = within(screen.getByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
+    expect(offer.getByText('Piano tuners')).toBeInTheDocument();
+    expect(offer.queryByText('Airline profit')).not.toBeInTheDocument();
+    expect(offer.queryByText('Hospital entry')).not.toBeInTheDocument();
   });
 });

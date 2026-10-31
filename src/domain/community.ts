@@ -14,6 +14,38 @@ export interface SharingPrefs {
   details: boolean; // open everything: scores, feedback, learning notes and other notes on every shared case
 }
 
+/** A case worked through on its own, and the book it came from (which may be blank). */
+export interface BurnedCase {
+  title: string;
+  book: string;
+}
+
+export const MAX_BURNED_CASES = 300;
+export const MAX_BURNED_TITLE = 200;
+
+/** One title per line; bullets and numbering ("- ", "3. ", "• ") are dropped, blanks are ignored. */
+export function parseBurnedTitles(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*(?:[-•*·]|\d+[.)])\s+/, '').trim())
+    .filter(Boolean);
+}
+
+/** A tidy list: trimmed, cut to length, no repeats (same title and book, ignoring case), at most 300. */
+export function normalizeBurnedCases(items: readonly BurnedCase[]): BurnedCase[] {
+  const seen = new Set<string>();
+  const out: BurnedCase[] = [];
+  for (const raw of items) {
+    const title = raw.title.trim().slice(0, MAX_BURNED_TITLE).trim();
+    const book = raw.book.trim().slice(0, MAX_BOOK_NAME).trim();
+    const key = `${title.toLowerCase()}|${book.toLowerCase()}`;
+    if (!title || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ title, book });
+  }
+  return out.slice(0, MAX_BURNED_CASES);
+}
+
 export const MAX_BURNED_BOOKS = 40;
 export const MAX_BOOK_NAME = 100;
 
@@ -55,6 +87,8 @@ export interface Profile {
   publicLinkOnly: boolean;
   /** Casebooks this member has already burned (for example solo). Others picking a case for them skip these. */
   burnedBooks: string[];
+  /** Individual cases they've burned. Not practice cases: kept apart from the case log, so they never count in any total. */
+  burnedCases: BurnedCase[];
   sharing: SharingPrefs;
 }
 

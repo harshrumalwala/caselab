@@ -87,7 +87,7 @@ export function FindCase({ person, theirs, mine }: { person: Profile; theirs: Sh
   const name = first(person.displayName);
   const [filter, setFilter] = useState<CaseFilter>(NO_FILTER);
 
-  const pairing = useMemo(() => pairCases(mine, theirs, person.burnedBooks), [mine, theirs, person.burnedBooks]);
+  const pairing = useMemo(() => pairCases(mine, theirs, person.burnedBooks, person.burnedCases), [mine, theirs, person.burnedBooks, person.burnedCases]);
   const industries = useMemo(() => distinctValues([...mine, ...theirs], 'industry'), [mine, theirs]);
   const sources = useMemo(() => distinctValues([...mine, ...theirs], 'source'), [mine, theirs]);
 
@@ -122,6 +122,20 @@ export function FindCase({ person, theirs, mine }: { person: Profile; theirs: Sh
         </p>
       </div>
 
+      {person.burnedBooks.length === 0 && person.burnedCases.length > 0 && (
+        <div className="flex gap-3 rounded-2xl border border-line bg-surface-2/60 px-4 py-3.5 text-sm" role="note">
+          <Flame className="mt-0.5 size-4 shrink-0 text-accent-text" aria-hidden />
+          <p className="leading-relaxed text-ink-2">
+            <strong className="font-semibold text-ink">
+              {name} has burned {person.burnedCases.length} {person.burnedCases.length === 1 ? 'case' : 'cases'} on their own.
+            </strong>{' '}
+            {pairing.burnedCaseExcluded.length > 0
+              ? `${pairing.burnedCaseExcluded.length === 1 ? '1 of your cases is' : `${pairing.burnedCaseExcluded.length} of your cases are`} left out below.`
+              : 'None of yours are among them.'}
+          </p>
+        </div>
+      )}
+
       {person.burnedBooks.length > 0 && (
         <div className="flex gap-3 rounded-2xl border border-line bg-surface-2/60 px-4 py-3.5 text-sm" role="note">
           <Flame className="mt-0.5 size-4 shrink-0 text-accent-text" aria-hidden />
@@ -132,6 +146,15 @@ export function FindCase({ person, theirs, mine }: { person: Profile; theirs: Sh
                   person.burnedBooks.length === 1 ? 'that book is' : 'those books are'
                 } left out below.`
               : 'None of your cases come from those books.'}
+            {person.burnedCases.length > 0 && (
+              <>
+                {' '}
+                {name} has also burned {person.burnedCases.length} {person.burnedCases.length === 1 ? 'case' : 'cases'} on their own
+                {pairing.burnedCaseExcluded.length > 0
+                  ? `, and ${pairing.burnedCaseExcluded.length === 1 ? '1 more of yours is' : `${pairing.burnedCaseExcluded.length} more of yours are`} left out.`
+                  : '.'}
+              </>
+            )}
           </p>
         </div>
       )}

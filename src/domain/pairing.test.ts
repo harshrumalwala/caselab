@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeBurnedBooks, type SharedCase } from './community';
+import { normalizeBurnedBooks, normalizeBurnedCases, parseBurnedTitles, type SharedCase } from './community';
 import { compareTitles, distinctValues, matchesFilter, NO_FILTER, pairCases, sameBook, titleTokens } from './pairing';
 import { makeCase } from '../test/builders';
 
@@ -172,5 +172,63 @@ describe('filters', () => {
   it('lists distinct sources and industries for the drop-downs', () => {
     expect(distinctValues([...rows, { ...rows[0], source: 'booth casebook ' }], 'source')).toEqual(['Booth casebook', 'Case in Point']);
     expect(distinctValues(rows, 'industry')).toEqual(['Financial Services', 'Transportation / Logistics']);
+  });
+});
+
+describe('burned cases', () => {
+  const mine = [
+    makeCase({ title: 'Airline profitability', source: 'Cosentino', date: '2026-09-01' }),
+    makeCase({ title: 'Hospital market entry', source: 'Booth casebook', caseType: 'Market Entry', date: '2026-09-02' }),
+    makeCase({ title: 'Piano tuners', source: 'Case in Point', caseType: 'Market Sizing', date: '2026-09-03' }),
+  ];
+
+  it('leaves out my cases that match an individual case they have burned, however it was typed', () => {
+    const p = pairCases(mine, [], [], [{ title: 'airline profitability case' }, { title: 'The Piano Tuner case' }]);
+    expect(p.newToThem.map((c) => c.title)).toEqual(['Hospital market entry']);
+    expect(p.burnedCaseExcluded.map((c) => c.title).sort()).toEqual(['Airline profitability', 'Piano tuners']);
+    expect(p.burnedExcluded).toEqual([]);
+  });
+
+  it('does not leave out cases that merely share a word with one they burned', () => {
+    const p = pairCases(mine, [], [], [{ title: 'Airline growth strategy' }]);
+    expect(p.newToThem).toHaveLength(3);
+    expect(p.burnedCaseExcluded).toEqual([]);
+  });
+
+  it('counts a case once: a burned book takes priority over a burned case in the same book', () => {
+    const p = pairCases(mine, [], ['Cosentino'], [{ title: 'Airline profitability' }]);
+    expect(p.burnedExcluded.map((c) => c.title)).toEqual(['Airline profitability']);
+    expect(p.burnedCaseExcluded).toEqual([]);
+  });
+
+  it('changes nothing when they have burned no cases', () => {
+    expect(pairCases(mine, [], [], []).newToThem).toHaveLength(3);
+  });
+});
+
+describe('the burned cases list', () => {
+  it('reads one title per line, ignoring bullets, numbers and blanks', () => {
+    expect(parseBurnedTitles('1. Airline profit\n- Bank fees\n• Piano tuners\n\n   \n  Plain title  ')).toEqual([
+      'Airline profit',
+      'Bank fees',
+      'Piano tuners',
+      'Plain title',
+    ]);
+  });
+
+  it('is tidied: trimmed, cut to length, no repeats (same title and book, ignoring case), at most 300', () => {
+    expect(
+      normalizeBurnedCases([
+        { title: ' Airline profit ', book: 'Cosentino' },
+        { title: 'airline profit', book: 'cosentino' },
+        { title: 'Airline profit', book: 'Other book' },
+        { title: '   ', book: 'x' },
+      ]),
+    ).toEqual([
+      { title: 'Airline profit', book: 'Cosentino' },
+      { title: 'Airline profit', book: 'Other book' },
+    ]);
+    expect(normalizeBurnedCases([{ title: 'x'.repeat(300), book: 'y'.repeat(200) }])[0]).toEqual({ title: 'x'.repeat(200), book: 'y'.repeat(100) });
+    expect(normalizeBurnedCases(Array.from({ length: 400 }, (_, i) => ({ title: `Case ${i}`, book: '' })))).toHaveLength(300);
   });
 });

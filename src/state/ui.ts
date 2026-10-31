@@ -16,6 +16,8 @@ export interface UIContextValue {
   openImport(): void;
   /** Profile & privacy settings. */
   openProfile(): void;
+  /** Profile & privacy, scrolled to the cases and books you've burned. */
+  openBurned(): void;
 }
 
 export const UIContext = createContext<UIContextValue | null>(null);

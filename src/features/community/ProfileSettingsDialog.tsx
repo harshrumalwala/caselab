@@ -12,6 +12,7 @@ import { useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
 import { AudienceSwitch, profileAddress } from './AudienceSwitch';
 import { BurnedBooks } from './BurnedBooks';
+import { BurnedCases } from './BurnedCases';
 import { SharedCaseRow } from './SharedCaseRow';
 import { SharingSwitches } from './SharingSwitches';
 
@@ -133,7 +134,7 @@ function Preview({ profile }: { profile: Profile }) {
   );
 }
 
-export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
+export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () => void; focus?: 'burned' | null }) {
   const profile = useMyProfile();
   const { saveProfile } = useCommunity();
   const { cases } = useData();
@@ -144,6 +145,13 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [confirmPublic, setConfirmPublic] = useState(false);
+
+  // Arriving from "Burn cases" on the Case Log: bring that part of the page into view.
+  useEffect(() => {
+    if (focus !== 'burned') return;
+    const timer = window.setTimeout(() => document.getElementById('burned-cases-title')?.scrollIntoView?.({ block: 'start' }), 150);
+    return () => window.clearTimeout(timer);
+  }, [focus]);
   // Opening everything while visible without an account changes what visitors read, so it asks first.
   const [pendingDetails, setPendingDetails] = useState<SharingPrefs | null>(null);
 
@@ -164,6 +172,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
         // Link only needs public, so withdrawing public visibility clears it too.
         publicLinkOnly: publicProfile && (next.publicLinkOnly ?? profile.publicLinkOnly),
         burnedBooks: next.burnedBooks ?? profile.burnedBooks,
+        burnedCases: next.burnedCases ?? profile.burnedCases,
         sharing: next.sharing ?? profile.sharing,
       });
       if (success) toast({ title: success });
@@ -270,6 +279,13 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
             suggestions={distinctSources(cases)}
             disabled={saving}
             onChange={(burnedBooks) => void save({ burnedBooks })}
+          />
+
+          <BurnedCases
+            cases={profile.burnedCases}
+            suggestions={[...new Set([...profile.burnedBooks, ...distinctSources(cases)])]}
+            disabled={saving}
+            onChange={(burnedCases) => void save({ burnedCases })}
           />
 
           <Preview profile={profile} />
