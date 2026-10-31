@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowLeft, Loader2, MailCheck } from 'lucide-react';
 import { Logo } from '../../components/layout/Header';
 import { Button } from '../../components/ui/Button';
-import { Sparkle, Sticky } from '../../components/ui/Doodles';
+import { Sparkle } from '../../components/ui/Doodles';
 import { quipOfTheDay } from '../../domain/quips';
 import { describeAuthError } from '../../data/errors';
 import { useAuth } from '../../state/AuthProvider';
@@ -12,6 +12,21 @@ export const MIN_PASSWORD = 8;
 export type Mode = 'signin' | 'signup' | 'forgot';
 type Sent = { kind: 'verify' | 'reset'; email: string } | null;
 
+/**
+ * A tile of tiny hand-drawn desk things (chart, coffee, pencil, bulb, magnifier) that repeats across the sign-in background,
+ * drawn faintly in ink so it reads as paper, not as content.
+ */
+const DOODLES =
+  "<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' fill='none' stroke='#1c1a18' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>" +
+  "<g transform='translate(18 22) rotate(-8)'><path d='M0 36h40M4 36V18M16 36V6M28 36V22'/></g>" +
+  "<g transform='translate(128 18) rotate(6)'><path d='M2 10h30v18a10 10 0 0 1-10 10H12A10 10 0 0 1 2 28ZM32 14h5a6 6 0 0 1 0 12h-5M10 0q-3 4 0 7M20 0q-3 4 0 7'/></g>" +
+  "<g transform='translate(22 126) rotate(-30)'><path d='M0 8h40v10H0zM40 8l12 5-12 5M8 8v10'/></g>" +
+  "<g transform='translate(136 120)'><circle cx='14' cy='14' r='12'/><path d='M8 30h12M10 36h8M14 -6v-4M-4 4l-4-3M32 4l4-3'/></g>" +
+  "<g transform='translate(84 78) rotate(10)'><circle cx='12' cy='12' r='9'/><path d='M19 19l11 11'/></g>" +
+  "<g transform='translate(176 188)'><path d='M8 0c1 6 4 9 10 10-6 1-9 4-10 10-1-6-4-9-10-10 6-1 9-4 10-10Z'/></g>" +
+  '</svg>';
+const DOODLE_TILE = `url("data:image/svg+xml,${encodeURIComponent(DOODLES)}")`;
+
 function Shell({ children, onBack }: { children: ReactNode; onBack?: () => void }) {
   const quip = useMemo(() => quipOfTheDay(), []);
   return (
@@ -19,8 +34,7 @@ function Shell({ children, onBack }: { children: ReactNode; onBack?: () => void 
       <Sparkle className="absolute left-[12%] top-[14%] size-8 text-coral" />
       <Sparkle className="absolute right-[14%] top-[22%] size-5 text-lilac" />
       <Sparkle className="absolute bottom-[16%] left-[18%] size-5 text-teal" />
-      <Sticky tone="sky" tilt={-7} className="absolute left-[8%] top-[44%] hidden lg:block">Quant 4/5</Sticky>
-      <Sticky tone="teal" tilt={6} className="absolute right-[9%] top-[38%] hidden lg:block">MECE ✓</Sticky>
+      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08] dark:invert" style={{ backgroundImage: DOODLE_TILE }} />
       <div className="relative w-full max-w-sm">
         {onBack && (
           <button type="button" onClick={onBack} className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-accent-text hover:underline">
@@ -30,7 +44,12 @@ function Shell({ children, onBack }: { children: ReactNode; onBack?: () => void 
         <div className="mb-8 flex justify-center">
           <Logo />
         </div>
-        {children}
+        {/* two loose sheets behind the card, like a case file */}
+        <div className="relative isolate">
+          <div aria-hidden className="absolute inset-0 -z-10 rotate-[3.5deg] rounded-2xl border-2 border-ink/80 bg-lilac-soft" />
+          <div aria-hidden className="absolute inset-0 -z-10 -rotate-[2.5deg] rounded-2xl border-2 border-ink/80 bg-sun" />
+          {children}
+        </div>
         <p className="mt-8 text-center font-display text-sm font-semibold text-ink-2">{quip.text}</p>
       </div>
     </main>
