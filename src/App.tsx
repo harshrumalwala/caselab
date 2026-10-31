@@ -9,6 +9,10 @@ import { SetNewPasswordScreen } from './features/auth/LoginScreen';
 import { CaseDetail } from './features/caselog/CaseDetail';
 import { CaseLog } from './features/caselog/CaseLog';
 import { Onboarding } from './features/community/Onboarding';
+import { ShortcutsDialog } from './features/help/ShortcutsDialog';
+import { Tour } from './features/tour/Tour';
+import { hasSeenTour } from './features/tour/seen';
+import { GO_KEYS, GO_WINDOW_MS, isTyping } from './features/help/shortcuts';
 import { ProfileSettingsDialog } from './features/community/ProfileSettingsDialog';
 import { Dashboard } from './features/dashboard/Dashboard';
 import { ImprovementAreas } from './features/improvement/ImprovementAreas';
@@ -22,6 +26,7 @@ import { SettingsDialog } from './features/settings/SettingsDialog';
 import { AuthProvider, useAuth, useSession } from './state/AuthProvider';
 import { CommunityProvider, useCommunity } from './state/CommunityProvider';
 import { DataProvider, useData } from './state/DataProvider';
+import { takeImportIntent } from './state/afterSignup';
 import { useRoute } from './state/route';
 import { MessagesProvider } from './state/MessagesProvider';
 import { PracticeProvider } from './state/PracticeProvider';
@@ -37,14 +42,8 @@ interface LogState {
   prefill: Partial<CaseInput> | null;
 }
 
-function isTyping(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
-}
-
 function Shell() {
-  const { status, loadError, reload, mode } = useData();
+  const { status, loadError, reload, mode, cases } = useData();
   const { signOut } = useAuth();
   const session = useSession();
   const warmupSync = useContext(WarmupSyncContext);
@@ -54,6 +53,9 @@ function Shell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // A brand-new account gets the tour once: not people who already have cases, and not after it was finished or skipped.
+  const [tourPending] = useState(() => !hasSeenTour(session.userId));
   const [profileFocus, setProfileFocus] = useState<'burned' | null>(null);
   const counter = useRef(0);
 
@@ -82,6 +84,7 @@ function Shell() {
         setProfileFocus(null);
         setProfileOpen(true);
       },
+      openShortcuts: () => setShortcutsOpen(true),
       openBurned: () => {
         setProfileFocus('burned');
         setProfileOpen(true);
@@ -90,17 +93,44 @@ function Shell() {
     [location, navigate],
   );
 
-  // "n" opens the Log Case form from anywhere, as long as you're not typing or in a dialog.
+  // Keyboard shortcuts work from anywhere, as long as you're not typing or in a dialog:
+  // "n" logs a case, "?" lists the shortcuts, and "g" then a letter jumps to a screen.
   useEffect(() => {
+    let goUntil = 0;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== 'n' || e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
       if (document.querySelector('[role="dialog"]')) return;
-      e.preventDefault();
-      ui.openLogCase();
+      const key = e.key.toLowerCase();
+      if (Date.now() < goUntil) {
+        goUntil = 0;
+        const target = GO_KEYS.find((g) => g.key === key);
+        if (target) {
+          e.preventDefault();
+          ui.navigate(target.route);
+          return;
+        }
+      }
+      if (key === 'n') {
+        e.preventDefault();
+        ui.openLogCase();
+      } else if (e.key === '?') {
+        e.preventDefault();
+        ui.openShortcuts();
+      } else if (key === 'g') {
+        goUntil = Date.now() + GO_WINDOW_MS;
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [ui]);
+
+  // Someone who chose "Create account and import" on the landing page gets the import as soon as their new account opens.
+  useEffect(() => {
+    if (status !== 'ready' || mode === 'demo') return;
+    if (takeImportIntent() && cases.length === 0) setImportOpen(true);
+    // Only when the account has just loaded; later changes to the cases must not reopen it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   if (status === 'loading') return <Splash label="Dusting off your case log…" />;
   if (status === 'error') {
@@ -138,7 +168,11 @@ function Shell() {
           <button type="button" className="font-semibold text-accent-text hover:underline" onClick={ui.openProfile}>
             Profile &amp; privacy
           </button>
-          .
+          . Press{' '}
+          <button type="button" className="font-semibold text-accent-text hover:underline" onClick={ui.openShortcuts}>
+            ?
+          </button>{' '}
+          for keyboard shortcuts.
         </footer>
         <BottomNav />
       </div>
@@ -154,6 +188,22 @@ function Shell() {
       )}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      <Tour
+        userId={session.userId}
+        active={
+          tourPending &&
+          mode !== 'demo' &&
+          cases.length === 0 &&
+          location.route === 'dashboard' &&
+          !logState &&
+          !viewId &&
+          !settingsOpen &&
+          !importOpen &&
+          !profileOpen &&
+          !shortcutsOpen
+        }
+      />
       {profileOpen && <ProfileSettingsDialog focus={profileFocus} onClose={() => setProfileOpen(false)} />}
     </UIContext.Provider>
   );

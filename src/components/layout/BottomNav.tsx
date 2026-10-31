@@ -33,6 +33,7 @@ export function BottomNav() {
                 href={`#/${r.id}`}
                 aria-current={on ? 'page' : undefined}
                 aria-label={waiting > 0 && spoken ? `${r.label}, ${spoken}` : r.label}
+                data-tour={r.id === 'people' ? 'community' : undefined}
                 className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition ${
                   on ? 'text-accent-text' : 'text-muted'
                 }`}
