@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
+@import "@fontsource-variable/bricolage-grotesque";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -31,6 +32,26 @@
   --good-soft: #e7f5ee;
   --warn-soft: #fcf1de;
   --bad-soft: #fbe9ec;
+
+  /* The supporting cast: used for tiles, stickers, badges and illustrations (never for scores, which keep good/warn/bad). */
+  --sun: #ffb800;
+  --sun-soft: #fff1c2;
+  --sun-ink: #7a5200;
+  --teal: #0f9d8a;
+  --teal-soft: #d6f4ee;
+  --teal-ink: #0b6b5e;
+  --coral: #ff6a55;
+  --coral-soft: #ffe2dc;
+  --coral-ink: #a8301f;
+  --lilac: #7c5cff;
+  --lilac-soft: #e9e3ff;
+  --lilac-ink: #4b32b3;
+  --sky: #2b8cff;
+  --sky-soft: #daeaff;
+  --sky-ink: #1556a8;
+  --paper-dot: rgb(128 0 0 / 0.07);
+  --on-sun: #1c1a18; /* text on the yellow, which stays bright in both themes */
+  --on-color: #ffffff; /* text on the teal, coral, lilac and blue */
 
   --track: #ece9e4;
   --bar: #9c948a;
@@ -64,6 +85,25 @@
   --warn-soft: #2b2212;
   --bad-soft: #301a1f;
 
+  --sun: #ffc83d;
+  --sun-soft: #3a2f10;
+  --sun-ink: #ffd978;
+  --teal: #2ec4ae;
+  --teal-soft: #11302b;
+  --teal-ink: #7fe3d3;
+  --coral: #ff8a78;
+  --coral-soft: #3b1f1b;
+  --coral-ink: #ffb0a3;
+  --lilac: #a28cff;
+  --lilac-soft: #272043;
+  --lilac-ink: #c9bcff;
+  --sky: #6aaeff;
+  --sky-soft: #14253d;
+  --sky-ink: #a9d0ff;
+  --paper-dot: rgb(255 255 255 / 0.05);
+  --on-sun: #1c1a18;
+  --on-color: #16110f; /* those colours are lighter in dark mode, so the text goes dark */
+
   --track: #2b2825;
   --bar: #8a8279;
   --chart-grid: #2d2a27;
@@ -74,6 +114,7 @@
 
 @theme inline {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -94,17 +135,45 @@
   --color-good-soft: var(--good-soft);
   --color-warn-soft: var(--warn-soft);
   --color-bad-soft: var(--bad-soft);
+  --color-sun: var(--sun);
+  --color-sun-soft: var(--sun-soft);
+  --color-sun-ink: var(--sun-ink);
+  --color-on-sun: var(--on-sun);
+  --color-on-color: var(--on-color);
+  --color-teal: var(--teal);
+  --color-teal-soft: var(--teal-soft);
+  --color-teal-ink: var(--teal-ink);
+  --color-coral: var(--coral);
+  --color-coral-soft: var(--coral-soft);
+  --color-coral-ink: var(--coral-ink);
+  --color-lilac: var(--lilac);
+  --color-lilac-soft: var(--lilac-soft);
+  --color-lilac-ink: var(--lilac-ink);
+  --color-sky: var(--sky);
+  --color-sky-soft: var(--sky-soft);
+  --color-sky-ink: var(--sky-ink);
+
   --color-track: var(--track);
   --color-bar: var(--bar);
 
   --shadow-card: var(--shadow-card);
   --shadow-pop: var(--shadow-pop);
 
+  --animate-bob: bob 5s ease-in-out infinite;
+  --animate-wiggle: wiggle 3.2s ease-in-out infinite;
   --animate-rise: rise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-fade: fade 0.2s ease-out both;
   --animate-sheet: sheet 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-drawer: drawer 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 
+  @keyframes bob {
+    0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); }
+    50% { transform: translateY(-6px) rotate(var(--tilt, 0deg)); }
+  }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(-2deg); }
+    50% { transform: rotate(2deg); }
+  }
   @keyframes rise {
     from { opacity: 0; transform: translateY(8px) scale(0.99); }
     to { opacity: 1; transform: none; }
@@ -136,6 +205,14 @@
   body {
     margin: 0;
     min-height: 100vh;
+    /* A faint dotted-notebook page behind everything. */
+    background-image: radial-gradient(circle at 1px 1px, var(--paper-dot) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+  h1,
+  h2 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
   }
   ::selection {
     background: var(--accent-soft);
@@ -184,6 +261,26 @@
 
   .label {
     @apply mb-1.5 block text-xs font-semibold tracking-wide text-ink-2;
+  }
+
+  /* A highlighter-pen swipe behind a word. */
+  .marker {
+    background-image: linear-gradient(transparent 58%, var(--sun) 58%, var(--sun) 92%, transparent 92%);
+    background-repeat: no-repeat;
+    padding: 0 0.12em;
+    margin: 0 -0.12em;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  /* A sticky note: a little tilted, a hard shadow, no blur. */
+  .sticker {
+    @apply rounded-2xl border-2 border-ink/80 bg-surface font-display;
+    box-shadow: 3px 4px 0 0 rgb(28 26 24 / 0.85);
+  }
+  .dark .sticker {
+    border-color: var(--ink);
+    box-shadow: 3px 4px 0 0 rgb(0 0 0 / 0.7);
   }
 
   .eyebrow {
