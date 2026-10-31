@@ -110,6 +110,15 @@ chose to be visible (see below). **Creating an account** takes four steps: email
 class) and sharing preferences, then start logging. **Signing in** is unchanged. **Forgot password?** emails a reset link that
 asks for a new password. The forms never reveal whether an email already has an account.
 
+**Deleting your account.** Settings → Danger zone → **Delete my account…** removes your account and everything in it, for good, after you
+type `DELETE`: your cases, lists, weekly goal and Warm-up record; your profile and anything you shared or made public; your practice
+requests and blocks; every conversation you were in (so the other person loses it too); and your login, so the email can't sign in
+again. It signs you out and clears what this browser remembered about you. Download a backup or an Excel copy first if you might want
+your cases later: nothing is archived and it can't be undone. A report someone filed about a conversation with you is kept (the reason and
+the messages as they were) but no longer points to you. It is separate from **Clear all data**, which empties your cases and lists but
+keeps the account. Not available in demo mode. Under the hood it is one database function, `delete_my_account('DELETE')`, that deletes
+only the caller's own login; everything else follows through "on delete cascade".
+
 ---
 
 ## Community: what other members can see
@@ -264,7 +273,8 @@ half-written Log Case draft, a copy of your Warm-up record, and Supabase's own s
 | Excel file | Case Log (top right) or Settings → Export to Excel | Your cases filled into the real MCG workbook, ready to open in Excel and to import again. See "Exporting to Excel" below. Sharing choices and burned cases are not in it; the JSON backup is the complete copy |
 | Spreadsheet view | Settings → Export cases (CSV) | One row per case, MCG column order plus CaseLab's additions |
 | Bring in your MCG log | The Dashboard's Excel card (while empty), the Case Log header, or Settings → Import from Excel | A preview first, nothing saved until you confirm. See "Importing your Excel log" below |
-| Wipe | Settings → Clear all data | Requires typing `DELETE` |
+| Wipe | Settings → Clear all data | Requires typing `DELETE`. Empties your cases and lists; keeps your account |
+| Delete your account | Settings → Delete my account | Requires typing `DELETE`. Removes the account and everything in it, for good. See "Accounts" |
 | Sign out | Settings → Sign out | |
 | Demo | Settings → Try demo mode | 16 clearly labeled sample cases held only in this tab's memory. They are never sent to your account, never shared, and People is switched off while in demo mode |
 
@@ -506,6 +516,7 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **Finding it**: five tabs in both navigation bars with people and messages together under Community (Members and Inbox views, the older `#/requests` and `#/messages` addresses still working), one count on the tab, and the Dashboard's "Needs you" strip (not shown in demo mode)
 - **Connected members**: a new request between two members with a conversation is refused by the database (both directions, after the generic refusal, leaving waiting requests alone), and in the app "Case again with …?" sends the case details as a message instead (from the profile and from Find a case; errors keep what you typed; a normal request to someone you aren't connected to is unchanged)
 - **Practice requests**: in Postgres (open to every listed, verified member and no one else, private to the two people, no direct table access, one waiting per pair, the 5-waiting and 20-a-day limits, silent blocks that can be undone, length limits, nothing readable by visitors, cascade on user delete), the Supabase wrapper, and the screens (nothing to switch on, asking, prefilled from Find a case, answering with a reply, declining and blocking, the badge, cancelling, errors, demo mode)
+- **Delete account**: in Postgres (a member with data in every table is removed completely: login, profile and public copies, cases, lists, goal, Warm-up record, requests, blocks, conversations, messages; everyone else untouched; the other person loses the conversation; a report stays but no longer points at the person; the confirmation word is required, a member can only delete themselves, visitors and signed-out callers can't, and a second call is harmless), the Supabase wrapper (asks the database, then ends only this browser's session; a failure changes nothing), and the screen (the Danger zone, what is listed before you confirm, typing `DELETE`, signing out to the public page, forgetting the member on this device but keeping the theme, a failed deletion keeping everything and allowing a retry, off in demo mode)
 - **Warm-up**: question generation (seeded, so repeatable), answer reading and the 5% tolerance, scoring; the record in Postgres (own row only, no direct writes, raise-only, no visitor access, cascade on user delete); syncing between the account and this device (offline, first sign-in on a shared browser, demo mode); and the screen (timer, streaks, tips after a miss, end of round)
 - **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
 - **Weekly goal**: the Monday-to-Sunday count, passing the goal, the streak (an unfinished week neither counts nor breaks it), the table in Postgres (own row only, 1 to 14, nothing for visitors, cascade), and the screens (set, change, remove, a failed save keeping the old goal, demo mode never writing, the saved panel's cheer)
@@ -533,7 +544,7 @@ CASELAB_E2E_PASSWORD_B=...
 ```
 
 Use throwaway accounts for A and B: the tests create their profiles (which can't be deleted through the API) and flip their
-sharing switches, then restore them to listed with nothing shared.
+sharing switches, then restore them to listed with nothing shared. (A member can now delete their whole account from Settings; the live checks don't use that, so the throwaway accounts stay.)
 
 ## Limitations
 

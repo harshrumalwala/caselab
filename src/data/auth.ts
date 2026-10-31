@@ -30,6 +30,8 @@ export interface AuthApi {
   /** Set a new password for the signed-in (or recovering) user. */
   updatePassword(password: string): Promise<void>;
   signOut(): Promise<void>;
+  /** Permanently delete the signed-in member's account and everything they own, then end this browser's session. */
+  deleteAccount(): Promise<void>;
 }
 
 /** Where email links (verify, reset) should send people back to: this app, without any #fragment. */
@@ -86,6 +88,12 @@ export function createSupabaseAuth(client: SupabaseClient): AuthApi {
     async signOut() {
       const { error } = await client.auth.signOut();
       if (error) throw error;
+    },
+    async deleteAccount() {
+      const { error } = await client.rpc('delete_my_account', { p_confirm: 'DELETE' });
+      if (error) throw error;
+      // The login is gone, so end this browser's session without asking the server about a user that no longer exists.
+      await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
     },
   };
 }

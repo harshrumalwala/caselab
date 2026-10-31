@@ -11,6 +11,7 @@ import {
   Table2,
   Trash2,
   Upload,
+  UserX,
 } from 'lucide-react';
 import { backupToJSON, ImportError, parseBackup, type ParsedBackup } from '../../data/backup';
 import { casesToCSV } from '../../data/csv';
@@ -41,7 +42,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const { data, cases, mode, replaceAll, mergeIn, clearAll, enterDemo, exitDemo } = useData();
-  const { signOut } = useAuth();
+  const { signOut, deleteAccount } = useAuth();
   const session = useSession();
   const toast = useToast();
   const { openImport, openShortcuts } = useUI();
@@ -49,6 +50,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const jsonInput = useRef<HTMLInputElement>(null);
   const [pendingBackup, setPendingBackup] = useState<ParsedBackup | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const demo = mode === 'demo';
@@ -92,6 +94,17 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     } finally {
       setBusy(false);
       setPendingBackup(null);
+    }
+  };
+
+  const removeAccount = async () => {
+    setBusy(true);
+    try {
+      await deleteAccount(); // on success this screen goes away with the sign-in state
+      toast({ title: 'Your account was deleted', body: 'Everything in it has been removed. Thanks for using CaseLab.' });
+    } catch (e) {
+      toast({ kind: 'error', title: "Couldn't delete your account", body: describeError(e) });
+      setBusy(false);
     }
   };
 
@@ -249,6 +262,16 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 <Trash2 className="size-4" /> Clear all data…
               </Button>
             </div>
+            <div className="mt-5 border-t border-line pt-4">
+              <p className="text-sm text-ink-2">
+                Permanently delete your account and everything in it: your cases, profile, messages and requests, and your login.
+              </p>
+              <div className="mt-3">
+                <Button variant="danger" onClick={() => setConfirmDelete(true)} disabled={demo}>
+                  <UserX className="size-4" /> Delete my account…
+                </Button>
+              </div>
+            </div>
           </Section>
         </div>
       </Dialog>
@@ -272,6 +295,30 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <Button className="w-full" variant="primary" disabled={busy} onClick={() => void restore('merge')}>
           Merge with current data
         </Button>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete your account?"
+        confirmLabel="Delete my account"
+        requireText="DELETE"
+        busy={busy}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => void removeAccount()}
+      >
+        <p>
+          This permanently deletes your CaseLab account and removes <strong className="text-ink">everything</strong> in it, on every device:
+        </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>your {plural(cases.length, 'case', 'cases')}, lists, weekly goal and Warm-up record</li>
+          <li>your profile, and everything you shared or made public</li>
+          <li>your requests and blocks, and every conversation you are in (the other person loses it too)</li>
+          <li>your login, so you can't sign in again with this email</li>
+        </ul>
+        <p>
+          It can't be undone. If you might want your cases later, download a backup or an Excel copy from this screen first. Anyone who
+          reported a conversation with you keeps that report, but it no longer points to you.
+        </p>
       </ConfirmDialog>
 
       <ConfirmDialog

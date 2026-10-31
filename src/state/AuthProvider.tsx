@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AuthApi, AuthEvent, AuthSession, SignUpResult } from '../data/auth';
-import { clearUserBrowserState } from './storageKeys';
+import { clearAccountBrowserState, clearUserBrowserState } from './storageKeys';
 
 type AuthState =
   | { status: 'loading' }
@@ -18,6 +18,11 @@ interface AuthContextValue {
   /** Choose a new password; also ends the "recovering" state. */
   updatePassword(password: string): Promise<void>;
   signOut(): Promise<void>;
+  /**
+   * Permanently delete this member's account and everything they own. Resolves once it is gone and this browser has signed out and
+   * forgotten them; rejects (and changes nothing) if the deletion failed.
+   */
+  deleteAccount(): Promise<void>;
   /** Set when the initial session check failed (e.g. offline), rather than assuming signed out. */
   startupError: unknown;
   /** Set when the page was opened from an email link that had expired. */
@@ -84,9 +89,17 @@ export function AuthProvider({
     await auth.signOut();
   }, [auth]);
 
+  const deleteAccount = useCallback(async () => {
+    const userId = state.status === 'signedIn' ? state.session.userId : null;
+    await auth.deleteAccount();
+    // Only once it is really gone: a failed deletion leaves the member signed in, with their things on this device.
+    clearAccountBrowserState(userId);
+    setState({ status: 'signedOut' });
+  }, [auth, state]);
+
   const value = useMemo(
-    () => ({ state, signIn, signUp, resendConfirmation, requestPasswordReset, updatePassword, signOut, startupError, linkProblem }),
-    [state, signIn, signUp, resendConfirmation, requestPasswordReset, updatePassword, signOut, startupError, linkProblem],
+    () => ({ state, signIn, signUp, resendConfirmation, requestPasswordReset, updatePassword, signOut, deleteAccount, startupError, linkProblem }),
+    [state, signIn, signUp, resendConfirmation, requestPasswordReset, updatePassword, signOut, deleteAccount, startupError, linkProblem],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
