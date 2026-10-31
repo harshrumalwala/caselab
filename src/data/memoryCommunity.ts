@@ -1,4 +1,5 @@
 import type { Profile, ProfileInput, SharedCase } from '../domain/community';
+import type { SharedInterviewed } from '../domain/interviewed';
 import type { CommunityRepository, PublicReader } from './community';
 
 type Method = keyof CommunityRepository;
@@ -60,11 +61,21 @@ export function createMemoryPublic(opts: { profiles: () => Profile[]; shared?: S
       const owner = opts.profiles().find((p) => p.userId === ownerId);
       return owner && isPublic(owner) ? (opts.shared ?? []).filter((s) => s.ownerId === ownerId).map((s) => forVisitors(s, owner)) : [];
     },
+    async getInterviewed() {
+      calls.push('getInterviewed');
+      return []; // interviewed cases are for members only
+    },
   };
 }
 
 /** In-memory community data for tests: a fixed set of members and shared cases. */
-export function createMemoryCommunity(opts: { me: string; profiles?: Profile[]; shared?: SharedCase[] }): CommunityRepository & {
+export function createMemoryCommunity(opts: {
+  me: string;
+  profiles?: Profile[];
+  shared?: SharedCase[];
+  /** The cases each member interviewed, as the database holds them (what members can see is decided by their switch). */
+  interviewedOf?: (ownerId: string) => SharedInterviewed[];
+}): CommunityRepository & {
   calls: string[];
   profiles: Profile[];
   /** Make a method fail like a dropped connection until `heal()`. */
@@ -117,6 +128,12 @@ export function createMemoryCommunity(opts: { me: string; profiles?: Profile[]; 
     async getSharedCases(ownerId: string): Promise<SharedCase[]> {
       enter('getSharedCases');
       return (opts.shared ?? []).filter((s) => s.ownerId === ownerId);
+    },
+    async getInterviewed(ownerId: string): Promise<SharedInterviewed[]> {
+      enter('getInterviewed');
+      const owner = profiles.find((p) => p.userId === ownerId);
+      // The same rules as the database function: listed, and the member switched it on.
+      return owner && owner.listed && owner.sharing.interviewed ? (opts.interviewedOf?.(ownerId) ?? []) : [];
     },
     async getPublicView(ownerId: string): Promise<SharedCase[]> {
       enter('getPublicView');

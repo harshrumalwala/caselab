@@ -19,6 +19,24 @@ export interface InterviewedCase {
   updatedAt: string;
 }
 
+/** What another member sees of a case you interviewed: the case itself, never who you interviewed or your notes. */
+export interface SharedInterviewed {
+  date: string;
+  title: string;
+  source: string;
+  caseType: CaseType;
+  industry: string;
+}
+
+/** The part of one of your own interviewed cases that members can see. */
+export const toSharedInterviewed = (c: InterviewedCase): SharedInterviewed => ({
+  date: c.date,
+  title: c.title,
+  source: c.source,
+  caseType: c.caseType,
+  industry: c.industry,
+});
+
 export type InterviewedInput = Omit<InterviewedCase, 'id' | 'createdAt' | 'updatedAt'>;
 
 export const INTERVIEWED_LIMITS = { title: 200, source: 200, industry: 100, partner: 100, text: 4000 } as const;

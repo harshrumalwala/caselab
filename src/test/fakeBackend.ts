@@ -6,6 +6,7 @@ import type { CaseLabRepository } from '../data/repository';
 import { createMemoryMessages } from '../data/messages';
 import { createMemoryPractice } from '../data/practiceRequests';
 import { createMemoryInterviewed } from '../data/interviewed';
+import { toSharedInterviewed, type SharedInterviewed } from '../domain/interviewed';
 import { createMemoryGoal } from '../data/weeklyGoal';
 import { createMemoryWarmup } from '../data/warmupBest';
 import { NO_SHARING, type Profile, type SharedCase } from '../domain/community';
@@ -84,10 +85,12 @@ interface Options {
   profile?: Profile | null;
   members?: Profile[];
   shared?: SharedCase[];
+  /** The cases other members interviewed (each is only visible while that member's switch is on). */
+  interviewedBy?: Record<string, SharedInterviewed[]>;
 }
 
 /** A fake Supabase: email/password auth with email verification, one in-memory database, and a community. */
-export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members = [], shared = [] }: Options = {}): FakeEnv {
+export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members = [], shared = [], interviewedBy = {} }: Options = {}): FakeEnv {
   let session: AuthSession | null = signedIn ? TEST_USER : null;
   let password = TEST_PASSWORD;
   const accounts = new Map<string, { verified: boolean; userId: string }>([[TEST_USER.email, { verified: true, userId: TEST_USER.userId }]]);
@@ -139,6 +142,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
     me: TEST_USER.userId,
     profiles: [...(profile ? [profile] : []), ...members],
     shared,
+    interviewedOf: (id) => (id === TEST_USER.userId ? interviewed.saved.map(toSharedInterviewed) : (interviewedBy[id] ?? [])),
   });
 
   const warmup = createMemoryWarmup();

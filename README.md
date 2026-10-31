@@ -129,6 +129,7 @@ members** (the default once you appear in People) and, only if you switch it on,
 | **Improvement focus** | The "main thing to improve" tag on each shared case |
 | **Learning notes** | What went well, what you struggled with, concepts learned, next focus |
 | **Who cased me** | The name you entered as your practice partner or interviewer, shown on each shared case (see below) |
+| **Interviewed cases** | The cases you ran as the interviewer (title, book, type, industry, date) and how many, to other members only (see below) |
 | **Open everything** | Every detail of each case you share: scores, improvement focus, written feedback, learning notes and your Other notes (see below) |
 
 Scores, feedback and notes only apply to cases that are shared, so they switch on after **Case history**.
@@ -173,6 +174,13 @@ feedback and notes, even if your profile shares none of those). Nobody has to to
 **Who cased me** is its own switch, **off by default**, because it names a third person who hasn't agreed to be listed. When on, the
 partner name appears on every one of your cases that is shared at all, to members and (if your profile is public) to visitors; a case set to
 "keep this case private" never shows it. The casebook or source of each case is part of **Case history**, so it is shown with it.
+
+**Interviewed cases** is its own switch, **off by default**, and it does not need Case history. When on, other *members* (never visitors) see how
+many cases you have interviewed ("Has interviewed 7 cases") and a list of them on your profile, so they know whom to ask and which cases you
+already know from the other side. Only the case itself is shown: its title, book, type, industry and date. **Who you interviewed, what you told
+them and what you learned are never shared.** Turning the switch off, or unlisting yourself, hides the list at once. Members read it through one
+function, `member_interviewed()`, which checks on every call that they are a verified member and that you are listed and have switched it on;
+there is no copy of the data to go stale.
 
 **Open everything** is one switch for people who want to show their whole log: every case you share (one that follows your profile,
 or is set to "share in full") shows its scores, improvement focus, written feedback, learning notes and Other notes, to members and, if
@@ -313,7 +321,7 @@ Running a case teaches you a lot, so it gets a place in the log: **My Case Log â
 needed; the form also takes the date, case type, industry, book, who you interviewed, what you told them and what running it taught you.
 
 - **Not on the scoreboard.** Interviewed cases are a separate list in a separate table (`interviewed_cases`). They never count in your case total, ratings, trends, coverage, suggestions or weekly goal, and the Case Log header says "N interviewed, not counted".
-- **Private.** Only you can read or change them (row-level security on all four commands). They are not part of your profile, not shared with members or visitors and not in "Find a case". In demo mode they are kept for the visit only.
+- **Private unless you choose.** Only you can read or change them (row-level security on all four commands). Other members see the cases themselves (never who you interviewed or your notes) only if you switch on **Interviewed cases** in Profile & privacy; visitors never do. They are not part of "Find a case". In demo mode they are kept for the visit only.
 - **Edit, search and delete** work like the rest of the log; deleting asks first.
 
 ## Keyboard shortcuts, the tour and installing
@@ -520,7 +528,7 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **Warm-up**: question generation (seeded, so repeatable), answer reading and the 5% tolerance, scoring; the record in Postgres (own row only, no direct writes, raise-only, no visitor access, cascade on user delete); syncing between the account and this device (offline, first sign-in on a shared browser, demo mode); and the screen (timer, streaks, tips after a miss, end of round)
 - **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
 - **Weekly goal**: the Monday-to-Sunday count, passing the goal, the streak (an unfinished week neither counts nor breaks it), the table in Postgres (own row only, 1 to 14, nothing for visitors, cascade), and the screens (set, change, remove, a failed save keeping the old goal, demo mode never writing, the saved panel's cheer)
-- **Interviewed cases**: the rules (tidying, limits, newest first, search), the table in Postgres (own rows only, the case-type list and length limits, never mixed into `cases`, nothing for visitors, cascade), and the screens (log, edit, search, delete after confirming, a failed save keeping the form, demo mode never writing, solved totals untouched)
+- **Interviewed cases**: the rules (tidying, limits, newest first, search), the table in Postgres (own rows only, the case-type list and length limits, never mixed into `cases`, nothing for visitors, cascade), the screens (log, edit, search, delete after confirming, a failed save keeping the form, demo mode never writing, solved totals untouched), and sharing (off by default; members only; only while listed and switched on; never who you interviewed, your feedback or what you learned; hidden again when switched off; never fetched for visitors; the count, list and chip on the profile and member list; the switch in Profile & privacy)
 - **First run**: the import wish after sign-up (kept, used once, expires, ignored when the account has cases), the tour (once, skippable, Escape, steps aside for windows, its ring following a button that moves), the shortcuts, the install button and the Warm-up nudge
 - **Excel export**: fills the real MCG template (all four tabs, charts, logo, dropdowns, merged headers, widths and panes kept byte for byte where untouched), the exact column layout, a real date, every skill's rating and feedback, the extra columns, rows tall enough for long text, oldest first, Dashboard name and numbers (and formulas stretched past 997 cases), Opportunity Areas, awkward text (accents, ampersands, line breaks, leading spaces, forbidden characters, the 32,767-character cell limit), well-formed XML, the template left unchanged, and a lossless round trip through the importer; opened and checked with an independent parser too
 - **Backup and import**: lossless JSON round trip, merge semantics, CSV quoting; Excel import (a populated sample, a richer workbook with an Industry column, extra columns and filled-in Opportunity Areas, and the empty template), header and case-type matching, industry suggestions, and the review screen end to end

@@ -1,4 +1,5 @@
 import type { Rating, SkillGroupKey, SkillKey, CaseType } from '../domain/constants';
+import type { SharedInterviewed } from '../domain/interviewed';
 import { normalizeBurnedBooks, normalizeBurnedCases, type BurnedCase, type Profile, type ProfileInput, type SharedCase } from '../domain/community';
 
 /** Read-only access to member profiles and shared cases. Visitors without an account only ever get this. */
@@ -8,6 +9,8 @@ export interface CommunityReader {
   getPerson(userId: string): Promise<Profile | null>;
   /** The cases that person has chosen to share with this audience. */
   getSharedCases(ownerId: string): Promise<SharedCase[]>;
+  /** The cases that member interviewed, if they chose to show other members. Visitors without an account always get none. */
+  getInterviewed(ownerId: string): Promise<SharedInterviewed[]>;
 }
 
 /** A member who has cased lately, with the date of their most recent shared case. */
@@ -53,6 +56,7 @@ export interface ProfileRow {
   share_partner: boolean;
   share_details: boolean;
   share_burned: boolean;
+  share_interviewed: boolean;
 }
 
 /** The stored list, read defensively: anything that isn't a {title, book} pair is ignored. */
@@ -85,6 +89,7 @@ export function rowToProfile(r: ProfileRow): Profile {
       partner: r.share_partner ?? false,
       details: r.share_details ?? false,
       burned: r.share_burned ?? false,
+      interviewed: r.share_interviewed ?? false,
     },
   };
 }
@@ -107,6 +112,7 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
     share_partner: input.sharing.partner,
     share_details: input.sharing.details,
     share_burned: input.sharing.burned,
+    share_interviewed: input.sharing.interviewed,
   };
 }
 
@@ -155,6 +161,7 @@ export function rowToPublicProfile(r: PublicProfileRow): Profile {
       partner: r.share_partner ?? false,
       details: r.share_details ?? false,
       burned: r.share_burned ?? false,
+      interviewed: false, // members only: never part of what visitors see
     },
   };
 }
