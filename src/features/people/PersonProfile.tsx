@@ -28,15 +28,13 @@ function MessageButton({ person }: { person: Profile }) {
   const conversation = useConversationWith(person.userId);
   if (!conversation) return null;
   return (
-    <div className="mt-3">
-      <a
-        href={`#/messages/${encodeURIComponent(conversation.id)}`}
-        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line-strong bg-surface px-4 text-sm font-semibold text-ink transition hover:bg-surface-2"
-      >
-        <MessageCircle className="size-4" aria-hidden /> Message {firstName(person.displayName)}
-        {conversation.unread > 0 && !conversation.muted && <span className="num rounded-full bg-coral px-1.5 text-[11px] font-extrabold text-on-color">{conversation.unread}</span>}
-      </a>
-    </div>
+    <a
+      href={`#/messages/${encodeURIComponent(conversation.id)}`}
+      className="inline-flex h-10 grow items-center justify-center gap-2 rounded-xl border border-line-strong bg-surface px-4 text-sm font-semibold text-ink transition hover:bg-surface-2 sm:grow-0"
+    >
+      <MessageCircle className="size-4" aria-hidden /> Message {firstName(person.displayName)}
+      {conversation.unread > 0 && !conversation.muted && <span className="num rounded-full bg-coral px-1.5 text-[11px] font-extrabold text-on-color">{conversation.unread}</span>}
+    </a>
   );
 }
 
@@ -45,11 +43,9 @@ function AskButton({ person, onAsk }: { person: Profile; onAsk: () => void }) {
   const { requests } = usePractice();
   const waiting = requests.some((r) => r.direction === 'sent' && r.otherId === person.userId && r.status === 'pending');
   return (
-    <div className="mt-3">
-      <Button variant="primary" onClick={onAsk} disabled={waiting}>
-        <Hand className="size-4" /> {waiting ? 'Request waiting' : `Case with ${firstName(person.displayName)}?`}
-      </Button>
-    </div>
+    <Button variant="primary" className="grow sm:grow-0" onClick={onAsk} disabled={waiting}>
+      <Hand className="size-4" /> {waiting ? 'Request waiting' : `Case with ${firstName(person.displayName)}?`}
+    </Button>
   );
 }
 
@@ -208,25 +204,30 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
     <div className="space-y-5">
       {back}
 
-      <div className="sticker flex items-start gap-4 bg-sun-soft p-5 sm:p-6">
-        <span className={`flex size-14 shrink-0 items-center justify-center rounded-2xl border-2 border-ink/80 font-display text-2xl font-extrabold ${chipClass(person.displayName)}`} aria-hidden>
-          {person.displayName.trim().charAt(0).toUpperCase()}
-        </span>
-        <div className="min-w-0">
-          <h1 className="text-3xl font-extrabold tracking-tight text-ink">{person.displayName}</h1>
-          <p className="text-sm text-muted">{person.mbaClass || 'MBA class not shown'}</p>
-          <p className="mt-2 text-sm text-ink-2">
-            Shares <strong className="font-semibold text-ink">{summary}</strong>
-            {shared.length > 0 && <> · {shared.length} case{shared.length === 1 ? '' : 's'} visible</>}
-          </p>
-          {!visitor && <MessageButton person={person} />}
+      <div className="sticker bg-sun-soft p-5 sm:p-6">
+        <div className="flex items-start gap-4">
+          <span className={`flex size-14 shrink-0 items-center justify-center rounded-2xl border-2 border-ink/80 font-display text-2xl font-extrabold ${chipClass(person.displayName)}`} aria-hidden>
+            {person.displayName.trim().charAt(0).toUpperCase()}
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-3xl font-extrabold tracking-tight text-ink">{person.displayName}</h1>
+            <p className="text-sm text-muted">{person.mbaClass || 'MBA class not shown'}</p>
+            <p className="mt-2 text-sm text-ink-2">
+              Shares <strong className="font-semibold text-ink">{summary}</strong>
+              {shared.length > 0 && <> · {shared.length} case{shared.length === 1 ? '' : 's'} visible</>}
+            </p>
+            <BurnedLine books={person.burnedBooks} cases={person.burnedCases} name={firstName(person.displayName)} />
+          </div>
+        </div>
+        {/* One row: the main action first, then the conversation. On a phone the buttons share the card's full width, or stack at full width; no space when there is neither. */}
+        <div className="mt-4 flex flex-wrap gap-2 empty:hidden">
           {!visitor && person.userId !== me && (
             <>
               <AskButton person={person} onAsk={() => setAsk({})} />
               {ask && <AskDialog person={person} prefill={ask} onClose={() => setAsk(null)} />}
             </>
           )}
-          <BurnedLine books={person.burnedBooks} cases={person.burnedCases} name={firstName(person.displayName)} />
+          {!visitor && <MessageButton person={person} />}
         </div>
       </div>
 
