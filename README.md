@@ -590,8 +590,16 @@ CASELAB_E2E_EMAIL_B=e2e-b@example.com
 CASELAB_E2E_PASSWORD_B=...
 ```
 
-Use throwaway accounts for A and B: the tests create their profiles (which can't be deleted through the API) and flip their
-sharing switches, then restore them to listed with nothing shared. (A member can now delete their whole account from Settings; the live checks don't use that, so the throwaway accounts stay.)
+Use throwaway accounts for A and B: the tests create their profiles and flip their sharing switches, then leave them **unlisted** with
+nothing shared, so they never appear in the Community list or search for real members. They are listed only while the suite runs (the
+directory checks need that), which is a few minutes. (A member can delete their whole account from Settings; the live checks don't use that,
+so the throwaway accounts stay.)
+
+To create a throwaway account without sending any email: Supabase dashboard → Authentication → Users → Add user → Create new user, with an
+address like `e2e-a@example.com`, any password, and **Auto Confirm User** ticked. Do the same for B, then put the four values in
+`.env.e2e.local`. If you ever sign in to the real app with one of these accounts, untick **Let other members find me by name** when it asks you
+to set up a profile (or turn off listing later in Profile & privacy). To check nobody test-like is visible, open **Community → Members** and look
+for names starting "E2E".
 
 ## Limitations
 

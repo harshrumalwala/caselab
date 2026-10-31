@@ -311,7 +311,7 @@ describe('Find a case for another student', () => {
 
   it("offers cases you've done that they haven't shared, and leaves out ones they have", async () => {
     await openBob();
-    const offer = within(screen.getByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
+    const offer = within(await screen.findByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
     expect(offer.getByText('Hospital market entry')).toBeInTheDocument();
     expect(offer.getByText('Piano tuners')).toBeInTheDocument();
     expect(offer.queryByText('Airline profit case')).not.toBeInTheDocument(); // same case as their "Airline profitability"
@@ -319,7 +319,7 @@ describe('Find a case for another student', () => {
 
   it('flags a similar-looking case as worth checking, rather than calling it new or repeated', async () => {
     await openBob();
-    const offer = within(screen.getByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
+    const offer = within(await screen.findByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
     expect(offer.getByText('Might overlap: check first')).toBeInTheDocument();
     expect(offer.getByText(/Looks similar to "Bank market entry"/)).toBeInTheDocument();
   });
@@ -342,7 +342,7 @@ describe('Find a case for another student', () => {
     const { user } = await openBob();
     const gaps = within(screen.getByRole('region', { name: /Where their shared history is thin/ }));
     await user.click(gaps.getByRole('button', { name: /Market Sizing/ }));
-    const offer = within(screen.getByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
+    const offer = within(await screen.findByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
     expect(offer.getByText('Piano tuners')).toBeInTheDocument();
     expect(offer.queryByText('Hospital market entry')).not.toBeInTheDocument();
     await user.click(gaps.getByRole('button', { name: /Market Sizing/ })); // tap again to clear
@@ -352,7 +352,7 @@ describe('Find a case for another student', () => {
   it('filters your offers by industry, case type and casebook', async () => {
     const { user } = await openBob();
     await user.selectOptions(screen.getByLabelText('Filter by industry'), 'Healthcare / Pharmaceuticals');
-    const offer = within(screen.getByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
+    const offer = within(await screen.findByRole('region', { name: /Cases you've done that Bob hasn't shared/ }));
     expect(offer.getByText('Hospital market entry')).toBeInTheDocument();
     expect(offer.queryByText('Piano tuners')).not.toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Filter by industry'), 'all');

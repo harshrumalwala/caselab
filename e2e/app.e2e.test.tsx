@@ -49,6 +49,8 @@ describe.skipIf(!HAVE_USER_A)('live Supabase: the real app, signed in as a test 
     const landed = await screen.findByRole('heading', { name: /^(Dashboard|Set up your profile)$/ }, LONG);
     if (landed.textContent === 'Set up your profile') {
       await user.type(screen.getByRole('textbox', { name: /^Your name/ }), 'E2E Test Account A');
+      // A test account must never appear in the Community list for real members, so switch listing off before saving.
+      await user.click(screen.getByRole('checkbox', { name: /Let other members find me by name/ }));
       await user.click(screen.getByRole('button', { name: 'Start casing' }));
       await screen.findByRole('heading', { name: 'Dashboard' }, LONG);
     }
@@ -91,9 +93,9 @@ describe.skipIf(!HAVE_USER_A)('live Supabase: the real app, signed in as a test 
     await waitFor(async () => expect(await rowsWithTitle(TITLE)).toHaveLength(0), LONG);
     expect(await counts(admin)).toEqual(baseline);
 
-    // --- People is reachable and does not list me ---
+    // --- Community is reachable ---
     window.location.hash = '#/people';
-    expect(await screen.findByRole('heading', { name: 'People' }, LONG)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Community' }, LONG)).toBeInTheDocument();
 
     // --- Sign out ---
     await user.click(screen.getByRole('button', { name: 'Data and settings' }));
