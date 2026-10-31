@@ -27,7 +27,7 @@ export function AskDialog({ person, prefill, onClose }: { person: Profile; prefi
     setError(null);
     try {
       await send(person.userId, cleanRequest(form));
-      toast({ title: `Request sent to ${name}`, body: "You'll see their answer under People → Requests." });
+      toast({ title: `Request sent to ${name}`, body: "You'll see their answer in Community → Inbox." });
       onClose();
     } catch (err) {
       setError(describeError(err));

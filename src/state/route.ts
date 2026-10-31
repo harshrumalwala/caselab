@@ -1,31 +1,33 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type Route = 'dashboard' | 'log' | 'improve' | 'people' | 'warmup' | 'requests' | 'messages';
-/** The screens that have a tab in the navigation. Requests lives under People. */
-export type NavRoute = Exclude<Route, 'requests'>;
+export type Route = 'dashboard' | 'log' | 'improve' | 'people' | 'warmup' | 'inbox' | 'messages';
+/** The screens that have a tab in the navigation. The Inbox and a conversation live under the Community (people) tab. */
+export type NavRoute = Exclude<Route, 'inbox' | 'messages'>;
 
-/** The screens that sit under the People tab. */
-export const UNDER_PEOPLE: readonly Route[] = ['requests'];
+/** The screens that sit under the Community tab. */
+export const UNDER_COMMUNITY: readonly Route[] = ['inbox', 'messages'];
 
 export const ROUTES: { id: NavRoute; label: string; /** For tight spaces (the phone bar, a narrow top bar). */ short: string }[] = [
   { id: 'dashboard', label: 'Dashboard', short: 'Dashboard' },
   { id: 'log', label: 'My Case Log', short: 'My Cases' },
   { id: 'improve', label: 'Improvement Areas', short: 'Improve' },
-  { id: 'people', label: 'People', short: 'People' },
-  { id: 'messages', label: 'Messages', short: 'Messages' },
+  { id: 'people', label: 'Community', short: 'Community' },
   { id: 'warmup', label: 'Warm-up', short: 'Warm-up' },
 ];
 
 export interface Location {
   route: Route;
-  /** For `people`: the member being viewed (#/people/<id>); for `messages`: the conversation (#/messages/<id>). Undefined shows the list. */
+  /** For `people`: the member being viewed (#/people/<id>); for `messages`: the conversation (#/messages/<id>). Undefined shows the list or the inbox. */
   param: string | undefined;
 }
 
 function parse(): Location {
   const [first, second] = window.location.hash.replace(/^#\/?/, '').split('/');
-  if (first === 'log' || first === 'improve' || first === 'warmup' || first === 'requests') return { route: first, param: undefined };
-  if (first === 'people' || first === 'messages') return { route: first, param: second ? decodeURIComponent(second) : undefined };
+  if (first === 'log' || first === 'improve' || first === 'warmup' || first === 'inbox') return { route: first, param: undefined };
+  // Older addresses still work: requests and the list of conversations are both the Inbox now.
+  if (first === 'requests') return { route: 'inbox', param: undefined };
+  if (first === 'messages') return second ? { route: 'messages', param: decodeURIComponent(second) } : { route: 'inbox', param: undefined };
+  if (first === 'people') return { route: 'people', param: second ? decodeURIComponent(second) : undefined };
   return { route: 'dashboard', param: undefined };
 }
 

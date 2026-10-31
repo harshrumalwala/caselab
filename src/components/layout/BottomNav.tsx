@@ -1,7 +1,7 @@
-import { LayoutDashboard, ListChecks, MessageCircle, Target, Timer, Users, type LucideIcon } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Target, Timer, Users, type LucideIcon } from 'lucide-react';
 import { CountDot } from '../ui/CountDot';
 import { useNavBadge } from '../../state/badge';
-import { ROUTES, UNDER_PEOPLE, type NavRoute } from '../../state/route';
+import { ROUTES, UNDER_COMMUNITY, type NavRoute } from '../../state/route';
 import { useUI } from '../../state/ui';
 
 const ICONS: Record<NavRoute, LucideIcon> = {
@@ -9,7 +9,6 @@ const ICONS: Record<NavRoute, LucideIcon> = {
   log: ListChecks,
   improve: Target,
   people: Users,
-  messages: MessageCircle,
   warmup: Timer,
 };
 
@@ -22,12 +21,12 @@ export function BottomNav() {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
     >
-      <ul className="mx-auto grid max-w-md grid-cols-6">
+      <ul className="mx-auto grid max-w-md grid-cols-5">
         {ROUTES.map((r) => {
           const Icon = ICONS[r.id];
-          const on = route === r.id || (r.id === 'people' && UNDER_PEOPLE.includes(route)); // Requests lives under People
-          const waiting = r.id === 'people' ? badge.requests : r.id === 'messages' ? badge.chats : 0;
-          const spoken = r.id === 'people' ? badge.requestsSpoken : r.id === 'messages' ? badge.chatsSpoken : null;
+          const on = route === r.id || (r.id === 'people' && UNDER_COMMUNITY.includes(route)); // The Inbox and conversations live under Community
+          const waiting = r.id === 'people' ? badge.total : 0;
+          const spoken = r.id === 'people' ? badge.spoken : null;
           return (
             <li key={r.id}>
               <a

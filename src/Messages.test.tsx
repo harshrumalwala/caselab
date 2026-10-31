@@ -50,7 +50,7 @@ describe('starting a conversation', () => {
   it('opens when you accept a request, and takes you to it from the request', async () => {
     const env = createFakeEnv({ members: [BOB] });
     await env.practice.as('bob').send(ME, ask);
-    const user = await openAt(env, '#/requests', 'Requests');
+    const user = await openAt(env, '#/inbox', 'Community');
     await user.type(await screen.findByLabelText(/^Reply/), 'Zoom: example.com/room');
     await user.click(screen.getByRole('button', { name: 'Accept' }));
 
@@ -68,14 +68,14 @@ describe('starting a conversation', () => {
   it('does not offer a conversation for a request that was declined or is still waiting', async () => {
     const env = createFakeEnv({ members: [BOB] });
     await env.practice.as('bob').send(ME, ask);
-    await openAt(env, '#/requests', 'Requests');
+    await openAt(env, '#/inbox', 'Community');
     expect(screen.queryByRole('link', { name: /^Message / })).not.toBeInTheDocument();
   });
 
   it('says there is nothing yet when there is nothing, and points at requests', async () => {
-    await openAt(createFakeEnv(), '#/messages', 'Messages');
-    expect(await screen.findByText('No conversations yet')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'See your requests' })).toBeInTheDocument();
+    await openAt(createFakeEnv(), '#/inbox', 'Community');
+    expect(await screen.findByText('Nothing in your inbox yet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Find members' })).toBeInTheDocument();
   });
 });
 
@@ -83,7 +83,7 @@ describe('the list', () => {
   it('shows who, the last message, when, and how many are new; and opens one', async () => {
     const { env } = await withConversation();
     await env.chat.as('bob').send((await env.chat.as('bob').conversations())[0].id, 'See you at 8');
-    const user = await openAt(env, '#/messages', 'Messages');
+    const user = await openAt(env, '#/inbox', 'Community');
     const row = await screen.findByRole('link', { name: 'Bob Brown, 1 unread' });
     expect(within(row).getByText('See you at 8')).toBeInTheDocument();
     await user.click(row);
@@ -93,14 +93,13 @@ describe('the list', () => {
     await waitFor(async () => expect((await env.chat.mine.conversations())[0].unread).toBe(0));
   });
 
-  it('puts the count on the Messages tab (not on People), and clears it once read', async () => {
+  it('puts the count on the Community tab and its Inbox view, and clears it once read', async () => {
     const { env, id } = await withConversation();
     await env.chat.as('bob').send(id, 'new one');
-    const user = await openAt(env, '#/people', 'People');
-    const tabs = await screen.findAllByRole('link', { name: 'Messages, 1 conversation has new messages' }); // top bar and phone bar
+    const user = await openAt(env, '#/people', 'Community');
+    const tabs = await screen.findAllByRole('link', { name: 'Community, 1 conversation has new messages' }); // top bar and phone bar
     expect(tabs).toHaveLength(2);
-    expect(screen.queryByRole('link', { name: /^People, / })).not.toBeInTheDocument();
-    await user.click(tabs[0]);
+    await user.click(screen.getByRole('link', { name: 'Inbox, 1 conversation has new messages' }));
     await user.click(await screen.findByRole('link', { name: 'Bob Brown, 1 unread' }));
     await screen.findByText('new one');
     await waitFor(() => expect(screen.queryByRole('link', { name: /conversation.* new messages/ })).not.toBeInTheDocument());
@@ -110,7 +109,7 @@ describe('the list', () => {
     const { env, id } = await withConversation();
     await env.chat.as('bob').send(id, 'hello');
     await env.chat.mine.setMuted(id, true);
-    const user = await openAt(env, '#/messages', 'Messages');
+    const user = await openAt(env, '#/inbox', 'Community');
     expect(await screen.findByLabelText('Muted')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /conversation.* new messages/ })).not.toBeInTheDocument();
 
@@ -125,15 +124,17 @@ describe('the list', () => {
   it('shows an error with Retry when it cannot load, and keeps the list when a later refresh fails', async () => {
     const { env } = await withConversation();
     env.chat.mine.control.failing = true;
-    const user = await openAt(env, '#/messages', 'Messages');
+    const user = await openAt(env, '#/inbox', 'Community');
     expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load your messages");
     env.chat.mine.control.failing = false;
     await user.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByRole('link', { name: /Bob Brown/ })).toBeInTheDocument();
+    const conversations = () => within(screen.getByRole('list', { name: 'Conversations' }));
+    await screen.findByRole('list', { name: 'Conversations' });
+    expect(conversations().getByRole('link', { name: /Bob Brown/ })).toBeInTheDocument();
     env.chat.mine.control.failing = true;
     comeBack();
     await new Promise((r) => setTimeout(r, 20));
-    expect(screen.getByRole('link', { name: /Bob Brown/ })).toBeInTheDocument();
+    expect(conversations().getByRole('link', { name: /Bob Brown/ })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
@@ -215,7 +216,7 @@ describe('controls', () => {
     const { env, id } = await withConversation();
     const user = await openAt(env, `#/messages/${id}`, 'Bob Brown');
     await user.click(await screen.findByRole('button', { name: 'Archive' }));
-    await screen.findByRole('heading', { name: 'Messages' });
+    await screen.findByRole('heading', { name: 'Community' });
     expect((await env.chat.mine.conversations())[0].archived).toBe(true);
     await env.chat.as('bob').send(id, 'ping');
     comeBack();
@@ -303,8 +304,8 @@ describe('demo mode', () => {
     await user.click(screen.getByRole('button', { name: 'Data and settings' }));
     await user.click(await screen.findByRole('button', { name: 'Try demo mode' }));
     expect(await screen.findByText(/Demo mode\./)).toBeInTheDocument();
-    window.location.hash = '#/messages';
-    expect(await screen.findByText("Messages aren't available in demo mode")).toBeInTheDocument();
+    window.location.hash = '#/inbox';
+    expect(await screen.findByText("Requests and messages aren't available in demo mode")).toBeInTheDocument();
     expect(screen.queryByText('Bob Brown')).not.toBeInTheDocument();
   });
 });
