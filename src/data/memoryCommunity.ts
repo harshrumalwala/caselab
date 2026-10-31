@@ -7,6 +7,9 @@ type Method = keyof CommunityRepository;
 const asVisitorsSee = (p: Profile): Profile => ({
   ...p,
   sharing: { ...p.sharing, feedback: p.sharing.details, notes: p.sharing.details },
+  // Burned books and cases only reach visitors when the member switched that on.
+  burnedBooks: p.sharing.burned ? p.burnedBooks : [],
+  burnedCases: p.sharing.burned ? p.burnedCases : [],
 });
 
 /**

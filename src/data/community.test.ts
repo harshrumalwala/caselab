@@ -505,18 +505,15 @@ describe('burned books', () => {
     expect(await burnedOf(ALICE, ALICE)).toHaveLength(1); // the owner still sees her own
   });
 
-  it('is never readable by visitors without an account, and is not in the public tables', async () => {
+  it('is never readable by visitors from the profiles table, and the public copy stays empty unless they opt in', async () => {
     await createProfile(ALICE, 'Alice');
     await setBurned(ALICE, ['Cosentino']);
+    await as(db, 'authenticated', ALICE);
+    await db.query('update public.profiles set public_profile = true where user_id = $1', [ALICE]);
     await as(db, 'anon');
     expect(await fails('select burned_books from public.profiles')).toMatch(/permission denied/);
-    await as(db, 'postgres');
-    const cols = (
-      await db.query<{ column_name: string }>(
-        `select column_name from information_schema.columns where table_name in ('public_profiles', 'public_shared_cases', 'shared_cases')`,
-      )
-    ).rows.map((c) => c.column_name);
-    expect(cols).not.toContain('burned_books');
+    // Public, but without the switch: there is a public row, and its burned list is empty.
+    expect((await db.query('select burned_books, share_burned from public.public_profiles')).rows).toEqual([{ burned_books: [], share_burned: false }]);
   });
 
   it("does not let another member change someone's list", async () => {
@@ -573,18 +570,14 @@ describe('burned cases', () => {
     expect(await burnedOf(BOB, ALICE)).toEqual([]); // unlisted: not even the row is visible
   });
 
-  it('is never readable by visitors and is not in the public tables', async () => {
+  it('is never readable by visitors from the profiles table, and the public copy stays empty unless they opt in', async () => {
     await createProfile(ALICE, 'Alice');
     await setBurned(ALICE, LIST);
+    await as(db, 'authenticated', ALICE);
+    await db.query('update public.profiles set public_profile = true where user_id = $1', [ALICE]);
     await as(db, 'anon');
     expect(await fails('select burned_cases from public.profiles')).toMatch(/permission denied/);
-    await as(db, 'postgres');
-    const cols = (
-      await db.query<{ column_name: string }>(
-        `select column_name from information_schema.columns where table_name in ('public_profiles', 'public_shared_cases', 'shared_cases')`,
-      )
-    ).rows.map((c) => c.column_name);
-    expect(cols).not.toContain('burned_cases');
+    expect((await db.query('select burned_cases from public.public_profiles')).rows).toEqual([{ burned_cases: [] }]);
   });
 
   it('is not a practice case: it never creates a case or a shared case', async () => {
