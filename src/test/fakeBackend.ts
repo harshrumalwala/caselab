@@ -77,6 +77,10 @@ export interface FakeEnv {
   /** Simulate clicking the password-reset link. */
   clickResetLink(email: string): void;
   password: () => string;
+  /** The ids of accounts that were deleted through the app. */
+  deletedAccounts: string[];
+  /** Make the next account deletion fail (a dropped connection, say); `undefined` clears it. */
+  failAccountDeletion(error?: unknown): void;
 }
 
 interface Options {
@@ -97,6 +101,8 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
   const listeners = new Set<(s: AuthSession | null, e: AuthEvent) => void>();
   const notify = (e: AuthEvent) => listeners.forEach((l) => l(session, e));
   const emails: FakeEnv['emails'] = [];
+  const deletedAccounts: string[] = [];
+  let deleteFailure: unknown = null;
 
   const auth: AuthApi = {
     async getSession() {
@@ -132,6 +138,14 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
       notify('updated');
     },
     async signOut() {
+      session = null;
+      notify('signed_out');
+    },
+    async deleteAccount() {
+      if (deleteFailure) throw deleteFailure;
+      if (!session) throw { message: 'Not signed in' };
+      deletedAccounts.push(session.userId);
+      accounts.delete(session.email);
       session = null;
       notify('signed_out');
     },
@@ -197,5 +211,9 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
       notify('recovery');
     },
     password: () => password,
+    deletedAccounts,
+    failAccountDeletion(error) {
+      deleteFailure = error ?? null;
+    },
   };
 }
