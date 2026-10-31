@@ -15,6 +15,7 @@ import { ImprovementAreas } from './features/improvement/ImprovementAreas';
 import { LogCaseDialog } from './features/logcase/LogCaseDialog';
 import { People } from './features/people/People';
 import { Warmup } from './features/warmup/Warmup';
+import { Requests } from './features/requests/Requests';
 import { PublicSite } from './features/public/PublicSite';
 import { ImportDialog } from './features/import/ImportDialog';
 import { SettingsDialog } from './features/settings/SettingsDialog';
@@ -22,6 +23,7 @@ import { AuthProvider, useAuth, useSession } from './state/AuthProvider';
 import { CommunityProvider, useCommunity } from './state/CommunityProvider';
 import { DataProvider, useData } from './state/DataProvider';
 import { useRoute } from './state/route';
+import { PracticeProvider } from './state/PracticeProvider';
 import { ThemeProvider } from './state/theme';
 import { WarmupSyncContext, type WarmupSync } from './state/warmupSync';
 import { ToastProvider } from './state/ToastProvider';
@@ -119,6 +121,7 @@ function Shell() {
           {location.route === 'log' && <CaseLog />}
           {location.route === 'improve' && <ImprovementAreas />}
           {location.route === 'people' && <People />}
+          {location.route === 'requests' && <Requests />}
           {location.route === 'warmup' && (
             // Demo mode never touches the account, so the record stays on this device there.
             <WarmupSyncContext.Provider value={mode === 'demo' ? null : warmupSync}>
@@ -185,6 +188,7 @@ function AuthGate({ backend }: { backend: Backend }) {
             data: backend.createRepository(),
             community: backend.createCommunity(userId),
             warmup: { repository: backend.createWarmup(userId), userId } satisfies WarmupSync,
+            practice: backend.createPractice(),
           }
         : null,
     [backend, userId],
@@ -198,7 +202,9 @@ function AuthGate({ backend }: { backend: Backend }) {
       <ProfileGate>
         <DataProvider repository={repos.data}>
           <WarmupSyncContext.Provider value={repos.warmup}>
-            <Shell />
+            <PracticeProvider practice={repos.practice}>
+              <Shell />
+            </PracticeProvider>
           </WarmupSyncContext.Provider>
         </DataProvider>
       </ProfileGate>

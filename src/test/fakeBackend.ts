@@ -3,6 +3,7 @@ import type { Backend } from '../data/backend';
 import { createMemoryCommunity, createMemoryPublic } from '../data/memoryCommunity';
 import { createMemoryRepository } from '../data/memoryRepository';
 import type { CaseLabRepository } from '../data/repository';
+import { createMemoryPractice } from '../data/practiceRequests';
 import { createMemoryWarmup } from '../data/warmupBest';
 import { NO_SHARING, type Profile, type SharedCase } from '../domain/community';
 
@@ -40,7 +41,7 @@ export const MY_PROFILE: Profile = {
   displayName: 'Test User',
   mbaClass: 'Class of 2027',
   listed: true,
-  publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [],
+  publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [], openToRequests: false,
   sharing: NO_SHARING,
 };
 
@@ -48,6 +49,8 @@ export interface FakeEnv {
   backend: { backend: Backend };
   repo: CaseLabRepository;
   community: ReturnType<typeof createMemoryCommunity>;
+  /** Practice requests between all the fake members; `as(userId)` is that member's view of them. */
+  practice: ReturnType<typeof createMemoryPractice> & { mine: ReturnType<ReturnType<typeof createMemoryPractice>['as']> };
   /** The member's Warm-up record, as the "database" holds it. */
   warmup: ReturnType<typeof createMemoryWarmup>;
   /** What visitors without an account can read (also records which methods were called). */
@@ -130,6 +133,10 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
   });
 
   const warmup = createMemoryWarmup();
+  const practice = createMemoryPractice(() =>
+    community.profiles.map((p) => ({ userId: p.userId, name: p.displayName, open: p.listed && p.openToRequests })),
+  );
+  const myPractice = practice.as(TEST_USER.userId);
   const publicReader = createMemoryPublic({ profiles: () => community.profiles, shared });
 
   return {
@@ -139,12 +146,14 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
         createRepository: () => flaky.repo,
         createCommunity: () => community,
         createWarmup: () => warmup,
+        createPractice: () => myPractice,
         createPublicCommunity: () => publicReader,
       },
     },
     repo: flaky.repo,
     community,
     warmup,
+    practice: Object.assign(practice, { mine: myPractice }),
     publicReader,
     calls: flaky.calls,
     failOn: flaky.failOn,

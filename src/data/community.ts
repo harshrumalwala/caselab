@@ -44,6 +44,7 @@ export interface ProfileRow {
   public_link_only: boolean;
   burned_books: string[];
   burned_cases: unknown;
+  open_to_requests: boolean;
   share_cases: boolean;
   share_overall: boolean;
   share_skills: boolean;
@@ -75,6 +76,7 @@ export function rowToProfile(r: ProfileRow): Profile {
     publicLinkOnly: r.public_link_only ?? false,
     burnedBooks: r.burned_books ?? [],
     burnedCases: parseBurnedCases(r.burned_cases),
+    openToRequests: r.open_to_requests ?? false,
     sharing: {
       cases: r.share_cases,
       overall: r.share_overall,
@@ -98,6 +100,7 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
     public_link_only: input.listed && input.publicProfile && input.publicLinkOnly, // link only needs public (also a database rule)
     burned_books: normalizeBurnedBooks(input.burnedBooks),
     burned_cases: normalizeBurnedCases(input.burnedCases),
+    open_to_requests: input.listed && input.openToRequests, // needs listed (also a database rule)
     share_cases: input.sharing.cases,
     share_overall: input.sharing.overall,
     share_skills: input.sharing.skills,
@@ -144,6 +147,7 @@ export function rowToPublicProfile(r: PublicProfileRow): Profile {
     // Empty unless the member also switched on showing them to visitors.
     burnedBooks: r.burned_books ?? [],
     burnedCases: parseBurnedCases(r.burned_cases),
+    openToRequests: false, // requests are between members, never offered to visitors
     sharing: {
       cases: r.share_cases,
       overall: r.share_overall,

@@ -2,7 +2,10 @@ import { Moon, Plus, Settings, Sun, UserRound } from 'lucide-react';
 import { ROUTES } from '../../state/route';
 import { useTheme } from '../../state/theme';
 import { useUI } from '../../state/ui';
+import { needYou } from '../../domain/requests';
+import { usePracticeBadge } from '../../state/PracticeProvider';
 import { Button, IconButton } from '../ui/Button';
+import { CountDot } from '../ui/CountDot';
 
 export function Logo() {
   return (
@@ -23,6 +26,7 @@ export function Logo() {
 export function Header() {
   const { route, openLogCase, openSettings, openProfile } = useUI();
   const { isDark, toggle } = useTheme();
+  const badge = usePracticeBadge();
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur-xl">
@@ -30,18 +34,24 @@ export function Header() {
         <Logo />
 
         <nav aria-label="Primary" className="ml-4 hidden items-center gap-1 md:flex">
-          {ROUTES.map((r) => (
-            <a
-              key={r.id}
-              href={`#/${r.id}`}
-              aria-current={route === r.id ? 'page' : undefined}
-              className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
-                route === r.id ? 'bg-sun text-on-sun shadow-[2px_2px_0_0_rgb(28_26_24/0.85)] ring-2 ring-ink/80' : 'text-ink-2 hover:bg-sun-soft hover:text-ink'
-              }`}
-            >
-              {r.label}
-            </a>
-          ))}
+          {ROUTES.map((r) => {
+            const on = route === r.id || (r.id === 'people' && route === 'requests'); // Requests lives under People
+            const waiting = r.id === 'people' ? badge : 0;
+            return (
+              <a
+                key={r.id}
+                href={`#/${r.id}`}
+                aria-current={on ? 'page' : undefined}
+                aria-label={waiting > 0 ? `${r.label}, ${needYou(waiting)}` : undefined}
+                className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+                  on ? 'bg-sun text-on-sun shadow-[2px_2px_0_0_rgb(28_26_24/0.85)] ring-2 ring-ink/80' : 'text-ink-2 hover:bg-sun-soft hover:text-ink'
+                }`}
+              >
+                {r.label}
+                {waiting > 0 && <CountDot n={waiting} inline />}
+              </a>
+            );
+          })}
         </nav>
 
         <div className="ml-auto flex items-center gap-1.5">

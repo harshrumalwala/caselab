@@ -18,7 +18,7 @@ import { SharedCaseRow } from '../community/SharedCaseRow';
 
 const first = (name: string) => name.trim().split(/\s+/)[0] || name;
 
-function MyCaseRow({ c, note }: { c: CaseRecord; note?: string }) {
+function MyCaseRow({ c, note, onPropose }: { c: CaseRecord; note?: string; onPropose?: (c: CaseRecord) => void }) {
   return (
     <li className="sticker p-4">
       <p className="font-display text-lg font-bold text-ink">{c.title}</p>
@@ -27,6 +27,11 @@ function MyCaseRow({ c, note }: { c: CaseRecord; note?: string }) {
         {[c.industry, c.source].filter(Boolean).join(' · ')}
       </p>
       {note && <p className="mt-2 text-xs text-warn">{note}</p>}
+      {onPropose && (
+        <button type="button" onClick={() => onPropose(c)} className="mt-2.5 text-xs font-semibold text-accent-text hover:underline">
+          Ask to case this
+        </button>
+      )}
     </li>
   );
 }
@@ -83,7 +88,18 @@ function GapList({
  * "Find a case for them": built only from my own cases and the cases this member chose to share.
  * It never claims a case is definitely new to them, because it can't know what they keep private.
  */
-export function FindCase({ person, theirs, mine }: { person: Profile; theirs: SharedCase[]; mine: CaseRecord[] }) {
+export function FindCase({
+  person,
+  theirs,
+  mine,
+  onPropose,
+}: {
+  person: Profile;
+  theirs: SharedCase[];
+  mine: CaseRecord[];
+  /** When they take requests: offer to ask them to case one of these. */
+  onPropose?: (c: CaseRecord) => void;
+}) {
   const name = first(person.displayName);
   const [filter, setFilter] = useState<CaseFilter>(NO_FILTER);
 
@@ -177,7 +193,7 @@ export function FindCase({ person, theirs, mine }: { person: Profile; theirs: Sh
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2">
             {offer.map((c) => (
-              <MyCaseRow key={c.id} c={c} />
+              <MyCaseRow key={c.id} c={c} onPropose={onPropose} />
             ))}
           </ul>
         )}

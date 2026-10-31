@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ArrowLeft, Loader2, UserRound } from 'lucide-react';
+import { ArrowLeft, Hand, Loader2, UserRound } from 'lucide-react';
 import type { CommunityReader } from '../../data/community';
 import { describeError } from '../../data/errors';
 import { publicSharingSummary, sharedToRecords, sharingSummary, type Profile, type SharedCase } from '../../domain/community';
@@ -12,11 +12,27 @@ import { BurnedLine } from '../community/BurnedLine';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { usePractice } from '../../state/PracticeProvider';
+import type { NewRequest } from '../../domain/requests';
+import { AskDialog } from '../requests/AskDialog';
 import { CaseFilterBar } from '../community/CaseFilterBar';
 import { SharedCaseRow } from '../community/SharedCaseRow';
 import { FindCase } from './FindCase';
 
 type Tab = 'cases' | 'find';
+
+/** "Case with them?" for a member who takes requests. Not offered to visitors, or while one is already waiting. */
+function AskButton({ person, onAsk }: { person: Profile; onAsk: () => void }) {
+  const { requests } = usePractice();
+  const waiting = requests.some((r) => r.direction === 'sent' && r.otherId === person.userId && r.status === 'pending');
+  return (
+    <div className="mt-3">
+      <Button variant="primary" onClick={onAsk} disabled={waiting}>
+        <Hand className="size-4" /> {waiting ? 'Request waiting' : `Case with ${firstName(person.displayName)}?`}
+      </Button>
+    </div>
+  );
+}
 
 /** What the person shares, as averages. Only appears when they share scores. */
 function SharedPerformance({ shared }: { shared: SharedCase[] }) {
@@ -65,6 +81,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
   >({ status: 'loading' });
   const [tab, setTab] = useState<Tab>(visitor ? 'cases' : 'find');
   const [filter, setFilter] = useState<CaseFilter>(NO_FILTER);
+  const [ask, setAsk] = useState<Partial<NewRequest> | null>(null);
 
   const load = useCallback(async () => {
     setState({ status: 'loading' });
@@ -182,6 +199,12 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
             Shares <strong className="font-semibold text-ink">{summary}</strong>
             {shared.length > 0 && <> · {shared.length} case{shared.length === 1 ? '' : 's'} visible</>}
           </p>
+          {!visitor && person.openToRequests && (
+            <>
+              <AskButton person={person} onAsk={() => setAsk({})} />
+              {ask && <AskDialog person={person} prefill={ask} onClose={() => setAsk(null)} />}
+            </>
+          )}
           <BurnedLine books={person.burnedBooks} cases={person.burnedCases} name={firstName(person.displayName)} />
         </div>
       </div>
@@ -214,7 +237,16 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
               </button>
             ))}
           </div>
-          {tab === 'find' ? <FindCase person={person} theirs={shared} mine={mine} /> : casesPanel}
+          {tab === 'find' ? (
+            <FindCase
+              person={person}
+              theirs={shared}
+              mine={mine}
+              onPropose={person.openToRequests ? (c) => setAsk({ caseTitle: c.title, caseBook: c.source }) : undefined}
+            />
+          ) : (
+            casesPanel
+          )}
         </>
       )}
     </div>

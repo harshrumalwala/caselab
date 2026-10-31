@@ -4,6 +4,7 @@ import type { CommunityRepository, PublicReader } from './community';
 import type { CaseLabRepository } from './repository';
 import { SupabaseWarmup, type WarmupRepository } from './warmupBest';
 import { PublicCommunity, SupabaseCommunity } from './supabaseCommunity';
+import { SupabasePractice, type PracticeRepository } from './practiceRequests';
 import { SupabaseRepository } from './supabaseRepository';
 
 /** Everything the app needs from the outside world: who you are, where your data lives, and the community. */
@@ -11,6 +12,8 @@ export interface Backend {
   auth: AuthApi;
   createRepository(): CaseLabRepository;
   createCommunity(userId: string): CommunityRepository;
+  /** The signed-in member's practice requests (sent and received). */
+  createPractice(): PracticeRepository;
   /** The signed-in member's best Warm-up score and streak. */
   createWarmup(userId: string): WarmupRepository;
   /** Read-only access for people without an account (the landing page). */
@@ -70,6 +73,7 @@ export function createSupabaseBackend(
       auth: createSupabaseAuth(client),
       createRepository: () => new SupabaseRepository(client),
       createCommunity: (userId) => new SupabaseCommunity(client, userId, anon),
+      createPractice: () => new SupabasePractice(client),
       createWarmup: () => new SupabaseWarmup(client),
       createPublicCommunity: () => new PublicCommunity(anon),
       linkProblem,
