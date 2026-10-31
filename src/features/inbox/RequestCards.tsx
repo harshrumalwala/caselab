@@ -80,7 +80,7 @@ export function AnswerCard({ r }: { r: PracticeRequest }) {
         </label>
       </div>
       {error && (
-        <p role="alert" className="mt-2 text-sm font-medium text-bad">
+        <p role="alert" className="mt-2 text-sm font-medium text-bad-text">
           {error}
         </p>
       )}

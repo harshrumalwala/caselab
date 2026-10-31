@@ -146,9 +146,17 @@ function Shell() {
   return (
     <UIContext.Provider value={ui}>
       <div className="flex min-h-screen flex-col">
+        {/* The first stop for someone using the keyboard: skip past the navigation. (A link to #main would change the page address.) */}
+        <button
+          type="button"
+          onClick={() => document.getElementById('main-content')?.focus()}
+          className="fixed left-3 top-3 z-[120] -translate-y-24 rounded-xl border-2 border-ink/80 bg-surface px-4 py-2 text-sm font-bold text-ink shadow-pop transition-transform focus:translate-y-0"
+        >
+          Skip to main content
+        </button>
         <Header />
         <Banners />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 sm:px-6 sm:pt-8 lg:pb-12">
+        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 outline-none sm:px-6 sm:pt-8 lg:pb-12">
           {location.route === 'dashboard' && <Dashboard />}
           {location.route === 'log' && <CaseLog />}
           {location.route === 'improve' && <ImprovementAreas />}

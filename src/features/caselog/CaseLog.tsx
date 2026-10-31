@@ -109,7 +109,7 @@ function RowActions({ c, onDelete }: { c: CaseRecord; onDelete: (c: CaseRecord) 
       </IconButton>
       <IconButton
         label={`Delete ${c.title}`}
-        className="hover:!text-bad"
+        className="hover:!text-bad-text"
         onClick={(e) => {
           e.stopPropagation();
           onDelete(c);

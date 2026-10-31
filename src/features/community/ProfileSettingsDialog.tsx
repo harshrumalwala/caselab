@@ -102,7 +102,7 @@ function Preview({ profile }: { profile: Profile }) {
             </p>
           )}
           {state.status === 'error' && (
-            <p role="alert" className="text-sm font-medium text-bad">
+            <p role="alert" className="text-sm font-medium text-bad-text">
               Couldn't load the preview. {state.message}
             </p>
           )}
@@ -221,7 +221,7 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
                   aria-invalid={Boolean(nameError)}
                 />
                 {nameError && (
-                  <p className="mt-1.5 text-xs font-medium text-bad" role="alert">
+                  <p className="mt-1.5 text-xs font-medium text-bad-text" role="alert">
                     {nameError}
                   </p>
                 )}

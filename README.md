@@ -15,7 +15,9 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **Practice requests**: ask a member to case (with a proposed case and time), and answer when someone asks you. Open to every member, and short notes only
 - **Messages**: once a request is accepted, a private conversation between the two of you, to settle a time, share a link or go over a case afterwards. It lives in the Community tab's Inbox, and the Dashboard tells you when something is waiting
 - **Profile & privacy**: switches for what other members can see, a per-case override, and a live preview
-- **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export and an Excel import that reads the MCG template are built in
+- **A weekly goal**: pick how many cases a week you want to log; a ring on the Dashboard fills as the week goes, and weeks in a row on target show as a streak. Private to you
+- **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export, an Excel import that reads the MCG template and an Excel export in the same layout are built in
+- **Find your way around**: a short tour for a new account, keyboard shortcuts (`?` lists them), and it can be installed on a phone or desktop like an app
 
 ---
 
@@ -23,7 +25,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 
 CaseLab is a static React app. It needs a Supabase project for sign-in and storage. Setup takes about fifteen minutes, once.
 
-### 1. Create the database tables (three migrations)
+### 1. Create the database tables (the migrations)
 
 The schema lives in [`supabase/migrations/`](supabase/migrations) and is tracked with the code. Apply it **one way only**, and
 **before** deploying the matching version of the app (the app expects the newest tables):
@@ -234,6 +236,7 @@ These rules are tested directly against a real Postgres (see Tests), including a
 | `conversations`, `conversation_members`, `messages` | A private conversation between two members (it starts when a request is accepted), each person's read marker, mute and archive, and the messages (1 to 1000 characters). No direct table access at all: only functions that act on your own conversations | Only the two people involved |
 | `message_reports` | A report (a reason and a snapshot of the last 30 messages). Kept even if the people involved leave | Only the database owner |
 | `warmup_best` | Your best Warm-up score and streak (one row per member). Read-only for you; changed only by `record_warmup_best()`, which can only raise it | Only you |
+| `weekly_goal` | Your weekly goal in cases (one row per member, 1 to 14; no row means no goal). Progress and streak are worked out from your cases, so nothing else is stored | Only you |
 | `shared_cases` | The owner-approved projection of cases (see above). Written only by triggers | Verified members |
 | `public_profiles`, `public_shared_cases` | Copies for members who chose to be public (free text only if they opened everything; link-only members are excluded from table reads). Written only by triggers | Anyone, including visitors without an account |
 
@@ -258,8 +261,9 @@ half-written Log Case draft, a copy of your Warm-up record, and Supabase's own s
 | --- | --- | --- |
 | Extra copy of everything | Settings → Download backup (JSON) | Every case, rating, feedback note, learning and list item, and each case's sharing setting |
 | Restore a backup | Settings → Import backup (JSON) | **Merge** (adds cases, newer edit wins, deletes nothing) or **Replace everything**. Replace writes the file first and removes leftovers second, so a failure can't leave you with less than you started with |
+| Excel file | Case Log (top right) or Settings → Export to Excel | An `.xlsx` in the MCG template layout: a **Log** tab and an **Opportunity Areas** tab, which Import from Excel reads straight back. Only the template's columns are in it, so learning notes, improvement tags and sharing settings are not; the JSON backup is the complete copy |
 | Spreadsheet view | Settings → Export cases (CSV) | One row per case, MCG column order plus CaseLab's additions |
-| Bring in your MCG log | Dashboard or Case Log (empty state), or Settings → Import from Excel | A preview first, nothing saved until you confirm. See "Importing your Excel log" below |
+| Bring in your MCG log | The Dashboard's Excel card (while empty), the Case Log header, or Settings → Import from Excel | A preview first, nothing saved until you confirm. See "Importing your Excel log" below |
 | Wipe | Settings → Clear all data | Requires typing `DELETE` |
 | Sign out | Settings → Sign out | |
 | Demo | Settings → Try demo mode | 16 clearly labeled sample cases held only in this tab's memory. They are never sent to your account, never shared, and People is switched off while in demo mode |
@@ -270,7 +274,7 @@ The app starts with 0 cases and shows no scores, trends or suggestions until you
 
 ## Importing your Excel log
 
-Open **Import from Excel** from the Dashboard or Case Log (when empty) or from Settings, then drop in your `.xlsx` file. CaseLab reads
+Open **Import from Excel** from the Dashboard (the Excel card, while your log is empty), the Case Log header or Settings, then drop in your `.xlsx` file. If you chose **Create account and import** on the front page, the import opens by itself the first time your new account loads with no cases (the wish is kept in your browser for three days and used up once). CaseLab reads
 it in your browser and shows a review screen first; **nothing is saved until you press Import**.
 
 | From the workbook | In CaseLab |
@@ -291,6 +295,21 @@ How it copes with real spreadsheets:
 - **Imported cases are private by default.** You can instead choose to have them follow your Profile & privacy settings, which is how a case you log normally behaves.
 
 ---
+
+## Weekly goal
+
+Under **Your week** on the Dashboard, **Set a weekly goal** lets you pick 1 to 7 cases a week (the database accepts 1 to 14). A ring fills as the
+week's cases add up, and the line beside it says how many are left. Saving a case shows where you stand, with confetti when that case is the
+one that reaches the goal.
+
+- **Streak**: the number of weeks in a row, ending now, that reached the goal. This week counts once it has; a week that is still going doesn't break the run. Only logged cases count (never burned ones), and the streak is always judged against the goal as it is now.
+- **Private**: the goal is one row in `weekly_goal` that only you can read or change (row-level security), with a check for 1 to 14. It isn't in your profile or visible to anyone else, and there is no comparison. In demo mode it is kept for the visit only.
+
+## Keyboard shortcuts, the tour and installing
+
+- **Shortcuts** work anywhere you aren't typing in a box or in a window: `N` logs a case, `?` shows the list, and `G` then `D`, `L`, `I`, `C` or `W` jumps to Dashboard, Case Log, Improvement Areas, Community or Warm-up.
+- **First-login tour**: a brand-new account (no cases yet) gets three notes pointing at **Log Case**, **Import** and **Community**, once. Skip it with a click or Escape; it never comes back, and it steps aside whenever a window is open.
+- **Install**: CaseLab has a web manifest and icons, so a browser can offer to install it. Settings → Shortcuts and install shows an **Install CaseLab** button when the browser offers one; on an iPhone use Share → Add to Home Screen.
 
 ## How it maps to the MCG template
 
@@ -337,6 +356,7 @@ Up to three suggestions, chosen by fixed rules that stay silent when there isn't
 
 - **Fewer than 5 cases**: only coverage gaps and the next-focus note you wrote on your latest case. No trend claims.
 - **5+ cases** adds: your weakest skill (last-5 average of 3.0 or lower), a skill that's declining, and over-concentration (your last three cases share a case type, or one type is 40%+ of 10+ cases).
+- Advice about **Quant / Math** also links to the Warm-up sprint (on the Dashboard and under Skills to improve).
 - **Always**: case types you've never practiced (most common interview types first), industries you haven't practiced, and case types seen only once.
 
 ### Improvement Areas
@@ -426,10 +446,11 @@ src/
   domain/      Pure TypeScript: types, constants, and all calculations (stats, suggestions,
                improvement areas, knowledge, milestones, filters). No React, no database.
   data/        Persistence and I/O: Supabase client + repository, auth, row mapping, error messages,
-               JSON backup/merge, CSV, MCG Excel import, demo data, in-memory repository
+               JSON backup/merge, CSV, MCG Excel import and export, weekly goal, demo data, in-memory repository
   state/       React context: auth, data (the only writer), toasts, theme, routing
   features/    The screens: dashboard, caselog, improvement, warmup, people (directory, profiles, find a case),
-               plus auth (sign in / sign up / reset), community (onboarding, profile & privacy), logcase, settings
+               plus auth (sign in / sign up / reset), community (onboarding, profile & privacy), logcase, settings,
+               import, help (keyboard shortcuts) and tour (the first-login walkthrough)
   components/  Shared UI primitives, layout, chart colors
   test/        Test setup, builders, fixtures, fake Supabase / fake backend
 supabase/
@@ -445,7 +466,7 @@ data, `createMemoryRepository` for demo mode and tests), the community through `
 There is no group administration, group chat or social feed: members, profiles, sharing, practice requests, and private conversations between two members who agreed to case are all there is.
 
 **Tech**: React 19, TypeScript, Vite, Tailwind CSS v4, Supabase (`@supabase/supabase-js`), Recharts (lazy-loaded),
-`read-excel-file` (loaded only when you import an Excel file), Vitest + Testing Library, PGlite for the database tests.
+`read-excel-file` and `write-excel-file` (each loaded only when you import or export an Excel file), Vitest + Testing Library, PGlite for the database tests.
 
 ---
 
@@ -466,6 +487,9 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **Practice requests**: in Postgres (open to every listed, verified member and no one else, private to the two people, no direct table access, one waiting per pair, the 5-waiting and 20-a-day limits, silent blocks that can be undone, length limits, nothing readable by visitors, cascade on user delete), the Supabase wrapper, and the screens (nothing to switch on, asking, prefilled from Find a case, answering with a reply, declining and blocking, the badge, cancelling, errors, demo mode)
 - **Warm-up**: question generation (seeded, so repeatable), answer reading and the 5% tolerance, scoring; the record in Postgres (own row only, no direct writes, raise-only, no visitor access, cascade on user delete); syncing between the account and this device (offline, first sign-in on a shared browser, demo mode); and the screen (timer, streaks, tips after a miss, end of round)
 - **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
+- **Weekly goal**: the Monday-to-Sunday count, passing the goal, the streak (an unfinished week neither counts nor breaks it), the table in Postgres (own row only, 1 to 14, nothing for visitors, cascade), and the screens (set, change, remove, a failed save keeping the old goal, demo mode never writing, the saved panel's cheer)
+- **Excel export**: the MCG layout, oldest case first, a round trip back through the importer, a real `.xlsx` read back by Import from Excel (lists included), and the buttons on the Case Log and in Settings
+- **First run**: the import wish after sign-up (kept, used once, expires, ignored when the account has cases), the tour (once, skippable, Escape, steps aside for windows, its ring following a button that moves), the shortcuts, the install button and the Warm-up nudge
 - **Backup and import**: lossless JSON round trip, merge semantics, CSV quoting; Excel import (a populated sample, a richer workbook with an Industry column, extra columns and filled-in Opportunity Areas, and the empty template), header and case-type matching, industry suggestions, and the review screen end to end
 - **The app end to end** against a fake Supabase: sign-in and sign-out, nothing requested before sign-in, create / edit / delete with confirmation, data surviving a refresh, a failed save keeping what you typed, a failed delete, a failed load with Retry, a missing-tables message, demo mode never touching the database, export then restore, clear-all
 
@@ -492,7 +516,8 @@ sharing switches, then restore them to listed with nothing shared.
 
 ## Limitations
 
-- Weeks start on Monday.
+- Weeks start on Monday, for the weekly goal and its streak as well. A week that is still going never breaks a streak, and burned cases never count toward it.
+- The tour is remembered in the browser it was finished in, so a new browser or device shows it again for an empty account. Installing CaseLab as an app does not add offline use: there is no service worker, so nothing is cached and a new version is never stale.
 - The MCG template has no industry column. The import suggests one from the case title where the words are clear (an airline, a hospital) and you confirm or change it on the review screen; anything left unset shows "–" until you edit the case.
 - Edits made on two devices at the same moment aren't merged: the last save wins (fine for one person).
 - Case matching is by title only, so very different spellings of the same case can be missed, and different cases that share

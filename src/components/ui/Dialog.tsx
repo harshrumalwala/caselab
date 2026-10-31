@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { IconButton } from './Button';
@@ -40,10 +40,20 @@ export function Dialog({
   headerExtra,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyFocusable, setBodyFocusable] = useState(false);
   const titleId = useId();
   const descId = useId();
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+
+  // Runs after every render: the body's contents change as the dialog does (steps, errors, lists).
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    const none = body.querySelector(FOCUSABLE) === null;
+    setBodyFocusable((was) => (was === none ? was : none));
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -134,7 +144,14 @@ export function Dialog({
               <X className="size-5" />
             </IconButton>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">{children}</div>
+          <div
+            ref={bodyRef}
+            // With nothing to tab to inside, the keyboard still needs a way in to scroll a long body.
+            tabIndex={bodyFocusable ? 0 : undefined}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent sm:px-7"
+          >
+            {children}
+          </div>
           {footer && (
             <footer className="border-t border-line bg-surface-2/60 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:rounded-b-3xl sm:px-7">
               {footer}

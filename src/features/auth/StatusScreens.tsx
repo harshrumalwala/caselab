@@ -21,7 +21,7 @@ function Panel({ title, children, actions }: { title: string; children: ReactNod
         </div>
         <div className="card p-6 sm:p-7" role="alert">
           <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-bad-soft text-bad">
+            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-bad-soft text-bad-text">
               <AlertTriangle className="size-4" />
             </span>
             <div className="min-w-0">

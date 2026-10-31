@@ -105,11 +105,11 @@ function Field({
     <div className={className}>
       <label className="label" htmlFor={htmlFor}>
         {label}
-        {required && <span className="ml-0.5 text-bad">*</span>}
+        {required && <span className="ml-0.5 text-bad-text">*</span>}
       </label>
       {children}
       {error && (
-        <p className="mt-1.5 text-xs font-medium text-bad" role="alert">
+        <p className="mt-1.5 text-xs font-medium text-bad-text" role="alert">
           {error}
         </p>
       )}
@@ -350,7 +350,7 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
       footer={
         <div className="space-y-3">
           {saveError && (
-            <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad">
+            <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad-text">
               Not saved. {saveError} Your entries are still here, so you can try again.
             </p>
           )}

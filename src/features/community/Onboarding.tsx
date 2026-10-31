@@ -57,7 +57,7 @@ export function Onboarding() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="profile-name">
-                Your name <span className="text-bad">*</span>
+                Your name <span className="text-bad-text">*</span>
               </label>
               <input
                 id="profile-name"
@@ -119,7 +119,7 @@ export function Onboarding() {
           </div>
 
           {error && (
-            <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad">
+            <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad-text">
               {error}
             </p>
           )}

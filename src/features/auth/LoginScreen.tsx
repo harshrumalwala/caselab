@@ -58,7 +58,7 @@ function Shell({ children, onBack }: { children: ReactNode; onBack?: () => void 
 
 function ErrorLine({ children }: { children: ReactNode }) {
   return (
-    <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad">
+    <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad-text">
       {children}
     </p>
   );
@@ -124,7 +124,7 @@ function CheckEmail({ sent, onBack }: { sent: NonNullable<Sent>; onBack: () => v
           )}
         </p>
       </div>
-      {note && <p className="text-sm font-medium text-good">{note}</p>}
+      {note && <p className="text-sm font-medium text-good-text">{note}</p>}
       {error && <ErrorLine>{error}</ErrorLine>}
       <div className="flex flex-col gap-2">
         <Button onClick={() => void resend()} disabled={busy}>

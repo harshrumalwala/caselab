@@ -17,7 +17,7 @@
   --line-strong: #d9d5ce;
   --ink: #1c1a18;
   --ink-2: #46423d;
-  --muted: #7a746d;
+  --muted: #6b655e;
 
   /* Chicago Booth maroon, used sparingly as the accent. */
   --accent: #800000;
@@ -29,6 +29,10 @@
   --good: #0e8a5f;
   --warn: #c27a0a;
   --bad: #c7364a;
+  /* The same three, darkened for small text: the fills above are for bars and dots, which need less contrast than words do. */
+  --good-text: #0b7a53;
+  --warn-text: #8f5400;
+  --bad-text: #b02a3e;
   --good-soft: #e7f5ee;
   --warn-soft: #fcf1de;
   --bad-soft: #fbe9ec;
@@ -81,6 +85,9 @@
   --good: #36d399;
   --warn: #f5b942;
   --bad: #fb7185;
+  --good-text: #36d399;
+  --warn-text: #f5b942;
+  --bad-text: #fb7185;
   --good-soft: #14291f;
   --warn-soft: #2b2212;
   --bad-soft: #301a1f;
@@ -132,6 +139,9 @@
   --color-good: var(--good);
   --color-warn: var(--warn);
   --color-bad: var(--bad);
+  --color-good-text: var(--good-text);
+  --color-warn-text: var(--warn-text);
+  --color-bad-text: var(--bad-text);
   --color-good-soft: var(--good-soft);
   --color-warn-soft: var(--warn-soft);
   --color-bad-soft: var(--bad-soft);
@@ -274,7 +284,6 @@
   :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    border-radius: 6px;
   }
   button {
     cursor: pointer;

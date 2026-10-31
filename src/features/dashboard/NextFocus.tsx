@@ -10,7 +10,8 @@ import {
   Shuffle,
   type LucideIcon,
 } from 'lucide-react';
-import { MIN_CASES_FOR_TRENDS, type Suggestion, type SuggestionKind } from '../../domain/suggestions';
+import { MIN_CASES_FOR_TRENDS, needsWarmup, type Suggestion, type SuggestionKind } from '../../domain/suggestions';
+import { WarmupLink } from '../warmup/WarmupLink';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { useUI } from '../../state/ui';
 
@@ -56,6 +57,7 @@ export function NextFocus({ suggestions, total }: { suggestions: Suggestion[]; t
                 </span>
                 <div className="min-w-0">
                   <p className="text-sm leading-relaxed text-ink">{s.text}</p>
+                  {needsWarmup(s) && <WarmupLink className="mt-2" />}
                   {s.action && (
                     <button
                       type="button"

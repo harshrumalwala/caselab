@@ -21,7 +21,7 @@ function TrendChip({ stat }: { stat: SkillStat }) {
   const up = stat.trend === 'improving';
   return (
     <span
-      className={`num inline-flex items-center gap-0.5 text-xs font-semibold ${up ? 'text-good' : 'text-bad'}`}
+      className={`num inline-flex items-center gap-0.5 text-xs font-semibold ${up ? 'text-good-text' : 'text-bad-text'}`}
       title="Last 5 ratings compared with your earlier ratings"
     >
       {up ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}
