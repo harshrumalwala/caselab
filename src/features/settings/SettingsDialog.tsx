@@ -124,7 +124,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <div className="space-y-4">
           {demo && (
             <div className="flex items-start gap-3 rounded-xl bg-warn-soft px-4 py-3 text-sm text-ink">
-              <FlaskConical className="mt-0.5 size-4 shrink-0 text-warn" />
+              <FlaskConical className="mt-0.5 size-4 shrink-0 text-warn-text" />
               <p>
                 You're in demo mode, so backups, imports and clearing are switched off to keep sample data away from your
                 real cases. Exit demo mode to manage your own data.
@@ -242,7 +242,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             </div>
           </Section>
 
-          <Section title="Danger zone" icon={<Trash2 className="size-4 text-bad" />}>
+          <Section title="Danger zone" icon={<Trash2 className="size-4 text-bad-text" />}>
             <p className="text-sm text-ink-2">Permanently delete every case and list in your account.</p>
             <div className="mt-3">
               <Button variant="danger" onClick={() => setConfirmClear(true)} disabled={demo}>

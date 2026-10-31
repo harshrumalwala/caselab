@@ -31,6 +31,9 @@ export interface Suggestion {
 export const MIN_CASES_FOR_TRENDS = 5;
 export const MAX_SUGGESTIONS = 3;
 
+/** Advice about Quant / Math is where the Warm-up sprint helps, so it gets a link to it. */
+export const needsWarmup = (s: Suggestion): boolean => s.id === 'skill-quant' || s.id === 'decline-quant';
+
 const joinOr = (items: string[]): string =>
   items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`;
 

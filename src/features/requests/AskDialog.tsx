@@ -101,7 +101,7 @@ export function AskDialog({ person, prefill, onClose }: { person: Profile; prefi
           </p>
         </div>
         {error && (
-          <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad">
+          <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad-text">
             {error}
           </p>
         )}

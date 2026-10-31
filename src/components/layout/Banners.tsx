@@ -6,7 +6,7 @@ function Banner({ tone, children }: { tone: 'warn' | 'bad'; children: React.Reac
   return (
     <div
       role={tone === 'bad' ? 'alert' : 'status'}
-      className={`px-4 py-2.5 text-sm sm:px-6 ${tone === 'bad' ? 'bg-bad-soft text-bad' : 'bg-warn-soft text-ink'}`}
+      className={`px-4 py-2.5 text-sm sm:px-6 ${tone === 'bad' ? 'bg-bad-soft text-bad-text' : 'bg-warn-soft text-ink'}`}
     >
       <div className="mx-auto flex w-full max-w-6xl items-center gap-3">{children}</div>
     </div>
@@ -20,7 +20,7 @@ export function Banners() {
     <>
       {mode === 'demo' && (
         <Banner tone="warn">
-          <FlaskConical className="size-4 shrink-0 text-warn" />
+          <FlaskConical className="size-4 shrink-0 text-warn-text" />
           <p className="min-w-0 flex-1">
             <strong className="font-semibold">Demo mode.</strong> Sample data only.
             <span className="hidden sm:inline"> Your real cases are untouched and nothing here is saved to them.</span>

@@ -17,8 +17,8 @@ interface ToastApi {
 const ToastContext = createContext<ToastApi | null>(null);
 
 const ICONS = {
-  success: <CheckCircle2 className="size-5 text-good" aria-hidden />,
-  error: <AlertTriangle className="size-5 text-bad" aria-hidden />,
+  success: <CheckCircle2 className="size-5 text-good-text" aria-hidden />,
+  error: <AlertTriangle className="size-5 text-bad-text" aria-hidden />,
   info: <Info className="size-5 text-accent-text" aria-hidden />,
 };
 

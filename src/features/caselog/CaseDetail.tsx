@@ -81,7 +81,7 @@ export function CaseDetail({ caseId, onClose }: { caseId: string; onClose: () =>
         footer={
           <div className="flex justify-between gap-2">
             <div className="flex gap-1">
-              <Button variant="ghost" className="hover:!text-bad" onClick={() => setConfirming(true)}>
+              <Button variant="ghost" className="hover:!text-bad-text" onClick={() => setConfirming(true)}>
                 <Trash2 className="size-4" /> Delete
               </Button>
               <Button variant="ghost" onClick={() => void togglePrivate(c)}>

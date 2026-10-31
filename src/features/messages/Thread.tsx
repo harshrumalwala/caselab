@@ -72,7 +72,7 @@ function ReportDialog({ name, onSend, onClose }: { name: string; onSend: (reason
           Messages in CaseLab are not end-to-end encrypted.
         </p>
         {error && (
-          <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad">
+          <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm font-medium text-bad-text">
             {error}
           </p>
         )}
@@ -281,7 +281,7 @@ export function Thread({ conversationId }: { conversationId: string }) {
                   <p className="mt-1 flex items-center justify-end gap-2 text-[11px] text-muted">
                     <time dateTime={m.createdAt}>{formatWhen(m.createdAt)}</time>
                     {m.mine && !m.deleted && (
-                      <button type="button" onClick={() => setConfirm({ deleteId: m.id })} className="inline-flex items-center gap-0.5 font-semibold hover:text-bad" aria-label="Delete this message">
+                      <button type="button" onClick={() => setConfirm({ deleteId: m.id })} className="inline-flex items-center gap-0.5 font-semibold hover:text-bad-text" aria-label="Delete this message">
                         <Trash2 className="size-3" aria-hidden /> Delete
                       </button>
                     )}
@@ -325,7 +325,7 @@ export function Thread({ conversationId }: { conversationId: string }) {
             </Button>
           </div>
           {sendError && (
-            <p role="alert" className="text-sm font-medium text-bad">
+            <p role="alert" className="text-sm font-medium text-bad-text">
               {sendError}
             </p>
           )}

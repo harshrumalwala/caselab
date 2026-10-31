@@ -30,6 +30,7 @@ import { describeError } from '../../data/errors';
 import { useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
+import { WarmupLink } from '../warmup/WarmupLink';
 
 // ---------------------------------------------------------------------------------------
 
@@ -128,7 +129,7 @@ function ManualList({
                 onClick={() => void run(() => onRemove(o.id), 'Not removed')}
                 disabled={busy}
                 aria-label={`Remove "${o.text}"`}
-                className="shrink-0 rounded-lg p-1 text-muted transition hover:bg-surface hover:text-bad disabled:opacity-50"
+                className="shrink-0 rounded-lg p-1 text-muted transition hover:bg-surface hover:text-bad-text disabled:opacity-50"
               >
                 <X className="size-4" />
               </button>
@@ -288,6 +289,7 @@ export function ImprovementAreas() {
                       <li key={r}>{r}</li>
                     ))}
                   </ul>
+                  {p.key === 'quant' && <WarmupLink className="mt-2.5" />}
                 </div>
               </li>
             ))}

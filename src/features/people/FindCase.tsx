@@ -28,7 +28,7 @@ function MyCaseRow({ c, note, onPropose }: { c: CaseRecord; note?: string; onPro
         <span className={`rounded-full px-2.5 py-0.5 font-bold ${chipClass(c.caseType)}`}>{c.caseType}</span>
         {[c.industry, c.source].filter(Boolean).join(' · ')}
       </p>
-      {note && <p className="mt-2 text-xs text-warn">{note}</p>}
+      {note && <p className="mt-2 text-xs text-warn-text">{note}</p>}
       {onPropose && (
         <button type="button" onClick={() => onPropose(c)} className="mt-2.5 text-xs font-semibold text-accent-text hover:underline">
           Ask to case this
@@ -74,7 +74,7 @@ function GapList({
                     {g.theirCount === 0 ? 'None shared' : `${g.theirCount} shared`}
                   </span>
                 </span>
-                <span className={`shrink-0 text-xs font-semibold ${g.offerable ? 'text-good' : 'text-muted'}`}>
+                <span className={`shrink-0 text-xs font-semibold ${g.offerable ? 'text-good-text' : 'text-muted'}`}>
                   {g.offerable ? `${g.offerable} from you` : 'none from you'}
                 </span>
               </button>
@@ -123,7 +123,7 @@ export function FindCase({
     <div className="space-y-5">
       <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface-2/60">
       <div className={`flex gap-3 px-4 py-3.5 text-sm ${sharesNothing ? 'bg-warn-soft' : ''}`} role="note">
-        {sharesNothing ? <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warn" /> : <Info className="mt-0.5 size-4 shrink-0 text-muted" />}
+        {sharesNothing ? <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warn-text" /> : <Info className="mt-0.5 size-4 shrink-0 text-muted" />}
         <p className="leading-relaxed text-ink-2">
           {sharesNothing ? (
             <>

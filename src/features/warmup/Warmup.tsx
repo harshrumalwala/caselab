@@ -262,7 +262,7 @@ export function Warmup({ seed }: { seed?: number } = {}) {
           </div>
 
           {/* Announced politely to screen readers as well as shown. */}
-          <p key={feedback?.text} role="status" className={`min-h-5 text-sm font-semibold ${feedback ? 'animate-rise' : ''} ${feedback?.right ? 'text-good' : 'text-coral-ink'}`}>
+          <p key={feedback?.text} role="status" className={`min-h-5 text-sm font-semibold ${feedback ? 'animate-rise' : ''} ${feedback?.right ? 'text-good-text' : 'text-coral-ink'}`}>
             {feedback?.text ?? ''}
           </p>
 
@@ -300,7 +300,7 @@ export function Warmup({ seed }: { seed?: number } = {}) {
                 </Button>
               </div>
               {problem && (
-                <p id="warmup-problem" role="alert" className="mt-2 text-sm font-medium text-bad">
+                <p id="warmup-problem" role="alert" className="mt-2 text-sm font-medium text-bad-text">
                   {problem}
                 </p>
               )}
@@ -327,7 +327,7 @@ export function Warmup({ seed }: { seed?: number } = {}) {
           </p>
           <p className="mt-4 font-display text-lg font-bold leading-snug text-ink">{result.line}</p>
           {result.stats.correct > 0 && result.misses.length === 0 && (
-            <p className="mt-3 text-sm font-semibold text-good">Nothing to review: a clean sheet.</p>
+            <p className="mt-3 text-sm font-semibold text-good-text">Nothing to review: a clean sheet.</p>
           )}
           <p className="mt-3 text-sm text-ink-2">
             Best so far: <span className="num font-bold text-ink">{result.update.best.score}</span> points, streak of{' '}

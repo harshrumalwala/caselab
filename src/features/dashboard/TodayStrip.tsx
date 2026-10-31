@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { ArrowRight, Flame, Plus, Target } from 'lucide-react';
 import { describeError } from '../../data/errors';
 import { goalProgress, GOAL_CHOICES, type GoalProgress } from '../../domain/goal';
-import type { Suggestion } from '../../domain/suggestions';
+import { needsWarmup, type Suggestion } from '../../domain/suggestions';
 import type { CaseRecord } from '../../domain/types';
 import { Button } from '../../components/ui/Button';
 import { Sparkle } from '../../components/ui/Doodles';
+import { WarmupLink } from '../warmup/WarmupLink';
 import { useGrowIn } from '../../state/motion';
 import { useGoal } from '../../state/GoalProvider';
 import { useToast } from '../../state/ToastProvider';
@@ -129,6 +130,7 @@ export function TodayStrip({ cases, now, next }: { cases: CaseRecord[]; now: Dat
               </span>
             </p>
           )}
+          {next && needsWarmup(next) && <WarmupLink className="mt-2" />}
           {ready && !picking && (
             <button
               type="button"

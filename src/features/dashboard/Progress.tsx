@@ -42,7 +42,7 @@ export function ProgressOverTime({ stats }: { stats: SkillStat[] }) {
                   <span className="font-semibold text-ink">{fmt(s.latestFive as number)}</span>
                   <span
                     className={`w-11 text-right text-xs font-semibold ${
-                      delta >= 0.3 ? 'text-good' : delta <= -0.3 ? 'text-bad' : 'text-muted'
+                      delta >= 0.3 ? 'text-good-text' : delta <= -0.3 ? 'text-bad-text' : 'text-muted'
                     }`}
                   >
                     {delta >= 0 ? '+' : '−'}

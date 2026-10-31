@@ -148,7 +148,7 @@ function Review({ fileName, result, onBack, onDone }: { fileName: string; result
             </p>
           </div>
           {flagged > 0 && (
-            <p className="mb-2 flex items-center gap-1.5 text-xs text-warn">
+            <p className="mb-2 flex items-center gap-1.5 text-xs text-warn-text">
               <AlertTriangle className="size-3.5" aria-hidden /> {plural(flagged, 'row has', 'rows have')} something worth a look, shown under the case.
             </p>
           )}
@@ -175,7 +175,7 @@ function Review({ fileName, result, onBack, onDone }: { fileName: string; result
                       {dup && ' · Already in your log'}
                     </p>
                     {row.notes.map((n) => (
-                      <p key={n} className="mt-0.5 text-xs text-warn">
+                      <p key={n} className="mt-0.5 text-xs text-warn-text">
                         {n}
                       </p>
                     ))}
@@ -202,7 +202,7 @@ function Review({ fileName, result, onBack, onDone }: { fileName: string; result
       )}
 
       {error && (
-        <p role="alert" className="text-sm font-medium text-bad">
+        <p role="alert" className="text-sm font-medium text-bad-text">
           Couldn't import. {error}
         </p>
       )}
@@ -289,7 +289,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
           </div>
 
           {stage.kind === 'pick' && stage.error && (
-            <p role="alert" className="text-sm font-medium text-bad">
+            <p role="alert" className="text-sm font-medium text-bad-text">
               {stage.error}
             </p>
           )}
