@@ -600,6 +600,12 @@ limited to 1 to 14, invisible to other members and visitors), the cases you inte
 never mixed into the cases you solved) and showing them to members (off by default, only while listed and switched on, only the five case columns
 and never who you interviewed or your notes, hidden the moment it is switched off, and nothing for visitors).
 
+The same two accounts also check that **the database that is actually live is the one the code expects** (`e2e/deployed.e2e.test.ts`). It reads
+the migration files and confirms every table and every added column exists live, and that each function the app calls exists with the arguments the
+app sends, so deploying the app before applying its migration is caught at once. It also confirms the tables behind requests, conversations,
+messages and reports refuse direct reads and writes (for a member and a visitor), the Warm-up record only goes up and is private, the email choice is
+private to its owner, and account deletion refuses anything but the exact word. It sends no messages or requests and never deletes an account.
+
 Use throwaway accounts for A and B: the tests create their profiles and flip their sharing switches, then leave them **unlisted** with
 nothing shared, so they never appear in the Community list or search for real members. They are listed only while the suite runs (the
 directory checks need that), which is a few minutes. (A member can delete their whole account from Settings; the live checks don't use that,
