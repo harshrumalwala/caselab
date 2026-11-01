@@ -595,6 +595,11 @@ CASELAB_E2E_EMAIL_B=e2e-b@example.com
 CASELAB_E2E_PASSWORD_B=...
 ```
 
+The two-account run covers the privacy of everything that is shared or kept private: cases and profiles, and also the weekly goal (saved,
+limited to 1 to 14, invisible to other members and visitors), the cases you interviewed (the same shape rules as cases, private to their owner,
+never mixed into the cases you solved) and showing them to members (off by default, only while listed and switched on, only the five case columns
+and never who you interviewed or your notes, hidden the moment it is switched off, and nothing for visitors).
+
 Use throwaway accounts for A and B: the tests create their profiles and flip their sharing switches, then leave them **unlisted** with
 nothing shared, so they never appear in the Community list or search for real members. They are listed only while the suite runs (the
 directory checks need that), which is a few minutes. (A member can delete their whole account from Settings; the live checks don't use that,
