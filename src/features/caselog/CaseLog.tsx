@@ -21,7 +21,8 @@ import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
 import { chipClass } from '../../components/ui/chips';
-import { splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
+import { splitMarkClass, splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
+import { SlideRow } from '../../components/ui/useSlidingMark';
 import { useMyProfile } from '../../state/CommunityProvider';
 import { BurnedPanel } from './BurnedPanel';
 import { InterviewedPanel } from './InterviewedPanel';
@@ -54,7 +55,7 @@ type LogTab = 'cases' | 'burned' | 'interviewed';
 
 function LogTabs({ tab, onChange, burned, interviewed }: { tab: LogTab; onChange: (t: LogTab) => void; burned: number; interviewed: number }) {
   return (
-    <div role="tablist" aria-label="Case log views" className={splitTabsClass}>
+    <SlideRow role="tablist" aria-label="Case log views" activeKey={tab} markClass={splitMarkClass} className={splitTabsClass}>
       {(
         [
           ['cases', 'My cases'],
@@ -67,6 +68,7 @@ function LogTabs({ tab, onChange, burned, interviewed }: { tab: LogTab; onChange
           type="button"
           role="tab"
           aria-selected={tab === id}
+          data-slide-active={tab === id ? 'true' : undefined}
           onClick={() => onChange(id)}
           className={splitTabClass(tab === id)}
         >
@@ -75,7 +77,7 @@ function LogTabs({ tab, onChange, burned, interviewed }: { tab: LogTab; onChange
           {label}
         </button>
       ))}
-    </div>
+    </SlideRow>
   );
 }
 

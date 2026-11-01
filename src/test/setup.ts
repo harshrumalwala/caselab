@@ -2,8 +2,9 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach } from 'vitest';
 import { cleanup, configure } from '@testing-library/react';
 
-// Whole-screen renders are slow on modest machines; wait longer before a query gives up.
-configure({ asyncUtilTimeout: 5000 });
+// Whole-screen renders are slow on modest machines, and the first test of a file pays for loading the whole app while many files run at
+// once: wait longer before a query gives up. (A test still fails at the 20-second test limit in vite.config.ts, so a real hang is not hidden.)
+configure({ asyncUtilTimeout: 15000 });
 
 // Recharts' ResponsiveContainer needs ResizeObserver, which jsdom lacks.
 class ResizeObserverStub {

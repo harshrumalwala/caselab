@@ -4,6 +4,7 @@ import { useTheme } from '../../state/theme';
 import { useUI } from '../../state/ui';
 import { useNavBadge } from '../../state/badge';
 import { Button, IconButton } from '../ui/Button';
+import { SlideRow } from '../ui/useSlidingMark';
 import { CountDot } from '../ui/CountDot';
 
 export function Logo() {
@@ -32,7 +33,13 @@ export function Header() {
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:px-6">
         <Logo />
 
-        <nav aria-label="Primary" className="ml-4 hidden items-center gap-0.5 lg:flex xl:gap-1">
+        <SlideRow
+          as="nav"
+          aria-label="Primary"
+          activeKey={ROUTES.find((r) => route === r.id || (r.id === 'people' && UNDER_COMMUNITY.includes(route)))?.id ?? ''}
+          markClass="rounded-full bg-sun shadow-[2px_2px_0_0_rgb(28_26_24/0.85)] ring-2 ring-ink/80"
+          className="ml-4 hidden items-center gap-0.5 lg:flex xl:gap-1"
+        >
           {ROUTES.map((r) => {
             const on = route === r.id || (r.id === 'people' && UNDER_COMMUNITY.includes(route)); // The Inbox and conversations live under Community
             const waiting = r.id === 'people' ? badge.total : 0;
@@ -44,8 +51,9 @@ export function Header() {
                 aria-current={on ? 'page' : undefined}
                 aria-label={waiting > 0 && spoken ? `${r.label}, ${spoken}` : r.label}
                 data-tour={r.id === 'people' ? 'community' : undefined}
-                className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition xl:px-3.5 ${
-                  on ? 'bg-sun text-on-sun shadow-[2px_2px_0_0_rgb(28_26_24/0.85)] ring-2 ring-ink/80' : 'text-ink-2 hover:bg-sun-soft hover:text-ink'
+                data-slide-active={on ? 'true' : undefined}
+                className={`relative z-10 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors xl:px-3.5 ${
+                  on ? 'text-on-sun' : 'text-ink-2 hover:bg-sun-soft hover:text-ink'
                 }`}
               >
                 <span className="xl:hidden">{r.short}</span>
@@ -54,7 +62,7 @@ export function Header() {
               </a>
             );
           })}
-        </nav>
+        </SlideRow>
 
         <div className="ml-auto flex items-center gap-1.5">
           <Button variant="primary" onClick={() => openLogCase()} aria-label="Log case" title="Log a case (press N)" data-tour="log">

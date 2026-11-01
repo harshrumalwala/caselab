@@ -8,7 +8,8 @@ import { round1, skillStats } from '../../domain/stats';
 import type { CaseRecord } from '../../domain/types';
 import { Badge, RatingBadge } from '../../components/ui/Badge';
 import { chipClass } from '../../components/ui/chips';
-import { splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
+import { splitMarkClass, splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
+import { SlideRow } from '../../components/ui/useSlidingMark';
 import { BurnedLine } from '../community/BurnedLine';
 import { InterviewedCard } from './InterviewedCard';
 import type { SharedInterviewed } from '../../domain/interviewed';
@@ -256,7 +257,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
         </>
       ) : (
         <>
-          <div role="tablist" aria-label="Profile sections" className={splitTabsClass}>
+          <SlideRow role="tablist" aria-label="Profile sections" activeKey={tab} markClass={splitMarkClass} className={splitTabsClass}>
             {(
               [
                 ['find', 'Find a case for them'],
@@ -268,13 +269,14 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
                 type="button"
                 role="tab"
                 aria-selected={tab === id}
+                data-slide-active={tab === id ? 'true' : undefined}
                 onClick={() => setTab(id)}
                 className={splitTabClass(tab === id)}
               >
                 {label}
               </button>
             ))}
-          </div>
+          </SlideRow>
           {tab === 'find' ? (
             <FindCase
               person={person}
