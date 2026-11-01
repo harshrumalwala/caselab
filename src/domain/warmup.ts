@@ -18,11 +18,43 @@ export function createRng(seed: number): Rng {
   };
 }
 
-export const ROUND_SECONDS = 60;
+/** The lengths a round can be, in seconds. 60 is the one everybody started with. */
+export const ROUND_LENGTHS = [30, 60, 120] as const;
+export type RoundLength = (typeof ROUND_LENGTHS)[number];
+export const ROUND_SECONDS: RoundLength = 60;
+
+export const isRoundLength = (n: unknown): n is RoundLength => ROUND_LENGTHS.includes(n as RoundLength);
+
+/** 30 -> "30 sec", 60 -> "1 min", 120 -> "2 min": short enough for a button. */
+export function roundLabel(seconds: RoundLength): string {
+  return seconds < 60 ? `${seconds} sec` : `${seconds / 60} min`;
+}
+
+/** 30 -> "30 seconds", 60 -> "1 minute", 120 -> "2 minutes": for a sentence. */
+export function roundWords(seconds: RoundLength): string {
+  if (seconds < 60) return `${seconds} seconds`;
+  const m = seconds / 60;
+  return `${m} ${m === 1 ? 'minute' : 'minutes'}`;
+}
 /** Consulting maths is estimation: an answer within 5% of the exact one counts. */
 export const TOLERANCE = 0.05;
 
-export type QuestionKind = 'percent' | 'growth' | 'breakeven' | 'market';
+export type QuestionKind =
+  | 'percent'
+  | 'growth'
+  | 'breakeven'
+  | 'market'
+  | 'margin'
+  | 'change'
+  | 'discount'
+  | 'share'
+  | 'payback'
+  | 'pricevolume'
+  | 'doubling'
+  | 'funnel'
+  | 'capacity'
+  | 'mix'
+  | 'savings';
 export type Level = 0 | 1 | 2;
 
 export interface Question {
@@ -165,13 +197,298 @@ function marketQuestion(rng: Rng, level: Level): Question {
   };
 }
 
+
+// ---- more kinds: margins, change, discounts, share, payback, price and volume, doubling, funnels, capacity, mix, savings --------
+
+const PCT_HINT = 'in %';
+/** 12.25 -> "12.3%"; 25 -> "25%". */
+const pctDisplay = (n: number) => `${fmt(Math.round(n * 10) / 10)}%`;
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+function marginQuestion(rng: Rng, level: Level): Question {
+  if (rng() < 0.5) {
+    const revenue = pick(rng, [[100, 200, 400, 500], [250, 320, 480, 600], [360, 540, 750, 900]][level]);
+    const wanted = pick(rng, [[10, 20, 25, 40], [15, 30, 35, 45], [12, 18, 24, 32]][level]);
+    const profit = Math.round((revenue * wanted) / 100);
+    const cost = revenue - profit;
+    const answer = (profit / revenue) * 100;
+    return {
+      kind: 'margin',
+      prompt: `Revenue is $${revenue}M and total costs are $${cost}M. What is the profit margin?`,
+      answer,
+      scale: 1,
+      unitHint: PCT_HINT,
+      display: pctDisplay(answer),
+      tip: `Profit is $${revenue}M − $${cost}M = $${profit}M. Margin is profit ÷ revenue: ${profit} ÷ ${revenue} ≈ ${pctDisplay(answer)}.`,
+    };
+  }
+  const price = pick(rng, [[20, 40, 50, 100], [30, 45, 60, 80], [35, 55, 75, 120]][level]);
+  const wanted = pick(rng, [[10, 20, 25, 50], [15, 30, 40, 60], [12, 35, 45, 65]][level]);
+  const cost = Math.round(price * (1 - wanted / 100));
+  const answer = ((price - cost) / price) * 100;
+  return {
+    kind: 'margin',
+    prompt: `Each unit sells for $${price} and costs $${cost} to make. What is the margin, as a percentage of the price?`,
+    answer,
+    scale: 1,
+    unitHint: PCT_HINT,
+    display: pctDisplay(answer),
+    tip: `Margin per unit is $${price} − $${cost} = $${price - cost}. As a share of the price: ${price - cost} ÷ ${price} ≈ ${pctDisplay(answer)}.`,
+  };
+}
+
+function changeQuestion(rng: Rng, level: Level): Question {
+  const base = pick(rng, [[40, 50, 80, 100, 200], [60, 120, 150, 250, 400], [45, 75, 125, 160, 350]][level]);
+  const p = pick(rng, [[10, 20, 25, 50], [10, 15, 20, 30, 40], [12, 15, 24, 35]][level]);
+  const up = rng() < 0.5;
+  const to = Math.round(up ? base * (1 + p / 100) : base * (1 - p / 100));
+  const answer = (Math.abs(to - base) / base) * 100;
+  return {
+    kind: 'change',
+    prompt: `Sales went from ${base} to ${to}. By what percentage did they ${up ? 'rise' : 'fall'}?`,
+    answer,
+    scale: 1,
+    unitHint: PCT_HINT,
+    display: pctDisplay(answer),
+    tip: `The change is ${Math.abs(to - base)}. Always divide by where you started (${base}), not where you ended: ${Math.abs(to - base)} ÷ ${base} ≈ ${pctDisplay(answer)}.`,
+  };
+}
+
+function discountQuestion(rng: Rng, level: Level): Question {
+  const p = pick(rng, [[10, 20, 25, 50], [10, 20, 25, 40, 50], [10, 20, 25, 40]][level]);
+  const orig = pick(rng, [[40, 60, 80, 100], [120, 160, 200, 240], [260, 300, 360, 480]][level]);
+  const sale = Math.round(orig * (1 - p / 100));
+  if (rng() < 0.5) {
+    return {
+      kind: 'discount',
+      prompt: `A $${orig} item is ${p}% off. What is the sale price?`,
+      answer: sale,
+      scale: 1,
+      unitHint: 'in dollars',
+      display: money(sale),
+      tip: `${p}% off means you pay ${100 - p}%. ${p}% of ${orig} is ${fmt((orig * p) / 100)}, so the price is ${orig} − ${fmt((orig * p) / 100)} = ${money(sale)}.`,
+    };
+  }
+  return {
+    kind: 'discount',
+    prompt: `After ${p}% off, a jacket costs $${sale}. What was the original price?`,
+    answer: orig,
+    scale: 1,
+    unitHint: 'in dollars',
+    display: money(orig),
+    tip: `$${sale} is ${100 - p}% of the original, not ${p}% off it. Divide: ${sale} ÷ ${(100 - p) / 100} = ${money(orig)}. Going backwards, never add the percentage on.`,
+  };
+}
+
+function shareQuestion(rng: Rng, level: Level): Question {
+  const share = pick(rng, [[5, 10, 20, 25], [8, 12, 15, 30, 40], [6, 9, 14, 35, 45]][level]);
+  const market = pick(rng, [[200, 400, 500, 1000], [250, 500, 800, 1200], [300, 750, 900, 1500]][level]);
+  const own = Math.round((market * share) / 100);
+  const answer = (own / market) * 100;
+  return {
+    kind: 'share',
+    prompt: `A client has $${own}M of sales in a $${market}M market. What is its market share?`,
+    answer,
+    scale: 1,
+    unitHint: PCT_HINT,
+    display: pctDisplay(answer),
+    tip: `Share is yours ÷ the whole: ${own} ÷ ${market}. Simplify first: ${market} is ${fmt(market / 100)} per 1%, so ${own} ÷ ${fmt(market / 100)} ≈ ${pctDisplay(answer)}.`,
+  };
+}
+
+function paybackQuestion(rng: Rng, level: Level): Question {
+  if (rng() < 0.6) {
+    const saving = pick(rng, [[2, 5, 10], [4, 6, 8, 15], [6, 8, 12, 14]][level]);
+    const years = pick(rng, [[2, 3, 4, 5], [3, 4, 5, 6, 8], [2.5, 3.5, 4.5, 6]][level]);
+    const invest = saving * years;
+    return {
+      kind: 'payback',
+      prompt: `A project costs $${fmt(invest)}M and saves $${saving}M a year. What is the payback period, in years?`,
+      answer: years,
+      scale: 1,
+      unitHint: 'in years',
+      display: `${fmt(years)} years`,
+      tip: `Payback is the cost ÷ the yearly benefit: ${fmt(invest)} ÷ ${saving} = ${fmt(years)} years.`,
+    };
+  }
+  const monthly = pick(rng, [[10, 20, 25, 50], [15, 30, 40, 60], [18, 45, 75, 90]][level]);
+  const months = pick(rng, [[4, 6, 10], [8, 9, 12, 15], [14, 16, 18, 20]][level]);
+  const acquire = monthly * months;
+  return {
+    kind: 'payback',
+    prompt: `A customer costs $${acquire} to win and pays $${monthly} a month. How many months until the cost is earned back?`,
+    answer: months,
+    scale: 1,
+    unitHint: 'in months',
+    display: `${months} months`,
+    tip: `Cost ÷ monthly revenue: ${acquire} ÷ ${monthly} = ${months} months.`,
+  };
+}
+
+function priceVolumeQuestion(rng: Rng, level: Level): Question {
+  const revenue = pick(rng, [[100, 200, 400], [120, 250, 500], [180, 320, 640]][level]);
+  const price = pick(rng, [[10, 20], [10, 20, 25], [5, 8, 10, 15]][level]);
+  const volume = pick(rng, [[10, 20], [5, 10, 20], [4, 5, 8, 10]][level]);
+  const answer = revenue * (1 + price / 100) * (1 - volume / 100) * 1e6;
+  const shown = money(Math.round(answer / 1e5) * 1e5);
+  return {
+    kind: 'pricevolume',
+    prompt: `Revenue is $${revenue}M. Price rises ${price}% and volume falls ${volume}%. What is the new revenue?`,
+    answer,
+    scale: 1e6,
+    unitHint: 'in $M',
+    display: shown,
+    tip: `Price and volume multiply, they don't just net out. $${revenue}M × ${fmt(1 + price / 100)} × ${fmt(1 - volume / 100)} ≈ ${shown}.`,
+  };
+}
+
+function doublingQuestion(rng: Rng, level: Level): Question {
+  if (rng() < 0.5) {
+    const rate = pick(rng, [[6, 8, 9, 12], [4, 6, 8, 9, 12], [3, 5, 6, 7, 9, 10]][level]);
+    const answer = Math.log(2) / Math.log(1 + rate / 100);
+    return {
+      kind: 'doubling',
+      prompt: `Revenue grows ${rate}% a year. About how many years until it doubles?`,
+      answer,
+      scale: 1,
+      unitHint: 'in years',
+      display: `about ${fmt(Math.round(answer))} years`,
+      tip: `The rule of 72: years to double ≈ 72 ÷ the growth rate. 72 ÷ ${rate} ≈ ${fmt(round1(72 / rate))} years.`,
+    };
+  }
+  const years = pick(rng, [[6, 8, 9, 12], [5, 6, 8, 9, 10, 12], [5, 6, 7, 8, 9, 10, 12]][level]);
+  const answer = (2 ** (1 / years) - 1) * 100;
+  return {
+    kind: 'doubling',
+    prompt: `Revenue has to double in ${years} years. About what growth rate a year is that?`,
+    answer,
+    scale: 1,
+    unitHint: PCT_HINT,
+    display: `about ${fmt(Math.round(answer))}%`,
+    tip: `The rule of 72 works both ways: rate ≈ 72 ÷ the years. 72 ÷ ${years} ≈ ${fmt(round1(72 / years))}% a year.`,
+  };
+}
+
+function funnelQuestion(rng: Rng, level: Level): Question {
+  const visitors = pick(rng, [[10_000, 20_000, 50_000], [40_000, 80_000, 120_000], [25_000, 60_000, 150_000]][level]);
+  const signup = pick(rng, [[10, 20], [5, 10, 25], [4, 8, 12]][level]);
+  const paid = pick(rng, [[10, 20, 50], [10, 20, 25], [8, 15, 30]][level]);
+  const price = pick(rng, [[10, 20, 50], [15, 30, 40], [25, 45, 90]][level]);
+  const signups = (visitors * signup) / 100;
+  const payers = (signups * paid) / 100;
+  const answer = payers * price;
+  const scale = scaleFor(answer);
+  return {
+    kind: 'funnel',
+    prompt: `${count(visitors)} people visit a site a month. ${signup}% sign up and ${paid}% of those pay $${price} a month. What is the monthly revenue?`,
+    answer,
+    scale,
+    unitHint: unitHintFor(scale),
+    display: money(answer),
+    tip: `Walk down the funnel: ${count(visitors)} × ${signup}% = ${count(signups)} sign-ups. × ${paid}% = ${count(payers)} payers. × $${price} = ${money(answer)}.`,
+  };
+}
+
+function capacityQuestion(rng: Rng, level: Level): Question {
+  if (rng() < 0.5) {
+    const seats = pick(rng, [[100, 150, 200], [120, 180, 240], [150, 180, 300]][level]);
+    const flights = pick(rng, [[2, 4, 5], [3, 6, 8], [6, 10, 12]][level]);
+    const full = pick(rng, [[50, 80], [60, 75, 80, 90], [65, 72, 85]][level]);
+    const fare = pick(rng, [[100, 200], [120, 150, 250], [110, 180, 325]][level]);
+    const answer = (seats * flights * full * fare) / 100;
+    const scale = scaleFor(answer);
+    return {
+      kind: 'capacity',
+      prompt: `A plane has ${seats} seats and flies ${flights} flights a day, ${full}% full, at $${fare} a ticket. What is the daily revenue?`,
+      answer,
+      scale,
+      unitHint: unitHintFor(scale),
+      display: money(answer),
+      tip: `Capacity first, then how full, then price: ${seats} × ${flights} = ${fmt(seats * flights)} seats a day. × ${full}% = ${fmt((seats * flights * full) / 100)} sold. × $${fare} = ${money(answer)}.`,
+    };
+  }
+  const rooms = pick(rng, [[50, 100, 200], [80, 120, 250], [150, 220, 340]][level]);
+  const occupied = pick(rng, [[50, 80], [60, 75, 90], [65, 72, 85]][level]);
+  const rate = pick(rng, [[100, 200], [120, 150, 220], [135, 180, 260]][level]);
+  const answer = (rooms * occupied * rate) / 100;
+  const scale = scaleFor(answer);
+  return {
+    kind: 'capacity',
+    prompt: `A hotel has ${rooms} rooms, ${occupied}% occupied, at $${rate} a night. What is the revenue for one night?`,
+    answer,
+    scale,
+    unitHint: unitHintFor(scale),
+    display: money(answer),
+    tip: `Rooms × occupancy × rate: ${rooms} × ${occupied}% = ${fmt((rooms * occupied) / 100)} rooms sold. × $${rate} = ${money(answer)}.`,
+  };
+}
+
+function mixQuestion(rng: Rng, level: Level): Question {
+  const share = pick(rng, [[50, 75, 25], [60, 80, 30, 70], [40, 65, 85, 35]][level]);
+  const low = pick(rng, [[10, 20, 30], [15, 25, 40], [18, 28, 45]][level]);
+  const high = low + pick(rng, [[10, 20, 30], [20, 30, 50], [22, 32, 55]][level]);
+  const answer = (share / 100) * low + (1 - share / 100) * high;
+  return {
+    kind: 'mix',
+    prompt: `${share}% of units sell at $${low} and the rest at $${high}. What is the average price per unit?`,
+    answer,
+    scale: 1,
+    unitHint: 'in dollars',
+    display: money(round1(answer)),
+    tip: `Weight each price by its share: ${share}% × ${low} = ${fmt((share * low) / 100)}, plus ${100 - share}% × ${high} = ${fmt(((100 - share) * high) / 100)}. Together: ${money(round1(answer))}. It must land between $${low} and $${high}, closer to the bigger share.`,
+  };
+}
+
+function savingsQuestion(rng: Rng, level: Level): Question {
+  const base = pick(rng, [[100, 200, 400], [250, 350, 600], [420, 640, 900]][level]);
+  const p = pick(rng, [[10, 20, 25], [8, 12, 15], [6, 9, 14, 18]][level]);
+  const cut = (base * p) / 100;
+  if (rng() < 0.5) {
+    const answer = cut * 1e6;
+    const scale = scaleFor(answer);
+    return {
+      kind: 'savings',
+      prompt: `Costs are $${base}M a year. A programme cuts ${p}% of them. What are the annual savings?`,
+      answer,
+      scale,
+      unitHint: unitHintFor(scale),
+      display: money(answer),
+      tip: `10% of ${base} is ${fmt(base / 10)}. Build ${p}% from that, or take 1% (${fmt(base / 100)}) times ${p}: ${money(answer)}.`,
+    };
+  }
+  const answer = (base - cut) * 1e6;
+  const scale = scaleFor(answer);
+  return {
+    kind: 'savings',
+    prompt: `Costs are $${base}M and fall ${p}%. What are costs after the cut?`,
+    answer,
+    scale,
+    unitHint: unitHintFor(scale),
+    display: money(answer),
+    tip: `The cut is ${p}% of ${base} = ${fmt(cut)}. Subtract it: ${base} − ${fmt(cut)} = ${money(answer)}. (Or take ${100 - p}% of ${base} straight away.)`,
+  };
+}
+
 const MAKERS: Record<QuestionKind, (rng: Rng, level: Level) => Question> = {
   percent: percentQuestion,
   growth: growthQuestion,
   breakeven: breakevenQuestion,
   market: marketQuestion,
+  margin: marginQuestion,
+  change: changeQuestion,
+  discount: discountQuestion,
+  share: shareQuestion,
+  payback: paybackQuestion,
+  pricevolume: priceVolumeQuestion,
+  doubling: doublingQuestion,
+  funnel: funnelQuestion,
+  capacity: capacityQuestion,
+  mix: mixQuestion,
+  savings: savingsQuestion,
 };
 const KINDS = Object.keys(MAKERS) as QuestionKind[];
+/** Every kind of question, for the tests and for anything that wants to list them. */
+export const QUESTION_KINDS: readonly QuestionKind[] = KINDS;
 
 export function makeQuestion(rng: Rng, level: Level, kind: QuestionKind = pick(rng, KINDS)): Question {
   return MAKERS[kind](rng, level);
@@ -182,14 +499,27 @@ export function levelFor(correct: number): Level {
   return correct < 4 ? 0 : correct < 9 ? 1 : 2;
 }
 
-/** A stream of questions that never asks the same kind twice in a row. */
+/** How many recent questions a round remembers, so the same one doesn't come round again while you are still on it. */
+const RECENT = 12;
+
+/** A stream of questions that never asks the same kind twice in a row, and doesn't repeat a recent question. */
 export function createQuestionStream(rng: Rng) {
   let previous: QuestionKind | undefined;
+  const recent: string[] = [];
   return {
     next(correctSoFar: number): Question {
-      const kind = pick(rng, KINDS.filter((k) => k !== previous));
-      previous = kind;
-      return makeQuestion(rng, levelFor(correctSoFar), kind);
+      const level = levelFor(correctSoFar);
+      let question: Question;
+      let tries = 0;
+      do {
+        const kind = pick(rng, KINDS.filter((k) => k !== previous));
+        question = makeQuestion(rng, level, kind);
+        tries += 1;
+      } while (recent.includes(question.prompt) && tries < 8);
+      previous = question.kind;
+      recent.push(question.prompt);
+      if (recent.length > RECENT) recent.shift();
+      return question;
     },
   };
 }
@@ -213,7 +543,7 @@ const SUFFIX: Record<string, number> = {
  * (so 408 million when it said "in $M"), but a bare 408000000 is accepted too. Returns [] when it isn't a number.
  */
 export function readAnswer(raw: string, scale: number): number[] {
-  const text = raw.toLowerCase().replace(/[$,\s~≈]/g, '').replace(/usd|dollars?|units?/g, '');
+  const text = raw.toLowerCase().replace(/[$,\s~≈]/g, '').replace(/usd|dollars?|units?|years?|yrs?|months?|percent|pct|%/g, '');
   const m = /^(-?(?:\d+\.?\d*|\.\d+))([a-z]*)$/.exec(text);
   if (!m) return [];
   const n = Number(m[1]);
@@ -290,6 +620,44 @@ export function mergeBest(a: Best, b: Best): Best {
   return { score: Math.max(a.score, b.score), streak: Math.max(a.streak, b.streak) };
 }
 
+/** A best for each round length: a 2-minute round naturally scores more than a 30-second one, so they are never compared. */
+export type Bests = Record<RoundLength, Best>;
+export const NO_BESTS: Bests = { 30: NO_BEST, 60: NO_BEST, 120: NO_BEST };
+
+/**
+ * Reads what was saved on this device. The record for the 60-second round is kept at the top level exactly as it was before there
+ * were other lengths (so what is already saved still reads, and an older open tab still understands it); the other lengths sit
+ * under `by`. Anything odd falls back to no best.
+ */
+export function parseBests(json: string | null): Bests {
+  if (!json) return NO_BESTS;
+  try {
+    const v = JSON.parse(json) as { by?: Record<string, unknown> } | null;
+    const by = v && typeof v === 'object' && v.by && typeof v.by === 'object' ? v.by : {};
+    return {
+      30: parseBest(JSON.stringify(by['30'] ?? null)),
+      60: parseBest(json),
+      120: parseBest(JSON.stringify(by['120'] ?? null)),
+    };
+  } catch {
+    return NO_BESTS;
+  }
+}
+
+/** What to keep on this device: the 60-second best at the top level, the others under `by` (left out while empty). */
+export function serializeBests(bests: Bests): string {
+  const by: Record<string, Best> = {};
+  for (const length of [30, 120] as const) if (bests[length].score > 0 || bests[length].streak > 0) by[length] = bests[length];
+  return JSON.stringify({ ...bests[60], ...(Object.keys(by).length > 0 ? { by } : {}) });
+}
+
+/** The better of each, for each length. */
+export function mergeBests(a: Bests, b: Bests): Bests {
+  return { 30: mergeBest(a[30], b[30]), 60: mergeBest(a[60], b[60]), 120: mergeBest(a[120], b[120]) };
+}
+
+export const hasAnyBest = (b: Bests): boolean => ROUND_LENGTHS.some((n) => b[n].score > 0 || b[n].streak > 0);
+
 export interface BestUpdate {
   best: Best;
   newScore: boolean;
@@ -315,7 +683,7 @@ const END_LINES: { upTo: number; lines: string[] }[] = [
     lines: [
       'Zero right. The mental calculator is on a coffee break.',
       'A bold strategy: let the timer do the thinking.',
-      'Warm-up, not a verdict. Go again, it takes a minute.',
+      'Warm-up, not a verdict. Go again, it takes no time at all.',
     ],
   },
   {
@@ -344,7 +712,9 @@ const END_LINES: { upTo: number; lines: string[] }[] = [
   },
 ];
 
-export function endOfRoundLine(stats: RoundStats, rng: Rng): string {
-  const tier = END_LINES.find((t) => stats.correct <= t.upTo) ?? END_LINES[END_LINES.length - 1];
+/** `seconds` scales what counts as a good round: ten right in 2 minutes is a calmer pace than ten right in 30 seconds. */
+export function endOfRoundLine(stats: RoundStats, rng: Rng, seconds: RoundLength = ROUND_SECONDS): string {
+  const perMinute = stats.correct / (seconds / 60);
+  const tier = END_LINES.find((t) => perMinute <= t.upTo) ?? END_LINES[END_LINES.length - 1];
   return pick(rng, tier.lines);
 }

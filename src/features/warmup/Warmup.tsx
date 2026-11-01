@@ -7,20 +7,27 @@ import {
   EMPTY_ROUND,
   endOfRoundLine,
   levelFor,
+  isRoundLength,
   recordAnswer,
+  ROUND_LENGTHS,
   ROUND_SECONDS,
+  roundLabel,
+  roundWords,
   TOLERANCE,
   updateBest,
   type BestUpdate,
   type Level,
   type Question,
   type Rng,
+  type RoundLength,
   type RoundStats,
 } from '../../domain/warmup';
 import { Button } from '../../components/ui/Button';
 import { Sparkle, Sticky } from '../../components/ui/Doodles';
+import { SlideRow } from '../../components/ui/useSlidingMark';
 import { useWarmupSync } from '../../state/warmupSync';
-import { useBest } from './useBest';
+import { LENGTH_KEY } from '../../state/storageKeys';
+import { useBests } from './useBest';
 
 type Phase = 'intro' | 'playing' | 'done';
 
@@ -38,6 +45,8 @@ interface Miss {
   said: string | null;
 }
 interface Result {
+  /** The length of the round this is the result of. */
+  seconds: RoundLength;
   stats: RoundStats;
   misses: Miss[];
   line: string;
@@ -45,6 +54,12 @@ interface Result {
 }
 
 const TICK_MS = 200;
+
+const LENGTH_BLURB: Record<RoundLength, string> = {
+  30: 'A quick burst between emails.',
+  60: 'The classic: long enough to find a rhythm.',
+  120: 'A proper drill: harder questions arrive as you get going.',
+};
 
 /** A scoreboard tile. `bumpKey` makes the number pop each time it changes; `iconClass` can animate the icon. */
 function Stat({
@@ -75,16 +90,31 @@ function Stat({
   );
 }
 
+/** The round length you picked last time, if this browser remembers one. */
+function rememberedLength(): RoundLength {
+  try {
+    const n = Number(window.localStorage.getItem(LENGTH_KEY));
+    return isRoundLength(n) ? n : ROUND_SECONDS;
+  } catch {
+    return ROUND_SECONDS;
+  }
+}
+
 /**
- * A 60-second mental-math sprint. Entirely optional. The best score and streak are private to you: kept with your account
- * (see useBest), or in this browser only in demo mode, and never shown to other members. `seed` makes the questions repeatable for tests.
+ * A mental-math sprint of 30, 60 or 120 seconds. Entirely optional. The best score and streak for each length are private to you:
+ * kept with your account (see useBests), or in this browser only in demo mode, and never shown to other members. `seed` makes the
+ * questions repeatable for tests.
  */
 export function Warmup({ seed }: { seed?: number } = {}) {
-  const [best, saveBest] = useBest();
+  const [bests, saveBest] = useBests();
   const onAccount = useWarmupSync() !== null;
   const [phase, setPhase] = useState<Phase>('intro');
+  /** The length picked on the start screen, and the length of the round being played or just finished. */
+  const [length, setLength] = useState<RoundLength>(rememberedLength);
+  const [roundSeconds, setRoundSeconds] = useState<RoundLength>(length);
+  const best = bests[phase === 'intro' ? length : roundSeconds];
   const [stats, setStats] = useState<RoundStats>(EMPTY_ROUND);
-  const [msLeft, setMsLeft] = useState(ROUND_SECONDS * 1000);
+  const [msLeft, setMsLeft] = useState(length * 1000);
   const [asked, setAsked] = useState<Asked | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [misses, setMisses] = useState<Miss[]>([]);
@@ -100,12 +130,22 @@ export function Warmup({ seed }: { seed?: number } = {}) {
   const ask = (correctSoFar: number) =>
     setAsked({ question: stream.current.next(correctSoFar), level: levelFor(correctSoFar) });
 
+  const chooseLength = (n: RoundLength) => {
+    setLength(n);
+    try {
+      window.localStorage.setItem(LENGTH_KEY, String(n));
+    } catch {
+      /* the choice just won't be remembered */
+    }
+  };
+
   const start = () => {
     round.current += 1;
     rng.current = createRng((seed ?? Math.floor(Math.random() * 2 ** 31)) + round.current);
     stream.current = createQuestionStream(rng.current);
+    setRoundSeconds(length);
     setStats(EMPTY_ROUND);
-    setMsLeft(ROUND_SECONDS * 1000);
+    setMsLeft(length * 1000);
     setFeedback(null);
     setMisses([]);
     setTyped('');
@@ -115,7 +155,7 @@ export function Warmup({ seed }: { seed?: number } = {}) {
     setPhase('playing');
   };
 
-  // A flat 60 seconds: the clock never waits. What you missed is reviewed at the end.
+  // A flat round (30, 60 or 120 seconds): the clock never waits. What you missed is reviewed at the end.
   const running = phase === 'playing';
   useEffect(() => {
     if (!running) return;
@@ -132,10 +172,10 @@ export function Warmup({ seed }: { seed?: number } = {}) {
   useEffect(() => {
     if (phase !== 'playing' || msLeft > 0) return;
     const update = updateBest(best, stats);
-    if (update.newScore || update.newStreak) saveBest(update.best);
-    setResult({ stats, misses, line: endOfRoundLine(stats, rng.current), update });
+    if (update.newScore || update.newStreak) saveBest(roundSeconds, update.best);
+    setResult({ stats, misses, line: endOfRoundLine(stats, rng.current, roundSeconds), update, seconds: roundSeconds });
     setPhase('done');
-  }, [phase, msLeft, stats, misses, best, saveBest]);
+  }, [phase, msLeft, stats, misses, best, saveBest, roundSeconds]);
 
   useEffect(() => {
     if (running) input.current?.focus();
@@ -173,7 +213,7 @@ export function Warmup({ seed }: { seed?: number } = {}) {
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Warm-up</h1>
         <p className="text-sm text-ink-2">
-          Sixty seconds of case-style maths, for a break between cases. Optional, and mildly addictive.
+          Quick bursts of case-style maths, for a break between cases. Optional, and mildly addictive.
         </p>
       </div>
 
@@ -184,13 +224,39 @@ export function Warmup({ seed }: { seed?: number } = {}) {
           <Sparkle className="absolute bottom-6 right-10 size-4 text-lilac" />
           <p className="eyebrow !text-ink-2">Ready when you are</p>
           <h2 id="warmup-intro" className="mt-1 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
-            The 60-second sprint
+            Pick your sprint
           </h2>
+
+          <SlideRow
+            role="radiogroup"
+            aria-label="Round length"
+            activeKey={String(length)}
+            markClass="rounded-full bg-sun ring-2 ring-ink/80 shadow-[2px_2px_0_0_rgb(28_26_24/0.85)]"
+            className="mx-auto mt-5 flex w-fit gap-1.5 rounded-full border-2 border-ink/80 bg-surface p-1.5 text-sm font-bold"
+          >
+            {ROUND_LENGTHS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={length === n}
+                aria-label={roundWords(n)}
+                data-slide-active={length === n ? 'true' : undefined}
+                onClick={() => chooseLength(n)}
+                className={`relative z-10 min-w-20 rounded-full px-4 py-2 transition-colors ${length === n ? 'text-on-sun' : 'text-ink-2 hover:bg-sun-soft hover:text-ink'}`}
+              >
+                {roundLabel(n)}
+              </button>
+            ))}
+          </SlideRow>
+          <p className="mt-2 text-sm text-ink-2">{LENGTH_BLURB[length]}</p>
 
           <ul className="mx-auto mt-5 grid max-w-xl gap-3 text-left text-sm sm:grid-cols-3">
             <li className="rounded-xl border-2 border-ink/80 bg-surface p-3 text-ink-2">
               <Calculator className="size-5 text-coral" aria-hidden />
-              <span className="mt-1.5 block">Percentages, growth, break-even and market-sizing sums. As many as you can.</span>
+              <span className="mt-1.5 block">
+                Percentages, margins, growth, payback, price and volume, funnels, market sizing and more: fifteen kinds of quant, as many as you can.
+              </span>
             </li>
             <li className="rounded-xl border-2 border-ink/80 bg-surface p-3 text-ink-2">
               <Target className="size-5 text-teal" aria-hidden />
@@ -211,6 +277,7 @@ export function Warmup({ seed }: { seed?: number } = {}) {
             </Button>
             <div className="sticker -rotate-2 bg-surface px-5 py-3 text-ink">
               <Trophy className="mx-auto size-5 text-sun-ink" aria-hidden />
+              <p className="eyebrow mt-1">{roundLabel(length)} record</p>
               <p className="mt-1 text-sm">
                 {best.score > 0 ? (
                   <>
@@ -257,7 +324,7 @@ export function Warmup({ seed }: { seed?: number } = {}) {
           <div aria-hidden className="h-2.5 overflow-hidden rounded-full border-2 border-ink/80 bg-track">
             <div
               className={`h-full transition-[width] duration-200 ease-linear motion-reduce:transition-none ${seconds <= 10 ? 'bg-coral' : 'bg-teal'}`}
-              style={{ width: `${(msLeft / (ROUND_SECONDS * 1000)) * 100}%` }}
+              style={{ width: `${(msLeft / (roundSeconds * 1000)) * 100}%` }}
             />
           </div>
 
@@ -316,7 +383,7 @@ export function Warmup({ seed }: { seed?: number } = {}) {
               New best!
             </Sticky>
           )}
-          <p className="eyebrow">Time’s up</p>
+          <p className="eyebrow">Time’s up · {roundWords(result.seconds)}</p>
           <h2 id="warmup-done" className="mt-1 text-4xl font-extrabold tracking-tight text-ink">
             <span className="num">{result.stats.score}</span> points
           </h2>
@@ -331,11 +398,15 @@ export function Warmup({ seed }: { seed?: number } = {}) {
           )}
           <p className="mt-3 text-sm text-ink-2">
             Best so far: <span className="num font-bold text-ink">{result.update.best.score}</span> points, streak of{' '}
-            <span className="num font-bold text-ink">{result.update.best.streak}</span>.
+            <span className="num font-bold text-ink">{result.update.best.streak}</span>
+            <span className="text-muted"> (for {roundWords(result.seconds)})</span>.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <Button variant="primary" size="lg" onClick={start} autoFocus>
               <Zap className="size-4" /> Go again
+            </Button>
+            <Button size="lg" onClick={() => setPhase('intro')}>
+              <Timer className="size-4" /> Change length
             </Button>
             <a
               href="#/dashboard"

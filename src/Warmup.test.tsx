@@ -2,10 +2,11 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
-import { createQuestionStream, createRng, ROUND_SECONDS, type Question } from './domain/warmup';
+import { createQuestionStream, createRng, ROUND_SECONDS, type Question, type RoundLength } from './domain/warmup';
 import { Warmup } from './features/warmup/Warmup';
 import { createMemoryWarmup } from './data/warmupBest';
 import { WARMUP_KEY, warmupKeyFor } from './state/storageKeys';
+import { LENGTH_KEY } from './state/storageKeys';
 import { WarmupSyncContext, type WarmupSync } from './state/warmupSync';
 import { createFakeEnv } from './test/fakeBackend';
 
@@ -352,6 +353,129 @@ describe('Warm-up record on your account', () => {
   });
 });
 
+describe('Warm-up: choosing how long to play', () => {
+  const ME = 'user-1';
+  const pick = (name: string) => screen.getByRole('radio', { name });
+
+  async function playFor(seconds: RoundLength, correct: number, sync: WarmupSync | null = null) {
+    const s = setup(SEED, sync);
+    await s.user.click(pick(seconds === 30 ? '30 seconds' : seconds === 60 ? '1 minute' : '2 minutes'));
+    await s.start();
+    const next = questions();
+    for (let i = 0; i < correct; i++) await s.submit(typeOf(next()));
+    s.tick(seconds * 1000);
+    return s;
+  }
+
+  it('offers 30 seconds, 1 minute and 2 minutes, with one minute chosen to start', () => {
+    setup();
+    const group = screen.getByRole('radiogroup', { name: 'Round length' });
+    expect(within(group).getAllByRole('radio').map((r) => r.textContent)).toEqual(['30 sec', '1 min', '2 min']);
+    expect(pick('1 minute')).toHaveAttribute('aria-checked', 'true');
+    expect(pick('30 seconds')).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('heading', { name: 'Pick your sprint' })).toBeInTheDocument();
+    expect(screen.getByText(/fifteen kinds of quant/)).toBeInTheDocument();
+  });
+
+  it.each([
+    [30, '30s'],
+    [60, '60s'],
+    [120, '120s'],
+  ] as const)('puts %i seconds on the clock when that length is chosen, and the bar and the clock agree', async (seconds, shown) => {
+    const s = setup();
+    await s.user.click(pick(seconds === 30 ? '30 seconds' : seconds === 60 ? '1 minute' : '2 minutes'));
+    await s.start();
+    expect(screen.getByRole('timer')).toHaveTextContent(shown);
+    s.tick(seconds * 500);
+    expect(screen.getByRole('timer')).toHaveTextContent(`${seconds / 2}s`);
+    s.tick(seconds * 500 - 1);
+    expect(screen.getByRole('timer')).toHaveTextContent('1s'); // not over until the last moment
+    s.tick(1);
+    expect(screen.getByText(/Time’s up/)).toHaveTextContent(`${seconds === 30 ? '30 seconds' : seconds === 60 ? '1 minute' : '2 minutes'}`);
+  });
+
+  it('keeps a separate best for each length: a 30-second record is not a 2-minute record', async () => {
+    await playFor(30, 3);
+    expect(screen.getByRole('heading', { name: /42 points/ })).toBeInTheDocument();
+    expect(screen.getByText('New best!')).toBeInTheDocument();
+    expect(screen.getByText(/Best so far:/)).toHaveTextContent('42 points, streak of 3 (for 30 seconds)');
+
+    // Back to the start: 30 seconds shows its record, the others have none yet.
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Change length' }));
+    expect(screen.getByText(/30 sec record/)).toBeInTheDocument();
+    expect(screen.getByText(/Best:/)).toHaveTextContent('42 points, streak of 3');
+    await userEvent.setup().click(pick('2 minutes'));
+    expect(screen.getByText(/2 min record/)).toBeInTheDocument();
+    expect(screen.getByText('No best yet. Yours to set.')).toBeInTheDocument();
+    await userEvent.setup().click(pick('1 minute'));
+    expect(screen.getByText('No best yet. Yours to set.')).toBeInTheDocument();
+  });
+
+  it('saves each length under its own place on this device, with the 60-second one where it always was', async () => {
+    await playFor(120, 2);
+    expect(JSON.parse(window.localStorage.getItem(WARMUP_KEY)!)).toEqual({ score: 0, streak: 0, by: { 120: { score: 26, streak: 2 } } });
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Change length' }));
+    await userEvent.setup().click(pick('1 minute'));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Start the sprint' }));
+    const next = questions(SEED + 1); // the second round of this visit draws its questions from the next seed
+    for (let i = 0; i < 3; i++) {
+      await userEvent.setup().clear(screen.getByLabelText(/Your answer/));
+      await userEvent.setup().type(screen.getByLabelText(/Your answer/), typeOf(next()));
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Check' }));
+    }
+    act(() => void vi.advanceTimersByTime(60_000));
+    expect(JSON.parse(window.localStorage.getItem(WARMUP_KEY)!)).toEqual({ score: 42, streak: 3, by: { 120: { score: 26, streak: 2 } } });
+  });
+
+  it('still reads a record saved before there were lengths as the 1-minute record', () => {
+    window.localStorage.setItem(WARMUP_KEY, JSON.stringify({ score: 142, streak: 9 }));
+    setup();
+    expect(screen.getByText(/Best:/)).toHaveTextContent('142 points, streak of 9');
+    expect(screen.getByText(/1 min record/)).toBeInTheDocument();
+  });
+
+  it('remembers the length you chose for next time', async () => {
+    const first = setup();
+    await first.user.click(pick('2 minutes'));
+    expect(window.localStorage.getItem(LENGTH_KEY)).toBe('120');
+    first.view.unmount();
+    setup();
+    expect(pick('2 minutes')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('ignores a remembered length that is not one of the three', () => {
+    window.localStorage.setItem(LENGTH_KEY, '45');
+    setup();
+    expect(pick('1 minute')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('sends a new best to your account under the length it was set in', async () => {
+    const repository = createMemoryWarmup();
+    const sync = { repository, userId: ME } satisfies WarmupSync;
+    await playFor(30, 3, sync);
+    await act(async () => void (await new Promise((r) => setTimeout(r, 0))));
+    expect(repository.savedAll).toEqual({ 30: { score: 42, streak: 3 }, 60: { score: 0, streak: 0 }, 120: { score: 0, streak: 0 } });
+  });
+
+  it('shows the records saved on your account for every length', async () => {
+    const repository = createMemoryWarmup({ 30: { score: 31, streak: 2 }, 120: { score: 260, streak: 12 } });
+    setup(SEED, { repository, userId: ME });
+    await act(async () => void (await new Promise((r) => setTimeout(r, 0))));
+    const s = userEvent.setup();
+    await s.click(pick('30 seconds'));
+    expect(screen.getByText(/Best:/)).toHaveTextContent('31 points, streak of 2');
+    await s.click(pick('2 minutes'));
+    expect(screen.getByText(/Best:/)).toHaveTextContent('260 points, streak of 12');
+  });
+
+  it('lets you change the length between rounds', async () => {
+    const s = await playFor(30, 1);
+    await s.user.click(screen.getByRole('button', { name: 'Change length' }));
+    expect(screen.getByRole('radiogroup', { name: 'Round length' })).toBeInTheDocument();
+    expect(pick('30 seconds')).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
 describe('Warm-up in the app', () => {
   // The app and its fake backend resolve with real promises; fake timers would stall them.
   beforeEach(() => vi.useRealTimers());
@@ -381,7 +505,7 @@ describe('Warm-up in the app', () => {
 
   it('leaves the account alone in demo mode: the record stays on this device', async () => {
     const env = createFakeEnv();
-    const load = vi.spyOn(env.warmup, 'load');
+    const load = vi.spyOn(env.warmup, 'loadAll');
     const record = vi.spyOn(env.warmup, 'record');
     const user = userEvent.setup();
     render(<App backend={env.backend} />);

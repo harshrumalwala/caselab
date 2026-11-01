@@ -5,7 +5,7 @@ import { needsWarmup, type Suggestion } from './domain/suggestions';
 import { casesWithRatings } from './test/builders';
 import { createFakeEnv } from './test/fakeBackend';
 
-const LINK = { name: /Warm up with a 60-second sprint/ };
+const LINK = { name: /Warm up with a quick sprint/ };
 
 async function openWith(quant: (1 | 2 | 3 | 4 | 5)[], hash = '') {
   const env = createFakeEnv();
