@@ -7,6 +7,8 @@ import { formatDate } from '../../domain/dates';
 import { quipOfTheDay } from '../../domain/quips';
 import { chipClass } from '../../components/ui/chips';
 import { HeroScene, Sparkle, Sticky } from '../../components/ui/Doodles';
+import { HeroVideo } from '../../components/ui/HeroVideo';
+import { RevealOnView } from '../../components/ui/RevealOnView';
 import type { Profile } from '../../domain/community';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -232,7 +234,7 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
   return (
     <>
       <section className="relative overflow-hidden border-b-2 border-ink/80 bg-gradient-to-br from-sun-soft via-bg to-coral-soft">
-        <div className="relative mx-auto grid max-w-5xl items-center gap-4 px-4 pb-10 pt-10 sm:px-6 sm:pb-16 sm:pt-16 md:grid-cols-[1.1fr_1fr]">
+        <div className="relative mx-auto grid max-w-5xl items-center gap-4 px-4 pb-10 pt-10 sm:px-6 sm:pb-16 sm:pt-16 md:grid-cols-[1fr_1.1fr]">
           <div>
             <p className="sticker inline-block rotate-[-2deg] bg-surface px-3 py-1 text-xs font-bold uppercase tracking-wider text-accent-text">
               Consulting case practice
@@ -257,17 +259,19 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
             <p className="mt-4 text-sm text-ink-2">Your practice is private by default. Nothing is shown to anyone unless you switch it on.</p>
           </div>
 
-          <div className="relative mx-auto w-full max-w-md">
-            <HeroScene className="w-full" />
-            <Sticky tone="teal" tilt={-6} className="absolute left-0 top-[58%] hidden sm:block">
-              MECE <Check className="inline size-4" />
-            </Sticky>
-            <Sticky tone="lilac" tilt={5} className="absolute right-2 top-[44%] hidden sm:block">
-              Quant 4/5
-            </Sticky>
-            <Sticky tone="coral" tilt={-3} className="absolute bottom-0 left-8 hidden sm:block">
-              Next: break-even drills
-            </Sticky>
+          <div className="relative mx-auto w-full max-w-xl">
+            <HeroVideo className="w-full" />
+            <div className="mt-5 hidden flex-wrap items-center justify-center gap-3 sm:flex">
+              <Sticky tone="teal" tilt={-4}>
+                MECE <Check className="inline size-4" />
+              </Sticky>
+              <Sticky tone="lilac" tilt={3}>
+                Quant 4/5
+              </Sticky>
+              <Sticky tone="coral" tilt={-2}>
+                Next: break-even drills
+              </Sticky>
+            </div>
           </div>
         </div>
       </section>
@@ -283,12 +287,20 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
         <ImportCallout />
 
         <section aria-labelledby="what-title">
-          <h2 id="what-title" className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
-            Practice with a plan, <span className="marker">not just volume</span>
-          </h2>
-          <p className="mt-2 max-w-2xl text-base leading-relaxed text-ink-2">
-            Most people just count cases. CaseLab keeps the details that tell you what to do differently next time.
-          </p>
+          <div className="grid items-center gap-6 md:grid-cols-[1.2fr_1fr]">
+            <div>
+              <h2 id="what-title" className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
+                Practice with a plan, <span className="marker">not just volume</span>
+              </h2>
+              <p className="mt-2 max-w-2xl text-base leading-relaxed text-ink-2">
+                Most people just count cases. CaseLab keeps the details that tell you what to do differently next time.
+              </p>
+            </div>
+            {/* The bars grow and the arrow draws itself when this scrolls into view. */}
+            <RevealOnView className="mx-auto aspect-[6/5] w-full max-w-xs">
+              <HeroScene className="w-full" />
+            </RevealOnView>
+          </div>
           <ul className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <Tile icon={<Timer className="size-5" />} title="Log in two minutes" tone="sun" tilt={-1.5} joke="Faster than debating the framework.">
               Date, case, type and industry are all it takes. Add 1 to 5 ratings and notes on the skills you want to track, only if you want to.
