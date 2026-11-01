@@ -1,3 +1,4 @@
+import { splitMarkClass } from './components/ui/splitTab';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -126,11 +127,15 @@ describe('five tabs, with people and messages together under Community', () => {
     const [members, inbox] = views.getAllByRole('link');
     expect(screen.getByRole('navigation', { name: 'Community' })).toHaveClass('sticker');
     expect(members).toHaveAttribute('aria-current', 'page');
-    expect(members).toHaveClass('bg-sun', 'ring-2'); // chosen
-    expect(inbox).not.toHaveClass('bg-sun'); // not chosen
+    // The yellow is one mark that slides to the chosen half (see SlidingTabs.test.tsx), so the half itself only carries the marker.
+    expect(members).toHaveAttribute('data-slide-active', 'true'); // chosen
+    expect(members).toHaveClass('text-on-sun');
+    expect(inbox).not.toHaveAttribute('data-slide-active'); // not chosen
     expect(inbox).toHaveClass('hover:bg-sun-soft');
+    expect(splitMarkClass).toContain('bg-sun');
+    expect(splitMarkClass).toContain('ring-2');
     const mainNav = screen.getAllByRole('navigation', { name: 'Primary' })[0];
-    expect(within(mainNav).getByRole('link', { name: /^Community/ })).toHaveClass('bg-sun', 'ring-2'); // the same look up top
+    expect(within(mainNav).getByRole('link', { name: /^Community/ })).toHaveAttribute('data-slide-active', 'true'); // the same look up top
   });
 
   it('uses the same full-width split for the other switches: the Case Log and a member profile', async () => {

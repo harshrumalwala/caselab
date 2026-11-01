@@ -1,5 +1,6 @@
 import { CountDot } from '../../components/ui/CountDot';
-import { splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
+import { splitMarkClass, splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
+import { SlideRow } from '../../components/ui/useSlidingMark';
 import { useNavBadge } from '../../state/badge';
 
 /**
@@ -10,19 +11,25 @@ import { useNavBadge } from '../../state/badge';
 export function CommunityTabs({ current }: { current: 'members' | 'inbox' }) {
   const badge = useNavBadge();
   return (
-    <nav aria-label="Community" className={splitTabsClass}>
-      <a href="#/people" aria-current={current === 'members' ? 'page' : undefined} className={splitTabClass(current === 'members')}>
+    <SlideRow as="nav" aria-label="Community" activeKey={current} markClass={splitMarkClass} className={splitTabsClass}>
+      <a
+        href="#/people"
+        aria-current={current === 'members' ? 'page' : undefined}
+        data-slide-active={current === 'members' ? 'true' : undefined}
+        className={splitTabClass(current === 'members')}
+      >
         Members
       </a>
       <a
         href="#/inbox"
         aria-current={current === 'inbox' ? 'page' : undefined}
+        data-slide-active={current === 'inbox' ? 'true' : undefined}
         aria-label={badge.total > 0 && badge.spoken ? `Inbox, ${badge.spoken}` : 'Inbox'}
         className={splitTabClass(current === 'inbox')}
       >
         Inbox
         {badge.total > 0 && <CountDot n={badge.total} inline />}
       </a>
-    </nav>
+    </SlideRow>
   );
 }
