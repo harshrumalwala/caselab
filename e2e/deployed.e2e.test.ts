@@ -94,6 +94,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
         ['conversation_messages', b.client, { p_conversation: nobody }],
         ['mark_practice_answers_seen', a.client, {}],
         ['delete_my_account', a.client, { p_confirm: 'not the word' }], // refuses, so nothing is deleted
+        ['record_warmup_best', b.client, { p_score: 0, p_streak: 0, p_seconds: 45 }], // refused (45 isn't a round length), so no row is written
         ['respond_practice_request', b.client, { p_id: nobody, p_accept: true, p_reply: '', p_block: false }],
         ['cancel_practice_request', a.client, { p_id: nobody }],
         ['send_message', b.client, { p_conversation: nobody, p_body: 'x' }],
@@ -160,7 +161,19 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
 
       const lower = await warm.record({ score: 1, streak: 0 }); // a worse round can't lower the record
       expect(lower).toEqual(first);
-      expect(await warm.load()).toEqual(first);
+      expect((await warm.loadAll())[60]).toEqual(first);
+
+      // Each round length keeps its own record, and a length that doesn't exist is refused.
+      const thirty = await warm.record({ score: 7, streak: 2 }, 30);
+      const twoMinutes = await warm.record({ score: 9, streak: 3 }, 120);
+      expect(thirty.score).toBeGreaterThanOrEqual(7);
+      expect(twoMinutes.score).toBeGreaterThanOrEqual(9);
+      const all = await warm.loadAll();
+      expect(all[30]).toEqual(thirty);
+      expect(all[120]).toEqual(twoMinutes);
+      expect(all[60]).toEqual(first); // the other lengths didn't touch it
+      expect((await a.client.rpc('record_warmup_best', { p_score: 1, p_streak: 1, p_seconds: 45 })).error).not.toBeNull();
+      expect((await a.client.rpc('record_warmup_best', { p_score: 1, p_streak: 1 })).error).toBeNull(); // the old two-argument call still works
 
       // Another member reads only their own row, never A's.
       const seen = await b.client.from('warmup_best').select('user_id');
@@ -171,7 +184,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
       expect((await a.client.from('warmup_best').update({ best_score: 100000 }).eq('user_id', a.userId)).error).not.toBeNull();
       expect((await a.client.from('warmup_best').insert({ best_score: 100000 })).error).not.toBeNull();
       expect((await anon.from('warmup_best').select('*')).error).not.toBeNull();
-      expect(await warm.load()).toEqual(first);
+      expect((await warm.loadAll())[60]).toEqual(first);
     });
   });
 

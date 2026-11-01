@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { mergeBest, parseBest, type Best } from '../../domain/warmup';
+import { hasAnyBest, mergeBests, NO_BESTS, parseBests, serializeBests, type Best, type Bests, type RoundLength } from '../../domain/warmup';
 import { useWarmupSync } from '../../state/warmupSync';
 import { WARMUP_KEY, warmupKeyFor } from '../../state/storageKeys';
 
-function read(key: string): Best {
+function read(key: string): Bests {
   try {
-    return parseBest(window.localStorage.getItem(key));
+    return parseBests(window.localStorage.getItem(key));
   } catch {
-    return parseBest(null); // storage blocked (private browsing, policy): play without a local copy
+    return NO_BESTS; // storage blocked (private browsing, policy): play without a local copy
   }
 }
 
-function write(key: string, best: Best) {
+function write(key: string, bests: Bests) {
   try {
-    window.localStorage.setItem(key, JSON.stringify(best));
+    window.localStorage.setItem(key, serializeBests(bests));
   } catch {
     /* the local copy just won't survive a reload */
   }
@@ -27,34 +27,33 @@ function forget(key: string) {
   }
 }
 
-const isSomething = (b: Best) => b.score > 0 || b.streak > 0;
-const sameBest = (a: Best, b: Best) => a.score === b.score && a.streak === b.streak;
+const same = (a: Bests, b: Bests) => ([30, 60, 120] as const).every((n) => a[n].score === b[n].score && a[n].streak === b[n].streak);
 
 /**
- * The best Warm-up score and streak.
+ * The best Warm-up score and streak for each round length (30, 60 and 120 seconds, never compared with one another).
  *
- * Signed in, the record lives with the account (so it follows you to any device) and this browser keeps a copy for when
- * you are offline: on load the two are merged (the better of each), and anything the account is missing is sent up.
- * Without an account (demo mode) it stays in this browser only. Either way it is private: never shown to other members.
+ * Signed in, the records live with the account (so they follow you to any device) and this browser keeps a copy for when you are
+ * offline: on load the two are merged (the better of each, length by length), and anything the account is missing is sent up.
+ * Without an account (demo mode) they stay in this browser only. Either way they are private: never shown to other members.
  */
-export function useBest(): [Best, (next: Best) => void] {
+export function useBests(): [Bests, (seconds: RoundLength, next: Best) => void] {
   const sync = useWarmupSync();
   const repository = sync?.repository;
   const key = sync ? warmupKeyFor(sync.userId) : WARMUP_KEY;
 
-  const [best, setBest] = useState<Best>(() => {
+  const [bests, setBests] = useState<Bests>(() => {
     const own = read(key);
     // Records from before they moved to the account were saved under the plain key: the first member to sign in claims them.
-    return sync ? mergeBest(own, read(WARMUP_KEY)) : own;
+    return sync ? mergeBests(own, read(WARMUP_KEY)) : own;
   });
-  const latest = useRef(best);
+  const latest = useRef(bests);
 
   const adopt = useCallback(
-    (incoming: Best) => {
-      const merged = mergeBest(latest.current, incoming);
+    (incoming: Bests) => {
+      const merged = mergeBests(latest.current, incoming);
       latest.current = merged;
-      if (isSomething(merged)) write(key, merged);
-      setBest((current) => (sameBest(current, merged) ? current : merged));
+      if (hasAnyBest(merged)) write(key, merged);
+      setBests((current) => (same(current, merged) ? current : merged));
       return merged;
     },
     [key],
@@ -66,10 +65,14 @@ export function useBest(): [Best, (next: Best) => void] {
     let live = true;
     void (async () => {
       try {
-        const saved = await repository.load();
+        const saved = await repository.loadAll();
         if (!live) return;
         const merged = adopt(saved);
-        if (merged.score > saved.score || merged.streak > saved.streak) adopt(await repository.record(merged));
+        for (const seconds of [30, 60, 120] as const) {
+          if (merged[seconds].score > saved[seconds].score || merged[seconds].streak > saved[seconds].streak) {
+            adopt({ ...NO_BESTS, [seconds]: await repository.record(merged[seconds], seconds) });
+          }
+        }
         forget(WARMUP_KEY); // the account has it now, so the next member to sign in here doesn't inherit it
       } catch {
         /* offline or a hiccup: the local copy is kept and is sent up next time the screen opens */
@@ -81,15 +84,18 @@ export function useBest(): [Best, (next: Best) => void] {
   }, [repository, adopt]);
 
   const save = useCallback(
-    (next: Best) => {
-      const merged = adopt(next);
+    (seconds: RoundLength, next: Best) => {
+      const merged = adopt({ ...NO_BESTS, [seconds]: next });
       if (!repository) return;
-      repository.record(merged).then(adopt, () => {
-        /* kept on this device; sent up next time the screen opens */
-      });
+      repository.record(merged[seconds], seconds).then(
+        (confirmed) => adopt({ ...NO_BESTS, [seconds]: confirmed }),
+        () => {
+          /* kept on this device; sent up next time the screen opens */
+        },
+      );
     },
     [repository, adopt],
   );
 
-  return [best, save];
+  return [bests, save];
 }

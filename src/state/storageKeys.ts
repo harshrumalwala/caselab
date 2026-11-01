@@ -7,6 +7,8 @@ export const THEME_KEY = 'caselab:v1:theme';
 // copy lives under a key with their id as an offline cache.
 export const WARMUP_KEY = 'caselab:v1:warmup';
 export const warmupKeyFor = (userId: string) => `${WARMUP_KEY}:${userId}`;
+// The round length (30, 60 or 120 seconds) last picked on the Warm-up start screen, so the next visit starts there.
+export const LENGTH_KEY = 'caselab:v1:warmup-length';
 
 import { tourKey } from '../features/tour/seen';
 
