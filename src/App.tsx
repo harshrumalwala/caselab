@@ -12,6 +12,7 @@ import { Onboarding } from './features/community/Onboarding';
 import { ShortcutsDialog } from './features/help/ShortcutsDialog';
 import { PromotedDialog } from './features/progress/PromotedDialog';
 import { useLevelUp } from './features/progress/useLevelUp';
+import { useShareLevel } from './features/progress/useShareLevel';
 import { progressFor } from './domain/progress';
 import { Tour } from './features/tour/Tour';
 import { hasSeenTour } from './features/tour/seen';
@@ -63,6 +64,8 @@ function Shell() {
   const { enabled: gameOn } = useGame();
   const level = useMemo(() => progressFor(cases).level, [cases]);
   const levelUp = useLevelUp(session.userId, level, status === 'ready' && mode !== 'demo');
+  // Members who chose to show their level get it kept up to date (never from sample data).
+  useShareLevel(level, status === 'ready' && mode !== 'demo');
   // A brand-new account gets the tour once: not people who already have cases, and not after it was finished or skipped.
   const [tourPending] = useState(() => !hasSeenTour(session.userId));
   const [profileFocus, setProfileFocus] = useState<'burned' | null>(null);

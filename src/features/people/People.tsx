@@ -12,12 +12,14 @@ import { useUI } from '../../state/ui';
 import { chipClass } from '../../components/ui/chips';
 import { CommunityTabs } from '../community/CommunityTabs';
 import { PersonProfile } from './PersonProfile';
+import { LevelTag } from '../progress/LevelTag';
 
 const MAX_CHIPS = 3;
 
 /** What a member shares, as a few small coloured chips instead of the same long sentence on every row. */
 function SharedChips({ sharing }: { sharing: SharingPrefs }) {
-  const parts = sharedParts(sharing);
+  // The level has its own badge beside the name, so it isn't repeated as a chip.
+  const parts = sharedParts({ ...sharing, level: false });
   if (parts.length === 0) return <span className="mt-1 block text-xs italic text-muted">Keeping it private for now</span>;
   const shown = parts.slice(0, MAX_CHIPS);
   const more = parts.length - shown.length;
@@ -125,7 +127,10 @@ export function Directory({
                       {p.displayName.trim().charAt(0).toUpperCase()}
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate font-semibold text-ink">{p.displayName}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="truncate font-semibold text-ink">{p.displayName}</span>
+                        {!publicView && <LevelTag person={p} className="shrink-0" />}
+                      </span>
                       <span className="block truncate text-xs text-muted">{p.mbaClass || 'Member'}</span>
                       {!publicView && <SharedChips sharing={p.sharing} />}
                     </span>

@@ -14,6 +14,7 @@ export interface SharingPrefs {
   details: boolean; // open everything: scores, feedback, learning notes and other notes on every shared case
   burned: boolean; // also show burned books and cases to visitors without an account (members always see them)
   interviewed: boolean; // show other members the cases I have interviewed (members only, never who or my notes)
+  level: boolean; // show other members my level and job title (members only, nothing else about my progress)
 }
 
 /** A case worked through on its own, and the book it came from (which may be blank). */
@@ -83,6 +84,7 @@ export const NO_SHARING: SharingPrefs = {
   details: false,
   burned: false,
   interviewed: false,
+  level: false,
 };
 
 export interface Profile {
@@ -101,9 +103,14 @@ export interface Profile {
   /** Individual cases they've burned. Not practice cases: kept apart from the case log, so they never count in any total. */
   burnedCases: BurnedCase[];
   sharing: SharingPrefs;
+  /**
+   * The level this member shows other members (1 to 30), only while `sharing.level` is on; otherwise null. It is a badge the app keeps
+   * up to date from their cases, not something they type, so it is not part of what the profile form saves.
+   */
+  level?: number | null;
 }
 
-export type ProfileInput = Omit<Profile, 'userId'>;
+export type ProfileInput = Omit<Profile, 'userId' | 'level'>;
 
 /** One case as another member sees it: exactly the row the database serves, nothing derived from private data. */
 export interface SharedCase {
@@ -195,6 +202,13 @@ export const SHARING_OPTIONS: {
     label: 'Interviewed cases',
     short: 'interviewed cases',
     hint: "Show other members how many cases you've interviewed, with each one's title, book, type and industry, so they know whom to ask. Never who you interviewed or what you told them. Members only, not visitors.",
+    needsCases: false,
+  },
+  {
+    key: 'level',
+    label: 'Level',
+    short: 'level',
+    hint: 'Show other members your level and job title (for example "Associate, level 8") next to your name. Just that: never your XP, cases, scores, medals or stickers. It is a badge, kept up to date from your cases. Members only, not visitors.',
     needsCases: false,
   },
   {

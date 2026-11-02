@@ -34,6 +34,8 @@ export interface CommunityRepository extends CommunityReader {
   getMyProfile(): Promise<Profile | null>;
   /** Create or update your profile and sharing switches. Takes effect for other members immediately. */
   saveProfile(input: ProfileInput): Promise<Profile>;
+  /** Update the level you show other members. Only valid while you share it; the database refuses it otherwise. */
+  saveSharedLevel(level: number): Promise<void>;
 }
 
 // --- row shapes (see supabase/migrations) and their mapping --------------------------------------
@@ -57,6 +59,9 @@ export interface ProfileRow {
   share_details: boolean;
   share_burned: boolean;
   share_interviewed: boolean;
+  share_level: boolean;
+  /** The level shown to other members; null unless share_level is on (a database rule). */
+  level?: number | null;
 }
 
 /** The stored list, read defensively: anything that isn't a {title, book} pair is ignored. */
@@ -79,6 +84,7 @@ export function rowToProfile(r: ProfileRow): Profile {
     publicLinkOnly: r.public_link_only ?? false,
     burnedBooks: r.burned_books ?? [],
     burnedCases: parseBurnedCases(r.burned_cases),
+    level: r.share_level && typeof r.level === 'number' ? r.level : null,
     sharing: {
       cases: r.share_cases,
       overall: r.share_overall,
@@ -90,6 +96,7 @@ export function rowToProfile(r: ProfileRow): Profile {
       details: r.share_details ?? false,
       burned: r.share_burned ?? false,
       interviewed: r.share_interviewed ?? false,
+      level: r.share_level ?? false,
     },
   };
 }
@@ -113,6 +120,10 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
     share_details: input.sharing.details,
     share_burned: input.sharing.burned,
     share_interviewed: input.sharing.interviewed,
+    share_level: input.sharing.level,
+    // Switching it off clears the shown level in the same write (the database insists). While it is on the level is left alone,
+    // because the app keeps it up to date separately.
+    ...(input.sharing.level ? {} : { level: null }),
   };
 }
 
@@ -162,6 +173,7 @@ export function rowToPublicProfile(r: PublicProfileRow): Profile {
       details: r.share_details ?? false,
       burned: r.share_burned ?? false,
       interviewed: false, // members only: never part of what visitors see
+      level: false, // likewise
     },
   };
 }
