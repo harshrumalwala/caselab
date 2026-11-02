@@ -17,6 +17,9 @@ export interface SavedInfo {
   goal?: { goal: number; count: number; hit: boolean; streak: number } | null;
   /** What this case earned toward your level; left out when levels are switched off. */
   xp?: { gained: number; level: number; title: string; toNext: number; leveledUp: boolean; atMax: boolean } | null;
+  /** Weekly quests this case finished, and stickers it won (names); empty when levels are switched off. */
+  quests?: string[];
+  stickers?: string[];
 }
 
 /** One of these under "Case saved", picked by how many cases you now have so it changes as you go. */
@@ -37,7 +40,7 @@ export function SavedPanel({ info, onUseSuggestion }: { info: SavedInfo; onUseSu
   return (
     <div role="status" className="animate-rise">
       {/* A milestone (10th case, first of an industry, every main case type) gets confetti. */}
-      {(info.milestones.length > 0 || info.firstInIndustry || info.goal?.hit || info.xp?.leveledUp) && <Confetti />}
+      {(info.milestones.length > 0 || info.firstInIndustry || info.goal?.hit || info.xp?.leveledUp || (info.stickers?.length ?? 0) > 0) && <Confetti />}
       <div className="flex items-center gap-3">
         <span className="flex size-11 items-center justify-center rounded-full bg-good-soft text-good-text">
           <CheckCircle2 className="size-6" />
@@ -59,6 +62,16 @@ export function SavedPanel({ info, onUseSuggestion }: { info: SavedInfo; onUseSu
             : info.xp.atMax
               ? 'You are at the top of the ladder.'
               : `${info.xp.toNext} to level ${info.xp.level + 1}.`}
+        </p>
+      )}
+      {info.quests && info.quests.length > 0 && (
+        <p className="mt-1.5 text-sm font-semibold text-lilac-ink">
+          {info.quests.length === 1 ? 'Quest finished' : 'Quests finished'}: {info.quests.join('; ')}.
+        </p>
+      )}
+      {info.stickers && info.stickers.length > 0 && (
+        <p className="mt-1.5 text-sm font-semibold text-lilac-ink">
+          {info.stickers.length === 1 ? 'New sticker' : 'New stickers'}: {info.stickers.join(', ')}.
         </p>
       )}
       {info.goal && (

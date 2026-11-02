@@ -1,5 +1,6 @@
 import { MAIN_CASE_TYPES, SKILL_GROUPS, type CaseType } from './constants';
 import { weekStartISO } from './dates';
+import { questTotals } from './quests';
 import { caseSkillValue, canonicalIndustry, mean, sortAsc } from './stats';
 import type { CaseRecord } from './types';
 
@@ -66,6 +67,8 @@ export interface XpBreakdown {
   consistency: number;
   /** From skills that got better. */
   improvement: number;
+  /** From the weekly quests you finished. */
+  quests: number;
 }
 
 function loggingXp(ordered: CaseRecord[]): number {
@@ -134,6 +137,7 @@ export function xpBreakdown(cases: CaseRecord[]): XpBreakdown {
     coverage: coverageXp(ordered),
     consistency: consistencyXp(ordered),
     improvement: improvementXp(ordered),
+    quests: questTotals(cases).xp,
   };
 }
 
@@ -186,7 +190,7 @@ export interface Progress {
 
 export function progressFor(cases: CaseRecord[]): Progress {
   const breakdown = xpBreakdown(cases);
-  const xp = breakdown.logging + breakdown.coverage + breakdown.consistency + breakdown.improvement;
+  const xp = breakdown.logging + breakdown.coverage + breakdown.consistency + breakdown.improvement + breakdown.quests;
   const level = levelForXp(xp);
   const atMax = level >= MAX_LEVEL;
   const start = xpAtLevel(level);

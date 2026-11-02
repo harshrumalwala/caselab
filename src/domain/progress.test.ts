@@ -57,7 +57,7 @@ describe('what one case earns', () => {
 describe('what the log earns together', () => {
   it('earns nothing with no cases', () => {
     expect(progressFor([])).toMatchObject({ xp: 0, level: 1, title: 'Intern', intoLevel: 0, pct: 0 });
-    expect(xpBreakdown([])).toEqual({ logging: 0, coverage: 0, consistency: 0, improvement: 0 });
+    expect(xpBreakdown([])).toEqual({ logging: 0, coverage: 0, consistency: 0, improvement: 0, quests: 0 });
   });
 
   it('pays the first three cases of a day in full and later ones a quarter, so logging a pile at once does not pay', () => {
@@ -189,7 +189,7 @@ describe('what saving a case changed', () => {
     expect(none.to.level).toBe(2);
 
     const a = [full({ date: '2026-09-01' })];
-    const next = xpGained(a, [...a, makeCase({ date: '2026-09-02' })]);
+    const next = xpGained(a, [...a, makeCase({ date: '2026-09-09' })]); // another week, so no quest is finished by it
     expect(next.gained).toBe(20);
     expect(next.leveledUp).toBe(false);
   });

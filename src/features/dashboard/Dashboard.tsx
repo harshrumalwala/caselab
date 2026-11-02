@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { FileSpreadsheet, FlaskConical, Gauge, Layers, Lightbulb, Plus, Upload } from 'lucide-react';
 import { milestones } from '../../domain/milestones';
 import { nextPracticeFocus } from '../../domain/suggestions';
@@ -20,7 +20,10 @@ import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
 import { useGame } from '../../state/game';
 import { LevelChip } from '../progress/LevelChip';
+import { ProgressDialog, type ProgressTab } from '../progress/ProgressDialog';
 import { progressFor } from '../../domain/progress';
+import { questsForWeek } from '../../domain/quests';
+import { startOfWeek, toISODate } from '../../domain/dates';
 import { TodayStrip } from './TodayStrip';
 import { CaseTypeCoverage, IndustryCoverage } from './Coverage';
 import { CoverageMatrix } from './CoverageMatrix';
@@ -56,6 +59,8 @@ export function Dashboard() {
   const total = cases.length;
   const { enabled: gameOn } = useGame();
   const progress = useMemo(() => progressFor(cases), [cases]);
+  const quests = useMemo(() => questsForWeek(cases, toISODate(startOfWeek(now))), [cases, now]);
+  const [progressTab, setProgressTab] = useState<ProgressTab | null>(null);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -63,7 +68,7 @@ export function Dashboard() {
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Dashboard</h1>
-            {total > 0 && gameOn && <LevelChip progress={progress} />}
+            {total > 0 && gameOn && <LevelChip progress={progress} onOpen={() => setProgressTab('level')} />}
           </div>
           <p className="text-sm text-ink-2">
             {total === 0
@@ -133,7 +138,15 @@ export function Dashboard() {
         </section>
       )}
 
-      {total > 0 && <TodayStrip cases={cases} now={now} next={view.suggestions[0]} />}
+      {total > 0 && (
+        <TodayStrip
+          cases={cases}
+          now={now}
+          next={view.suggestions[0]}
+          quests={gameOn ? { done: quests.filter((q) => q.done).length, total: quests.length } : undefined}
+          onQuests={() => setProgressTab('quests')}
+        />
+      )}
 
 
       <Overview stats={view.overview} cases={cases} now={now} />
@@ -170,6 +183,9 @@ export function Dashboard() {
             <Milestones achieved={view.achieved} total={total} />
           </div>
         </>
+      )}
+      {gameOn && progressTab && total > 0 && (
+        <ProgressDialog progress={progress} cases={cases} now={now} tab={progressTab} onTab={setProgressTab} onClose={() => setProgressTab(null)} />
       )}
     </div>
   );
