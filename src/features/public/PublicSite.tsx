@@ -261,17 +261,17 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
 
           <div className="relative mx-auto w-full max-w-xl">
             <HeroVideo className="w-full" />
-            <div className="mt-5 hidden flex-wrap items-center justify-center gap-3 sm:flex">
-              <Sticky tone="teal" tilt={-4}>
-                MECE <Check className="inline size-4" />
-              </Sticky>
-              <Sticky tone="lilac" tilt={3}>
-                Quant 4/5
-              </Sticky>
-              <Sticky tone="coral" tilt={-2}>
-                Next: break-even drills
-              </Sticky>
-            </div>
+            {/* Stickies hang off the video's edges, overlapping it only a little. */}
+            <Sticky tone="teal" tilt={-4} className="absolute -top-6 left-[5%] hidden sm:block">
+              MECE <Check className="inline size-4" />
+            </Sticky>
+            <Sticky tone="lilac" tilt={4} className="absolute -bottom-6 left-[8%] hidden sm:block">
+              Quant 4/5
+            </Sticky>
+            {/* This one sits over the small sparkle in the video's lower right (about 91% across and 82% down), at any size. */}
+            <Sticky tone="coral" tilt={-3} className="absolute bottom-[12%] right-[4%]">
+              Next: break-even drills
+            </Sticky>
           </div>
         </div>
       </section>
