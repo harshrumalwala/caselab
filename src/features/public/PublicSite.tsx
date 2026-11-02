@@ -246,7 +246,7 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
             </h1>
             <p className="mt-5 max-w-md text-lg leading-relaxed text-ink-2">
               Practicing casing for consulting? CaseLab is a simple log of every case you do. See how you&rsquo;re improving, where
-              you&rsquo;re still weak, and what to practice next. <span className="font-semibold">Fewer spreadsheets, more offers.</span>
+              you&rsquo;re still weak, and what to practice next.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <a href="#/signup" className={PRIMARY}>

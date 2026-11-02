@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Flame, Plus, Target } from 'lucide-react';
+import { ArrowRight, Compass, Flame, Plus, Target } from 'lucide-react';
 import { describeError } from '../../data/errors';
 import { goalProgress, GOAL_CHOICES, type GoalProgress } from '../../domain/goal';
 import { needsWarmup, type Suggestion } from '../../domain/suggestions';
@@ -98,7 +98,20 @@ function GoalPicker({ current, onDone }: { current: number | null; onDone: () =>
   );
 }
 
-export function TodayStrip({ cases, now, next }: { cases: CaseRecord[]; now: Date; next?: Suggestion }) {
+export function TodayStrip({
+  cases,
+  now,
+  next,
+  quests,
+  onQuests,
+}: {
+  cases: CaseRecord[];
+  now: Date;
+  next?: Suggestion;
+  /** This week's quests, when levels are on. */
+  quests?: { done: number; total: number };
+  onQuests?: () => void;
+}) {
   const { openLogCase } = useUI();
   const { goal, ready } = useGoal();
   const [picking, setPicking] = useState(false);
@@ -130,9 +143,18 @@ export function TodayStrip({ cases, now, next }: { cases: CaseRecord[]; now: Dat
               </span>
             </p>
           )}
-          {((next && needsWarmup(next)) || (ready && !picking)) && (
+          {((next && needsWarmup(next)) || (ready && !picking) || quests) && (
             <div className="mt-3 flex flex-wrap items-center gap-2.5">
               {next && needsWarmup(next) && <WarmupLink />}
+              {quests && onQuests && (
+                <button
+                  type="button"
+                  onClick={onQuests}
+                  className="inline-flex items-center gap-1.5 rounded-full border-2 border-ink/80 bg-surface px-3 py-1 text-xs font-bold text-ink shadow-[1px_2px_0_0_rgb(28_26_24/0.85)] transition hover:bg-lilac-soft"
+                >
+                  <Compass className="size-3.5" aria-hidden /> Quests {quests.done}/{quests.total}
+                </button>
+              )}
               {ready && !picking && (
                 <button
                   type="button"

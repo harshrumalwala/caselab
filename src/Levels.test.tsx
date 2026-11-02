@@ -52,7 +52,7 @@ describe('the level chip', () => {
     const p = progressFor(cases);
     const user = await open(await envWith(cases));
     await user.click(await chip());
-    const dialog = within(await screen.findByRole('dialog', { name: 'Your level' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Your progress' }));
     expect(dialog.getByRole('heading', { name: `Level ${p.level}: ${p.title}` })).toBeInTheDocument();
     expect(dialog.getByText(new RegExp(`${p.toNext.toLocaleString('en-US')} to level ${p.level + 1}`))).toBeInTheDocument();
     expect(dialog.getByText(/Next title:/)).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe('the level chip', () => {
     expect(dialog.getByText('Logging cases').nextElementSibling).toHaveTextContent(p.breakdown.logging.toLocaleString('en-US'));
     expect(dialog.getByText(/Burned and interviewed cases earn nothing/)).toBeInTheDocument();
     await user.keyboard('{Escape}');
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Your level' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Your progress' })).not.toBeInTheDocument());
   });
 
   it('is not shown until there is a first case to earn from', async () => {
@@ -101,6 +101,80 @@ describe('the level chip', () => {
     await env.interviewed.add({ date: day(2), title: 'Interviewed one', source: '', caseType: 'Profitability', industry: 'Insurance', partner: '', feedback: 'x', learned: 'y' });
     await open(env);
     expect(await chip()).toHaveTextContent(new RegExp(`${before.toLocaleString('en-US')} XP`));
+  });
+});
+
+describe('quests, medals and the sticker book', () => {
+  const openProgress = async (user: ReturnType<typeof userEvent.setup>, tab: RegExp) => {
+    await user.click(await chip());
+    const dialog = await screen.findByRole('dialog', { name: 'Your progress' });
+    await user.click(within(dialog).getByRole('tab', { name: tab }));
+    return within(dialog);
+  };
+
+  it('opens on the Level tab with Level, Quests, Medals and Stickers to switch between', async () => {
+    const user = await open(await envWith(manyCases(4)));
+    await user.click(await chip());
+    const dialog = within(await screen.findByRole('dialog', { name: 'Your progress' }));
+    const tabs = dialog.getAllByRole('tab').map((t) => t.textContent);
+    expect(tabs[0]).toBe('Level');
+    expect(tabs[1]).toMatch(/^Quests \d\/3$/);
+    expect(tabs[2]).toMatch(/^Medals \d+$/);
+    expect(tabs[3]).toMatch(/^Stickers \d+$/);
+    expect(dialog.getByRole('tab', { name: 'Level' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('shows the three quests of the week with how far each one is, and what they are worth', async () => {
+    const user = await open(await envWith(manyCases(4)));
+    const dialog = await openProgress(user, /^Quests/);
+    expect(dialog.getByRole('list', { name: "This week's quests" }).querySelectorAll('li')).toHaveLength(3);
+    expect(dialog.getByText(/worth 5 XP/)).toBeInTheDocument();
+    expect(dialog.getByText(/\d of 3 done this week/)).toBeInTheDocument();
+  });
+
+  it('is reachable from the Quests pill on the Your week card, which opens straight to the quests', async () => {
+    const user = await open(await envWith(manyCases(4)));
+    await user.click(await screen.findByRole('button', { name: /^Quests \d\/3$/ }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Your progress' }));
+    expect(dialog.getByRole('tab', { name: /^Quests/ })).toHaveAttribute('aria-selected', 'true');
+    expect(dialog.getByRole('list', { name: "This week's quests" })).toBeInTheDocument();
+  });
+
+  it('shows a medal for each skill: five ratings in a row at 4.6 or better is gold, and the others say how many ratings they need', async () => {
+    const gold = Array.from({ length: 5 }, (_, i) => makeCase({ date: day(1 + i), skills: { framework: 5 } }));
+    const user = await open(await envWith(gold));
+    const dialog = await openProgress(user, /^Medals/);
+    const rows = dialog.getByRole('list', { name: 'Skill medals' }).querySelectorAll('li');
+    expect(rows).toHaveLength(7);
+    const framework = [...rows].find((r) => r.textContent!.includes('Framework'))!;
+    expect(framework).toHaveTextContent('Gold');
+    expect(framework).toHaveTextContent('The top medal');
+    const quant = [...rows].find((r) => r.textContent!.includes('Quant'))!;
+    expect(quant).toHaveTextContent('0 of 5 ratings so far');
+    expect(dialog.getByText('1 of 7 skills with a medal')).toBeInTheDocument();
+  });
+
+  it('keeps a sticker book, the earned ones marked and the rest locked with how to get them', async () => {
+    const user = await open(await envWith(manyCases(12)));
+    const dialog = await openProgress(user, /^Stickers/);
+    const book = dialog.getByRole('list', { name: 'Sticker book' });
+    expect(within(book).getByRole('listitem', { name: 'First case: earned' })).toBeInTheDocument();
+    expect(within(book).getByRole('listitem', { name: 'Double digits: earned' })).toBeInTheDocument();
+    expect(within(book).getByRole('listitem', { name: /^Half century: locked\. Log 50 cases$/ })).toBeInTheDocument();
+    expect(dialog.getByText(/^\d+ of \d+ stickers$/)).toBeInTheDocument();
+  });
+
+  it('counts finished quests in the XP breakdown', async () => {
+    const user = await open(await envWith(manyCases(4)));
+    await user.click(await chip());
+    const dialog = within(await screen.findByRole('dialog', { name: 'Your progress' }));
+    expect(dialog.getByText('Weekly quests').nextElementSibling).toHaveTextContent(String(progressFor(manyCases(4)).breakdown.quests));
+  });
+
+  it('hides the Quests pill along with everything else when levels are switched off', async () => {
+    window.localStorage.setItem(GAME_KEY, 'off');
+    await open(await envWith(manyCases(4)));
+    expect(screen.queryByRole('button', { name: /^Quests \d\/3$/ })).not.toBeInTheDocument();
   });
 });
 
@@ -196,9 +270,16 @@ describe('XP when you save a case', () => {
   it('says how much the case earned and how far to the next level', async () => {
     const user = await open(createFakeEnv());
     const dialog = await logCase(user, true);
-    // 20 for the case, 5 for the rating, 30 for a first case type and 20 for a first industry.
-    expect(await within(dialog).findByText(/\+75 XP\./)).toBeInTheDocument();
+    // 20 for the case, 5 for the rating, 30 for a first case type and 20 for a first industry: 75, plus 5 for each weekly quest it also finished.
+    const earned = Number((await within(dialog).findByText(/\+\d+ XP\./)).textContent!.match(/\+(\d+) XP/)![1]);
+    expect([75, 80, 85]).toContain(earned);
     expect(within(dialog).getByText(/Level up: you are now level 2, Intern\./)).toBeInTheDocument();
+  });
+
+  it('announces the stickers a saved case won', async () => {
+    const user = await open(createFakeEnv());
+    const dialog = await logCase(user, true);
+    expect(await within(dialog).findByText(/New sticker: First case/)).toBeInTheDocument();
   });
 
   it('shows the distance to the next level when it did not level you up', async () => {

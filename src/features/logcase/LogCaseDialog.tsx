@@ -33,6 +33,8 @@ import { useCommunity, useMyProfile } from '../../state/CommunityProvider';
 import { DRAFT_KEY, useData } from '../../state/DataProvider';
 import { useMemberSuggestions } from '../community/useMemberSuggestions';
 import { xpGained } from '../../domain/progress';
+import { questsFinishedBy } from '../../domain/quests';
+import { newStickers } from '../../domain/stickers';
 import { useGame } from '../../state/game';
 import { useGoal } from '../../state/GoalProvider';
 import { useToast } from '../../state/ToastProvider';
@@ -276,6 +278,8 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
         xp: gameOn
           ? (({ gained, to, leveledUp }) => ({ gained, level: to.level, title: to.title, toNext: to.toNext, leveledUp, atMax: to.atMax }))(xpGained(before, after))
           : null,
+        quests: gameOn ? questsFinishedBy(before, after, record.date).map((q) => q.title) : [],
+        stickers: gameOn ? newStickers(before, after).map((st) => st.name) : [],
         goal: goal ? (({ count, met, streak }) => ({ goal, count, hit: met && count === goal, streak }))(goalProgress(after, new Date(), goal)) : null,
       });
     } catch (err) {
