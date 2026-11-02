@@ -540,6 +540,8 @@ src/
                import, help (keyboard shortcuts) and tour (the first-login walkthrough)
   components/  Shared UI primitives, layout, chart colors
   test/        Test setup, builders, fixtures, fake Supabase / fake backend
+public/
+  hero/        The looping illustration on the front page (loop.mp4, about 1 MB, no sound) and its still picture (poster.jpg)
 supabase/
   migrations/  The database schema, versioned with the code
   config.toml  Supabase CLI configuration
@@ -549,6 +551,12 @@ Your own data goes through the small `CaseLabRepository` interface in `src/data/
 data, `createMemoryRepository` for demo mode and tests), the community through `CommunityRepository`
 (`src/data/community.ts`), and sign-in through `AuthApi` (`src/data/auth.ts`). The domain logic (including case matching in
 `src/domain/pairing.ts`) and the screens don't know Supabase exists.
+
+The front page shows a short looping illustration of students casing (`src/components/ui/HeroVideo.tsx`). It is decorative:
+silent, no controls and hidden from screen readers. People who prefer reduced motion or are saving data, and anyone whose browser
+can't load it, see the still picture instead, and it pauses while scrolled out of view. To change it, replace the two files in
+`public/hero/`: keep the video small (a 9-second, 960-pixel-wide H.264 loop with the audio removed is about 1 MB) and make its
+last frame flow into its first so the loop doesn't jump.
 
 There is no group administration, group chat or social feed: members, profiles, sharing, practice requests, and private conversations between two members who agreed to case are all there is.
 
