@@ -14,7 +14,7 @@ export interface SharingPrefs {
   details: boolean; // open everything: scores, feedback, learning notes and other notes on every shared case
   burned: boolean; // also show burned books and cases to visitors without an account (members always see them)
   interviewed: boolean; // show other members the cases I have interviewed (members only, never who or my notes)
-  level: boolean; // show other members my level and job title (members only, nothing else about my progress)
+  level: boolean; // show other members my level and job title (members only, nothing else about my progress). On by default for new profiles
 }
 
 /** A case worked through on its own, and the book it came from (which may be blank). */

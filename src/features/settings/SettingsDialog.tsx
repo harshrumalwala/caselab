@@ -168,7 +168,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 <p className="text-sm font-medium text-ink">Show levels and XP</p>
                 <p className="text-xs text-muted">
                   Earn XP for logging well and getting better, and level up from Intern to Partner. Turn it off to keep CaseLab plain: no levels, no XP, no celebrations. This is a
-                  setting of this browser. Showing your level to other members is a separate switch in Profile and privacy.
+                  setting of this browser. Showing your level to other members is a separate switch in Profile and privacy (on by default).
                 </p>
               </div>
               <Switch label="Show levels and XP" checked={game.enabled} onChange={game.setEnabled} />

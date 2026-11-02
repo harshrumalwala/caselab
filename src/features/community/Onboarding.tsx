@@ -11,7 +11,7 @@ import { SharingSwitches } from './SharingSwitches';
 
 const CLASS_SUGGESTIONS = ['Class of 2026', 'Class of 2027', 'Class of 2028', 'Class of 2029', 'Evening MBA', 'Weekend MBA', 'Executive MBA'];
 
-/** First sign-in: a short profile and your sharing choices. Everything starts private. */
+/** First sign-in: a short profile and your sharing choices. Everything starts private except your level, which starts on. */
 export function Onboarding() {
   const { saveProfile } = useCommunity();
   const { signOut } = useAuth();
@@ -19,7 +19,7 @@ export function Onboarding() {
   const [mbaClass, setMbaClass] = useState('');
   const [listed, setListed] = useState(true);
   const [publicProfile, setPublicProfile] = useState(false);
-  const [sharing, setSharing] = useState<SharingPrefs>(NO_SHARING);
+  const [sharing, setSharing] = useState<SharingPrefs>({ ...NO_SHARING, level: true });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,7 +112,7 @@ export function Onboarding() {
           <div>
             <h2 className="mb-1 text-sm font-semibold text-ink">What would you like to share?</h2>
             <p className="mb-3 text-xs text-muted">
-              Only signed-in, verified members can see what you share. Everything is off by default, you can change any of
+              Only signed-in, verified members can see what you share. Everything is off by default except your level (a small badge with your job title, nothing more), you can change any of
               it at any time, and you can keep individual cases private.
             </p>
             <SharingSwitches value={sharing} onChange={setSharing} disabled={!listed} />

@@ -90,7 +90,7 @@ describe('creating an account', () => {
     expect(env.community.profiles.find((p) => p.displayName === 'Nina Newcomer')).toMatchObject({
       mbaClass: 'Class of 2028',
       listed: true,
-      sharing: NO_SHARING,
+      sharing: { ...NO_SHARING, level: true }, // everything private except the level badge, which starts on
     });
   });
 
@@ -132,13 +132,14 @@ describe('creating an account', () => {
 });
 
 describe('profile setup', () => {
-  it('requires a name, and keeps every sharing switch off until chosen', async () => {
+  it('requires a name, and keeps every sharing switch off until chosen, except your level, which starts on', async () => {
     const env = createFakeEnv({ profile: null });
     const { user } = await openApp(env);
     await screen.findByRole('heading', { name: 'Set up your profile' });
     for (const label of ['Case history', 'Overall scores', 'Skill scores', 'Written feedback', 'Improvement focus', 'Learning notes', 'Who cased me']) {
       expect(screen.getByRole('switch', { name: label })).toHaveAttribute('aria-checked', 'false');
     }
+    expect(screen.getByRole('switch', { name: 'Level' })).toHaveAttribute('aria-checked', 'true');
     await user.click(screen.getByRole('button', { name: 'Start casing' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Enter the name');
     expect(env.community.profiles).toEqual([]);
@@ -152,7 +153,7 @@ describe('profile setup', () => {
     await user.click(screen.getByRole('switch', { name: 'Overall scores' }));
     await user.click(screen.getByRole('button', { name: 'Start casing' }));
     await screen.findByRole('heading', { name: 'Dashboard' });
-    expect(env.community.profiles[0].sharing).toEqual({ ...NO_SHARING, cases: true, overall: true });
+    expect(env.community.profiles[0].sharing).toEqual({ ...NO_SHARING, cases: true, overall: true, level: true });
   });
 
   it('greys out score and feedback switches until case history is on', async () => {
