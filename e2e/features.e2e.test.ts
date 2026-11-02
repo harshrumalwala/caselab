@@ -220,4 +220,48 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: weekly goal, interviewed cases 
       expect(await visitors.getInterviewed()).toEqual([]);
     });
   });
+
+  describe('showing your level to other members', () => {
+    const levelSeenByB = async () => (await communityB.getPerson(a.userId))?.level ?? null;
+
+    it('shows nothing by default, shows the level once switched on, and clears it the moment the switch goes off', async () => {
+      await communityA.saveProfile(profile({ listed: true }));
+      expect(await levelSeenByB()).toBeNull();
+
+      await communityA.saveProfile(profile({ listed: true, sharing: { ...NO_SHARING, level: true } }));
+      await communityA.saveSharedLevel(7);
+      expect(await levelSeenByB()).toBe(7);
+      expect((await communityB.getPerson(a.userId))?.sharing.level).toBe(true);
+
+      // Saving the rest of the profile again keeps the level while it stays on.
+      await communityA.saveProfile(profile({ listed: true, displayName: 'E2E Owner A', sharing: { ...NO_SHARING, level: true } }));
+      expect(await levelSeenByB()).toBe(7);
+
+      // Off: gone at once, in the same write, and the database itself would refuse a level without the switch.
+      await communityA.saveProfile(profile({ listed: true, sharing: NO_SHARING }));
+      expect(await levelSeenByB()).toBeNull();
+      await expect(communityA.saveSharedLevel(7)).rejects.toBeTruthy();
+      expect(await levelSeenByB()).toBeNull();
+    });
+
+    it('only accepts a level from 1 to 30, and only you can change yours', async () => {
+      await communityA.saveProfile(profile({ listed: true, sharing: { ...NO_SHARING, level: true } }));
+      await expect(communityA.saveSharedLevel(0)).rejects.toBeTruthy();
+      await expect(communityA.saveSharedLevel(31)).rejects.toBeTruthy();
+      await communityA.saveSharedLevel(12);
+
+      await b.client.from('profiles').update({ level: 30 }).eq('user_id', a.userId); // matches no row it may touch
+      expect(await levelSeenByB()).toBe(12);
+    });
+
+    it('never reaches visitors without an account', async () => {
+      await communityA.saveProfile(profile({ listed: true, publicProfile: true, sharing: { ...NO_SHARING, cases: true, level: true } }));
+      await communityA.saveSharedLevel(9);
+      const publicPerson = await visitors.getPerson(a.userId);
+      expect(publicPerson).not.toBeNull();
+      expect(publicPerson?.level ?? null).toBeNull();
+      expect(publicPerson?.sharing.level).toBe(false);
+      expect((await anon.from('profiles').select('level')).error).not.toBeNull();
+    });
+  });
 });

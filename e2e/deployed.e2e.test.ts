@@ -60,7 +60,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
     it('finds the tables and columns it is about to check', () => {
       expect(migrationTables().length).toBeGreaterThanOrEqual(15);
       expect(migrationTables()).toEqual(expect.arrayContaining(['cases', 'profiles', 'weekly_goal', 'interviewed_cases', 'notification_settings']));
-      expect(migrationColumns()).toEqual(expect.arrayContaining([['profiles', 'share_interviewed'], ['practice_requests', 'emailed_at']]));
+      expect(migrationColumns()).toEqual(expect.arrayContaining([['profiles', 'share_interviewed'], ['profiles', 'share_level'], ['profiles', 'level'], ['practice_requests', 'emailed_at']]));
     });
 
     it('has every table the migrations create', async () => {
