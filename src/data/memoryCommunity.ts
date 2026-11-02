@@ -7,7 +7,9 @@ type Method = keyof CommunityRepository;
 /** A member as visitors know them: written feedback and notes only count as shared if they opened everything. */
 const asVisitorsSee = (p: Profile): Profile => ({
   ...p,
-  sharing: { ...p.sharing, feedback: p.sharing.details, notes: p.sharing.details },
+  // The level is for members only.
+  level: null,
+  sharing: { ...p.sharing, feedback: p.sharing.details, notes: p.sharing.details, level: false },
   // Burned books and cases only reach visitors when the member switched that on.
   burnedBooks: p.sharing.burned ? p.burnedBooks : [],
   burnedCases: p.sharing.burned ? p.burnedCases : [],
@@ -108,11 +110,19 @@ export function createMemoryCommunity(opts: {
     async saveProfile(input: ProfileInput) {
       enter('saveProfile');
       const publicProfile = input.listed && input.publicProfile;
-      const saved: Profile = { userId: opts.me, ...input, publicProfile, publicLinkOnly: publicProfile && input.publicLinkOnly };
       const i = profiles.findIndex((p) => p.userId === opts.me);
+      // As in the database: no level once sharing is off, and an existing one is kept while it stays on.
+      const level = input.sharing.level ? (profiles[i]?.level ?? null) : null;
+      const saved: Profile = { userId: opts.me, ...input, level, publicProfile, publicLinkOnly: publicProfile && input.publicLinkOnly };
       if (i === -1) profiles.push(saved);
       else profiles[i] = saved;
       return saved;
+    },
+    async saveSharedLevel(level: number) {
+      enter('saveSharedLevel');
+      const i = profiles.findIndex((p) => p.userId === opts.me);
+      if (i === -1 || !profiles[i].sharing.level) throw { message: 'new row for relation "profiles" violates check constraint "profiles_level_needs_sharing"' };
+      profiles[i] = { ...profiles[i], level };
     },
     async searchPeople(query: string) {
       enter('searchPeople');

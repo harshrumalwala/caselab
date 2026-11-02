@@ -14,6 +14,8 @@ interface CommunityContextValue {
   reload(): Promise<void>;
   /** Saves, then updates the screen. Rejects with a DataError whose message is fit to show. */
   saveProfile(input: ProfileInput): Promise<Profile>;
+  /** Updates the level you show other members (only while you share it). */
+  setSharedLevel(level: number): Promise<void>;
 }
 
 const CommunityContext = createContext<CommunityContextValue | null>(null);
@@ -52,9 +54,17 @@ export function CommunityProvider({ community, children }: { community: Communit
     [community],
   );
 
+  const setSharedLevel = useCallback(
+    async (level: number) => {
+      await community.saveSharedLevel(level);
+      setProfile((p) => (p && p.sharing.level ? { ...p, level } : p));
+    },
+    [community],
+  );
+
   const value = useMemo(
-    () => ({ community, status, loadError, profile, reload: load, saveProfile }),
-    [community, status, loadError, profile, load, saveProfile],
+    () => ({ community, status, loadError, profile, reload: load, saveProfile, setSharedLevel }),
+    [community, status, loadError, profile, load, saveProfile, setSharedLevel],
   );
   return <CommunityContext.Provider value={value}>{children}</CommunityContext.Provider>;
 }

@@ -24,6 +24,7 @@ import { AskDialog } from '../requests/AskDialog';
 import { CaseFilterBar } from '../community/CaseFilterBar';
 import { SharedCaseRow } from '../community/SharedCaseRow';
 import { FindCase } from './FindCase';
+import { LevelTag } from '../progress/LevelTag';
 
 type Tab = 'cases' | 'find';
 
@@ -223,6 +224,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
           <div className="min-w-0">
             <h1 className="text-3xl font-extrabold tracking-tight text-ink">{person.displayName}</h1>
             <p className="text-sm text-muted">{person.mbaClass || 'MBA class not shown'}</p>
+            {!visitor && <LevelTag person={person} className="mt-1.5" />}
             <p className="mt-2 text-sm text-ink-2">
               Shares <strong className="font-semibold text-ink">{summary}</strong>
               {shared.length > 0 && <> · {shared.length} case{shared.length === 1 ? '' : 's'} visible</>}

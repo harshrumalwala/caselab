@@ -136,6 +136,11 @@ export class SupabaseCommunity implements CommunityRepository {
     return rowToProfile(created.data as ProfileRow);
   }
 
+  async saveSharedLevel(level: number): Promise<void> {
+    const { error } = await this.client.from('profiles').update({ level }).eq('user_id', this.userId);
+    if (error) throw error;
+  }
+
   async searchPeople(query: string): Promise<Profile[]> {
     let q = this.client.from('profiles').select('*').eq('listed', true).neq('user_id', this.userId);
     const text = query.trim();
