@@ -18,6 +18,9 @@ import { QuipCard } from '../../components/ui/Quip';
 import { useData } from '../../state/DataProvider';
 import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
+import { useGame } from '../../state/game';
+import { LevelChip } from '../progress/LevelChip';
+import { progressFor } from '../../domain/progress';
 import { TodayStrip } from './TodayStrip';
 import { CaseTypeCoverage, IndustryCoverage } from './Coverage';
 import { CoverageMatrix } from './CoverageMatrix';
@@ -51,12 +54,17 @@ export function Dashboard() {
   );
 
   const total = cases.length;
+  const { enabled: gameOn } = useGame();
+  const progress = useMemo(() => progressFor(cases), [cases]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Dashboard</h1>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Dashboard</h1>
+            {total > 0 && gameOn && <LevelChip progress={progress} />}
+          </div>
           <p className="text-sm text-ink-2">
             {total === 0
               ? 'Your prep command center. It is a little empty in here, which is fine. Log a case and it fills up.'
@@ -126,6 +134,7 @@ export function Dashboard() {
       )}
 
       {total > 0 && <TodayStrip cases={cases} now={now} next={view.suggestions[0]} />}
+
 
       <Overview stats={view.overview} cases={cases} now={now} />
 

@@ -7,6 +7,10 @@ export const THEME_KEY = 'caselab:v1:theme';
 // copy lives under a key with their id as an offline cache.
 export const WARMUP_KEY = 'caselab:v1:warmup';
 export const warmupKeyFor = (userId: string) => `${WARMUP_KEY}:${userId}`;
+// Whether levels, XP and rewards are shown ('off' hides them; anything else, or nothing, shows them).
+export const GAME_KEY = 'caselab:v1:game';
+// The highest level this member has reached in this browser, so a level is celebrated once.
+export const levelKey = (userId: string) => `caselab:v1:level:${userId}`;
 // The round length (30, 60 or 120 seconds) last picked on the Warm-up start screen, so the next visit starts there.
 export const LENGTH_KEY = 'caselab:v1:warmup-length';
 
