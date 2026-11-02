@@ -10,6 +10,9 @@ import { CaseDetail } from './features/caselog/CaseDetail';
 import { CaseLog } from './features/caselog/CaseLog';
 import { Onboarding } from './features/community/Onboarding';
 import { ShortcutsDialog } from './features/help/ShortcutsDialog';
+import { PromotedDialog } from './features/progress/PromotedDialog';
+import { useLevelUp } from './features/progress/useLevelUp';
+import { progressFor } from './domain/progress';
 import { Tour } from './features/tour/Tour';
 import { hasSeenTour } from './features/tour/seen';
 import { GO_KEYS, GO_WINDOW_MS, isTyping } from './features/help/shortcuts';
@@ -30,6 +33,7 @@ import { takeImportIntent } from './state/afterSignup';
 import { useRoute } from './state/route';
 import { MessagesProvider } from './state/MessagesProvider';
 import { PracticeProvider } from './state/PracticeProvider';
+import { GameProvider, useGame } from './state/game';
 import { ThemeProvider } from './state/theme';
 import { GoalProvider } from './state/GoalProvider';
 import { InterviewedProvider } from './state/InterviewedProvider';
@@ -55,6 +59,10 @@ function Shell() {
   const [importOpen, setImportOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // Levels: notice a new highest level and celebrate it once, when nothing else is open (demo mode never counts, it is sample data).
+  const { enabled: gameOn } = useGame();
+  const level = useMemo(() => progressFor(cases).level, [cases]);
+  const levelUp = useLevelUp(session.userId, level, status === 'ready' && mode !== 'demo');
   // A brand-new account gets the tour once: not people who already have cases, and not after it was finished or skipped.
   const [tourPending] = useState(() => !hasSeenTour(session.userId));
   const [profileFocus, setProfileFocus] = useState<'burned' | null>(null);
@@ -198,6 +206,9 @@ function Shell() {
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {gameOn && levelUp.promotion && !logState && !viewId && !settingsOpen && !importOpen && !profileOpen && !shortcutsOpen && (
+        <PromotedDialog from={levelUp.promotion.from} to={levelUp.promotion.to} onClose={levelUp.dismiss} />
+      )}
       <Tour
         userId={session.userId}
         active={
@@ -296,15 +307,17 @@ export function App({ backend }: { backend?: BackendResult } = {}) {
 
   return (
     <ThemeProvider>
-      <ToastProvider>
-        {'problem' in resolved ? (
-          <ConfigProblem problem={resolved.problem} />
-        ) : (
-          <AuthProvider auth={resolved.backend.auth} linkProblem={resolved.backend.linkProblem}>
-            <AuthGate backend={resolved.backend} />
-          </AuthProvider>
-        )}
-      </ToastProvider>
+      <GameProvider>
+        <ToastProvider>
+          {'problem' in resolved ? (
+            <ConfigProblem problem={resolved.problem} />
+          ) : (
+            <AuthProvider auth={resolved.backend.auth} linkProblem={resolved.backend.linkProblem}>
+              <AuthGate backend={resolved.backend} />
+            </AuthProvider>
+          )}
+        </ToastProvider>
+      </GameProvider>
     </ThemeProvider>
   );
 }

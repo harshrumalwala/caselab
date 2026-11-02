@@ -10,11 +10,14 @@ import {
   MonitorSmartphone,
   Table2,
   Trash2,
+  Trophy,
   Upload,
   UserX,
 } from 'lucide-react';
 import { backupToJSON, ImportError, parseBackup, type ParsedBackup } from '../../data/backup';
 import { casesToCSV } from '../../data/csv';
+import { Switch } from '../../components/ui/Switch';
+import { useGame } from '../../state/game';
 import { useInstall } from '../../state/install';
 import { useExportExcel } from '../caselog/useExportExcel';
 import { backupFilename, downloadText } from '../../data/download';
@@ -47,6 +50,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const toast = useToast();
   const { openImport, openShortcuts } = useUI();
   const install = useInstall();
+  const game = useGame();
   const jsonInput = useRef<HTMLInputElement>(null);
   const [pendingBackup, setPendingBackup] = useState<ParsedBackup | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -155,6 +159,19 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               <Button onClick={() => void leave()}>
                 <LogOut className="size-4" /> Sign out
               </Button>
+            </div>
+          </Section>
+
+          <Section title="Levels and rewards" icon={<Trophy className="size-4" />}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink">Show levels and XP</p>
+                <p className="text-xs text-muted">
+                  Earn XP for logging well and getting better, and level up from Intern to Partner. Turn it off to keep CaseLab plain: no levels, no XP, no celebrations. This is a
+                  setting of this browser.
+                </p>
+              </div>
+              <Switch label="Show levels and XP" checked={game.enabled} onChange={game.setEnabled} />
             </div>
           </Section>
 

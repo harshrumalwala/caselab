@@ -32,6 +32,8 @@ import { normalizeBurnedBooks } from '../../domain/community';
 import { useCommunity, useMyProfile } from '../../state/CommunityProvider';
 import { DRAFT_KEY, useData } from '../../state/DataProvider';
 import { useMemberSuggestions } from '../community/useMemberSuggestions';
+import { xpGained } from '../../domain/progress';
+import { useGame } from '../../state/game';
 import { useGoal } from '../../state/GoalProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
@@ -128,6 +130,7 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
   const { cases, data, mode, addCase, updateCase } = useData();
   const { navigate } = useUI();
   const { goal } = useGoal();
+  const { enabled: gameOn } = useGame();
   const toast = useToast();
   const profile = useMyProfile();
   const { saveProfile } = useCommunity();
@@ -270,6 +273,9 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
         firstInIndustry: !before.some(sameIndustry),
         milestones: newMilestones(before, after),
         next: nextPracticeFocus(after)[0] ?? null,
+        xp: gameOn
+          ? (({ gained, to, leveledUp }) => ({ gained, level: to.level, title: to.title, toNext: to.toNext, leveledUp, atMax: to.atMax }))(xpGained(before, after))
+          : null,
         goal: goal ? (({ count, met, streak }) => ({ goal, count, hit: met && count === goal, streak }))(goalProgress(after, new Date(), goal)) : null,
       });
     } catch (err) {

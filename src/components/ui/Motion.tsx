@@ -2,9 +2,9 @@ import { useEffect, useRef } from 'react';
 import { useCountUp, useGrowIn, useReducedMotion } from '../../state/motion';
 
 /** A number that counts up to its value (the final number is what is there once the count finishes). */
-export function CountUp({ value }: { value: number }) {
+export function CountUp({ value, format }: { value: number; format?: (n: number) => string }) {
   const shown = useCountUp(value);
-  return <span className="num">{shown}</span>;
+  return <span className="num">{format ? format(shown) : shown}</span>;
 }
 
 /** The coloured part of a progress bar: fills in from empty. `pct` is 0 to 100. */

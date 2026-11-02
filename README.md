@@ -17,6 +17,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **Email notifications**: an email when someone asks you to case (with the case, casebook, time and their note, so you know what you're answering) and when someone says yes. On by default, one switch in Profile & privacy turns it off
 - **Profile & privacy**: switches for what other members can see, a per-case override, and a live preview
 - **Interviewed cases**: log the cases you ran as the interviewer, with what you told them and what it taught you. Kept apart from the cases you solved and private to you
+- **Levels and rewards**: earn XP for logging well and for getting better, and climb from Intern to Partner. On by default, and one switch in Settings hides all of it
 - **A weekly goal**: pick how many cases a week you want to log; a ring on the Dashboard fills as the week goes, and weeks in a row on target show as a streak. Private to you
 - **Your data, on every device**: saved to your account in [Supabase](https://supabase.com) behind a login. JSON backup, CSV export, an Excel import that reads the MCG template, and an Excel export that fills in the real MCG workbook are built in
 - **Find your way around**: a short tour for a new account, keyboard shortcuts (`?` lists them), and it can be installed on a phone or desktop like an app
@@ -322,6 +323,34 @@ How it copes with real spreadsheets:
 
 ---
 
+## Levels and XP
+
+On the Dashboard, once you have a first case, a small **level pill** under the page title shows your level, job title, a thin bar for the way through the level and your XP (a big tile would compete with practising). Click it for the full story: what is left, the next title, where your XP came from and what earns it.
+Titles run Intern (level 1), Analyst (4), Associate (8), Consultant (12), Engagement Manager (16) and Partner (20), each with a light joke; levels carry on to 30 after that. Reaching a new level shows a
+**Promoted** (a new title) or **Level up** moment once, with confetti, and saving a case says how much XP it earned.
+
+XP rewards how well you practise, not just how much:
+
+| What | XP |
+| --- | --- |
+| A case with a title, type and industry | 20 |
+| Rating it overall, and each skill rated | +5, and +2 each (up to eight) |
+| Written feedback, a concept learned, an improvement tag, a next focus | +5, +5, +5, +3 |
+| The first case in a new case type, and in a new industry | +30, +20 |
+| A week (Monday to Sunday) with three or more cases | +25 |
+| A skill that got better: your best run of five ratings beats your first five by half a point, and by a whole point | +50, and +50 more |
+
+So a fully written-up case earns up to 59 against 20 for a bare one. Only the first three cases of a day earn in full, and later ones a quarter, so logging a pile at once doesn't pay.
+A level takes more XP than the last. **Partner (level 20) is about 5,000 XP**, which is meant to take about a hundred cases for someone who logs them in the ordinary way
+(a title, type, industry, an overall rating, a few skills and sometimes a note): roughly 65 to 75 cases if every case is written up in full, and a good deal more (about 140)
+if you only ever log the bare minimum. The first dozen cases also earn the "something new" bonuses, so the early levels come quickly.
+
+- **Worked out from your log, never stored.** XP and levels come from your cases every time, so nothing can drift, nothing can be cheated, and an Excel import counts the moment it lands. The flip side is that deleting cases lowers your XP. The highest level seen in this browser is remembered only so a level is celebrated once: dropping a level takes nothing away and climbing back to it isn't celebrated again.
+- **Not touched by the weekly goal**, so changing your goal can never change your XP. Burned cases and interviewed cases earn nothing. Warm-up doesn't earn XP either, for now.
+- **Keep it simple.** **Settings → Levels and rewards → Show levels and XP** turns the pill, the XP line when you save and the celebrations off. It is a setting of this browser and nothing is stored on your account. It is on by default.
+- **Demo mode** shows the pill for the sample data but never celebrates or remembers a level.
+- The rules are pure code in `src/domain/progress.ts`; the pill and its details, the level-up moment and the switch are in `src/features/progress/` and `src/state/game.tsx`.
+
 ## Weekly goal
 
 Under **Your week** on the Dashboard, **Set a weekly goal** lets you pick 1 to 7 cases a week (the database accepts 1 to 14). A ring fills as the
@@ -584,6 +613,7 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **Delete account**: in Postgres (a member with data in every table is removed completely: login, profile and public copies, cases, lists, goal, Warm-up record, requests, blocks, conversations, messages; everyone else untouched; the other person loses the conversation; a report stays but no longer points at the person; the confirmation word is required, a member can only delete themselves, visitors and signed-out callers can't, and a second call is harmless), the Supabase wrapper (asks the database, then ends only this browser's session; a failure changes nothing), and the screen (the Danger zone, what is listed before you confirm, typing `DELETE`, signing out to the public page, forgetting the member on this device but keeping the theme, a failed deletion keeping everything and allowing a retry, off in demo mode)
 - **Warm-up**: question generation for all fifteen kinds (seeded, so repeatable; each answer is recomputed from its own wording, the rule-of-72 answers are accepted, and no question repeats too soon), answer reading and the 5% tolerance (including `%`, years and months), scoring, the three round lengths and a best for each (including how an older single record is read); the record in Postgres (own row only, no direct writes, raise-only, no visitor access, cascade on user delete); syncing between the account and this device (offline, first sign-in on a shared browser, demo mode); and the screen (timer, streaks, tips after a miss, end of round)
 - **Rules**: milestones, suggestions (including "stays silent with too little data"), improvement areas, knowledge filtering, case-log search / filter / sort
+- **Levels and XP**: what one case earns (every rating, note and lesson, with a bare log earning the base), the daily limit on full XP, the bonuses for new case types and industries and for solid weeks, skill improvement measured on your best five ratings (and never taken back by a bad run), the level curve and the job titles (with the climb calibrated: Partner in about a hundred ordinary cases, sooner for full write-ups, later for bare logs, and never in the first fifty), how much saving a case earned; and the screens (the pill, the details window, how XP is explained, the switch and its memory, a level celebrated once, the first look only noting where you are, dropping a level, demo mode, interviewed cases earning nothing)
 - **Weekly goal**: the Monday-to-Sunday count, passing the goal, the streak (an unfinished week neither counts nor breaks it), the table in Postgres (own row only, 1 to 14, nothing for visitors, cascade), and the screens (set, change, remove, a failed save keeping the old goal, demo mode never writing, the saved panel's cheer)
 - **Interviewed cases**: the rules (tidying, limits, newest first, search), the table in Postgres (own rows only, the case-type list and length limits, never mixed into `cases`, nothing for visitors, cascade), the screens (log, edit, search, delete after confirming, a failed save keeping the form, demo mode never writing, solved totals untouched), and sharing (off by default; members only; only while listed and switched on; never who you interviewed, your feedback or what you learned; hidden again when switched off; never fetched for visitors; the count, list and chip on the profile and member list; the switch in Profile & privacy)
 - **First run**: the import wish after sign-up (kept, used once, expires, ignored when the account has cases), the tour (once, skippable, Escape, steps aside for windows, its ring following a button that moves), the shortcuts, the install button and the Warm-up nudge
