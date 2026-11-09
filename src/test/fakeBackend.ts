@@ -8,6 +8,7 @@ import { createMemoryPractice } from '../data/practiceRequests';
 import { createMemoryInterviewed } from '../data/interviewed';
 import { toSharedInterviewed, type SharedInterviewed } from '../domain/interviewed';
 import { createMemoryGoal } from '../data/weeklyGoal';
+import { createMemoryInsights } from '../data/feedbackInsights';
 import { createMemoryWarmup } from '../data/warmupBest';
 import { NO_SHARING, type Profile, type SharedCase } from '../domain/community';
 
@@ -63,6 +64,8 @@ export interface FakeEnv {
   interviewed: ReturnType<typeof createMemoryInterviewed>;
   /** The member's weekly goal, as the "database" holds it. */
   goal: ReturnType<typeof createMemoryGoal>;
+  /** The member's Coach's read, as the "function" and the table hold it (the answer is scripted: see `state.next`). */
+  insights: ReturnType<typeof createMemoryInsights>;
   /** What visitors without an account can read (also records which methods were called). */
   publicReader: ReturnType<typeof createMemoryPublic>;
   /** Which repository methods the app has called (use to prove nothing was fetched/written). */
@@ -161,6 +164,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
 
   const warmup = createMemoryWarmup();
   const goal = createMemoryGoal();
+  const insights = createMemoryInsights();
   const interviewed = createMemoryInterviewed();
   const practice = createMemoryPractice(() =>
     community.profiles.map((p) => ({ userId: p.userId, name: p.displayName, open: p.listed })),
@@ -178,6 +182,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
         createCommunity: () => community,
         createWarmup: () => warmup,
         createGoal: () => goal,
+        createInsights: () => insights,
         createInterviewed: () => interviewed,
         createPractice: () => myPractice,
         createMessages: () => myChat,
@@ -188,6 +193,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
     community,
     warmup,
     goal,
+    insights,
     interviewed,
     practice: Object.assign(practice, { mine: myPractice }),
     chat: Object.assign(chat, { mine: myChat }),

@@ -4,6 +4,7 @@ import type { CommunityRepository, PublicReader } from './community';
 import type { CaseLabRepository } from './repository';
 import { SupabaseInterviewed, type InterviewedRepository } from './interviewed';
 import { SupabaseGoal, type GoalRepository } from './weeklyGoal';
+import { SupabaseInsights, type InsightsRepository } from './feedbackInsights';
 import { SupabaseWarmup, type WarmupRepository } from './warmupBest';
 import { PublicCommunity, SupabaseCommunity } from './supabaseCommunity';
 import { SupabaseMessages, type MessagesRepository } from './messages';
@@ -25,6 +26,8 @@ export interface Backend {
   createInterviewed(): InterviewedRepository;
   /** The signed-in member's private weekly practice goal. */
   createGoal(userId: string): GoalRepository;
+  /** The signed-in member's Coach's read: Claude's short read of the feedback they wrote on their own cases (private). */
+  createInsights(): InsightsRepository;
   /** Read-only access for people without an account (the landing page). */
   createPublicCommunity(): PublicReader;
   /** Set when the page was opened from an email link that failed (expired, already used). */
@@ -86,6 +89,7 @@ export function createSupabaseBackend(
       createMessages: () => new SupabaseMessages(client),
       createWarmup: () => new SupabaseWarmup(client),
       createGoal: (userId) => new SupabaseGoal(client, userId),
+      createInsights: () => new SupabaseInsights(client),
       createInterviewed: () => new SupabaseInterviewed(client),
       createPublicCommunity: () => new PublicCommunity(anon),
       linkProblem,

@@ -31,6 +31,7 @@ import { useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 import { WarmupLink } from '../warmup/WarmupLink';
+import { CoachCard } from './CoachCard';
 
 // ---------------------------------------------------------------------------------------
 
@@ -190,6 +191,9 @@ export function ImprovementAreas() {
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Improvement Areas</h1>
         <p className="text-sm text-ink-2">Where your practice is thin, what to sharpen, and what you've learned so far. Think of it as honest friends with a spreadsheet.</p>
       </div>
+
+      {/* ---- The coach's read of the feedback you wrote -------------------------------- */}
+      {total > 0 && <CoachCard />}
 
       {/* ---- A. Limited exposure ------------------------------------------------------- */}
       <Card strip="coral" aria-labelledby="exposure-title">
