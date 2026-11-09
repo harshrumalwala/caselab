@@ -168,6 +168,7 @@ export function normalizeCase(raw: unknown): CaseRecord | null {
     improvementArea: area,
     otherNotes: str(r.otherNotes),
     shareMode: SHARE_MODES.some((m) => m.value === r.shareMode) ? (r.shareMode as ShareMode) : 'profile',
+    ...(typeof r.libraryId === 'string' && /^[0-9a-f-]{36}$/i.test(r.libraryId) ? { libraryId: r.libraryId } : {}),
     createdAt,
     updatedAt,
   };

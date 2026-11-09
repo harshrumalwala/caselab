@@ -38,6 +38,7 @@ import { GameProvider, useGame } from './state/game';
 import { ThemeProvider } from './state/theme';
 import { GoalProvider } from './state/GoalProvider';
 import { InsightsProvider } from './state/InsightsProvider';
+import { LibraryProvider } from './state/LibraryProvider';
 import { InterviewedProvider } from './state/InterviewedProvider';
 import { WarmupSyncContext, type WarmupSync } from './state/warmupSync';
 import { ToastProvider } from './state/ToastProvider';
@@ -267,6 +268,7 @@ function AuthGate({ backend }: { backend: Backend }) {
             warmup: { repository: backend.createWarmup(userId), userId } satisfies WarmupSync,
             goal: backend.createGoal(userId),
             insights: backend.createInsights(),
+            library: backend.createLibrary(),
             interviewed: backend.createInterviewed(),
             practice: backend.createPractice(),
             messages: backend.createMessages(),
@@ -285,13 +287,15 @@ function AuthGate({ backend }: { backend: Backend }) {
           <WarmupSyncContext.Provider value={repos.warmup}>
             <GoalProvider repository={repos.goal}>
               <InsightsProvider repository={repos.insights}>
-                <InterviewedProvider repository={repos.interviewed}>
-                  <PracticeProvider practice={repos.practice}>
-                    <MessagesProvider messages={repos.messages}>
-                      <Shell />
-                    </MessagesProvider>
-                  </PracticeProvider>
-                </InterviewedProvider>
+                <LibraryProvider repository={repos.library}>
+                  <InterviewedProvider repository={repos.interviewed}>
+                    <PracticeProvider practice={repos.practice}>
+                      <MessagesProvider messages={repos.messages}>
+                        <Shell />
+                      </MessagesProvider>
+                    </PracticeProvider>
+                  </InterviewedProvider>
+                </LibraryProvider>
               </InsightsProvider>
             </GoalProvider>
           </WarmupSyncContext.Provider>

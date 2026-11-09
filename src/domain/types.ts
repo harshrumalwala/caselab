@@ -31,6 +31,8 @@ export interface CaseRecord {
   otherNotes: string;
   /** Per-case sharing override; 'profile' follows the Profile & privacy switches. */
   shareMode: ShareMode;
+  /** The casebook library case this was picked from (a search in Log case), if any. Private like the rest of the case. */
+  libraryId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -27,3 +27,7 @@ coverage
 
 # local tooling
 .claude/
+
+# Casebook analysis (our write-ups of third-party casebooks): kept out of git; loaded into the database only
+/private-data/
+/supabase/seeds/
