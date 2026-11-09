@@ -37,6 +37,7 @@ import { PracticeProvider } from './state/PracticeProvider';
 import { GameProvider, useGame } from './state/game';
 import { ThemeProvider } from './state/theme';
 import { GoalProvider } from './state/GoalProvider';
+import { InsightsProvider } from './state/InsightsProvider';
 import { InterviewedProvider } from './state/InterviewedProvider';
 import { WarmupSyncContext, type WarmupSync } from './state/warmupSync';
 import { ToastProvider } from './state/ToastProvider';
@@ -265,6 +266,7 @@ function AuthGate({ backend }: { backend: Backend }) {
             community: backend.createCommunity(userId),
             warmup: { repository: backend.createWarmup(userId), userId } satisfies WarmupSync,
             goal: backend.createGoal(userId),
+            insights: backend.createInsights(),
             interviewed: backend.createInterviewed(),
             practice: backend.createPractice(),
             messages: backend.createMessages(),
@@ -282,13 +284,15 @@ function AuthGate({ backend }: { backend: Backend }) {
         <DataProvider repository={repos.data}>
           <WarmupSyncContext.Provider value={repos.warmup}>
             <GoalProvider repository={repos.goal}>
-              <InterviewedProvider repository={repos.interviewed}>
-                <PracticeProvider practice={repos.practice}>
-                  <MessagesProvider messages={repos.messages}>
-                    <Shell />
-                  </MessagesProvider>
-                </PracticeProvider>
-              </InterviewedProvider>
+              <InsightsProvider repository={repos.insights}>
+                <InterviewedProvider repository={repos.interviewed}>
+                  <PracticeProvider practice={repos.practice}>
+                    <MessagesProvider messages={repos.messages}>
+                      <Shell />
+                    </MessagesProvider>
+                  </PracticeProvider>
+                </InterviewedProvider>
+              </InsightsProvider>
             </GoalProvider>
           </WarmupSyncContext.Provider>
         </DataProvider>
