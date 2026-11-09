@@ -9,6 +9,7 @@ import {
   MAX_FIELD_CHARS,
   MIN_CASES,
   MIN_INTERVAL_MS,
+  OUTPUT_SCHEMA,
   parseInsight,
   RECENT_CASES,
   sha256Hex,
@@ -135,6 +136,15 @@ describe('what is accepted back', () => {
     expect(big.focus[0].skill).toBeNull(); // an unknown category is not passed on
   });
 
+  it('asks for the skill as a plain list of words, with "none" for no skill, which the schema check of the API accepts', () => {
+    const skill = OUTPUT_SCHEMA.properties.focus.items.properties.skill;
+    expect(skill.type).toBe('string'); // a union type with null is rejected by the API
+    expect(skill.enum).toEqual(['behavioral', 'prompt', 'framework', 'quant', 'exhibits', 'brainstorm', 'recommendation', 'none']);
+    expect(skill.enum.every((v) => typeof v === 'string')).toBe(true);
+    const insight = parseInsight({ summary: 's', strengths: [], focus: [{ title: 't', detail: 'd', action: 'a', skill: 'none' }] })!;
+    expect(insight.focus[0].skill).toBeNull();
+  });
+
   it('refuses anything else: not JSON, the wrong shape, an empty answer, or half of one', () => {
     expect(parseInsight('not json')).toBeNull();
     expect(parseInsight(null)).toBeNull();
@@ -231,6 +241,19 @@ describe('one request, start to finish', () => {
     expect(await handleAnalyze('all', other.deps)).toMatchObject({ status: 'ok', cached: false, scope: 'all' });
   });
 
+  it('says why it failed, in a word, for whoever is fixing it, and never includes the text that was sent', async () => {
+    const why = async (ask: AnalyzeDeps['ask']) => handleAnalyze('recent', setup({ ask }).deps);
+    expect(await why(async () => ({ text: GOOD, stopReason: 'refusal' }))).toEqual({ status: 'failed', reason: 'refused' });
+    expect(await why(async () => ({ text: GOOD, stopReason: 'max_tokens' }))).toEqual({ status: 'failed', reason: 'cut_off' });
+    expect(await why(async () => ({ text: 'nonsense', stopReason: 'end_turn' }))).toEqual({ status: 'failed', reason: 'bad_answer' });
+    const broken = await why(async () => {
+      throw new Error('401 invalid x-api-key '.padEnd(400, '!'));
+    });
+    expect(broken).toMatchObject({ status: 'failed', reason: 'ask_failed' });
+    expect((broken as { detail: string }).detail).toHaveLength(200);
+    expect((broken as { detail: string }).detail).toMatch(/^401 invalid x-api-key/);
+  });
+
   it('keeps what was stored, and says it failed, when Claude refuses, is cut off, errors or answers nonsense', async () => {
     const earlier = await previous('recent', 10, many(4));
     for (const ask of [
@@ -243,7 +266,7 @@ describe('one request, start to finish', () => {
       },
     ]) {
       const { deps, log, stored } = setup({ stored: earlier, ask });
-      expect(await handleAnalyze('recent', deps)).toEqual({ status: 'failed' });
+      expect(await handleAnalyze('recent', deps)).toMatchObject({ status: 'failed' });
       expect(log.saved).toEqual([]);
       expect(stored()).toBe(earlier);
     }

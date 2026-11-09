@@ -8,7 +8,7 @@
 // answer is stored with the service role, because members have no write access to that table (they cannot plant an answer or reset
 // their own limit). The Anthropic key exists only here.
 //
-// Secrets to set (supabase secrets set ...):  ANTHROPIC_API_KEY, and optionally ANTHROPIC_MODEL (default claude-opus-5-5).
+// Secrets to set (supabase secrets set ...):  ANTHROPIC_API_KEY, and optionally ANTHROPIC_MODEL (default claude-sonnet-5-5).
 // Supabase provides SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY itself.
 import Anthropic from 'npm:@anthropic-ai/sdk';
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     console.log('analyze-feedback: ANTHROPIC_API_KEY is not set, so nothing can be read');
     return reply(200, { status: 'unavailable' });
   }
-  const model = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-opus-5-5';
+  const model = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-sonnet-5-5';
 
   // Their cases, through their own token: row level security means only their own rows can ever come back.
   const asMember = createClient(url, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } });
@@ -101,10 +101,10 @@ Deno.serve(async (req) => {
 
   try {
     const result = await handleAnalyze(body.scope, deps);
-    console.log(`analyze-feedback ${body.scope}: ${result.status}${result.status === 'ok' ? (result.cached ? ' (stored)' : ' (new)') : ''}`);
+    console.log(`analyze-feedback ${body.scope}: ${result.status}${result.status === 'ok' ? (result.cached ? ' (stored)' : ' (new)') : result.status === 'failed' ? ` (${result.reason}${result.detail ? `: ${result.detail}` : ''})` : ''}`);
     return reply(200, result);
   } catch (e) {
     console.log(`analyze-feedback: failed (${e instanceof Error ? e.message : String(e)})`);
-    return reply(200, { status: 'failed' });
+    return reply(200, { status: 'failed', reason: 'ask_failed', detail: e instanceof Error ? e.message.slice(0, 200) : 'unknown' });
   }
 });

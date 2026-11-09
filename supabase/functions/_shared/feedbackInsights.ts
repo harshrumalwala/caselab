@@ -181,9 +181,9 @@ export const OUTPUT_SCHEMA = {
           detail: { type: 'string', description: 'One or two sentences on what the notes show.' },
           action: { type: 'string', description: 'One concrete thing to try in the next practice case.' },
           skill: {
-            type: ['string', 'null'],
-            enum: [...SKILL_AREAS, null],
-            description: 'The skill category this area belongs to, or null if it is not about one skill (for example pacing or confidence).',
+            type: 'string',
+            enum: [...SKILL_AREAS, 'none'],
+            description: 'The skill category this area belongs to, or "none" if it is not about one skill (for example pacing or confidence).',
           },
         },
         required: ['title', 'detail', 'action', 'skill'],
@@ -245,7 +245,10 @@ export type AnalyzeResult =
   | { status: 'ok'; insight: Insight; scope: FeedbackScope; caseCount: number; model: string; updatedAt: string; cached: boolean }
   | { status: 'not_enough'; caseCount: number; needed: number }
   | { status: 'too_soon'; retryInSeconds: number }
-  | { status: 'failed' };
+  | { status: 'failed'; reason: FailReason; detail?: string };
+
+/** Why a read did not happen, for whoever is fixing it. The screen only ever says "couldn't sort that just now". */
+export type FailReason = 'ask_failed' | 'refused' | 'cut_off' | 'bad_answer';
 
 export interface AnalyzeDeps {
   now: () => number;
@@ -287,13 +290,15 @@ export async function handleAnalyze(scope: FeedbackScope, deps: AnalyzeDeps): Pr
   let answer: { text: string; stopReason: string | null };
   try {
     answer = await deps.ask(SYSTEM_PROMPT, userPrompt(corpus));
-  } catch {
-    return { status: 'failed' };
+  } catch (e) {
+    // The first part of the message only (the API's own words about the request, such as a wrong setting or a bad key): never the text sent.
+    return { status: 'failed', reason: 'ask_failed', detail: (e instanceof Error ? e.message : String(e)).slice(0, 200) };
   }
   // A refusal or a cut-off answer is not an answer: keep whatever was stored and say it did not work.
-  if (answer.stopReason === 'refusal' || answer.stopReason === 'max_tokens') return { status: 'failed' };
+  if (answer.stopReason === 'refusal') return { status: 'failed', reason: 'refused' };
+  if (answer.stopReason === 'max_tokens') return { status: 'failed', reason: 'cut_off' };
   const insight = parseInsight(answer.text);
-  if (!insight) return { status: 'failed' };
+  if (!insight) return { status: 'failed', reason: 'bad_answer' };
 
   const fresh: StoredInsight = { insight, scope, caseCount: corpus.caseCount, model: deps.model, updatedAt: new Date(deps.now()).toISOString(), inputHash };
   await deps.save(fresh);
