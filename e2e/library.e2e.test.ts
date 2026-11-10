@@ -35,6 +35,17 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the case library', () => {
     expect(none.data).toEqual([]);
   });
 
+  it('suggests cases for a skill to verified members only, with the same public columns and nothing of our analysis', async () => {
+    const { data, error } = await a.client.rpc('library_next_cases', { p_skill: 'quant', p_limit: 3 });
+    expect(error).toBeNull();
+    expect((data ?? []).length).toBeLessThanOrEqual(3);
+    for (const row of (data ?? []) as Record<string, unknown>[]) {
+      expect(Object.keys(row).sort()).toEqual(['also_in', 'book', 'case_type', 'cochair_pick', 'details_known', 'id', 'industry', 'name', 'school', 'year']);
+    }
+    expect((await a.client.rpc('library_next_cases', { p_skill: 'not-a-skill' })).data).toEqual([]);
+    expect((await anon.rpc('library_next_cases', { p_skill: 'quant' })).error).not.toBeNull();
+  });
+
   it('keeps our analysis unreadable: no table read, no column read, and nothing released for a case you have not logged', async () => {
     for (const client of [a.client, b.client, anon]) {
       expect((await client.from('library_case_notes').select('*')).error).not.toBeNull();

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import { makeCase } from './test/builders';
-import { createFakeEnv, TEST_USER, type FakeEnv } from './test/fakeBackend';
+import { createFakeEnv, SAMPLE_LIBRARY, TEST_USER, type FakeEnv } from './test/fakeBackend';
 
 const day = (i: number) => `2026-09-${String(1 + (i % 28)).padStart(2, '0')}`;
 const withNotes = (n: number) => Array.from({ length: n }, (_, i) => makeCase({ date: day(i), title: `Case ${i}`, overallFeedback: `Feedback ${i}` }));
@@ -62,6 +62,30 @@ describe('Bucket, the coach', () => {
     expect(work.getByText(/Do two timed mental-maths drills/)).toBeInTheDocument();
     expect(card.getByText(/Updated .* from 5 cases \(most recent\)/)).toBeInTheDocument();
     expect(card.getByRole('button', { name: 'Re-bucket my feedback' })).toBeEnabled();
+  });
+
+  it('suggests casebook cases for the skill to work on, showing only what any member may know, and not ones you have done', async () => {
+    const env = await envWith(withNotes(5));
+    await env.repo.insertCase(makeCase({ date: day(20), title: 'Army Hotel', libraryId: SAMPLE_LIBRARY[0].id }));
+    const { user, card } = await openImprove(env);
+    await user.click(card.getByRole('button', { name: 'Bucket my feedback' }));
+    const work = within(await card.findByRole('region', { name: 'What to work on' }));
+    expect(await work.findByText('Cases to try for this')).toBeInTheDocument();
+    expect(env.library.nextAsked).toContain('quant');
+    expect(work.getByText('Duck Island Beer Company').closest('li')).toHaveTextContent('Fuqua Case Book 2017 · Profitability · Consumer Products / Retail');
+    expect(work.getByText('Hawaiian Smoothies')).toBeInTheDocument();
+    expect(work.queryByText('Army Hotel')).not.toBeInTheDocument(); // you did it
+    expect(work.queryByText('Army Base Housing')).not.toBeInTheDocument(); // not a quant case
+  });
+
+  it('says nothing about cases to try when looking them up fails', async () => {
+    const env = await envWith(withNotes(5));
+    const { user, card } = await openImprove(env);
+    env.library.state.failing = true;
+    await user.click(card.getByRole('button', { name: 'Bucket my feedback' }));
+    expect(await card.findByText('Quant under pressure')).toBeInTheDocument();
+    await waitFor(() => expect(env.library.nextAsked).toContain('quant'));
+    expect(card.queryByText('Cases to try for this')).not.toBeInTheDocument();
   });
 
   it('reads whichever set of cases you chose: the latest ten or all of them', async () => {

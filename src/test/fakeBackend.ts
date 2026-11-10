@@ -52,6 +52,14 @@ export const SAMPLE_LIBRARY: LibraryCase[] = [
   { id: '00000000-0000-4000-8000-000000000005', name: 'Rural Broadband Rollout', book: 'Haas Case Book', school: 'Haas', year: 2015, caseType: 'Other', industry: 'Other', cochairPick: false, alsoIn: [], detailsKnown: false },
 ];
 
+/** Which skills the sample library cases exercise (our private analysis, by id): only the fake "database" knows this. */
+export const SAMPLE_LIBRARY_SKILLS: Record<string, string[]> = {
+  '00000000-0000-4000-8000-000000000001': ['framework', 'quant'],
+  '00000000-0000-4000-8000-000000000002': ['quant'],
+  '00000000-0000-4000-8000-000000000003': ['quant', 'exhibits'],
+  '00000000-0000-4000-8000-000000000004': ['framework'],
+};
+
 export const MY_PROFILE: Profile = {
   userId: TEST_USER.userId,
   displayName: 'Test User',
@@ -178,7 +186,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
   const warmup = createMemoryWarmup();
   const goal = createMemoryGoal();
   const insights = createMemoryInsights();
-  const library = createMemoryLibrary(SAMPLE_LIBRARY, async () => (await flaky.repo.loadAll()).cases);
+  const library = createMemoryLibrary(SAMPLE_LIBRARY, async () => (await flaky.repo.loadAll()).cases, SAMPLE_LIBRARY_SKILLS);
   const interviewed = createMemoryInterviewed();
   const practice = createMemoryPractice(() =>
     community.profiles.map((p) => ({ userId: p.userId, name: p.displayName, open: p.listed })),
