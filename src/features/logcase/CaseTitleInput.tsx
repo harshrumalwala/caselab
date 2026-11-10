@@ -162,9 +162,7 @@ export function CaseTitleInput({
                     </span>
                   )}
                 </span>
-                <span className="block text-xs text-ink-2">
-                  {c.book} · {c.caseType} · {c.industry}
-                </span>
+                <span className="block text-xs text-ink-2">{c.detailsKnown ? `${c.book} · ${c.caseType} · ${c.industry}` : c.book}</span>
                 {c.alsoIn.length > 0 && <span className="block text-[11px] text-muted">Also in {c.alsoIn.join(', ')}</span>}
               </li>
             ))}

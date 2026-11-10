@@ -62,7 +62,9 @@ export function MatchCases() {
       const input: CaseInput = {
         ...rest,
         libraryId: m.library.id,
-        ...(how === 'update' ? { title: m.library.name, source: m.library.book, caseType: m.library.caseType, industry: m.library.industry } : {}),
+        ...(how === 'update'
+          ? { title: m.library.name, source: m.library.book, ...(m.library.detailsKnown ? { caseType: m.library.caseType, industry: m.library.industry } : {}) }
+          : {}),
       };
       try {
         await updateCase(m.caseId, input);

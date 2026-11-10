@@ -8,6 +8,8 @@ export interface SeedCase {
   caseType: string;
   industry: string;
   cochairPick?: boolean;
+  /** False for a case that is only listed: its caseType and industry are a placeholder. */
+  detailsKnown?: boolean;
   /** The analysis: all of these or none of them (a case that is only listed has none). */
   difficulty?: number;
   skills?: string[];

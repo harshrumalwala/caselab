@@ -16,14 +16,20 @@ export interface LibraryCase {
   cochairPick: boolean;
   /** The other books this same case appears in (one entry per case: Booth MCG first, otherwise the newest book). */
   alsoIn: string[];
+  /**
+   * False for a case that is only listed (we know its name, book and year but not yet its case type and industry): then `caseType` and
+   * `industry` are a placeholder that is never shown or filled in.
+   */
+  detailsKnown: boolean;
 }
 
 /** "Army Hotel (Booth MCG 2026-2027)": what a search result and a linked case are called. */
 export const libraryLabel = (c: Pick<LibraryCase, 'name' | 'book'>): string => `${c.name} (${c.book})`;
 
-/** What picking a library case fills in on the Log case form: the title, the book as the source, the type, the industry and the link. */
-export function libraryPrefill(c: LibraryCase): Pick<CaseInput, 'title' | 'source' | 'caseType' | 'industry' | 'libraryId'> {
-  return { title: c.name, source: c.book, caseType: c.caseType, industry: c.industry, libraryId: c.id };
+/** What picking a library case fills in on the Log case form: the title, the book as the source, the type, the industry (when known) and the link. */
+export function libraryPrefill(c: LibraryCase): Partial<Pick<CaseInput, 'title' | 'source' | 'caseType' | 'industry' | 'libraryId'>> {
+  // A case we only have listed fills in what we know and leaves the type and industry for the member to choose.
+  return c.detailsKnown ? { title: c.name, source: c.book, caseType: c.caseType, industry: c.industry, libraryId: c.id } : { title: c.name, source: c.book, libraryId: c.id };
 }
 
 /**
@@ -42,6 +48,7 @@ export function searchLibrary(all: readonly LibraryCase[], query: string, limit 
         Number(b.name.toLowerCase() === q) - Number(a.name.toLowerCase() === q) ||
         Number(b.name.toLowerCase().startsWith(q)) - Number(a.name.toLowerCase().startsWith(q)) ||
         Number(b.cochairPick) - Number(a.cochairPick) ||
+        Number(b.detailsKnown) - Number(a.detailsKnown) ||
         b.year - a.year ||
         a.name.localeCompare(b.name),
     )

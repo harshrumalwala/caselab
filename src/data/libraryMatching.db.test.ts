@@ -22,11 +22,11 @@ beforeEach(async () => {
   await db.exec('truncate public.library_cases cascade');
 });
 
-const lib = async (name: string, over: { book?: string; school?: string; year?: number; type?: string; industry?: string; alsoIn?: string[] } = {}) =>
+const lib = async (name: string, over: { book?: string; school?: string; year?: number; type?: string; industry?: string; alsoIn?: string[]; detailsKnown?: boolean } = {}) =>
   (
     await db.query<{ id: string }>(
-      `insert into public.library_cases (book, school, year, name, case_type, industry, also_in) values ($1, $2, $3, $4, $5, $6, $7) returning id`,
-      [over.book ?? 'Booth MCG 2026-2027', over.school ?? 'Booth', over.year ?? 2026, name, over.type ?? 'Market Entry', over.industry ?? 'Travel / Hospitality', over.alsoIn ?? []],
+      `insert into public.library_cases (book, school, year, name, case_type, industry, also_in, details_known) values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
+      [over.book ?? 'Booth MCG 2026-2027', over.school ?? 'Booth', over.year ?? 2026, name, over.type ?? 'Market Entry', over.industry ?? 'Travel / Hospitality', over.alsoIn ?? [], over.detailsKnown ?? true],
     )
   ).rows[0].id;
 const mine = (uid: string, title: string, over: { source?: string | null; type?: string; industry?: string | null; libraryId?: string | null } = {}) =>
@@ -140,6 +140,20 @@ describe('a member reviewing their own cases', () => {
     expect(await review()).toEqual([]);
     await as(db, 'anon');
     expect(await fails('select * from public.match_my_cases()')).toMatch(/permission denied/);
+  });
+
+  it('does not offer to change the case type or industry to a placeholder when the library only lists the case', async () => {
+    const listed = await lib('Rural Broadband', { type: 'Other', industry: 'Other', detailsKnown: false, book: 'Haas Case Book', school: 'Haas' });
+    await mine(ALICE, 'Rural Broadband', { source: 'Haas Case Book', type: 'Market Entry', industry: 'Telecom / Media', libraryId: listed });
+    await as(db, 'authenticated', ALICE);
+    // The title and book already match, and the type and industry are the member's own to keep: nothing to review.
+    expect(await review()).toEqual([]);
+    await as(db, 'postgres');
+    await db.query("update public.cases set title = 'rural broadband'");
+    await as(db, 'authenticated', ALICE);
+    const rows = await review();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ lib_details_known: false, linked: true });
   });
 
   it('never returns our analysis, only what any member may know about the library case', async () => {

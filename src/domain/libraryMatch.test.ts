@@ -15,6 +15,7 @@ const lib = (name: string, over: Partial<LibraryCase> = {}): LibraryCase => ({
   industry: 'Travel / Hospitality',
   cochairPick: false,
   alsoIn: [],
+  detailsKnown: true,
   ...over,
 });
 
@@ -49,6 +50,11 @@ describe('what updating a case would change', () => {
       { field: 'caseType', label: 'Case type', from: 'Profitability', to: 'Market Entry' },
       { field: 'industry', label: 'Industry', from: 'Energy / Utilities', to: 'Travel / Hospitality' },
     ]);
+  });
+
+  it('does not offer to change the case type or industry to a placeholder when the library only lists the case', () => {
+    const listed = lib('Army Hotel', { caseType: 'Other', industry: 'Other', detailsKnown: false });
+    expect(changesFor({ ...m, library: listed }).map((c) => c.field)).toEqual(['title', 'source']);
   });
 
   it('lists nothing for what is already the same', () => {
@@ -88,7 +94,7 @@ describe('a row from the database', () => {
   const row = {
     case_id: 'c1', title: 'army hotel', source: 'Booth', case_type: 'Profitability', industry: null, linked: false, sure: true,
     library_id: 'l1', lib_name: 'Army Hotel', lib_book: 'Booth MCG 2026-2027', lib_school: 'Booth', lib_year: 2026,
-    lib_case_type: 'Market Entry', lib_industry: 'Travel / Hospitality', lib_cochair: true, lib_also_in: null,
+    lib_case_type: 'Market Entry', lib_industry: 'Travel / Hospitality', lib_cochair: true, lib_also_in: null, lib_details_known: true,
   };
 
   it('becomes a match, and a row that is not shaped as expected is left out', () => {
@@ -96,5 +102,6 @@ describe('a row from the database', () => {
     expect(rowToCaseMatch({ ...row, lib_name: undefined as unknown as string })).toBeNull();
     expect(rowToCaseMatch({ ...row, case_id: undefined as unknown as string })).toBeNull();
     expect(rowToCaseMatch({ ...row, case_type: 'Invented' })?.caseType).toBe('Other');
+    expect(rowToCaseMatch({ ...row, lib_details_known: false })?.library.detailsKnown).toBe(false);
   });
 });

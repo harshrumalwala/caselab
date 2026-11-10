@@ -45,10 +45,11 @@ export function flakyRepository(base: CaseLabRepository) {
 
 /** A few library cases, so tests can search and pick. Ids are made up. */
 export const SAMPLE_LIBRARY: LibraryCase[] = [
-  { id: '00000000-0000-4000-8000-000000000001', name: 'Army Hotel', book: 'Booth MCG 2026-2027', school: 'Booth', year: 2026, caseType: 'Market Entry', industry: 'Travel / Hospitality', cochairPick: true, alsoIn: [] },
-  { id: '00000000-0000-4000-8000-000000000002', name: 'Hawaiian Smoothies', book: 'Booth MCG 2026-2027', school: 'Booth', year: 2026, caseType: 'Market Entry', industry: 'Consumer Products / Retail', cochairPick: true, alsoIn: ['Kellogg Case Book 2020'] },
-  { id: '00000000-0000-4000-8000-000000000003', name: 'Duck Island Beer Company', book: 'Fuqua Case Book 2017', school: 'Fuqua', year: 2017, caseType: 'Profitability', industry: 'Consumer Products / Retail', cochairPick: true, alsoIn: [] },
-  { id: '00000000-0000-4000-8000-000000000004', name: 'Army Base Housing', book: 'Ross Case Book 2013', school: 'Ross', year: 2013, caseType: 'Investment Decision', industry: 'Real Estate / Construction', cochairPick: false, alsoIn: [] },
+  { id: '00000000-0000-4000-8000-000000000001', name: 'Army Hotel', book: 'Booth MCG 2026-2027', school: 'Booth', year: 2026, caseType: 'Market Entry', industry: 'Travel / Hospitality', cochairPick: true, alsoIn: [], detailsKnown: true },
+  { id: '00000000-0000-4000-8000-000000000002', name: 'Hawaiian Smoothies', book: 'Booth MCG 2026-2027', school: 'Booth', year: 2026, caseType: 'Market Entry', industry: 'Consumer Products / Retail', cochairPick: true, alsoIn: ['Kellogg Case Book 2020'], detailsKnown: true },
+  { id: '00000000-0000-4000-8000-000000000003', name: 'Duck Island Beer Company', book: 'Fuqua Case Book 2017', school: 'Fuqua', year: 2017, caseType: 'Profitability', industry: 'Consumer Products / Retail', cochairPick: true, alsoIn: [], detailsKnown: true },
+  { id: '00000000-0000-4000-8000-000000000004', name: 'Army Base Housing', book: 'Ross Case Book 2013', school: 'Ross', year: 2013, caseType: 'Investment Decision', industry: 'Real Estate / Construction', cochairPick: false, alsoIn: [], detailsKnown: true },
+  { id: '00000000-0000-4000-8000-000000000005', name: 'Rural Broadband Rollout', book: 'Haas Case Book', school: 'Haas', year: 2015, caseType: 'Other', industry: 'Other', cochairPick: false, alsoIn: [], detailsKnown: false },
 ];
 
 export const MY_PROFILE: Profile = {
