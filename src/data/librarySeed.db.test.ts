@@ -146,3 +146,23 @@ describe('one entry per case name', () => {
   });
 });
 
+describe('linking the cases members already logged', () => {
+  it('links a case with the same name that names the book, changes nothing else about it, and leaves a maybe alone', async () => {
+    await as(db, 'postgres');
+    await db.exec('delete from public.cases');
+    await db.query("insert into auth.users (id, email, email_confirmed_at) values ('11111111-1111-4111-8111-111111111111', 'a@example.com', now()) on conflict do nothing");
+    const mine = (title: string, source: string | null) =>
+      db.query("insert into public.cases (user_id, case_date, title, source, case_type, industry) values ('11111111-1111-4111-8111-111111111111', '2026-10-01', $1, $2, 'Profitability', 'Energy / Utilities')", [title, source]);
+    await mine('army hotel', 'Booth casebook');
+    await mine('Army Hotel', null);
+    await mine('Unrelated', 'Booth');
+    await run([sample()]);
+    const rows = (await db.query<{ title: string; source: string | null; case_type: string; industry: string; linked: boolean }>('select title, source, case_type, industry, library_id is not null as linked from public.cases')).rows;
+    const byTitle = Object.fromEntries(rows.map((r) => [`${r.title}|${r.source ?? ''}`, r]));
+    // Linked, and its wording untouched.
+    expect(byTitle['army hotel|Booth casebook']).toMatchObject({ source: 'Booth casebook', case_type: 'Profitability', industry: 'Energy / Utilities', linked: true });
+    // A maybe (no book given) and an unrelated case are left alone.
+    expect(byTitle['Army Hotel|']).toMatchObject({ linked: false });
+    expect(byTitle['Unrelated|Booth']).toMatchObject({ linked: false });
+  });
+});

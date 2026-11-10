@@ -16,7 +16,9 @@ const OUT = 'supabase/seeds/library.sql';
 const files = readdirSync(DIR).filter((f) => f.endsWith('.json') && !f.endsWith('.index.json')).sort();
 if (files.length === 0) throw new Error(`No analyses found in ${DIR}`);
 
-const { sql, count, dropped } = seedSql(files.map((file) => ({ file, cases: JSON.parse(readFileSync(join(DIR, file), 'utf8')) })));
+const { sql, count, dropped } = seedSql(
+  files.map((file) => ({ file, cases: JSON.parse(readFileSync(join(DIR, file), 'utf8')) })),
+);
 mkdirSync('supabase/seeds', { recursive: true });
 writeFileSync(OUT, sql);
 console.log(`Wrote ${OUT}: ${count} cases from ${files.length} file(s).`);

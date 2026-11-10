@@ -177,7 +177,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
   const warmup = createMemoryWarmup();
   const goal = createMemoryGoal();
   const insights = createMemoryInsights();
-  const library = createMemoryLibrary(SAMPLE_LIBRARY);
+  const library = createMemoryLibrary(SAMPLE_LIBRARY, async () => (await flaky.repo.loadAll()).cases);
   const interviewed = createMemoryInterviewed();
   const practice = createMemoryPractice(() =>
     community.profiles.map((p) => ({ userId: p.userId, name: p.displayName, open: p.listed })),
