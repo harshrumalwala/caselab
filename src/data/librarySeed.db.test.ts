@@ -214,6 +214,11 @@ describe("the book's own solutions", () => {
     expect(row.solution).not.toHaveProperty('book');
   });
 
+  it('says how many it attached', () => {
+    expect(seedSql([{ file: 't', cases: [sample()] }], [solution()]).solutionCount).toBe(1);
+    expect(seedSql([{ file: 't', cases: [sample()] }]).solutionCount).toBe(0);
+  });
+
   it('can be loaded again, replacing what was there', async () => {
     await run2([sample()], [solution()]);
     await run2([sample()], [solution({ recommendation: 'Do not open it.' })]);

@@ -141,5 +141,5 @@ export function seedSql(groups, solutions = []) {
   // Link the cases members have already logged to what was just loaded: only a case that has the same name AND names the book, and only
   // the link, nothing else about the case. Cases that are less certain are left for each member to review.
   lines.push('select public.link_cases_to_library();', '', 'commit;', '');
-  return { sql: lines.join('\n'), count: winners.length, dropped };
+  return { sql: lines.join('\n'), count: winners.length, dropped, solutionCount: attached.size };
 }
