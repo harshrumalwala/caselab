@@ -9,6 +9,8 @@ import { createMemoryInterviewed } from '../data/interviewed';
 import { toSharedInterviewed, type SharedInterviewed } from '../domain/interviewed';
 import { createMemoryGoal } from '../data/weeklyGoal';
 import { createMemoryInsights } from '../data/feedbackInsights';
+import { createMemoryLibrary } from '../data/caseLibrary';
+import type { LibraryCase } from '../domain/library';
 import { createMemoryWarmup } from '../data/warmupBest';
 import { NO_SHARING, type Profile, type SharedCase } from '../domain/community';
 
@@ -41,6 +43,14 @@ export function flakyRepository(base: CaseLabRepository) {
   };
 }
 
+/** A few library cases, so tests can search and pick. Ids are made up. */
+export const SAMPLE_LIBRARY: LibraryCase[] = [
+  { id: '00000000-0000-4000-8000-000000000001', name: 'Army Hotel', book: 'Booth MCG 2026-2027', school: 'Booth', year: 2026, caseType: 'Market Entry', industry: 'Travel / Hospitality', cochairPick: true, alsoIn: [] },
+  { id: '00000000-0000-4000-8000-000000000002', name: 'Hawaiian Smoothies', book: 'Booth MCG 2026-2027', school: 'Booth', year: 2026, caseType: 'Market Entry', industry: 'Consumer Products / Retail', cochairPick: true, alsoIn: ['Kellogg Case Book 2020'] },
+  { id: '00000000-0000-4000-8000-000000000003', name: 'Duck Island Beer Company', book: 'Fuqua Case Book 2017', school: 'Fuqua', year: 2017, caseType: 'Profitability', industry: 'Consumer Products / Retail', cochairPick: true, alsoIn: [] },
+  { id: '00000000-0000-4000-8000-000000000004', name: 'Army Base Housing', book: 'Ross Case Book 2013', school: 'Ross', year: 2013, caseType: 'Investment Decision', industry: 'Real Estate / Construction', cochairPick: false, alsoIn: [] },
+];
+
 export const MY_PROFILE: Profile = {
   userId: TEST_USER.userId,
   displayName: 'Test User',
@@ -64,6 +74,8 @@ export interface FakeEnv {
   interviewed: ReturnType<typeof createMemoryInterviewed>;
   /** The member's weekly goal, as the "database" holds it. */
   goal: ReturnType<typeof createMemoryGoal>;
+  /** The casebook library, as the database holds it (a few sample cases; see `library.cases`). */
+  library: ReturnType<typeof createMemoryLibrary>;
   /** The member's Coach's read, as the "function" and the table hold it (the answer is scripted: see `state.next`). */
   insights: ReturnType<typeof createMemoryInsights>;
   /** What visitors without an account can read (also records which methods were called). */
@@ -165,6 +177,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
   const warmup = createMemoryWarmup();
   const goal = createMemoryGoal();
   const insights = createMemoryInsights();
+  const library = createMemoryLibrary(SAMPLE_LIBRARY, async () => (await flaky.repo.loadAll()).cases);
   const interviewed = createMemoryInterviewed();
   const practice = createMemoryPractice(() =>
     community.profiles.map((p) => ({ userId: p.userId, name: p.displayName, open: p.listed })),
@@ -183,6 +196,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
         createWarmup: () => warmup,
         createGoal: () => goal,
         createInsights: () => insights,
+        createLibrary: () => library,
         createInterviewed: () => interviewed,
         createPractice: () => myPractice,
         createMessages: () => myChat,
@@ -194,6 +208,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
     warmup,
     goal,
     insights,
+    library,
     interviewed,
     practice: Object.assign(practice, { mine: myPractice }),
     chat: Object.assign(chat, { mine: myChat }),

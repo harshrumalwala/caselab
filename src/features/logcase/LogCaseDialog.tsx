@@ -41,6 +41,8 @@ import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 import { goalProgress } from '../../domain/goal';
 import { SavedPanel, type SavedInfo } from './SavedPanel';
+import { CaseTitleInput } from './CaseTitleInput';
+import { libraryPrefill, type LibraryCase } from '../../domain/library';
 
 const CUSTOM = '__custom__';
 
@@ -166,6 +168,8 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showSharing, setShowSharing] = useState(() => initial.shareMode !== 'profile');
+  // The casebook case picked from the search, if any (only for this visit to the form; the link itself is kept on the case).
+  const [linked, setLinked] = useState<LibraryCase | null>(null);
 
   // Best-effort draft so an accidental close never loses a half-written case.
   useEffect(() => {
@@ -176,6 +180,16 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
   const set = <K extends keyof CaseInput>(key: K, value: CaseInput[K]) => {
     setInput((prev) => ({ ...prev, [key]: value }));
     if (key in errors) setErrors((e) => ({ ...e, [key]: undefined }));
+  };
+  const pickLibrary = (c: LibraryCase) => {
+    setLinked(c);
+    setCustomIndustry(false);
+    setInput((prev) => ({ ...prev, ...libraryPrefill(c) }));
+    setErrors((e) => ({ ...e, title: undefined, caseType: undefined, industry: undefined }));
+  };
+  const clearLibrary = () => {
+    setLinked(null);
+    setInput((prev) => ({ ...prev, libraryId: null }));
   };
   const setSkill = (key: SkillKey, patch: Partial<CaseInput['skills'][SkillKey]>) =>
     setInput((prev) => ({ ...prev, skills: { ...prev.skills, [key]: { ...prev.skills[key], ...patch } } }));
@@ -291,6 +305,7 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
   };
 
   const resetForm = (prefillNext?: Partial<CaseInput>) => {
+    setLinked(null);
     setSaved(null);
     setInput({ ...blankCaseInput(), ...prefillNext });
     setErrors({});
@@ -406,16 +421,16 @@ export function LogCaseDialog({ editId, prefill, onClose }: Props) {
         <section className="space-y-4" aria-label="Essentials">
           <div className="grid gap-4 sm:grid-cols-[1fr_11rem]">
             <Field label="Case title" htmlFor="case-title" required error={errors.title}>
-              <input
+              <CaseTitleInput
                 id="case-title"
-                maxLength={200}
-                className="field"
                 value={input.title}
-                onChange={(e) => set('title', e.target.value)}
-                placeholder="e.g. Regional airline profitability"
-                aria-invalid={Boolean(errors.title)}
-                data-autofocus={!editing && hasFinePointer() ? '' : undefined}
-                autoComplete="off"
+                onChange={(text) => set('title', text)}
+                onPick={pickLibrary}
+                linked={linked}
+                onClear={clearLibrary}
+                suggest={!editing && mode === 'real'}
+                invalid={Boolean(errors.title)}
+                autoFocus={!editing && hasFinePointer()}
               />
             </Field>
             <Field label="Date" htmlFor="case-date" error={errors.date}>

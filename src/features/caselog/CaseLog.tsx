@@ -26,6 +26,7 @@ import { SlideRow } from '../../components/ui/useSlidingMark';
 import { useMyProfile } from '../../state/CommunityProvider';
 import { BurnedPanel } from './BurnedPanel';
 import { InterviewedPanel } from './InterviewedPanel';
+import { MatchCases } from './MatchCases';
 import { useInterviewed } from '../../state/InterviewedProvider';
 import { useExportExcel } from './useExportExcel';
 import { useTogglePrivate } from './useTogglePrivate';
@@ -239,6 +240,7 @@ export function CaseLog() {
 
       {tab === 'cases' && (
         <>
+      <MatchCases />
       {/* ---- Toolbar ------------------------------------------------------------------ */}
       <div className="sticker space-y-3 p-3 sm:p-4">
         <div className="flex gap-2">

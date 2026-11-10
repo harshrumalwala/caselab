@@ -16,7 +16,7 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
     restoreMocks: true,
-    testTimeout: 20_000, // the end-to-end UI tests click through whole flows
+    testTimeout: 40_000, // the end-to-end UI tests click through whole flows (and 70-odd files run at once)
     hookTimeout: 60_000, // starting the in-process Postgres and applying every migration can be slow when many files run at once
   },
 });
