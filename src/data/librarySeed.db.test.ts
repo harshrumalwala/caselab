@@ -3,7 +3,7 @@
 // The loader for the case library: the SQL it writes runs against the real migrations, can be run again, and copes with awkward text.
 import type { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { dedupe, nameKey, seedSql, type SeedCase } from '../../scripts/librarySeed.mjs';
+import { dedupe, nameKey, seedSql, type SeedCase, type SeedSolution } from '../../scripts/librarySeed.mjs';
 import { as, createDb } from '../test/pg';
 
 let db: PGlite;
@@ -185,6 +185,65 @@ describe('cases that are only listed', () => {
   it('keeps the placeholder marked as unknown when no copy knows them', () => {
     const { winners } = dedupe([listed({ name: 'Maine Apples', book: 'Ross Case Book 2024', school: 'Ross', year: 2024 }), listed({ name: 'Maine Apples', book: 'Ross Case Book 2013', school: 'Ross', year: 2013 })]);
     expect(winners[0]).toMatchObject({ book: 'Ross Case Book 2024', detailsKnown: false });
+  });
+});
+
+describe("the book's own solutions", () => {
+  const solution = (over: Partial<SeedSolution> = {}): SeedSolution => ({
+    name: 'Army Hotel',
+    book: 'Booth MCG 2026-2027',
+    prompt: "Should the chain open a hotel? It's the army's call.",
+    facts: ['A fact'],
+    steps: [{ title: 'Step one', body: "O'Reilly's maths", calc: ['1 + 1 = 2'] }],
+    exhibits: [{ title: 'Exhibit 1', columns: ['A', 'B'], rows: [['1', '2']] }],
+    recommendation: 'Open it.',
+    ...over,
+  });
+  const run2 = (cases: SeedCase[], solutions: SeedSolution[]) => db.exec(seedSql([{ file: 'test.json', cases }], solutions).sql);
+  const stored = async () =>
+    (await db.query<{ name: string; solution: Record<string, unknown> }>('select c.name, s.solution from public.library_case_solutions s join public.library_cases c on c.id = s.case_id order by c.name')).rows;
+  const build = (solutions: SeedSolution[]) => () => seedSql([{ file: 't', cases: [sample()] }], solutions);
+
+  it('is stored against the case, with apostrophes intact, and without the identity keys', async () => {
+    await run2([sample()], [solution()]);
+    const [row] = await stored();
+    expect(row.name).toBe('Army Hotel');
+    expect(row.solution.prompt).toBe("Should the chain open a hotel? It's the army's call.");
+    expect((row.solution.steps as { body: string }[])[0].body).toBe("O'Reilly's maths");
+    expect(row.solution).not.toHaveProperty('name');
+    expect(row.solution).not.toHaveProperty('book');
+  });
+
+  it('can be loaded again, replacing what was there', async () => {
+    await run2([sample()], [solution()]);
+    await run2([sample()], [solution({ recommendation: 'Do not open it.' })]);
+    const rows = await stored();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].solution.recommendation).toBe('Do not open it.');
+  });
+
+  it('goes to the entry that won for that case name, whichever book the write-up was made from', async () => {
+    const cases = [
+      sample({ name: 'Zoo Co', book: 'Kellogg Case Book 2020', school: 'Kellogg', year: 2020, cochairPick: false }),
+      sample({ name: 'Zoo Co.', book: 'Kellogg Case Book 2024', school: 'Kellogg', year: 2024, cochairPick: false }),
+    ];
+    await run2(cases, [solution({ name: 'Zoo Co', book: 'Kellogg Case Book 2020' })]);
+    const { rows } = await db.query<{ book: string }>('select c.book from public.library_case_solutions s join public.library_cases c on c.id = s.case_id');
+    expect(rows).toEqual([{ book: 'Kellogg Case Book 2024' }]);
+  });
+
+  it('is refused unless it has a question, a recommendation and steps, or when it matches no case, or when a case has two', () => {
+    expect(build([solution({ prompt: '' })])).toThrow(/no prompt/);
+    expect(build([solution({ recommendation: ' ' })])).toThrow(/no recommendation/);
+    expect(build([solution({ steps: [] })])).toThrow(/no steps/);
+    expect(build([solution({ name: 'Nowhere Inc' })])).toThrow(/matches no case/);
+    expect(build([solution(), solution()])).toThrow(/two solutions/);
+  });
+
+  it('is removed with the case', async () => {
+    await run2([sample()], [solution()]);
+    await db.exec("delete from public.library_cases where name = 'Army Hotel'");
+    expect(await stored()).toEqual([]);
   });
 });
 

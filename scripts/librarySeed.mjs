@@ -66,8 +66,22 @@ export function dedupe(cases) {
   return { winners, dropped };
 }
 
-/** `groups` is a list of { file, cases } (one per analysis file). */
-export function seedSql(groups) {
+const SOLUTION_KEYS = ['prompt', 'facts', 'structure', 'steps', 'exhibits', 'recommendation', 'risks', 'nextSteps', 'bookErrors', 'confidence'];
+
+/** The content of a write-up of the book's solution, without the identity keys, refused unless it has what the screen needs. */
+function solutionContent(sol) {
+  const where = `solution for "${sol.name}"`;
+  if (typeof sol.prompt !== 'string' || sol.prompt.trim() === '') throw new Error(`${where} has no prompt`);
+  if (typeof sol.recommendation !== 'string' || sol.recommendation.trim() === '') throw new Error(`${where} has no recommendation`);
+  if (!Array.isArray(sol.steps) || sol.steps.length === 0) throw new Error(`${where} has no steps`);
+  return Object.fromEntries(SOLUTION_KEYS.filter((k) => sol[k] !== undefined).map((k) => [k, sol[k]]));
+}
+
+/**
+ * `groups` is a list of { file, cases } (one per analysis file). `solutions` is a list of write-ups of the book's own solution to a case
+ * (each with the case's `name`): each is attached to the winning entry for that case name, whichever book the write-up was made from.
+ */
+export function seedSql(groups, solutions = []) {
   const all = [];
   for (const { file, cases } of groups) {
     for (const c of cases) {
@@ -98,6 +112,22 @@ export function seedSql(groups) {
       );
     }
     lines.push('');
+  }
+
+  // The book's own solution to a case, attached to the entry that won for that case name.
+  const winnerOf = new Map(winners.map((w) => [nameKey(w.name), w]));
+  const attached = new Set();
+  for (const sol of solutions) {
+    const w = winnerOf.get(nameKey(sol.name ?? ''));
+    if (!w) throw new Error(`solution for "${sol.name}" matches no case in the library`);
+    if (attached.has(w.name)) throw new Error(`two solutions for "${w.name}"`);
+    attached.add(w.name);
+    lines.push(
+      `insert into public.library_case_solutions (case_id, solution)`,
+      `  select id, ${q(JSON.stringify(solutionContent(sol)))}::jsonb from public.library_cases where book = ${q(w.book)} and name = ${q(w.name)}`,
+      `  on conflict (case_id) do update set solution = excluded.solution, updated_at = now();`,
+      '',
+    );
   }
 
   // A copy loaded by an earlier run that has since lost to a better one: move any case a member linked to it over to the winner, then remove it.
