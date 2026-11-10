@@ -52,6 +52,8 @@ export interface LibraryRepository {
   matchMyCases(): Promise<CaseMatch[]>;
   /** A few casebook cases that exercise a skill and that you have not done yet (co-chair picks and newer books first). */
   nextCases(skill: string, limit?: number): Promise<LibraryCase[]>;
+  /** Casebook cases of these case types or industries that you have not done (for the gaps in your practice), analysed ones first. */
+  gapCases(types: string[], industries: string[], limit?: number): Promise<LibraryCase[]>;
   /** Our analysis of a casebook case you have logged (the database releases it to nobody else), or null. */
   notesFor(libraryId: string): Promise<BookNotes | null>;
 }
@@ -147,6 +149,12 @@ export class SupabaseLibrary implements LibraryRepository {
     return ((data ?? []) as LibraryRow[]).flatMap((r) => rowToLibraryCase(r) ?? []);
   }
 
+  async gapCases(types: string[], industries: string[], limit = 12): Promise<LibraryCase[]> {
+    const { data, error } = await this.client.rpc('library_gap_cases', { p_types: types, p_industries: industries, p_limit: limit });
+    if (error) throw error;
+    return ((data ?? []) as LibraryRow[]).flatMap((r) => rowToLibraryCase(r) ?? []);
+  }
+
   async notesFor(libraryId: string): Promise<BookNotes | null> {
     const { data, error } = await this.client.rpc('library_notes_for', { p_library_id: libraryId });
     if (error) throw error;
@@ -166,11 +174,13 @@ export function createMemoryLibrary(
   const queries: string[] = [];
   const nextAsked: string[] = [];
   const notesAsked: string[] = [];
+  const gapAsked: { types: string[]; industries: string[] }[] = [];
   const state = { failing: false as boolean };
   return {
     queries,
     nextAsked,
     notesAsked,
+    gapAsked,
     state,
     cases,
     async search(query: string, limit = 8) {
@@ -181,6 +191,17 @@ export function createMemoryLibrary(
     async matchMyCases() {
       if (state.failing) throw new Error('Failed to fetch');
       return matchCases(await myCases(), cases);
+    },
+    async gapCases(types: string[], industries: string[], limit = 12) {
+      gapAsked.push({ types, industries });
+      if (state.failing) throw new Error('Failed to fetch');
+      const mine = await myCases();
+      const done = new Set(mine.flatMap((m) => (m.libraryId ? [m.libraryId] : [])));
+      const titles = new Set(mine.map((m) => libraryNameKey(m.title)));
+      return cases
+        .filter((c) => c.detailsKnown && (types.includes(c.caseType) || industries.includes(c.industry)) && !done.has(c.id) && !titles.has(libraryNameKey(c.name)))
+        .sort((a, b) => Number(Boolean(notesById[b.id])) - Number(Boolean(notesById[a.id])) || Number(b.cochairPick) - Number(a.cochairPick) || b.year - a.year || a.name.localeCompare(b.name))
+        .slice(0, Math.min(Math.max(limit, 1), 30));
     },
     async notesFor(libraryId: string) {
       notesAsked.push(libraryId);

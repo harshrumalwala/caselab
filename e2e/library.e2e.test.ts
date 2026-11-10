@@ -46,6 +46,17 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the case library', () => {
     expect((await anon.rpc('library_next_cases', { p_skill: 'quant' })).error).not.toBeNull();
   });
 
+  it('finds cases that fill a gap for verified members only, with only the public columns', async () => {
+    const { data, error } = await a.client.rpc('library_gap_cases', { p_types: ['Market Entry'], p_industries: ['Insurance'], p_limit: 5 });
+    expect(error).toBeNull();
+    expect((data ?? []).length).toBeLessThanOrEqual(5);
+    for (const row of (data ?? []) as Record<string, unknown>[]) {
+      expect(Object.keys(row).sort()).toEqual(['also_in', 'book', 'case_type', 'cochair_pick', 'details_known', 'id', 'industry', 'name', 'school', 'year']);
+    }
+    expect((await a.client.rpc('library_gap_cases', { p_types: [], p_industries: [] })).data).toEqual([]);
+    expect((await anon.rpc('library_gap_cases', { p_types: ['Market Entry'], p_industries: [] })).error).not.toBeNull();
+  });
+
   it('keeps our analysis unreadable: no table read, no column read, and nothing released for a case you have not logged', async () => {
     for (const client of [a.client, b.client, anon]) {
       expect((await client.from('library_case_notes').select('*')).error).not.toBeNull();
