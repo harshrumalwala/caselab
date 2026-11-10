@@ -11,6 +11,7 @@ import { Dialog } from '../../components/ui/Dialog';
 import { useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
+import { BookComparison } from './BookComparison';
 import { useTogglePrivate } from './useTogglePrivate';
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
@@ -153,6 +154,8 @@ export function CaseDetail({ caseId, onClose }: { caseId: string; onClose: () =>
               <Note label="Other notes" text={c.otherNotes} />
             </section>
           )}
+
+          <BookComparison c={c} />
         </div>
       </Dialog>
 
