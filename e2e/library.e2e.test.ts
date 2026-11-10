@@ -61,6 +61,8 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the case library', () => {
     for (const client of [a.client, b.client, anon]) {
       expect((await client.from('library_case_notes').select('*')).error).not.toBeNull();
       expect((await client.from('library_case_notes').select('strong_answer')).error).not.toBeNull();
+      expect((await client.from('library_case_solutions').select('*')).error).not.toBeNull();
+      expect((await client.from('library_case_solutions').select('solution')).error).not.toBeNull();
     }
     // The public columns of the main table are readable by a member, but nothing outside that list.
     expect((await a.client.from('library_cases').select('id, name, book, case_type, industry')).error).toBeNull();
@@ -69,6 +71,9 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the case library', () => {
     const released = await a.client.rpc('library_notes_for', { p_library_id: '99999999-9999-4999-8999-999999999999' });
     expect(released.error).toBeNull();
     expect(released.data).toEqual([]);
+    const solution = await a.client.rpc('library_solution_for', { p_library_id: '99999999-9999-4999-8999-999999999999' });
+    expect(solution.error).toBeNull();
+    expect(solution.data).toEqual([]);
   });
 
   it('is read-only for everyone: no member or visitor can add, change or remove a library case', async () => {
@@ -84,6 +89,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the case library', () => {
   it('is closed to visitors without an account', async () => {
     expect((await anon.rpc('search_library', { p_query: 'hotel' })).error).not.toBeNull();
     expect((await anon.rpc('library_notes_for', { p_library_id: '99999999-9999-4999-8999-999999999999' })).error).not.toBeNull();
+    expect((await anon.rpc('library_solution_for', { p_library_id: '99999999-9999-4999-8999-999999999999' })).error).not.toBeNull();
     expect((await anon.rpc('match_my_cases')).error).not.toBeNull();
     expect((await anon.from('library_cases').select('id')).error).not.toBeNull();
   });
