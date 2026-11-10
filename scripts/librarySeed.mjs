@@ -56,7 +56,12 @@ export function dedupe(cases) {
       }
     }
     winners.push(winner);
-    for (const loser of rest) dropped.push({ book: loser.book, name: loser.name, keptBook: winner.book, keptName: winner.name });
+    // A copy with the very same book and name as the winner is the same row (for example a listed-only entry of a case that is also analysed):
+    // it must never be deleted, or the winner would go with it.
+    for (const loser of rest) {
+      if (loser.book === winner.book && loser.name === winner.name) continue;
+      dropped.push({ book: loser.book, name: loser.name, keptBook: winner.book, keptName: winner.name });
+    }
   }
   return { winners, dropped };
 }

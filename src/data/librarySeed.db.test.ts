@@ -168,6 +168,20 @@ describe('cases that are only listed', () => {
     expect(winners[0].strongAnswer).toBeTruthy(); // and the analysis too
   });
 
+  it('keeps the analysed row when the same case is also listed in the very same book (never deletes the winner)', async () => {
+    const both = [
+      listed({ name: 'Zoo Co', book: 'Kellogg Case Book 2024', school: 'Kellogg', year: 2024 }),
+      sample({ name: 'Zoo Co', book: 'Kellogg Case Book 2024', school: 'Kellogg', year: 2024 }),
+    ];
+    const { dropped } = dedupe(both);
+    expect(dropped).toEqual([]);
+    await run(both);
+    expect(await counts()).toEqual({ cases: 1, notes: 1 });
+    // and again, on top of a row an earlier run loaded
+    await run(both);
+    expect(await counts()).toEqual({ cases: 1, notes: 1 });
+  });
+
   it('keeps the placeholder marked as unknown when no copy knows them', () => {
     const { winners } = dedupe([listed({ name: 'Maine Apples', book: 'Ross Case Book 2024', school: 'Ross', year: 2024 }), listed({ name: 'Maine Apples', book: 'Ross Case Book 2013', school: 'Ross', year: 2013 })]);
     expect(winners[0]).toMatchObject({ book: 'Ross Case Book 2024', detailsKnown: false });
