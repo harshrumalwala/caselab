@@ -9,7 +9,7 @@ import { createMemoryInterviewed } from '../data/interviewed';
 import { toSharedInterviewed, type SharedInterviewed } from '../domain/interviewed';
 import { createMemoryGoal } from '../data/weeklyGoal';
 import { createMemoryInsights } from '../data/feedbackInsights';
-import { createMemoryLibrary } from '../data/caseLibrary';
+import { createMemoryLibrary, type BookNotes } from '../data/caseLibrary';
 import type { LibraryCase } from '../domain/library';
 import { createMemoryWarmup } from '../data/warmupBest';
 import { NO_SHARING, type Profile, type SharedCase } from '../domain/community';
@@ -58,6 +58,19 @@ export const SAMPLE_LIBRARY_SKILLS: Record<string, string[]> = {
   '00000000-0000-4000-8000-000000000002': ['quant'],
   '00000000-0000-4000-8000-000000000003': ['quant', 'exhibits'],
   '00000000-0000-4000-8000-000000000004': ['framework'],
+};
+
+/** Our analysis of the first sample library case, which the fake "database" releases only to a member who logged it. */
+export const SAMPLE_LIBRARY_NOTES: Record<string, BookNotes> = {
+  '00000000-0000-4000-8000-000000000001': {
+    difficulty: 3,
+    skills: ['framework', 'quant'],
+    concepts: ['Break-even', 'Capacity constraints', 'Seasonality'],
+    summary: 'A hotel chain asks whether to open a new property near a military base.',
+    strongAnswer: 'Split the question into demand, price and cost, check the break-even occupancy against realistic peak and off-peak demand, and recommend opening only if off-peak demand clears break-even.',
+    pitfalls: ['Treating peak-season demand as the whole year', 'Skipping the break-even check before recommending'],
+    confidence: 'high',
+  },
 };
 
 export const MY_PROFILE: Profile = {
@@ -186,7 +199,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
   const warmup = createMemoryWarmup();
   const goal = createMemoryGoal();
   const insights = createMemoryInsights();
-  const library = createMemoryLibrary(SAMPLE_LIBRARY, async () => (await flaky.repo.loadAll()).cases, SAMPLE_LIBRARY_SKILLS);
+  const library = createMemoryLibrary(SAMPLE_LIBRARY, async () => (await flaky.repo.loadAll()).cases, SAMPLE_LIBRARY_SKILLS, SAMPLE_LIBRARY_NOTES);
   const interviewed = createMemoryInterviewed();
   const practice = createMemoryPractice(() =>
     community.profiles.map((p) => ({ userId: p.userId, name: p.displayName, open: p.listed })),

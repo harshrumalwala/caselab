@@ -32,6 +32,7 @@ import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 import { WarmupLink } from '../warmup/WarmupLink';
 import { CoachCard } from './CoachCard';
+import { WeeklyPlanCard } from './WeeklyPlanCard';
 
 // ---------------------------------------------------------------------------------------
 
@@ -194,6 +195,9 @@ export function ImprovementAreas() {
 
       {/* ---- The coach's read of the feedback you wrote -------------------------------- */}
       {total > 0 && <CoachCard />}
+
+      {/* ---- This week's plan: Bucket's focus plus the gaps in your practice ----------- */}
+      {total > 0 && <WeeklyPlanCard />}
 
       {/* ---- A. Limited exposure ------------------------------------------------------- */}
       <Card strip="coral" aria-labelledby="exposure-title">
