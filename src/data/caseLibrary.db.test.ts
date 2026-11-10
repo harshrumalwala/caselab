@@ -21,11 +21,11 @@ beforeEach(async () => {
   await db.exec('truncate public.library_cases cascade');
 });
 
-const addCase = async (name: string, over: { book?: string; year?: number; type?: string; industry?: string; cochair?: boolean; alsoIn?: string[] } = {}) => {
+const addCase = async (name: string, over: { book?: string; year?: number; type?: string; industry?: string; cochair?: boolean; alsoIn?: string[]; detailsKnown?: boolean } = {}) => {
   const { rows } = await db.query<{ id: string }>(
-    `insert into public.library_cases (book, school, year, name, case_type, industry, cochair_pick, also_in)
-     values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
-    [over.book ?? 'Booth MCG 2026-2027', 'Booth', over.year ?? 2026, name, over.type ?? 'Profitability', over.industry ?? 'Travel / Hospitality', over.cochair ?? false, over.alsoIn ?? []],
+    `insert into public.library_cases (book, school, year, name, case_type, industry, cochair_pick, also_in, details_known)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
+    [over.book ?? 'Booth MCG 2026-2027', 'Booth', over.year ?? 2026, name, over.type ?? 'Profitability', over.industry ?? 'Travel / Hospitality', over.cochair ?? false, over.alsoIn ?? [], over.detailsKnown ?? true],
   );
   await db.query(
     `insert into public.library_case_notes (case_id, difficulty, skills, concepts, summary, strong_answer, pitfalls, confidence)
@@ -60,6 +60,17 @@ describe('searching the library', () => {
     expect(await search('kellogg 2020')).toEqual(['Hawaiian Smoothies']);
     const { rows } = await db.query<{ also_in: string[] }>("select also_in from public.search_library('smoothies')");
     expect(rows[0].also_in).toEqual(['Kellogg Case Book 2020', 'Ross Case Book 2016']);
+  });
+
+  it('says whether the case type and industry are known, and lists a case with them known before one that is only listed', async () => {
+    await addCase('Rural Broadband', { book: 'Haas Case Book', year: 2015, type: 'Other', industry: 'Other', detailsKnown: false });
+    await addCase('Rural Broadband', { book: 'Ross Case Book 2013', year: 2013 });
+    await as(db, 'authenticated', ALICE);
+    const { rows } = await db.query<{ book: string; details_known: boolean }>("select book, details_known from public.search_library('rural')");
+    expect(rows).toEqual([
+      { book: 'Ross Case Book 2013', details_known: true },
+      { book: 'Haas Case Book', details_known: false },
+    ]);
   });
 
   it('puts exact and starting matches first, then the co-chairs\' picks, then newer books', async () => {

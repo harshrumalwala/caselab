@@ -53,8 +53,9 @@ export function changesFor(m: Pick<CaseMatch, 'title' | 'source' | 'caseType' | 
   const changes: Change[] = [];
   if (m.title !== l.name) changes.push({ field: 'title', label: 'Title', from: m.title, to: l.name });
   if (m.source !== l.book) changes.push({ field: 'source', label: 'Book', from: m.source, to: l.book });
-  if (m.caseType !== l.caseType) changes.push({ field: 'caseType', label: 'Case type', from: m.caseType, to: l.caseType });
-  if (m.industry !== l.industry) changes.push({ field: 'industry', label: 'Industry', from: m.industry, to: l.industry });
+  // The case type and industry only count when the library really knows them (a listed-only case has a placeholder).
+  if (l.detailsKnown && m.caseType !== l.caseType) changes.push({ field: 'caseType', label: 'Case type', from: m.caseType, to: l.caseType });
+  if (l.detailsKnown && m.industry !== l.industry) changes.push({ field: 'industry', label: 'Industry', from: m.industry, to: l.industry });
   return changes;
 }
 

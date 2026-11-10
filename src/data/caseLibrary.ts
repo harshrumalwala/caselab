@@ -22,6 +22,7 @@ interface LibraryRow {
   industry: string;
   cochair_pick: boolean;
   also_in?: string[] | null;
+  details_known?: boolean | null;
 }
 
 export function rowToLibraryCase(r: LibraryRow): LibraryCase | null {
@@ -37,6 +38,7 @@ export function rowToLibraryCase(r: LibraryRow): LibraryCase | null {
     industry: typeof r.industry === 'string' ? r.industry : '',
     cochairPick: r.cochair_pick === true,
     alsoIn: Array.isArray(r.also_in) ? r.also_in.filter((b): b is string => typeof b === 'string') : [],
+    detailsKnown: r.details_known !== false,
   };
 }
 
@@ -57,6 +59,7 @@ interface MatchRow {
   lib_industry: string;
   lib_cochair: boolean;
   lib_also_in: string[] | null;
+  lib_details_known?: boolean | null;
 }
 
 /** A row of match_my_cases(), read defensively: a row that is not shaped as expected is left out. */
@@ -71,6 +74,7 @@ export function rowToCaseMatch(r: MatchRow): CaseMatch | null {
     industry: r.lib_industry,
     cochair_pick: r.lib_cochair,
     also_in: r.lib_also_in,
+    details_known: r.lib_details_known,
   });
   if (!library || typeof r.case_id !== 'string' || typeof r.title !== 'string') return null;
   const caseType = (CASE_TYPES as readonly string[]).includes(r.case_type) ? (r.case_type as CaseType) : 'Other';

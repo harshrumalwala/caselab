@@ -146,6 +146,34 @@ describe('one entry per case name', () => {
   });
 });
 
+describe('cases that are only listed', () => {
+  const listed = (over: Partial<SeedCase> = {}): SeedCase => {
+    const { difficulty: _d, skills: _s, concepts: _c, summary: _su, strongAnswer: _sa, pitfalls: _p, confidence: _co, ...rest } = sample({ caseType: 'Other', industry: 'Other', ...over });
+    return { ...rest, detailsKnown: false } as SeedCase;
+  };
+
+  it('is stored with its details marked as not known, and no analysis', async () => {
+    await run([listed({ name: 'Rural Broadband Rollout', book: 'Haas Case Book', school: 'Haas', year: 2015 })]);
+    const { rows } = await db.query<{ details_known: boolean; case_type: string }>('select details_known, case_type from public.library_cases');
+    expect(rows).toEqual([{ details_known: false, case_type: 'Other' }]);
+    expect(await counts()).toEqual({ cases: 1, notes: 0 });
+  });
+
+  it('takes the case type and industry from another copy of the case that has them', () => {
+    const { winners } = dedupe([
+      listed({ name: 'Maine Apples', book: 'Ross Case Book 2024', school: 'Ross', year: 2024 }),
+      sample({ name: 'Maine Apples', book: 'Kellogg Case Book 2020', school: 'Kellogg', year: 2020, caseType: 'Profitability', industry: 'Consumer Products / Retail' }),
+    ]);
+    expect(winners[0]).toMatchObject({ book: 'Ross Case Book 2024', caseType: 'Profitability', industry: 'Consumer Products / Retail', detailsKnown: true });
+    expect(winners[0].strongAnswer).toBeTruthy(); // and the analysis too
+  });
+
+  it('keeps the placeholder marked as unknown when no copy knows them', () => {
+    const { winners } = dedupe([listed({ name: 'Maine Apples', book: 'Ross Case Book 2024', school: 'Ross', year: 2024 }), listed({ name: 'Maine Apples', book: 'Ross Case Book 2013', school: 'Ross', year: 2013 })]);
+    expect(winners[0]).toMatchObject({ book: 'Ross Case Book 2024', detailsKnown: false });
+  });
+});
+
 describe('linking the cases members already logged', () => {
   it('links a case with the same name that names the book, changes nothing else about it, and leaves a maybe alone', async () => {
     await as(db, 'postgres');

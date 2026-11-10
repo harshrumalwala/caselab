@@ -28,7 +28,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the case library', () => {
     expect(error).toBeNull();
     expect(Array.isArray(data)).toBe(true);
     for (const row of (data ?? []) as Record<string, unknown>[]) {
-      expect(Object.keys(row).sort()).toEqual(['also_in', 'book', 'case_type', 'cochair_pick', 'id', 'industry', 'name', 'school', 'year']);
+      expect(Object.keys(row).sort()).toEqual(['also_in', 'book', 'case_type', 'cochair_pick', 'details_known', 'id', 'industry', 'name', 'school', 'year']);
     }
     const none = await a.client.rpc('search_library', { p_query: 'x' }); // one letter is not a search
     expect(none.error).toBeNull();

@@ -73,6 +73,20 @@ describe('suggestions while you type a case title', () => {
     expect(dialog.queryByRole('listbox', { name: 'Casebook cases' })).not.toBeInTheDocument();
   });
 
+  it('fills in only the title and the book for a case that is only listed, and leaves the type and industry for you to choose', async () => {
+    const { user, dialog, title } = await openLogCase();
+    await user.type(title, 'rural broad');
+    const option = await dialog.findByRole('option', { name: /Rural Broadband Rollout/ });
+    expect(option).toHaveTextContent('Haas Case Book'); // the book, and no made-up type or industry
+    expect(option).not.toHaveTextContent('Other');
+    await user.click(option);
+    expect(title).toHaveValue('Rural Broadband Rollout');
+    expect(dialog.getByLabelText('Case source')).toHaveValue('Haas Case Book');
+    expect(dialog.getByLabelText(/Case type/)).toHaveValue('');
+    expect(dialog.getByLabelText(/Industry/)).toHaveValue('');
+    expect(dialog.getByText(/Filled in from Rural Broadband Rollout \(Haas Case Book\)/)).toBeInTheDocument();
+  });
+
   it('does not suggest the case you just picked all over again', async () => {
     const { user, env, dialog, title } = await openLogCase();
     await user.type(title, 'army ho');

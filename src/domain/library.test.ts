@@ -12,6 +12,7 @@ const c = (name: string, over: Partial<LibraryCase> = {}): LibraryCase => ({
   industry: 'Travel / Hospitality',
   cochairPick: false,
   alsoIn: [],
+  detailsKnown: true,
   ...over,
 });
 
@@ -65,11 +66,25 @@ describe('picking a library case', () => {
   });
 });
 
+describe('a case that is only listed', () => {
+  const listed = c('Rural Broadband Rollout', { book: 'Haas Case Book', school: 'Haas', year: 2015, caseType: 'Other', industry: 'Other', detailsKnown: false });
+
+  it('fills in the title, the book and the link, and leaves the case type and industry for the member to choose', () => {
+    expect(libraryPrefill(listed)).toEqual({ title: 'Rural Broadband Rollout', source: 'Haas Case Book', libraryId: 'id-Rural Broadband Rollout' });
+  });
+
+  it('is found like any other, but a case with its details known comes before it', () => {
+    const both = [listed, c('Rural Broadband Rollout', { book: 'Ross Case Book 2013', school: 'Ross', year: 2013 })];
+    expect(searchLibrary(both, 'rural').map((x) => x.book)).toEqual(['Ross Case Book 2013', 'Haas Case Book']);
+    expect(searchLibrary([listed], 'rural broadband').map((x) => x.name)).toEqual(['Rural Broadband Rollout']);
+  });
+});
+
 describe('a row from the database', () => {
   const row = { id: 'x', name: 'Army Hotel', book: 'Booth MCG 2026-2027', school: 'Booth', year: 2026, case_type: 'Market Entry', industry: 'Travel / Hospitality', cochair_pick: true, also_in: ['Kellogg Case Book 2020'] };
 
   it('becomes a library case', () => {
-    expect(rowToLibraryCase(row)).toEqual({ id: 'x', name: 'Army Hotel', book: 'Booth MCG 2026-2027', school: 'Booth', year: 2026, caseType: 'Market Entry', industry: 'Travel / Hospitality', cochairPick: true, alsoIn: ['Kellogg Case Book 2020'] });
+    expect(rowToLibraryCase(row)).toEqual({ id: 'x', name: 'Army Hotel', book: 'Booth MCG 2026-2027', school: 'Booth', year: 2026, caseType: 'Market Entry', industry: 'Travel / Hospitality', cochairPick: true, alsoIn: ['Kellogg Case Book 2020'], detailsKnown: true });
   });
 
   it('treats an unknown case type as Other, and leaves out a row that is not shaped as expected', () => {
@@ -78,5 +93,8 @@ describe('a row from the database', () => {
     expect(rowToLibraryCase({ ...row, cochair_pick: undefined as unknown as boolean })?.cochairPick).toBe(false);
     expect(rowToLibraryCase({ ...row, also_in: null })?.alsoIn).toEqual([]);
     expect(rowToLibraryCase({ ...row, also_in: undefined })?.alsoIn).toEqual([]);
+    expect(rowToLibraryCase(row)?.detailsKnown).toBe(true);
+    expect(rowToLibraryCase({ ...row, details_known: undefined })?.detailsKnown).toBe(true); // an older row without the column
+    expect(rowToLibraryCase({ ...row, details_known: false })?.detailsKnown).toBe(false);
   });
 });
