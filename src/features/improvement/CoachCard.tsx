@@ -8,8 +8,10 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { ALL_CASES_CAP, MIN_CASES, RECENT_CASES, type CoachRead, type FeedbackScope } from '../../data/feedbackInsights';
 import { describeError } from '../../data/errors';
+import type { LibraryCase } from '../../domain/library';
 import { useData } from '../../state/DataProvider';
 import { useInsights } from '../../state/InsightsProvider';
+import { useLibrary } from '../../state/LibraryProvider';
 import { BucketAvatar } from './BucketAvatar';
 
 /** Whether a case has any writing for the coach to read: feedback, notes, what was learned, or feedback on a single skill. */
@@ -22,6 +24,44 @@ const SCOPES: { value: FeedbackScope; label: string }[] = [
   { value: 'recent', label: `Last ${RECENT_CASES} cases` },
   { value: 'all', label: `All cases (latest ${ALL_CASES_CAP})` },
 ];
+
+/**
+ * A few casebook cases that exercise the skill Bucket says to work on and that you have not done. Only the case's name, book, type and
+ * industry are shown (the same as the title suggestions); why it fits is only the skill you were told to work on. Silent when there are
+ * none or the lookup fails.
+ */
+function TryNext({ skill }: { skill: string }) {
+  const library = useLibrary();
+  const { cases } = useData();
+  const [found, setFound] = useState<LibraryCase[]>([]);
+  const logged = cases.length; // a case you log now drops out of the list
+  useEffect(() => {
+    if (!library) return;
+    let live = true;
+    library.nextCases(skill, 3).then(
+      (list) => live && setFound(list),
+      () => live && setFound([]),
+    );
+    return () => {
+      live = false;
+    };
+  }, [library, skill, logged]);
+  if (found.length === 0) return null;
+  return (
+    <div className="mt-2 border-t border-ink/10 pt-2">
+      <p className="text-xs font-semibold text-ink-2">Cases to try for this</p>
+      <ul className="mt-1 space-y-1">
+        {found.map((c) => (
+          <li key={c.id} className="text-sm text-ink">
+            <span className="font-semibold">{c.name}</span>
+            {c.cochairPick && <span className="ml-1.5 rounded-full bg-lilac-soft px-1.5 py-0.5 text-[10px] font-bold text-lilac-ink">Co-chair pick</span>}
+            <span className="block text-xs text-muted">{c.detailsKnown ? `${c.book} · ${c.caseType} · ${c.industry}` : c.book}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 const minutes = (seconds: number) => (seconds < 90 ? 'a minute' : `${Math.ceil(seconds / 60)} minutes`);
 
@@ -191,6 +231,7 @@ export function CoachCard() {
                       <p className="mt-1.5 text-sm text-ink">
                         <span className="font-semibold">Try:</span> {f.action}
                       </p>
+                      {f.skill && <TryNext skill={f.skill} />}
                     </li>
                   ))}
                 </ol>

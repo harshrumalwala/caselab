@@ -241,7 +241,9 @@ describe('reaching a new level', () => {
     const cases = manyCases(8);
     await open(await envWith(cases));
     expect(screen.queryByRole('dialog', { name: /Promoted|Level \d/ })).not.toBeInTheDocument();
-    expect(window.localStorage.getItem(SEEN)).toBe(String(progressFor(cases).level));
+    // The level is noted once the cases have loaded, which can be a moment after the page appears.
+    await waitFor(() => expect(window.localStorage.getItem(SEEN)).toBe(String(progressFor(cases).level)));
+    expect(screen.queryByRole('dialog', { name: /Promoted|Level \d/ })).not.toBeInTheDocument();
   });
 
   it('never counts sample data in demo mode', async () => {

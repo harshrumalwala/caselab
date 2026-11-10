@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { CASE_TYPES, type CaseType } from '../domain/constants';
 import { searchLibrary, type LibraryCase } from '../domain/library';
-import { matchCases, type CaseMatch } from '../domain/libraryMatch';
+import { libraryNameKey, matchCases, type CaseMatch } from '../domain/libraryMatch';
 import type { CaseRecord } from '../domain/types';
 
 /** Search the casebook library by name, book, school or year. Read-only, and only what a member who has not done the case may see. */
@@ -9,6 +9,8 @@ export interface LibraryRepository {
   search(query: string, limit?: number): Promise<LibraryCase[]>;
   /** Your own cases that look like casebook cases and are not linked yet, or are linked and differ from the library (for review). */
   matchMyCases(): Promise<CaseMatch[]>;
+  /** A few casebook cases that exercise a skill and that you have not done yet (co-chair picks and newer books first). */
+  nextCases(skill: string, limit?: number): Promise<LibraryCase[]>;
 }
 
 /** A row of search_library(), read defensively: a row that is not shaped as expected is left out, never half-shown. */
@@ -95,14 +97,27 @@ export class SupabaseLibrary implements LibraryRepository {
     if (error) throw error;
     return ((data ?? []) as MatchRow[]).flatMap((r) => rowToCaseMatch(r) ?? []);
   }
+
+  async nextCases(skill: string, limit = 3): Promise<LibraryCase[]> {
+    const { data, error } = await this.client.rpc('library_next_cases', { p_skill: skill, p_limit: limit });
+    if (error) throw error;
+    return ((data ?? []) as LibraryRow[]).flatMap((r) => rowToLibraryCase(r) ?? []);
+  }
 }
 
 /** For tests: the same search as the database, over a fixed list, and a record of what was asked. */
-export function createMemoryLibrary(cases: LibraryCase[] = [], myCases: () => Promise<CaseRecord[]> = async () => []) {
+export function createMemoryLibrary(
+  cases: LibraryCase[] = [],
+  myCases: () => Promise<CaseRecord[]> = async () => [],
+  /** Which skills each library case exercises (the private analysis), by library id. */
+  skillsById: Record<string, string[]> = {},
+) {
   const queries: string[] = [];
+  const nextAsked: string[] = [];
   const state = { failing: false as boolean };
   return {
     queries,
+    nextAsked,
     state,
     cases,
     async search(query: string, limit = 8) {
@@ -113,6 +128,17 @@ export function createMemoryLibrary(cases: LibraryCase[] = [], myCases: () => Pr
     async matchMyCases() {
       if (state.failing) throw new Error('Failed to fetch');
       return matchCases(await myCases(), cases);
+    },
+    async nextCases(skill: string, limit = 3) {
+      nextAsked.push(skill);
+      if (state.failing) throw new Error('Failed to fetch');
+      const mine = await myCases();
+      const done = new Set(mine.flatMap((m) => (m.libraryId ? [m.libraryId] : [])));
+      const titles = new Set(mine.map((m) => libraryNameKey(m.title)));
+      return cases
+        .filter((c) => (skillsById[c.id] ?? []).includes(skill) && !done.has(c.id) && !titles.has(libraryNameKey(c.name)))
+        .sort((a, b) => Number(b.cochairPick) - Number(a.cochairPick) || b.year - a.year || a.name.localeCompare(b.name))
+        .slice(0, Math.min(Math.max(limit, 1), 10));
     },
   } satisfies LibraryRepository & Record<string, unknown>;
 }
