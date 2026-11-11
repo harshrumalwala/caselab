@@ -55,6 +55,10 @@ export interface ExhibitChart {
   segmentNames: boolean;
   /** For a scatter chart: the horizontal position of each point (the categories are then the point labels). */
   xValues: number[];
+  /** Print the value on each bar or point. Off when the book prints none (the labels it does print are always shown). */
+  valueLabels: boolean;
+  /** A note the book prints under or beside the chart, such as a footnote or a callout. */
+  footnote: string;
   /** Words the book prints at the two ends of the vertical axis, such as "Extremely important" and "Not at all important". */
   axisEnds: { top: string; bottom: string } | null;
   /** Several charts side by side in one exhibit; each has its own heading. */
@@ -79,6 +83,8 @@ export const blankChart: ExhibitChart = {
   horizontal: false,
   segmentNames: false,
   xValues: [],
+  valueLabels: true,
+  footnote: '',
   axisEnds: null,
   panels: [],
 };
@@ -186,7 +192,8 @@ function parseChart(v: unknown, columns: string[], rows: string[][], depth = 0):
       return {
         name: str(so.name, 80),
         values,
-        labels: (Array.isArray(so.labels) ? so.labels : []).map((l) => str(l, 40)),
+        // a label of just a space is deliberate: the book prints nothing on that point (an empty label means "print the value")
+        labels: (Array.isArray(so.labels) ? so.labels : []).map((l) => (typeof l === 'string' && l.length > 0 && l.trim() === '' ? ' ' : str(l, 40))),
         type: so.type === 'line' ? ('line' as const) : ('bar' as const),
         color: str(so.color, 20),
       };
@@ -233,6 +240,8 @@ function parseChart(v: unknown, columns: string[], rows: string[][], depth = 0):
     horizontal: o.horizontal === true,
     segmentNames: o.segmentNames === true,
     xValues: (Array.isArray(o.xValues) ? o.xValues : []).map((n) => num(n) ?? NaN).filter((n) => Number.isFinite(n)),
+    valueLabels: o.valueLabels !== false,
+    footnote: str(o.footnote, 240),
     axisEnds: str(obj(o.axisEnds).top, 40) || str(obj(o.axisEnds).bottom, 40) ? { top: str(obj(o.axisEnds).top, 40), bottom: str(obj(o.axisEnds).bottom, 40) } : null,
     panels,
   };

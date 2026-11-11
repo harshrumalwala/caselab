@@ -52,6 +52,18 @@ function wrap(label: string, max = 12): string[] {
   return [label.slice(0, at), label.slice(at + 1)];
 }
 
+/** The margins of a panel and how many characters a category label can have before it wraps. */
+function metrics(chart: Chart, width: number) {
+  const hasSide = chart.sideNotes !== null;
+  const endLabels = chart.series.some((s) => s.type === 'line' || chart.kind === 'line') && chart.kind !== 'pie';
+  const left = chart.kind === 'pie' ? 10 : 52 + (chart.axisEnds ? 62 : 0);
+  const right = hasSide ? 110 : endLabels ? 74 : 14;
+  const slot = (width - left - right) / Math.max(chart.categories.length, 1);
+  const maxCh = Math.max(5, Math.floor(slot / 6));
+  const wrapped = chart.kind !== 'pie' && !(chart.kind === 'bar' && chart.horizontal) && chart.categories.some((c) => wrap(c, maxCh).length > 1);
+  return { left, right, slot, maxCh, wrapped };
+}
+
 interface Box {
   x: number;
   y: number;
@@ -69,17 +81,12 @@ function Text({ x, y, children, anchor = 'middle', size = 11, weight = 400, fill
 
 /** One chart (a panel, when the exhibit has several), as an SVG group of the given width. */
 function Panel({ chart, width }: { chart: Chart; width: number }) {
-  const hasSide = chart.sideNotes !== null;
   const lineSeries = chart.series.filter((s) => s.type === 'line' || chart.kind === 'line');
-  const endLabels = lineSeries.length > 0 && chart.kind !== 'pie';
-  const left = chart.kind === 'pie' ? 10 : 52 + (chart.axisEnds ? 62 : 0);
-  const right = hasSide ? 110 : endLabels ? 74 : 14;
+  const { left, right, maxCh, wrapped } = metrics(chart, width);
   const top = (chart.heading ? 22 : 0) + (chart.axisTitle ? 22 : 8) + (chart.totals.length > 0 ? 14 : 0);
   const rowsH = chart.belowRows.length * 16;
   const plotH = chart.kind === 'pie' ? 190 : 170;
-  const wrapped = chart.categories.some((c) => wrap(c).length > 1);
   const catH = chart.kind === 'pie' ? 0 : wrapped ? 42 : 30;
-  const H = top + plotH + catH + rowsH + 12;
   const plot: Box = { x: left, y: top, w: width - left - right, h: plotH };
 
   const n = Math.max(chart.categories.length, 1);
@@ -100,7 +107,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
   const cx = (i: number) => plot.x + slot * i + slot / 2;
   const ticks = chart.kind === 'pie' ? [] : ticksFor(yMin, yMax, chart.yStep ?? (chart.percent ? 20 : null));
   const fmtTick = (t: number) => `${chart.unit === '$' || chart.unit === '$M' || chart.unit === '$B' ? '$' : ''}${short(t)}${chart.unit === '%' ? '%' : chart.unit === '$M' ? 'M' : chart.unit === '$B' ? 'B' : ''}`;
-  const labelFor = (s: ChartSeries, i: number) => s.labels[i] || short(s.values[i]);
+  const labelFor = (s: ChartSeries, i: number) => s.labels[i] || (chart.valueLabels ? short(s.values[i]) : '');
 
   const body: ReactNode[] = [];
 
@@ -131,7 +138,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
     });
   } else {
     // grid, axis numbers and the axis title
-    ticks.forEach((t) =>
+    (chart.kind === 'bar' && chart.horizontal ? [] : ticks).forEach((t) =>
       body.push(
         <g key={`t${t}`}>
           <line x1={plot.x} x2={plot.x + plot.w} y1={y(t)} y2={y(t)} stroke={INK} strokeOpacity={t === 0 ? 0.6 : 0.12} strokeWidth={1} />
@@ -179,6 +186,14 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
       const barH = Math.min(rowH * 0.7, 26 / Math.max(barSeries.length, 1) + 12);
       const xMaxV = chart.yMax ?? niceMax(dataMax, chart.yStep);
       const xScale = (v: number) => plot.x + (v / (xMaxV || 1)) * plot.w;
+      ticksFor(0, xMaxV, chart.yStep).forEach((t) => {
+        body.push(<line key={`xg${t}`} x1={xScale(t)} x2={xScale(t)} y1={plot.y} y2={plot.y + plot.h} stroke={INK} strokeOpacity={t === 0 ? 0.6 : 0.12} strokeWidth={1} />);
+        body.push(
+          <Text key={`xt${t}`} x={xScale(t)} y={plot.y + plot.h + 14} size={10} opacity={0.75}>
+            {fmtTick(t)}
+          </Text>,
+        );
+      });
       chart.categories.forEach((c, i) => {
         const cy = plot.y + rowH * i + rowH / 2;
         body.push(
@@ -211,7 +226,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
             acc += v;
             const segH = Math.abs(y0 - y1);
             body.push(<rect key={`g${i}-${si}`} x={x0} y={Math.min(y0, y1)} width={groupW} height={Math.max(segH, 0)} fill={greyFor(si)} stroke="#ffffff" strokeWidth={0.8} />);
-            if (segH > 13) {
+            if (segH > 13 && (chart.segmentNames || labelFor(s, i))) {
               body.push(
                 <Text key={`gl${i}-${si}`} x={cx(i)} y={(y0 + y1) / 2 + 4} size={10} fill={onGrey(si)}>
                   {chart.segmentNames ? s.name : labelFor(s, i)}
@@ -246,7 +261,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
             );
           }
         }
-        wrap(c).forEach((line, li) =>
+        wrap(c, maxCh).forEach((line, li) =>
           body.push(
             <Text key={`cat${i}-${li}`} x={cx(i)} y={plot.y + plot.h + 16 + li * 12} size={10}>
               {line}
@@ -336,16 +351,20 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
         </Text>
       )}
       {body}
+      {chart.footnote && (
+        <Text x={4} y={top + plotH + catH + rowsH + 14} anchor="start" size={10} opacity={0.85}>
+          {chart.footnote}
+        </Text>
+      )}
       <title>{chart.heading || chart.axisTitle}</title>
-      <rect x={0} y={0} width={0} height={H} fill="none" />
     </g>
   );
 }
 
-const panelHeight = (c: Chart): number => {
+const panelHeight = (c: Chart, width: number): number => {
   const top = (c.heading ? 22 : 0) + (c.axisTitle ? 22 : 8) + (c.totals.length > 0 ? 14 : 0);
-  const wrapped = c.categories.some((x) => wrap(x).length > 1);
-  return top + (c.kind === 'pie' ? 190 : 170) + (c.kind === 'pie' ? 0 : wrapped ? 42 : 30) + c.belowRows.length * 16 + 12;
+  const { wrapped } = metrics(c, width);
+  return top + (c.kind === 'pie' ? 190 : 170) + (c.kind === 'pie' ? 0 : wrapped ? 42 : 30) + c.belowRows.length * 16 + (c.footnote ? 16 : 0) + 12;
 };
 
 /**
@@ -355,20 +374,26 @@ const panelHeight = (c: Chart): number => {
  */
 export function ExhibitChart({ exhibit, chart }: { exhibit: SolutionExhibit; chart: Chart }) {
   const panels = chart.panels.length > 0 ? chart.panels : [chart];
-  const each = panels.length > 1 ? 330 : 560;
-  const W = each * panels.length;
-  const H = Math.max(...panels.map(panelHeight));
+  const hasPie = panels.some((x) => x.kind === 'pie');
+  const each = hasPie ? 420 : panels.length > 1 ? 340 : 560; // a pie needs room for its labels on both sides
+  const perRow = Math.min(panels.length, 2); // never more than two to a row, so the text stays readable
+  const rows = Array.from({ length: Math.ceil(panels.length / perRow) }, (_, r) => panels.slice(r * perRow, (r + 1) * perRow));
+  const rowHeights = rows.map((r) => Math.max(...r.map((p) => panelHeight(p, each))));
+  const W = each * perRow;
+  const H = rowHeights.reduce((a, b) => a + b, 0);
   const description = `${exhibit.title}: ${panels
     .map((p) => `${p.heading ? `${p.heading}: ` : ''}${p.categories.map((c, i) => `${c} ${p.series.map((s) => s.labels[i] || s.values[i]).join(', ')}`).join('; ')}`)
     .join(' | ')}`;
   return (
     <div className="max-w-full overflow-x-auto text-ink">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={description} className="h-auto" style={{ width: '100%', maxWidth: W, minWidth: Math.min(W, 420) }}>
-        {panels.map((p, i) => (
-          <g key={i} transform={`translate(${each * i},0)`}>
-            <Panel chart={p} width={each} />
-          </g>
-        ))}
+        {rows.map((r, ri) =>
+          r.map((p, ci) => (
+            <g key={`${ri}-${ci}`} transform={`translate(${each * ci},${rowHeights.slice(0, ri).reduce((a, b) => a + b, 0)})`}>
+              <Panel chart={p} width={each} />
+            </g>
+          )),
+        )}
       </svg>
     </div>
   );
