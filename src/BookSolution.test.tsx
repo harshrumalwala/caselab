@@ -193,6 +193,13 @@ describe('a write-up read from the database', () => {
     expect([parseFigure('$1.2M'), parseFigure('95%'), parseFigure('(300)'), parseFigure('1,200'), parseFigure('~40'), parseFigure('3x'), parseFigure('n/a'), parseFigure('')]).toEqual([1_200_000, 95, -300, 1200, 40, 3, null, null]);
   });
 
+  it('keeps an exhibit whose column headings are blank in the book, so the figures still line up', () => {
+    const s = parseBookSolution({ ...good, exhibits: [{ title: 'Impact on Valuation', columns: ['', ''], rows: [['Total Cost Synergies', '$10,000,000']] }] });
+    expect(s?.exhibits).toHaveLength(1);
+    expect(s?.exhibits[0].columns).toEqual(['', '']);
+    expect(s?.exhibits[0].rows).toEqual([['Total Cost Synergies', '$10,000,000']]);
+  });
+
   it('tolerates missing lists and an odd confidence, and cuts rows to the columns', () => {
     const s = parseBookSolution({ prompt: 'q', recommendation: 'r', steps: [{ title: 't', body: 'b' }], confidence: 'weird', exhibits: [{ title: 'E', columns: ['A'], rows: [['1', '2', '3']] }] });
     expect(s).toMatchObject({ facts: [], structure: [], risks: [], nextSteps: [], ourTakeaways: [], confidence: 'high' });

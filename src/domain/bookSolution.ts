@@ -161,7 +161,8 @@ export function parseBookSolution(raw: unknown): BookSolution | null {
   const exhibits: SolutionExhibit[] = (Array.isArray(v.exhibits) ? v.exhibits : [])
     .map((e) => {
       const o = obj(e);
-      const columns = strs(o.columns, 80, 12);
+      // A heading can be blank in the book itself: keep it, so the columns still line up with the rows.
+      const columns = (Array.isArray(o.columns) ? o.columns : []).map((c) => str(c, 80)).slice(0, 12);
       const rows = (Array.isArray(o.rows) ? o.rows : [])
         .map((r) => (Array.isArray(r) ? r.map((c) => str(c, 120)).slice(0, columns.length || 12) : []))
         .filter((r) => r.some((c) => c !== ''))
@@ -178,7 +179,7 @@ export function parseBookSolution(raw: unknown): BookSolution | null {
       };
     })
     .filter((e) => e.title && e.columns.length > 0 && e.rows.length > 0)
-    .slice(0, 8);
+    .slice(0, 12);
 
   const clarifyingQuestions: ClarifyingQuestion[] = (Array.isArray(v.clarifyingQuestions) ? v.clarifyingQuestions : [])
     .map((q) => {
