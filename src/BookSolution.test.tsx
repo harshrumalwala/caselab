@@ -53,13 +53,13 @@ describe('the full solution, in a case you did', () => {
     expect(section.getByText('Open the hotel only if off-peak occupancy clears the break-even.')).toBeInTheDocument();
     expect(section.getByText('Base closure')).toBeInTheDocument();
     expect(section.queryByText(/Slips in the book/)).not.toBeInTheDocument();
-    // Everything we add is purple and labelled Ours; the book's solution is plain text.
-    expect(section.getByText(/Purple notes are ours/)).toBeInTheDocument();
-    expect(section.getByText('Ours · How to read it fast')).toBeInTheDocument();
-    expect(section.getByText('Ours · What to notice')).toBeInTheDocument();
-    expect(section.getByText('Ours · How to deliver it')).toBeInTheDocument();
-    const takeaways = within(section.getByRole('region', { name: 'Our top takeaways' }));
-    expect(takeaways.getByText(/Top 2 things we picked up/)).toBeInTheDocument();
+    // Everything we add is purple and labelled as Bucket's tip; the book's solution is plain text.
+    expect(section.getByText(/Purple tips are from Bucket/)).toBeInTheDocument();
+    expect(section.getByText("Bucket's tip · How to read it fast")).toBeInTheDocument();
+    expect(section.getByText("Bucket's tip · What to notice")).toBeInTheDocument();
+    expect(section.getByText("Bucket's tip · How to deliver it")).toBeInTheDocument();
+    const takeaways = within(section.getByRole('region', { name: "Bucket's top takeaways" }));
+    expect(takeaways.getByText(/Bucket's top 2 takeaways/)).toBeInTheDocument();
     expect(takeaways.getByText(/Peak demand is not the year/)).toBeInTheDocument();
     expect(takeaways.getByText(/\(from the exhibit\)/)).toBeInTheDocument();
     await user.click(toggle);
@@ -77,13 +77,13 @@ describe('the full solution, in a case you did', () => {
     expect(section.getByText('The chain should build if off-peak occupancy clears break-even.')).toBeInTheDocument();
     expect(section.getByText('Will enough soldiers stay?')).toBeInTheDocument();
     expect(section.getByText('Occupancy decides revenue.')).toBeInTheDocument();
-    expect(section.getByText('Ours · How to read it fast')).toBeInTheDocument();
+    expect(section.getByText("Bucket's tip · How to read it fast")).toBeInTheDocument();
     expect(section.getByText('Compare the two seasons first, then ask which one carries the year.')).toBeInTheDocument();
     expect(section.getByRole('img', { name: /Exhibit 1: Occupancy by season: Peak/ })).toBeInTheDocument(); // the chart, described for screen readers
     expect(section.getByText('Off-peak occupancy of 40% is the number that decides the case.')).toBeInTheDocument();
-    expect(section.getByText('Ours · What to notice')).toBeInTheDocument();
+    expect(section.getByText("Bucket's tip · What to notice")).toBeInTheDocument();
     expect(section.getByText('Treating peak demand as year-round')).toBeInTheDocument();
-    expect(section.getByText('Ours · How to deliver it')).toBeInTheDocument();
+    expect(section.getByText("Bucket's tip · How to deliver it")).toBeInTheDocument();
     expect(section.getByText(/I would not open it yet\./)).toBeInTheDocument();
     expect(section.getByText('Leaving out the off-peak months')).toBeInTheDocument();
   });

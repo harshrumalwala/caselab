@@ -23,14 +23,14 @@ const Bullets = ({ items }: { items: string[] }) => (
   </ul>
 );
 
-// What we add or suggest (anything that is not the book's own solution) is always purple and labelled "Ours", so it is never mistaken
+// What we add or suggest (anything that is not the book's own solution) is always purple and labelled as Bucket's tip, so it is never mistaken
 // for the book. Everything else on this screen is the book's solution, reworded.
 const OURS = 'text-lilac-ink';
 
 function OurNote({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className={`rounded-lg border-l-4 border-lilac bg-lilac-soft px-3 py-2 text-sm ${OURS}`}>
-      <p className="text-xs font-bold uppercase tracking-wide">Ours · {label}</p>
+      <p className="text-xs font-bold uppercase tracking-wide">Bucket's tip · {label}</p>
       <div className="mt-0.5">{children}</div>
     </div>
   );
@@ -55,7 +55,7 @@ function SolutionBody({ s }: { s: BookSolution }) {
   return (
     <div className="space-y-6">
       <p className="rounded-lg bg-surface px-3 py-2 text-xs text-muted">
-        Plain text is the book's own solution, in our words. <span className={`font-semibold ${OURS}`}>Purple notes are ours</span>: what we suggest you notice, not what the book says.
+        Plain text is the book's own solution, in our words. <span className={`font-semibold ${OURS}`}>Purple tips are from Bucket</span>: what Bucket suggests you notice, not what the book says.
       </p>
 
       <Block label="The question">
@@ -187,7 +187,7 @@ function SolutionBody({ s }: { s: BookSolution }) {
               )}
               {st.checkYourself.length > 0 && (
                 <fieldset className={`space-y-1 ${OURS}`}>
-                  <legend className="text-xs font-bold uppercase tracking-wide">Ours · Check yourself</legend>
+                  <legend className="text-xs font-bold uppercase tracking-wide">Bucket's tip · Check yourself</legend>
                   {st.checkYourself.map((q, j) => {
                     const key = `${i}-${j}`;
                     return (
@@ -239,8 +239,8 @@ function SolutionBody({ s }: { s: BookSolution }) {
       )}
 
       {s.ourTakeaways.length > 0 && (
-        <section aria-label="Our top takeaways" className={`space-y-2 rounded-xl border-2 border-lilac bg-lilac-soft p-3.5 ${OURS}`}>
-          <h4 className="text-sm font-bold">Ours · Top {s.ourTakeaways.length} things we picked up</h4>
+        <section aria-label="Bucket's top takeaways" className={`space-y-2 rounded-xl border-2 border-lilac bg-lilac-soft p-3.5 ${OURS}`}>
+          <h4 className="text-sm font-bold">Bucket's top {s.ourTakeaways.length} takeaways</h4>
           <ol className="space-y-2">
             {s.ourTakeaways.map((t, i) => (
               <li key={t.title} className="text-sm">
@@ -257,7 +257,7 @@ function SolutionBody({ s }: { s: BookSolution }) {
 
       {touched && (
         <section aria-label="Where your attempt differed" className={`space-y-1.5 rounded-xl border-2 border-lilac p-3.5 ${OURS}`}>
-          <h4 className="text-sm font-bold">Ours · Where your attempt differed</h4>
+          <h4 className="text-sm font-bold">Bucket · Where your attempt differed</h4>
           {missed.length === 0 ? (
             <p className="text-sm">You ticked every check. Nothing to revisit.</p>
           ) : (
@@ -285,7 +285,7 @@ function SolutionBody({ s }: { s: BookSolution }) {
 /**
  * "Full solution": the book's own solution to a case you did, written up in our own words with its numbers, step by step, so you can compare your
  * attempt with it at every stage. The book's content is plain text; everything we add (how to read an exhibit, what to notice, a model delivery,
- * our top three takeaways, the check-yourself list) is purple and labelled "Ours". Released by the database only to a member who logged the case
+ * Bucket's top three takeaways, the check-yourself list) is purple and labelled as Bucket's. Released by the database only to a member who logged the case
  * and shown only to you. It starts closed, and the section is not there at all when the case has no link, no write-up yet, the lookup fails, or in
  * demo mode.
  */
@@ -317,7 +317,7 @@ export function BookSolutionSection({ c }: { c: CaseRecord }) {
         <FileText className="size-5 shrink-0 text-accent-text" aria-hidden />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-bold text-ink">Full solution</span>
-          <span className="block text-xs text-muted">The book's own solution, step by step, in our own words, with our notes in purple. Private to you.</span>
+          <span className="block text-xs text-muted">The book's own solution, step by step, in our own words, with Bucket's tips in purple. Private to you.</span>
         </span>
         {open ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}
       </button>
