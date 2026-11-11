@@ -36,13 +36,25 @@ export interface SeedSolution {
   year?: number;
   prompt: string;
   facts?: string[];
-  structure?: { heading: string; points: string[] }[];
-  steps: { title: string; body?: string; calc?: string[] }[];
-  exhibits?: { title: string; caption?: string; columns: string[]; rows: string[][]; approx?: boolean }[];
+  clarifyingQuestions?: { question: string; answer: string; why?: string }[];
+  hypothesis?: { statement: string; basis?: string };
+  structure?: { heading: string; points: string[]; keyQuestion?: string; why?: string }[];
+  steps: { title: string; body?: string; calc?: string[]; whatToNotice?: string; commonMiss?: string[]; checkYourself?: string[] }[];
+  exhibits?: {
+    title: string;
+    caption?: string;
+    columns: string[];
+    rows: string[][];
+    approx?: boolean;
+    howToRead?: string;
+    takeaways?: string[];
+    chart?: { kind: 'bar' | 'line'; labelColumn: number; seriesColumns: number[]; unit?: string } | null;
+  }[];
   recommendation: string;
+  recommendationDetail?: { because?: string[]; delivery?: string; commonMisses?: string[] };
   risks?: string[];
   nextSteps?: string[];
-  bookErrors?: string[];
+  ourTakeaways?: { title: string; detail: string; from?: string }[];
   confidence?: string;
 }
 export function seedSql(

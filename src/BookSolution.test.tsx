@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App';
-import { parseBookSolution } from './domain/bookSolution';
+import { parseBookSolution, parseFigure } from './domain/bookSolution';
 import { makeCase } from './test/builders';
 import { createFakeEnv, SAMPLE_LIBRARY, TEST_USER, type FakeEnv } from './test/fakeBackend';
 
@@ -53,8 +53,56 @@ describe('the full solution, in a case you did', () => {
     expect(section.getByText('Open the hotel only if off-peak occupancy clears the break-even.')).toBeInTheDocument();
     expect(section.getByText('Base closure')).toBeInTheDocument();
     expect(section.queryByText(/Slips in the book/)).not.toBeInTheDocument();
+    // Everything we add is purple and labelled as Bucket's tip; the book's solution is plain text.
+    expect(section.getByText(/Purple tips are from Bucket/)).toBeInTheDocument();
+    expect(section.getByText("Bucket's tip · How to read it fast")).toBeInTheDocument();
+    expect(section.getByText("Bucket's tip · What to notice")).toBeInTheDocument();
+    expect(section.getByText("Bucket's tip · How to deliver it")).toBeInTheDocument();
+    const takeaways = within(section.getByRole('region', { name: "Bucket's top takeaways" }));
+    expect(takeaways.getByText(/Bucket's top 2 takeaways/)).toBeInTheDocument();
+    expect(takeaways.getByText(/Peak demand is not the year/)).toBeInTheDocument();
+    expect(takeaways.getByText(/\(from the exhibit\)/)).toBeInTheDocument();
     await user.click(toggle);
     expect(section.queryByText('The solution, step by step')).not.toBeInTheDocument();
+  });
+
+  it('shows the clarifying questions, the hypothesis, the buckets, how to read each exhibit with a chart and its takeaways, and how to deliver the recommendation', async () => {
+    const env = await envWith({ title: 'Army Hotel', libraryId: HOTEL.id });
+    const { user, drawer } = await openCase('Army Hotel', env);
+    const section = within(await drawer.findByRole('region', { name: 'Full solution' }));
+    await user.click(section.getByRole('button', { name: /Full solution/ }));
+    expect(section.getByText('Who pays for the rooms?')).toBeInTheDocument();
+    expect(section.getByText(/The army pays a fixed per diem per soldier\./)).toBeInTheDocument();
+    expect(section.getByText('It caps the nightly price.')).toBeInTheDocument();
+    expect(section.getByText('The chain should build if off-peak occupancy clears break-even.')).toBeInTheDocument();
+    expect(section.getByText('Will enough soldiers stay?')).toBeInTheDocument();
+    expect(section.getByText('Occupancy decides revenue.')).toBeInTheDocument();
+    expect(section.getByText("Bucket's tip · How to read it fast")).toBeInTheDocument();
+    expect(section.getByText('Compare the two seasons first, then ask which one carries the year.')).toBeInTheDocument();
+    expect(section.getByRole('img', { name: /Exhibit 1: Occupancy by season: Peak/ })).toBeInTheDocument(); // the chart, described for screen readers
+    expect(section.getByText('Off-peak occupancy of 40% is the number that decides the case.')).toBeInTheDocument();
+    expect(section.getByText("Bucket's tip · What to notice")).toBeInTheDocument();
+    expect(section.getByText('Treating peak demand as year-round')).toBeInTheDocument();
+    expect(section.getByText("Bucket's tip · How to deliver it")).toBeInTheDocument();
+    expect(section.getByText(/I would not open it yet\./)).toBeInTheDocument();
+    expect(section.getByText('Leaving out the off-peak months')).toBeInTheDocument();
+  });
+
+  it('lets you tick what you did at each step, and lists what you did not as where your attempt differed', async () => {
+    const env = await envWith({ title: 'Army Hotel', libraryId: HOTEL.id });
+    const { user, drawer } = await openCase('Army Hotel', env);
+    const section = within(await drawer.findByRole('region', { name: 'Full solution' }));
+    await user.click(section.getByRole('button', { name: /Full solution/ }));
+    expect(section.queryByRole('region', { name: 'Where your attempt differed' })).not.toBeInTheDocument();
+    await user.click(section.getByRole('checkbox', { name: 'Did you separate peak from off-peak?' }));
+    const differed = within(section.getByRole('region', { name: 'Where your attempt differed' }));
+    expect(differed.getByText(/You ticked 1 of 3/)).toBeInTheDocument();
+    expect(differed.getByText('Did you state your assumptions out loud?')).toBeInTheDocument();
+    expect(differed.getByText('Did you compute a break-even before recommending?')).toBeInTheDocument();
+    expect(differed.queryByText('Did you separate peak from off-peak?')).not.toBeInTheDocument();
+    await user.click(section.getByRole('checkbox', { name: 'Did you state your assumptions out loud?' }));
+    await user.click(section.getByRole('checkbox', { name: 'Did you compute a break-even before recommending?' }));
+    expect(within(section.getByRole('region', { name: 'Where your attempt differed' })).getByText(/Nothing to revisit/)).toBeInTheDocument();
   });
 
   it('is not there for a case with no link, or a linked case whose solution we have not written up', async () => {
@@ -88,12 +136,14 @@ describe('a write-up read from the database', () => {
     recommendation: 'Do it',
     risks: [],
     nextSteps: ['Next'],
-    bookErrors: ['Slip'],
+    ourTakeaways: [{ title: 'One', detail: 'First thing', from: 'prompt' }, { title: 'Two', detail: 'Second thing', from: 'exhibit' }, { title: 'Three', detail: 'Third', from: 'brainstorm' }, { title: 'Four', detail: 'Fourth', from: 'prompt' }],
     confidence: 'partial',
   };
 
   it('becomes a solution, tidied', () => {
-    expect(parseBookSolution(good)).toMatchObject({ prompt: 'The question', recommendation: 'Do it', confidence: 'partial', bookErrors: ['Slip'] });
+    expect(parseBookSolution(good)).toMatchObject({ prompt: 'The question', recommendation: 'Do it', confidence: 'partial' });
+    expect(parseBookSolution(good)?.ourTakeaways.map((t) => t.title)).toEqual(['One', 'Two', 'Three']); // the top three only
+    expect(parseBookSolution({ ...good, bookErrors: ['Slip'] })).not.toHaveProperty('bookErrors'); // slips are not part of a solution
     expect(parseBookSolution(JSON.stringify(good))?.steps[0].calc).toEqual(['1 + 1 = 2']);
     expect(parseBookSolution(good)?.exhibits[0].approx).toBe(true);
   });
@@ -108,9 +158,51 @@ describe('a write-up read from the database', () => {
     expect(parseBookSolution({ ...good, exhibits: [{ title: 'Empty', columns: ['A'], rows: [] }, good.exhibits[0]] })?.exhibits).toHaveLength(1);
   });
 
+  it('reads the coaching layers, and tolerates a write-up from before them', () => {
+    const rich = parseBookSolution({
+      ...good,
+      clarifyingQuestions: [{ question: ' Who pays? ', answer: ' The army ', why: 'Caps price' }, { question: 'No answer given', answer: '' }],
+      hypothesis: { statement: 'Build it', basis: 'Peak is strong' },
+      structure: [{ heading: 'Demand', keyQuestion: 'Enough soldiers?', why: 'Drives revenue', points: ['Leave'] }],
+      steps: [{ title: 'S', body: 'b', whatToNotice: 'Look at the base', commonMiss: ['Peak only'], checkYourself: ['Did you split seasons?'] }],
+      recommendationDetail: { because: ['Reason one'], delivery: 'Say it first.', commonMisses: ['Forgot risks'] },
+    });
+    expect(rich?.clarifyingQuestions).toEqual([{ question: 'Who pays?', answer: 'The army', why: 'Caps price' }]);
+    const many = Array.from({ length: 9 }, (_, i) => ({ question: `Q${i}`, answer: `A${i}` }));
+    expect(parseBookSolution({ ...good, clarifyingQuestions: many })?.clarifyingQuestions.map((q) => q.question)).toEqual(['Q0', 'Q1', 'Q2', 'Q3', 'Q4']);
+    expect(rich?.hypothesis).toEqual({ statement: 'Build it', basis: 'Peak is strong' });
+    expect(rich?.structure[0]).toMatchObject({ keyQuestion: 'Enough soldiers?', why: 'Drives revenue' });
+    expect(rich?.steps[0]).toMatchObject({ whatToNotice: 'Look at the base', commonMiss: ['Peak only'], checkYourself: ['Did you split seasons?'] });
+    expect(rich?.recommendationDetail).toEqual({ because: ['Reason one'], delivery: 'Say it first.', commonMisses: ['Forgot risks'] });
+    const old = parseBookSolution(good);
+    expect(old?.clarifyingQuestions).toEqual([]);
+    expect(old?.hypothesis).toBeNull();
+    expect(old?.recommendationDetail).toBeNull();
+    expect(old?.steps[0].checkYourself).toEqual([]);
+  });
+
+  it('keeps a chart only when its columns hold figures in every row, and reads figures like $1.2M, 95%, (300) and 1,200', () => {
+    const base = { ...good, exhibits: [{ title: 'E', columns: ['Year', 'Sales', 'Note'], rows: [['2020', '$1.2M', 'a'], ['2021', '(300)', 'b']] }] };
+    const withChart = (chart: unknown) => parseBookSolution({ ...base, exhibits: [{ ...base.exhibits[0], chart }] })?.exhibits[0].chart;
+    expect(withChart({ kind: 'bar', labelColumn: 0, seriesColumns: [1], unit: '$' })).toEqual({ kind: 'bar', labelColumn: 0, seriesColumns: [1], unit: '$' });
+    expect(withChart({ kind: 'bar', labelColumn: 0, seriesColumns: [2] })).toBeNull(); // text, not figures
+    expect(withChart({ kind: 'pie', labelColumn: 0, seriesColumns: [1] })).toBeNull();
+    expect(withChart({ kind: 'line', labelColumn: 9, seriesColumns: [1] })).toBeNull();
+    expect(withChart({ kind: 'line', labelColumn: 0, seriesColumns: [0, 1, 2] })?.seriesColumns).toEqual([1]);
+    expect(withChart(undefined)).toBeNull();
+    expect([parseFigure('$1.2M'), parseFigure('95%'), parseFigure('(300)'), parseFigure('1,200'), parseFigure('~40'), parseFigure('3x'), parseFigure('n/a'), parseFigure('')]).toEqual([1_200_000, 95, -300, 1200, 40, 3, null, null]);
+  });
+
+  it('keeps an exhibit whose column headings are blank in the book, so the figures still line up', () => {
+    const s = parseBookSolution({ ...good, exhibits: [{ title: 'Impact on Valuation', columns: ['', ''], rows: [['Total Cost Synergies', '$10,000,000']] }] });
+    expect(s?.exhibits).toHaveLength(1);
+    expect(s?.exhibits[0].columns).toEqual(['', '']);
+    expect(s?.exhibits[0].rows).toEqual([['Total Cost Synergies', '$10,000,000']]);
+  });
+
   it('tolerates missing lists and an odd confidence, and cuts rows to the columns', () => {
     const s = parseBookSolution({ prompt: 'q', recommendation: 'r', steps: [{ title: 't', body: 'b' }], confidence: 'weird', exhibits: [{ title: 'E', columns: ['A'], rows: [['1', '2', '3']] }] });
-    expect(s).toMatchObject({ facts: [], structure: [], risks: [], nextSteps: [], bookErrors: [], confidence: 'high' });
+    expect(s).toMatchObject({ facts: [], structure: [], risks: [], nextSteps: [], ourTakeaways: [], confidence: 'high' });
     expect(s?.exhibits[0].rows).toEqual([['1']]);
   });
 });

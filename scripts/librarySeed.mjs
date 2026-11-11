@@ -66,7 +66,21 @@ export function dedupe(cases) {
   return { winners, dropped };
 }
 
-const SOLUTION_KEYS = ['prompt', 'facts', 'structure', 'steps', 'exhibits', 'recommendation', 'risks', 'nextSteps', 'bookErrors', 'confidence'];
+const SOLUTION_KEYS = [
+  'prompt',
+  'facts',
+  'clarifyingQuestions',
+  'hypothesis',
+  'structure',
+  'steps',
+  'exhibits',
+  'recommendation',
+  'recommendationDetail',
+  'risks',
+  'nextSteps',
+  'ourTakeaways',
+  'confidence',
+];
 
 /** The content of a write-up of the book's solution, without the identity keys, refused unless it has what the screen needs. */
 function solutionContent(sol) {

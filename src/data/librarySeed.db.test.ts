@@ -214,6 +214,25 @@ describe("the book's own solutions", () => {
     expect(row.solution).not.toHaveProperty('book');
   });
 
+  it('keeps the coaching layers, not only the original fields', async () => {
+    await run2(
+      [sample()],
+      [
+        solution({
+          clarifyingQuestions: [{ question: 'Who pays?', answer: 'The army', why: 'Caps price' }],
+          hypothesis: { statement: 'Build it', basis: 'Peak is strong' },
+          recommendationDetail: { because: ['Reason'], delivery: 'Say it first.', commonMisses: ['Risks'] },
+          steps: [{ title: 'S', body: 'b', whatToNotice: 'Look', commonMiss: ['Peak only'], checkYourself: ['Did you?'] }],
+        }),
+      ],
+    );
+    const [row] = await stored();
+    expect(row.solution.clarifyingQuestions).toEqual([{ question: 'Who pays?', answer: 'The army', why: 'Caps price' }]);
+    expect(row.solution.hypothesis).toEqual({ statement: 'Build it', basis: 'Peak is strong' });
+    expect((row.solution.recommendationDetail as { delivery: string }).delivery).toBe('Say it first.');
+    expect((row.solution.steps as { checkYourself: string[] }[])[0].checkYourself).toEqual(['Did you?']);
+  });
+
   it('says how many it attached', () => {
     expect(seedSql([{ file: 't', cases: [sample()] }], [solution()]).solutionCount).toBe(1);
     expect(seedSql([{ file: 't', cases: [sample()] }]).solutionCount).toBe(0);
