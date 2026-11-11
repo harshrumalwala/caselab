@@ -10,7 +10,7 @@ import { toSharedInterviewed, type SharedInterviewed } from '../domain/interview
 import { createMemoryGoal } from '../data/weeklyGoal';
 import { createMemoryInsights } from '../data/feedbackInsights';
 import { createMemoryLibrary, type BookNotes } from '../data/caseLibrary';
-import type { BookSolution } from '../domain/bookSolution';
+import { blankChart, type BookSolution } from '../domain/bookSolution';
 import type { LibraryCase } from '../domain/library';
 import { createMemoryWarmup } from '../data/warmupBest';
 import { NO_SHARING, type Profile, type SharedCase } from '../domain/community';
@@ -102,7 +102,7 @@ export const SAMPLE_LIBRARY_SOLUTIONS: Record<string, BookSolution> = {
         approx: false,
         howToRead: 'Compare the two seasons first, then ask which one carries the year.',
         takeaways: ['Off-peak occupancy of 40% is the number that decides the case.'],
-        chart: { kind: 'bar', labelColumn: 0, seriesColumns: [1], unit: '%' },
+        chart: { ...blankChart, kind: 'bar', unit: '%', categories: ['Peak', 'Off-peak'], series: [{ name: 'Occupancy', values: [95, 40], labels: ['95%', '40%'], type: 'bar', color: '' }] },
       },
     ],
     recommendation: 'Open the hotel only if off-peak occupancy clears the break-even.',

@@ -184,13 +184,48 @@ describe('a write-up read from the database', () => {
   it('keeps a chart only when its columns hold figures in every row, and reads figures like $1.2M, 95%, (300) and 1,200', () => {
     const base = { ...good, exhibits: [{ title: 'E', columns: ['Year', 'Sales', 'Note'], rows: [['2020', '$1.2M', 'a'], ['2021', '(300)', 'b']] }] };
     const withChart = (chart: unknown) => parseBookSolution({ ...base, exhibits: [{ ...base.exhibits[0], chart }] })?.exhibits[0].chart;
-    expect(withChart({ kind: 'bar', labelColumn: 0, seriesColumns: [1], unit: '$' })).toEqual({ kind: 'bar', labelColumn: 0, seriesColumns: [1], unit: '$' });
+    // the earlier form: plot columns of the exhibit's own table
+    const fromTable = withChart({ kind: 'bar', labelColumn: 0, seriesColumns: [1], unit: '$' });
+    expect(fromTable).toMatchObject({ kind: 'bar', unit: '$', categories: ['2020', '2021'] });
+    expect(fromTable?.series).toEqual([{ name: 'Sales', values: [1_200_000, -300], labels: [], type: 'bar', color: '' }]);
     expect(withChart({ kind: 'bar', labelColumn: 0, seriesColumns: [2] })).toBeNull(); // text, not figures
-    expect(withChart({ kind: 'pie', labelColumn: 0, seriesColumns: [1] })).toBeNull();
+    expect(withChart({ kind: 'donut', labelColumn: 0, seriesColumns: [1] })).toBeNull();
     expect(withChart({ kind: 'line', labelColumn: 9, seriesColumns: [1] })).toBeNull();
-    expect(withChart({ kind: 'line', labelColumn: 0, seriesColumns: [0, 1, 2] })?.seriesColumns).toEqual([1]);
+    expect(withChart({ kind: 'line', labelColumn: 0, seriesColumns: [0, 1, 2] })?.series.map((x) => x.name)).toEqual(['Sales']);
     expect(withChart(undefined)).toBeNull();
     expect([parseFigure('$1.2M'), parseFigure('95%'), parseFigure('(300)'), parseFigure('1,200'), parseFigure('~40'), parseFigure('3x'), parseFigure('n/a'), parseFigure('')]).toEqual([1_200_000, 95, -300, 1200, 40, 3, null, null]);
+  });
+
+  it('reads a chart drawn the way the book draws it: the plotted figures, the totals and notes it prints, and several charts side by side', () => {
+    const chart = {
+      kind: 'stacked',
+      axisTitle: 'Total hair product sales ($M)',
+      categories: ['2008', '2009'],
+      series: [
+        { name: 'Grocery', values: [180, 190], labels: [], type: 'bar' },
+        { name: 'Salons', values: [100, 100], labels: ['100', '100'] },
+      ],
+      totals: ['434M', '447M'],
+      belowRows: [{ label: 'EBITDA', values: ['10%', '15%'] }],
+      sideNotes: { heading: 'CAGR', items: ['0%', '5%'] },
+      segmentNames: true,
+      yMax: 500,
+    };
+    const parsed = parseBookSolution({ ...good, exhibits: [{ title: 'E', columns: ['A'], rows: [['1']], chart }] })?.exhibits[0].chart;
+    expect(parsed).toMatchObject({ kind: 'stacked', axisTitle: 'Total hair product sales ($M)', totals: ['434M', '447M'], segmentNames: true, yMax: 500, percent: false, horizontal: false });
+    expect(parsed?.series.map((x) => [x.name, x.type])).toEqual([['Grocery', 'bar'], ['Salons', 'bar']]);
+    expect(parsed?.belowRows).toEqual([{ label: 'EBITDA', values: ['10%', '15%'] }]);
+    expect(parsed?.sideNotes).toEqual({ heading: 'CAGR', items: ['0%', '5%'] });
+    // a series that does not line up with the categories, or holds a non-figure, cannot be drawn
+    const draw = (series: unknown) => parseBookSolution({ ...good, exhibits: [{ title: 'E', columns: ['A'], rows: [['1']], chart: { kind: 'bar', categories: ['a', 'b'], series } }] })?.exhibits[0].chart;
+    expect(draw([{ name: 'x', values: [1, 2, 3] }])).toBeNull();
+    expect(draw([{ name: 'x', values: [1, 'two'] }])).toBeNull();
+    expect(draw([{ name: 'x', values: [1, 2] }])?.series).toHaveLength(1);
+    // lines over bars, and panels
+    const combo = parseBookSolution({ ...good, exhibits: [{ title: 'E', columns: ['A'], rows: [['1']], chart: { kind: 'bar', categories: ['a', 'b'], series: [{ name: 'Importance', values: [4.7, 4.5] }, { name: 'Brand A', values: [4.8, 4.5], type: 'line', color: 'yellow' }] } }] })?.exhibits[0].chart;
+    expect(combo?.series.map((x) => [x.type, x.color])).toEqual([['bar', ''], ['line', 'yellow']]);
+    const panels = parseBookSolution({ ...good, exhibits: [{ title: 'E', columns: ['A'], rows: [['1']], chart: { kind: 'stacked', panels: [{ kind: 'stacked', heading: 'VARIABLE', categories: ['Variable costs'], series: [{ name: 'COGS', values: [3] }] }, { kind: 'stacked', heading: 'FIXED', categories: ['Fixed costs'], series: [{ name: 'Warehouse', values: [1] }] }] } }] })?.exhibits[0].chart;
+    expect(panels?.panels.map((p) => p.heading)).toEqual(['VARIABLE', 'FIXED']);
   });
 
   it('keeps an exhibit whose column headings are blank in the book, so the figures still line up', () => {

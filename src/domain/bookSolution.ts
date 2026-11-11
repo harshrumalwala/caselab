@@ -12,14 +12,76 @@ export interface SolutionStep {
   checkYourself: string[];
 }
 
-/** A chart drawn from an exhibit's own table: which column labels the points and which columns hold the values. */
-export interface ExhibitChart {
-  kind: 'bar' | 'line';
-  labelColumn: number;
-  seriesColumns: number[];
-  /** Shown beside the axis, such as "$M". */
-  unit: string;
+/** One series of a chart: what is plotted, and the labels the book prints on the points (a blank label means "print the value"). */
+export interface ChartSeries {
+  name: string;
+  values: number[];
+  labels: string[];
+  /** In a bar chart a series can be drawn as a line over the bars (the book's combination charts). */
+  type: 'bar' | 'line';
+  /** The colour the book draws it in, when that matters (the lines of a combination chart). */
+  color: string;
 }
+
+/**
+ * A chart drawn the way the book draws it, from the figures the book plots. `kind` is the book's own chart type; the rest says what the book
+ * prints around it: the axis title, the labels on the points, totals above stacks, rows of text under the axis, notes beside the chart, and
+ * (when one exhibit shows several charts side by side) the panels.
+ */
+export interface ExhibitChart {
+  kind: 'bar' | 'stacked' | 'line' | 'pie' | 'scatter';
+  /** A heading over this chart when the exhibit has several, such as "VARIABLE". */
+  heading: string;
+  /** What the vertical axis measures, as printed, such as "Total revenue". */
+  axisTitle: string;
+  /** Shown with the axis numbers, such as "$M" or "%". */
+  unit: string;
+  categories: string[];
+  series: ChartSeries[];
+  /** Labels the book prints above each bar or stack, such as "434M". */
+  totals: string[];
+  /** Rows of text the book prints under the axis, aligned with the categories (for example an EBITDA row). */
+  belowRows: { label: string; values: string[] }[];
+  /** A column of notes beside the chart, such as "CAGR" figures or the average price, lined up with the segments. */
+  sideNotes: { heading: string; items: string[] } | null;
+  yMin: number | null;
+  yMax: number | null;
+  yStep: number | null;
+  /** Stacks that each fill the whole height (percent of total). */
+  percent: boolean;
+  /** Bars drawn sideways. */
+  horizontal: boolean;
+  /** Write each segment's series name inside the stack, as the book does instead of a legend. */
+  segmentNames: boolean;
+  /** For a scatter chart: the horizontal position of each point (the categories are then the point labels). */
+  xValues: number[];
+  /** Words the book prints at the two ends of the vertical axis, such as "Extremely important" and "Not at all important". */
+  axisEnds: { top: string; bottom: string } | null;
+  /** Several charts side by side in one exhibit; each has its own heading. */
+  panels: ExhibitChart[];
+}
+
+/** A chart with nothing set, to build one from (for tests and for charts that only need a few fields). */
+export const blankChart: ExhibitChart = {
+  kind: 'bar',
+  heading: '',
+  axisTitle: '',
+  unit: '',
+  categories: [],
+  series: [],
+  totals: [],
+  belowRows: [],
+  sideNotes: null,
+  yMin: null,
+  yMax: null,
+  yStep: null,
+  percent: false,
+  horizontal: false,
+  segmentNames: false,
+  xValues: [],
+  axisEnds: null,
+  panels: [],
+};
 
 export interface SolutionExhibit {
   /** The book's own label, such as "Exhibit 1: Sales by region". */
@@ -103,19 +165,77 @@ export function parseFigure(cell: string): number | null {
   return Number(m[1]) * scale;
 }
 
-function parseChart(v: unknown, columns: string[], rows: string[][]): ExhibitChart | null {
+const KINDS = ['bar', 'stacked', 'line', 'pie', 'scatter'] as const;
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/**
+ * Reads a chart. A chart either names the table columns it plots (the earlier form: `labelColumn` and `seriesColumns`), or carries the figures
+ * the book plots (`categories` and `series`). Anything that cannot be drawn is dropped, so the screen shows the table alone rather than a
+ * half-drawn chart.
+ */
+function parseChart(v: unknown, columns: string[], rows: string[][], depth = 0): ExhibitChart | null {
   const o = obj(v);
-  if (o.kind !== 'bar' && o.kind !== 'line') return null;
-  const labelColumn = Number(o.labelColumn);
-  if (!Number.isInteger(labelColumn) || labelColumn < 0 || labelColumn >= columns.length) return null;
-  const series = (Array.isArray(o.seriesColumns) ? o.seriesColumns : [])
-    .map(Number)
-    .filter((c) => Number.isInteger(c) && c >= 0 && c < columns.length && c !== labelColumn)
-    // a series is only drawable when every row has a figure in it
-    .filter((c) => rows.length > 0 && rows.every((r) => parseFigure(r[c] ?? '') !== null))
-    .slice(0, 4);
-  if (series.length === 0) return null;
-  return { kind: o.kind, labelColumn, seriesColumns: [...new Set(series)], unit: str(o.unit, 12) };
+  const kind = KINDS.find((k) => k === o.kind);
+  if (!kind) return null;
+
+  let categories = strs(o.categories, 80, 40);
+  let series: ChartSeries[] = (Array.isArray(o.series) ? o.series : [])
+    .map((x) => {
+      const so = obj(x);
+      const values = (Array.isArray(so.values) ? so.values : []).map((n) => num(n) ?? NaN);
+      return {
+        name: str(so.name, 80),
+        values,
+        labels: (Array.isArray(so.labels) ? so.labels : []).map((l) => str(l, 40)),
+        type: so.type === 'line' ? ('line' as const) : ('bar' as const),
+        color: str(so.color, 20),
+      };
+    })
+    .filter((x) => x.values.length > 0 && x.values.every((n) => Number.isFinite(n)))
+    .slice(0, 6);
+
+  // The earlier form: plot columns of the exhibit's own table.
+  if (series.length === 0 && Array.isArray(o.seriesColumns)) {
+    const labelColumn = Number(o.labelColumn);
+    if (!Number.isInteger(labelColumn) || labelColumn < 0 || labelColumn >= columns.length) return null;
+    const cols = [...new Set((o.seriesColumns as unknown[]).map(Number))]
+      .filter((c) => Number.isInteger(c) && c >= 0 && c < columns.length && c !== labelColumn)
+      .filter((c) => rows.length > 0 && rows.every((r) => parseFigure(r[c] ?? '') !== null))
+      .slice(0, 4);
+    categories = rows.map((r) => r[labelColumn] ?? '');
+    series = cols.map((c) => ({ name: columns[c] ?? '', values: rows.map((r) => parseFigure(r[c] ?? '') ?? 0), labels: [], type: 'bar' as const, color: '' }));
+  }
+
+  const panels = depth === 0 ? (Array.isArray(o.panels) ? o.panels : []).map((p) => parseChart(p, columns, rows, 1)).filter((p): p is ExhibitChart => p !== null).slice(0, 4) : [];
+  if (series.length === 0 && panels.length === 0) return null;
+  // every series must line up with the categories, or it cannot be drawn
+  if (series.some((x) => x.values.length !== categories.length)) return null;
+
+  const sn = obj(o.sideNotes);
+  const sideItems = strs(sn.items, 60, 12);
+  return {
+    kind,
+    heading: str(o.heading, 60),
+    axisTitle: str(o.axisTitle, 80),
+    unit: str(o.unit, 12),
+    categories,
+    series,
+    totals: strs(o.totals, 30, 40),
+    belowRows: (Array.isArray(o.belowRows) ? o.belowRows : [])
+      .map((r) => ({ label: str(obj(r).label, 40), values: strs(obj(r).values, 30, 40) }))
+      .filter((r) => r.values.length > 0)
+      .slice(0, 4),
+    sideNotes: sideItems.length > 0 ? { heading: str(sn.heading, 60), items: sideItems } : null,
+    yMin: num(o.yMin),
+    yMax: num(o.yMax),
+    yStep: num(o.yStep) !== null && (num(o.yStep) as number) > 0 ? num(o.yStep) : null,
+    percent: o.percent === true,
+    horizontal: o.horizontal === true,
+    segmentNames: o.segmentNames === true,
+    xValues: (Array.isArray(o.xValues) ? o.xValues : []).map((n) => num(n) ?? NaN).filter((n) => Number.isFinite(n)),
+    axisEnds: str(obj(o.axisEnds).top, 40) || str(obj(o.axisEnds).bottom, 40) ? { top: str(obj(o.axisEnds).top, 40), bottom: str(obj(o.axisEnds).bottom, 40) } : null,
+    panels,
+  };
 }
 
 /**
