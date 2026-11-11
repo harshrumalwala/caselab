@@ -28,4 +28,24 @@ export interface Dropped {
 }
 export function nameKey(name: string): string;
 export function dedupe<T extends SeedCase>(cases: T[]): { winners: (T & { alsoIn: string[] })[]; dropped: Dropped[] };
-export function seedSql(groups: { file: string; cases: SeedCase[] }[]): { sql: string; count: number; dropped: Dropped[] };
+/** A write-up of the book's own solution to a case, in our own words (see src/domain/bookSolution.ts). */
+export interface SeedSolution {
+  name: string;
+  book?: string;
+  school?: string;
+  year?: number;
+  prompt: string;
+  facts?: string[];
+  structure?: { heading: string; points: string[] }[];
+  steps: { title: string; body?: string; calc?: string[] }[];
+  exhibits?: { title: string; caption?: string; columns: string[]; rows: string[][]; approx?: boolean }[];
+  recommendation: string;
+  risks?: string[];
+  nextSteps?: string[];
+  bookErrors?: string[];
+  confidence?: string;
+}
+export function seedSql(
+  groups: { file: string; cases: SeedCase[] }[],
+  solutions?: SeedSolution[],
+): { sql: string; count: number; dropped: Dropped[]; solutionCount: number };

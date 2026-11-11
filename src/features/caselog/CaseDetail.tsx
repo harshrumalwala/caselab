@@ -12,6 +12,7 @@ import { useData } from '../../state/DataProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 import { BookComparison } from './BookComparison';
+import { BookSolutionSection } from './BookSolutionSection';
 import { BookTakeaways } from './BookTakeaways';
 import { useTogglePrivate } from './useTogglePrivate';
 
@@ -157,6 +158,8 @@ export function CaseDetail({ caseId, onClose }: { caseId: string; onClose: () =>
           )}
 
           <BookTakeaways c={c} />
+
+          <BookSolutionSection c={c} />
 
           <BookComparison c={c} />
         </div>

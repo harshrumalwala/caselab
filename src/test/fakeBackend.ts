@@ -10,6 +10,7 @@ import { toSharedInterviewed, type SharedInterviewed } from '../domain/interview
 import { createMemoryGoal } from '../data/weeklyGoal';
 import { createMemoryInsights } from '../data/feedbackInsights';
 import { createMemoryLibrary, type BookNotes } from '../data/caseLibrary';
+import type { BookSolution } from '../domain/bookSolution';
 import type { LibraryCase } from '../domain/library';
 import { createMemoryWarmup } from '../data/warmupBest';
 import { NO_SHARING, type Profile, type SharedCase } from '../domain/community';
@@ -69,6 +70,25 @@ export const SAMPLE_LIBRARY_NOTES: Record<string, BookNotes> = {
     summary: 'A hotel chain asks whether to open a new property near a military base.',
     strongAnswer: 'Split the question into demand, price and cost, check the break-even occupancy against realistic peak and off-peak demand, and recommend opening only if off-peak demand clears break-even.',
     pitfalls: ['Treating peak-season demand as the whole year', 'Skipping the break-even check before recommending'],
+    confidence: 'high',
+  },
+};
+
+/** The book's own solution to the first sample library case (the fake "database" releases it only to a member who logged it). */
+export const SAMPLE_LIBRARY_SOLUTIONS: Record<string, BookSolution> = {
+  '00000000-0000-4000-8000-000000000001': {
+    prompt: 'Should a hotel chain open a new property near a military base?',
+    facts: ['The base houses 20,000 soldiers.', 'Peak season runs four months.'],
+    structure: [{ heading: 'Demand', points: ['Soldiers on leave', 'Visiting families'] }],
+    steps: [
+      { title: 'Size peak demand', body: 'Peak demand fills the hotel for four months.', calc: ['Rooms = 200 x 120 nights = 24,000 room-nights'] },
+      { title: 'Check the break-even', body: 'Off-peak occupancy must clear the break-even.', calc: [] },
+    ],
+    exhibits: [{ title: 'Exhibit 1: Occupancy by season', caption: '', columns: ['Season', 'Occupancy'], rows: [['Peak', '95%'], ['Off-peak', '40%']], approx: false }],
+    recommendation: 'Open the hotel only if off-peak occupancy clears the break-even.',
+    risks: ['Base closure'],
+    nextSteps: ['Survey soldiers'],
+    bookErrors: [],
     confidence: 'high',
   },
 };
@@ -199,7 +219,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
   const warmup = createMemoryWarmup();
   const goal = createMemoryGoal();
   const insights = createMemoryInsights();
-  const library = createMemoryLibrary(SAMPLE_LIBRARY, async () => (await flaky.repo.loadAll()).cases, SAMPLE_LIBRARY_SKILLS, SAMPLE_LIBRARY_NOTES);
+  const library = createMemoryLibrary(SAMPLE_LIBRARY, async () => (await flaky.repo.loadAll()).cases, SAMPLE_LIBRARY_SKILLS, SAMPLE_LIBRARY_NOTES, SAMPLE_LIBRARY_SOLUTIONS);
   const interviewed = createMemoryInterviewed();
   const practice = createMemoryPractice(() =>
     community.profiles.map((p) => ({ userId: p.userId, name: p.displayName, open: p.listed })),

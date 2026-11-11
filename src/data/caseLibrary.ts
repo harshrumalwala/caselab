@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { CASE_TYPES, type CaseType } from '../domain/constants';
+import { parseBookSolution, type BookSolution } from '../domain/bookSolution';
 import { searchLibrary, type LibraryCase } from '../domain/library';
 import { libraryNameKey, matchCases, type CaseMatch } from '../domain/libraryMatch';
 import type { CaseRecord } from '../domain/types';
@@ -54,6 +55,8 @@ export interface LibraryRepository {
   nextCases(skill: string, limit?: number): Promise<LibraryCase[]>;
   /** Casebook cases of these case types or industries that you have not done (for the gaps in your practice), analysed ones first. */
   gapCases(types: string[], industries: string[], limit?: number): Promise<LibraryCase[]>;
+  /** The book's own solution to a casebook case you have logged, in our own words (the database releases it to nobody else), or null. */
+  solutionFor(libraryId: string): Promise<BookSolution | null>;
   /** Our analysis of a casebook case you have logged (the database releases it to nobody else), or null. */
   notesFor(libraryId: string): Promise<BookNotes | null>;
 }
@@ -155,6 +158,13 @@ export class SupabaseLibrary implements LibraryRepository {
     return ((data ?? []) as LibraryRow[]).flatMap((r) => rowToLibraryCase(r) ?? []);
   }
 
+  async solutionFor(libraryId: string): Promise<BookSolution | null> {
+    const { data, error } = await this.client.rpc('library_solution_for', { p_library_id: libraryId });
+    if (error) throw error;
+    const row = Array.isArray(data) ? (data[0] as { solution?: unknown } | undefined) : undefined;
+    return parseBookSolution(row?.solution);
+  }
+
   async notesFor(libraryId: string): Promise<BookNotes | null> {
     const { data, error } = await this.client.rpc('library_notes_for', { p_library_id: libraryId });
     if (error) throw error;
@@ -170,16 +180,20 @@ export function createMemoryLibrary(
   skillsById: Record<string, string[]> = {},
   /** Our analysis by library id (only released for a library case one of your cases is linked to, as in the database). */
   notesById: Record<string, BookNotes> = {},
+  /** The book's solutions by library id (released only for a library case one of your cases is linked to). */
+  solutionsById: Record<string, BookSolution> = {},
 ) {
   const queries: string[] = [];
   const nextAsked: string[] = [];
   const notesAsked: string[] = [];
+  const solutionsAsked: string[] = [];
   const gapAsked: { types: string[]; industries: string[] }[] = [];
   const state = { failing: false as boolean };
   return {
     queries,
     nextAsked,
     notesAsked,
+    solutionsAsked,
     gapAsked,
     state,
     cases,
@@ -202,6 +216,12 @@ export function createMemoryLibrary(
         .filter((c) => c.detailsKnown && (types.includes(c.caseType) || industries.includes(c.industry)) && !done.has(c.id) && !titles.has(libraryNameKey(c.name)))
         .sort((a, b) => Number(Boolean(notesById[b.id])) - Number(Boolean(notesById[a.id])) || Number(b.cochairPick) - Number(a.cochairPick) || b.year - a.year || a.name.localeCompare(b.name))
         .slice(0, Math.min(Math.max(limit, 1), 30));
+    },
+    async solutionFor(libraryId: string) {
+      solutionsAsked.push(libraryId);
+      if (state.failing) throw new Error('Failed to fetch');
+      const mine = await myCases();
+      return mine.some((m) => m.libraryId === libraryId) ? (solutionsById[libraryId] ?? null) : null;
     },
     async notesFor(libraryId: string) {
       notesAsked.push(libraryId);
