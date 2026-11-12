@@ -18,14 +18,16 @@ interface Props {
   footer?: ReactNode;
   /** `modal`: centered card (full-screen sheet on phones). `drawer`: right-hand panel. */
   variant?: 'modal' | 'drawer';
-  width?: 'sm' | 'md' | 'lg';
+  /** `xl` is for reading long content (a case with a full book solution): a wide window that uses most of the screen's height. */
+  width?: 'sm' | 'md' | 'lg' | 'xl';
   /** Raise above another open dialog. */
   layer?: 'base' | 'top';
   /** Optional element shown next to the title (e.g. status badges). */
   headerExtra?: ReactNode;
 }
 
-const WIDTHS = { sm: 'sm:max-w-md', md: 'sm:max-w-xl', lg: 'sm:max-w-2xl' };
+const WIDTHS = { sm: 'sm:max-w-md', md: 'sm:max-w-xl', lg: 'sm:max-w-2xl', xl: 'sm:max-w-5xl' };
+const MAX_HEIGHT = { standard: 'sm:max-h-[min(92vh,880px)]', tall: 'sm:max-h-[92vh]' };
 
 export function Dialog({
   open,
@@ -125,7 +127,7 @@ export function Dialog({
           className={`relative flex w-full flex-col bg-surface shadow-pop outline-none ${
             isDrawer
               ? 'animate-drawer h-full sm:max-w-xl sm:border-l sm:border-line'
-              : `animate-sheet h-full sm:h-auto sm:max-h-[min(92vh,880px)] sm:rounded-3xl sm:border sm:border-line ${WIDTHS[width]}`
+              : `animate-sheet h-full sm:h-auto ${MAX_HEIGHT[width === 'xl' ? 'tall' : 'standard']} sm:rounded-3xl sm:border sm:border-line ${WIDTHS[width]}`
           }`}
         >
           <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-7 sm:py-5">
