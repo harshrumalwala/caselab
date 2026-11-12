@@ -291,9 +291,9 @@ export function parseBookSolution(raw: unknown): BookSolution | null {
     .map((e) => {
       const o = obj(e);
       // A heading can be blank in the book itself: keep it, so the columns still line up with the rows.
-      const columns = (Array.isArray(o.columns) ? o.columns : []).map((c) => str(c, 80)).slice(0, 12);
+      const columns = (Array.isArray(o.columns) ? o.columns : []).map((c) => str(c, 80)).slice(0, 16);
       const rows = (Array.isArray(o.rows) ? o.rows : [])
-        .map((r) => (Array.isArray(r) ? r.map((c) => str(c, 120)).slice(0, columns.length || 12) : []))
+        .map((r) => (Array.isArray(r) ? r.map((c) => str(c, 120)).slice(0, columns.length || 16) : []))
         .filter((r) => r.some((c) => c !== ''))
         .slice(0, 30);
       return {
