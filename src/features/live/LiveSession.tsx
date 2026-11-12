@@ -165,9 +165,13 @@ export function LiveSessionScreen({ s, view }: { s: LiveSession; view: LiveView 
       )}
 
       {view.stage === 'exhibits' && (
-        <div key={key} className="space-y-4">
+        <div key={key} className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-start">
+          {/* The exhibit stays in view while the conversation grows, so it never has to be scrolled back to. */}
           {latest && (
-            <section aria-label="The exhibit on the table" className="space-y-3">
+            <section
+              aria-label="The exhibit on the table"
+              className="sticky top-[7.5rem] z-20 max-h-[42vh] space-y-3 overflow-y-auto bg-bg pb-2 lg:top-28 lg:max-h-[calc(100vh-8rem)]"
+            >
               <h2 className="eyebrow">
                 Exhibit {latest.beat + 1} of {view.beatsTotal}
               </h2>
@@ -184,16 +188,18 @@ export function LiveSessionScreen({ s, view }: { s: LiveSession; view: LiveView 
               )}
             </section>
           )}
-          <Thread messages={thread.filter((m) => m.stage === 'exhibits')} pending={pending} typing={busy && Boolean(pending)} />
-          <ChatInput
-            draftKey="exhibit"
-            initial={view.drafts.exhibit ?? ''}
-            label="Your thinking"
-            placeholder="What do you notice? Show your calculations, then what it means for the client and what you would do next."
-            busy={busy}
-            onSend={(t) => void s.say(t)}
-            onDraft={(k, t) => void s.saveDraft(k, t)}
-          />
+          <div className="space-y-4">
+            <Thread messages={thread.filter((m) => m.stage === 'exhibits')} pending={pending} typing={busy && Boolean(pending)} />
+            <ChatInput
+              draftKey="exhibit"
+              initial={view.drafts.exhibit ?? ''}
+              label="Your thinking"
+              placeholder="What do you notice? Show your calculations, then what it means for the client and what you would do next."
+              busy={busy}
+              onSend={(t) => void s.say(t)}
+              onDraft={(k, t) => void s.saveDraft(k, t)}
+            />
+          </div>
         </div>
       )}
 

@@ -28,9 +28,9 @@ export const PLANNED_MS: Record<Exclude<Stage, 'done'>, number> = {
   framework_write: 3 * 60 * SECOND,
   exhibits: 15 * 60 * SECOND,
   brainstorm_think: 30 * SECOND,
-  brainstorm_write: 60 * SECOND,
+  brainstorm_write: 90 * SECOND,
   recommend_think: 30 * SECOND,
-  recommend_write: 60 * SECOND,
+  recommend_write: 90 * SECOND,
 };
 
 /** How much longer a writing stage may run for someone still typing when its time is up. */
@@ -39,15 +39,7 @@ export const WRITING_GRACE_MS = 30 * SECOND;
 export const DRAFT_ACTIVE_MS = 20 * SECOND;
 /** The exhibit discussion may run past its planned 15 minutes only while the member keeps making progress within this long. */
 export const PROGRESS_WINDOW_MS = 60 * SECOND;
-/** The least time between two nudges. */
-export const MIN_NUDGE_GAP_MS = 15 * SECOND;
-/**
- * When the member says nothing and types nothing, the clock speaks up only after real silence, counted from the last thing they did (the
- * exhibit appearing, a message, typing): reading and thinking come first. A hint, a sharper hint, and then the next exhibit.
- */
-export const SILENCE_FIRST_MS = 150 * SECOND;
-export const SILENCE_SECOND_MS = 240 * SECOND;
-export const SILENCE_MOVE_ON_MS = 330 * SECOND;
+
 /** A saved response is cut to this long. */
 export const MAX_RESPONSE_CHARS = 4000;
 
@@ -75,6 +67,10 @@ export interface Beat {
 }
 
 export interface CasePlan {
+  /** The time the exhibit discussion is planned for. Plans saved before this existed use 15 minutes. */
+  exhibitMs?: number;
+  /** The whole case. Plans saved before this existed use 30 minutes. */
+  limitMs?: number;
   beats: Beat[];
   hasBrainstorm: boolean;
   /** What the brainstorm is about, from the book's own step (never its ideas). */
@@ -121,8 +117,13 @@ export function buildPlan(solution: PlanSource): CasePlan {
   // A case with no exhibits for the candidate is worked through the book's own steps instead (the brainstorm has its own stages).
   // (The framework is done in its own stages, so a step that is just the framework is not discussed again.)
   const stepBeats: Beat[] = solution.steps.flatMap((s, index) => (BRAINSTORM.test(s.title) || FRAMEWORK_STEP.test(s.title) ? [] : [{ kind: 'step' as const, index }]));
+  const beats = exhibitBeats.length > 0 ? exhibitBeats : stepBeats;
+  // More to cover, more time: 20 minutes of exhibits in a 35-minute case, or 25 in 40 when there are more than four.
+  const long = beats.length > 4;
   return {
-    beats: exhibitBeats.length > 0 ? exhibitBeats : stepBeats,
+    exhibitMs: (long ? 25 : 20) * 60 * SECOND,
+    limitMs: (long ? 40 : 35) * 60 * SECOND,
+    beats,
     hasBrainstorm: Boolean(brainstormStep || brainstormTable),
     brainstormTopic: brainstormStep
       ? brainstormStep.title.replace(/^\s*brainstorm(?:s|ing)?\s*[:\-–]?\s*/i, '').trim()
@@ -196,7 +197,8 @@ export interface SessionState {
   endReason: 'completed' | 'time_limit' | null;
 }
 
-export const hardEnd = (s: SessionState): number => s.startedAt + LIMIT_MS;
+export const hardEnd = (s: SessionState): number => s.startedAt + (s.plan.limitMs ?? LIMIT_MS);
+const exhibitPlanned = (s: SessionState): number => s.plan.exhibitMs ?? PLANNED_MS.exhibits;
 const stageIndex = (stage: Stage): number => ORDER.indexOf(stage);
 const clamp = (n: number, lo: number, hi: number): number => Math.min(Math.max(n, lo), hi);
 const clip = (t: string): string => t.replace(/\r\n/g, '\n').trim().slice(0, MAX_RESPONSE_CHARS);
@@ -242,7 +244,7 @@ function laterPlanned(s: SessionState, stage: Stage): number {
     if (next === 'done') continue;
     if (next === 'exhibits' && s.plan.beats.length === 0) continue;
     if ((next === 'brainstorm_think' || next === 'brainstorm_write') && !s.plan.hasBrainstorm) continue;
-    total += PLANNED_MS[next];
+    total += next === 'exhibits' ? exhibitPlanned(s) : PLANNED_MS[next];
   }
   return total;
 }
@@ -264,7 +266,7 @@ export function deadlines(s: SessionState, stage: Stage, startAt: number): Deadl
   if (stage === 'done') return { soft: end, hard: end };
   if (stage === 'exhibits') {
     const latest = Math.max(startAt, end - closingNeeded(s));
-    return { soft: Math.min(startAt + PLANNED_MS.exhibits, latest), hard: latest };
+    return { soft: Math.min(startAt + exhibitPlanned(s), latest), hard: latest };
   }
   const soft = Math.min(startAt + PLANNED_MS[stage], end);
   const writing = stage === 'framework_write' || stage === 'brainstorm_write' || stage === 'recommend_write';
@@ -306,9 +308,9 @@ const LINES = {
   framework_write: 'Time to write. Put your framework down, then tell me where you would start.',
   direction: 'Thanks. Where would you start, and what would you want to understand first?',
   brainstorm_think: (topic: string) => `Brainstorm${topic ? `: ${topic}` : ''}. You have 30 seconds to think before you write.`,
-  brainstorm_write: 'Write your ideas now. You have one minute.',
+  brainstorm_write: 'Write your ideas now. You have a minute and a half.',
   recommend_think: 'Time to bring it together. You have 30 seconds to think about your recommendation, using what you have worked through.',
-  recommend_write: 'Write your recommendation now. You have one minute.',
+  recommend_write: 'Write your recommendation now. You have a minute and a half.',
   wrap_up: 'Let us move to your recommendation using what you have so far.',
   to_brainstorm: 'Let us move on to brainstorming.',
 };
@@ -569,43 +571,26 @@ export function recordAssessment(settled: SessionState, assessment: Assessment, 
   return bump(s);
 }
 
-const unproductiveWindow = (b: BeatRecord, behind: boolean): number => clamp(b.budgetMs / 3, 45 * SECOND, 75 * SECOND) * (behind ? 0.5 : 1);
-
 const behindSchedule = (b: BeatRecord, at: number): boolean => at > b.revealedAt + b.budgetMs;
 
-function thresholdFor(b: BeatRecord, behind: boolean): number {
-  const u = unproductiveWindow(b, behind);
-  return b.hints === 0 ? u * 0.5 : b.hints === 1 ? u : u * 1.5;
-}
-
 /**
- * What the coach should do about an exhibit the member is not getting anywhere with, by the clock.
- *  - 'message': the member has just written to Bucket. The hint ladder follows how long it has been since their last real progress.
- *  - 'timer': the member has said nothing. Only real silence counts (see SILENCE_*), so nobody gets a hint while still reading or typing.
+ * What help to give on the exhibit on the table. The member drives: nothing is said unless they write something.
+ *  - 'message': they have written to Bucket. If it shows they are stuck, they get a process hint, then a sharper one, and (only if the exhibit
+ *    has already taken longer than it is worth) the next exhibit.
+ *  - 'timer': they have said nothing. The clock never speaks up on its own: how much they cover in the time is up to them, and when the
+ *    exhibit time is used up the case moves on to the next part.
  */
 export function nudgeLevel(s: SessionState, now: number, via: 'message' | 'timer' = 'message'): NudgeLevel {
   const b = openBeat(s);
-  if (!b || s.stage !== 'exhibits') return 'none';
-  if (via === 'timer') {
-    if (b.lastNudgeAt && now - b.lastNudgeAt < MIN_NUDGE_GAP_MS) return 'none';
-    return now - lastActivity(s, b) >= silenceNeeded(b) ? levelFor(b) : 'none';
-  }
-  if (s.drafts.exhibit?.trim() && now - s.lastDraftAt < DRAFT_ACTIVE_MS) return 'none';
-  if (b.lastNudgeAt && now - b.lastNudgeAt < MIN_NUDGE_GAP_MS) return 'none';
-  if (now - b.lastProgressAt < thresholdFor(b, behindSchedule(b, now))) return 'none';
-  return levelFor(b);
+  if (!b || s.stage !== 'exhibits' || via === 'timer') return 'none';
+  if (b.hints === 0) return 'process_hint';
+  if (b.hints === 1) return 'directional_hint';
+  return behindSchedule(b, now) ? 'advance' : 'none';
 }
 
-const levelFor = (b: BeatRecord): NudgeLevel => (b.hints === 0 ? 'process_hint' : b.hints === 1 ? 'directional_hint' : 'advance');
-const lastActivity = (s: SessionState, b: BeatRecord): number => Math.max(b.revealedAt, b.lastUserAt, s.lastDraftAt);
-const silenceNeeded = (b: BeatRecord): number => (b.hints === 0 ? SILENCE_FIRST_MS : b.hints === 1 ? SILENCE_SECOND_MS : SILENCE_MOVE_ON_MS);
-
-/** When the clock next speaks up if the member stays silent (for the app to wake up at), or null when no exhibit is open. */
-export function nextNudgeAt(s: SessionState, now: number): number | null {
-  const b = openBeat(s);
-  if (!b || s.stage !== 'exhibits') return null;
-  const gap = b.lastNudgeAt ? b.lastNudgeAt + MIN_NUDGE_GAP_MS : 0;
-  return Math.max(lastActivity(s, b) + silenceNeeded(b), gap, now);
+/** Nothing wakes the screen up for a hint: they only come in reply to the member. */
+export function nextNudgeAt(_s: SessionState, _now: number): number | null {
+  return null;
 }
 
 /** Records that the coach gave a hint (level 1 or 2) on the open exhibit. */

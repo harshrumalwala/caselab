@@ -122,12 +122,12 @@ describe('the plan from a case', () => {
 });
 
 describe('the clock', () => {
-  it('starts with the prompt, runs one continuous 30 minutes and adds up to 25:30 planned', () => {
+  it('starts with the prompt, runs one continuous 30 minutes and adds up to 26:30 planned', () => {
     const s = start();
     expect(s.startedAt).toBe(T0);
     expect(hardEnd(s)).toBe(T0 + LIMIT_MS);
     expect(LIMIT_MS).toBe(sec(1800));
-    expect(Object.values(PLANNED_MS).reduce((a, b) => a + b, 0)).toBe(sec(25 * 60 + 30));
+    expect(Object.values(PLANNED_MS).reduce((a, b) => a + b, 0)).toBe(sec(26 * 60 + 30)); // with 15 minutes for exhibits, the earlier plan
     expect(s.stage).toBe('prompt');
     expect(stageEndsAt(s)).toBe(at(180));
     expect(s.messages[0]).toMatchObject({ from: 'coach', text: 'Prompt text' });
@@ -166,13 +166,13 @@ describe('the clock', () => {
 
   it('enforces the 30-minute limit when the clock is the thing that runs out', () => {
     let s = settle(start(plan(1, false)), at(450));
-    s = recordAssessment(s, 'progress', at(1650)); // still making progress, so the discussion runs on to its reserve
-    expect(settle(s, at(1700)).stage).toBe('exhibits');
-    s = settle(s, at(1715));
-    expect(s.stage).toBe('recommend_think'); // the recommendation starts by 28:30 for a case with no brainstorm
-    s = settle(s, at(1745));
+    s = recordAssessment(s, 'progress', at(1600)); // still making progress, so the discussion runs on towards its reserve
+    expect(settle(s, at(1650)).stage).toBe('exhibits');
+    s = settle(s, at(1665));
+    expect(s.stage).toBe('recommend_think'); // the recommendation starts with 2:00 left for a case with no brainstorm
+    s = settle(s, at(1695));
     expect(s.stage).toBe('recommend_write');
-    s = saveDraft(s, 'recommendation', 'Open the hotel only if', at(1760));
+    s = saveDraft(s, 'recommendation', 'Open the hotel only if', at(1775)); // typing right up to the end
     const done = settle(s, at(1900));
     expect(done.stage).toBe('done');
     expect(done.endReason).toBe('time_limit');
@@ -195,15 +195,15 @@ describe('time saved and flexible time', () => {
     const fast = toExhibits(plan(3), 60); // got through the opening in one minute
     const slowRoom = deadlines(slow, 'exhibits', slow.stageStartedAt).hard - slow.stageStartedAt;
     const fastRoom = deadlines(fast, 'exhibits', fast.stageStartedAt).hard - fast.stageStartedAt;
-    expect(slowRoom).toBe(sec(900 + 270)); // the planned 15 minutes plus the 4:30 of flexible time
+    expect(slowRoom).toBe(sec(900 + 210)); // the planned 15 minutes plus the flexible time that is left
     expect(fastRoom).toBeGreaterThan(slowRoom); // plus what was saved
   });
 
-  it('never lets the discussion take the closing time: the recommendation starts by 28:30, the brainstorm by 27:00', () => {
+  it('never lets the discussion take the closing time: the recommendation starts 2:00 before the end, the brainstorm 4:00 before', () => {
     const withBrainstorm = deadlines(settle(start(plan(3, true)), at(450)), 'exhibits', at(450));
     const without = deadlines(settle(start(plan(3, false)), at(450)), 'exhibits', at(450));
-    expect(withBrainstorm.hard).toBe(at(1620));
-    expect(without.hard).toBe(at(1710));
+    expect(withBrainstorm.hard).toBe(at(1560));
+    expect(without.hard).toBe(at(1680));
   });
 
   it('skips the brainstorm cleanly when the case has none, going straight to the recommendation', () => {
@@ -316,74 +316,34 @@ describe('the exhibit discussion', () => {
     expect(many).toBeLessThan(few);
   });
 
-  it('does nothing while the member is working, then gives a process hint, a directional hint, and moves on', () => {
-    let s = inExhibits(3);
-    const b = openBeat(s)!;
-    const u = (n: number) => b.revealedAt + sec(n);
-    expect(nudgeLevel(s, u(10))).toBe('none');
-    expect(nudgeLevel(s, u(38))).toBe('process_hint');
-    s = recordHint(s, u(38));
-    expect(nudgeLevel(s, u(45))).toBe('none'); // not again at once
-    expect(nudgeLevel(s, u(80))).toBe('directional_hint');
-    s = recordHint(s, u(80));
-    expect(nudgeLevel(s, u(100))).toBe('none');
-    expect(nudgeLevel(s, u(120))).toBe('advance'); // about two minutes without progress: the case moves on
-  });
-
-  it('counts progress, so a member who keeps making progress is not nudged', () => {
-    let s = inExhibits(3);
-    const b = openBeat(s)!;
-    s = recordAssessment(s, 'progress', b.revealedAt + sec(50));
-    expect(nudgeLevel(s, b.revealedAt + sec(60))).toBe('none');
-    s = recordAssessment(s, 'stuck', b.revealedAt + sec(100));
-    expect(openBeat(s)!.lastProgressAt).toBe(b.revealedAt + sec(50)); // being stuck is not progress
-  });
-
-  it('does not mistake active typing for being stuck', () => {
-    let s = inExhibits(3);
-    const b = openBeat(s)!;
-    s = saveDraft(s, 'exhibit', 'revenue is 40 so margin is', b.revealedAt + sec(55));
-    expect(nudgeLevel(s, b.revealedAt + sec(60))).toBe('none');
-    expect(nudgeLevel(s, b.revealedAt + sec(80))).not.toBe('none'); // stopped typing for 25 seconds
-  });
-
-  it('does not speak up while the member is reading, thinking or typing: only real silence brings a hint', () => {
+  it('never speaks up on its own: the member drives, and hints only answer what they write', () => {
     const s = inExhibits(3);
     const b = openBeat(s)!;
-    const at = (n: number) => b.revealedAt + sec(n);
-    expect(nudgeLevel(s, at(100), 'timer')).toBe('none'); // reading the exhibit takes time
-    expect(nudgeLevel(s, at(149), 'timer')).toBe('none');
-    expect(nudgeLevel(s, at(151), 'timer')).toBe('process_hint'); // two and a half minutes of nothing
-    // typing counts as being busy, and so does writing to Bucket: the silence is counted again from there
-    const typing = saveDraft(s, 'exhibit', 'revenue is 300 and', at(140));
-    expect(nudgeLevel(typing, at(200), 'timer')).toBe('none');
-    expect(nudgeLevel(typing, at(140 + 151), 'timer')).toBe('process_hint');
-    const talked = ok(userSays(s, 'Revenue is 300', at(100)));
-    expect(nudgeLevel(talked, at(200), 'timer')).toBe('none');
-    expect(nudgeLevel(talked, at(100 + 151), 'timer')).toBe('process_hint');
+    for (const n of [30, 150, 600, 1200]) expect(nudgeLevel(s, b.revealedAt + sec(n), 'timer')).toBe('none');
+    expect(nextNudgeAt(s, b.revealedAt)).toBeNull();
   });
 
-  it('then a sharper hint, then the next exhibit, each after more silence', () => {
+  it('helps in reply to the member: a process hint, then a sharper one, and moves on only once the exhibit has taken longer than it is worth', () => {
     let s = inExhibits(3);
     const b = openBeat(s)!;
-    const at = (n: number) => b.revealedAt + sec(n);
-    s = recordHint(s, at(151));
-    expect(nudgeLevel(s, at(170), 'timer')).toBe('none');
-    expect(nudgeLevel(s, at(239), 'timer')).toBe('none');
-    expect(nudgeLevel(s, at(241), 'timer')).toBe('directional_hint');
-    s = recordHint(s, at(241));
-    expect(nudgeLevel(s, at(325), 'timer')).toBe('none');
-    expect(nudgeLevel(s, at(331), 'timer')).toBe('advance'); // five and a half minutes without a word
+    expect(nudgeLevel(s, b.revealedAt + sec(5))).toBe('process_hint');
+    s = recordHint(s, b.revealedAt + sec(5));
+    expect(nudgeLevel(s, b.revealedAt + sec(20))).toBe('directional_hint');
+    s = recordHint(s, b.revealedAt + sec(20));
+    expect(nudgeLevel(s, b.revealedAt + sec(30))).toBe('none'); // still within the time it is worth: let them carry on
+    expect(nudgeLevel(s, b.revealedAt + openBeat(s)!.budgetMs + sec(1))).toBe('advance');
   });
 
-  it('tells the app when to wake up for the next nudge, never in the past', () => {
-    const s = inExhibits(3);
-    const b = openBeat(s)!;
-    const wake = nextNudgeAt(s, b.revealedAt + sec(1))!;
-    expect(wake).toBeGreaterThan(b.revealedAt);
-    expect(nudgeLevel(s, wake, 'timer')).not.toBe('none');
-    expect(nextNudgeAt(s, wake + sec(1000))).toBeGreaterThanOrEqual(wake + sec(1000));
-    expect(nextNudgeAt(start(), T0)).toBeNull();
+  it('gives a case 20 minutes of exhibits in 35, or 25 in 40 when it has more than four exhibits', () => {
+    const exhibits = (n: number) => Array.from({ length: n }, (_, i) => ({ title: `Exhibit ${i + 1}: Sales` }));
+    const standard = buildPlan({ exhibits: exhibits(4), steps: [] });
+    const long = buildPlan({ exhibits: exhibits(5), steps: [] });
+    expect([standard.exhibitMs, standard.limitMs]).toEqual([20 * 60_000, 35 * 60_000]);
+    expect([long.exhibitMs, long.limitMs]).toEqual([25 * 60_000, 40 * 60_000]);
+    const s = settle(newSession(long, T0, 'Prompt'), at(450));
+    expect(hardEnd(s)).toBe(T0 + 40 * 60_000);
+    expect(deadlines(s, 'exhibits', s.stageStartedAt).soft - s.stageStartedAt).toBe(25 * 60_000);
+    expect(stageEndsAt(s)).toBe(s.stageStartedAt + 25 * 60_000);
   });
 
   it('ends the discussion at its planned time, or later only while the member keeps making progress, and never past the closing reserve', () => {

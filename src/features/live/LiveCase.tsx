@@ -18,11 +18,11 @@ const OUTLINE: [string, string][] = [
   ["1:30", "Think about your framework (no interruptions)"],
   ["3 min", "Write it, then say where you would start"],
   [
-    "15 min",
+    "20-25 min",
     "Work through the exhibits with Bucket, who keeps the case moving",
   ],
-  ["0:30 + 1", "Brainstorm, if the case has one"],
-  ["0:30 + 1", "Think, then write your recommendation"],
+  ["0:30 + 1:30", "Brainstorm, if the case has one"],
+  ["0:30 + 1:30", "Think, then write your recommendation"],
 ];
 
 function Start({ s }: { s: LiveSession }) {
@@ -59,7 +59,7 @@ function Start({ s }: { s: LiveSession }) {
           Practise a case with Bucket
         </h1>
         <p className="max-w-2xl text-sm text-ink-2">
-          A whole case in writing against a 30-minute clock, with Bucket as your
+          A whole case in writing against a 35-minute clock (40 for a case with more than four exhibits), with Bucket as your
           interviewer. It keeps the case moving, lets you lead, and only gives
           limited hints. When it ends, you get feedback based on what you
           actually wrote, and the case goes in your case log.
@@ -83,7 +83,7 @@ function Start({ s }: { s: LiveSession }) {
             ))}
           </ol>
           <p className="text-xs text-muted">
-            The 30 minutes start when you see the prompt, and time you save
+            The clock starts when you see the prompt, and time you save
             early carries over. Bucket is an AI: it follows the case's own
             script and does not make up data. The ratings in your log are its
             draft from what you wrote, so you can review and change them.
@@ -216,7 +216,7 @@ function Finished({
       <div className="flex flex-col gap-1">
         <p className="eyebrow">
           {view.endReason === "time_limit"
-            ? "The 30 minutes ran out"
+            ? "Time ran out"
             : "Case finished"}
         </p>
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
@@ -237,7 +237,7 @@ function Finished({
           />
           <p className="text-sm text-ink-2">
             Bucket is writing your feedback from what you wrote. This does not
-            count against your 30 minutes.
+            count against your time.
           </p>
         </Card>
       )}

@@ -553,7 +553,7 @@ Analysis steps: ${sol.steps.map((s) => `${s.title}: ${s.whatToNotice} ${s.calc.j
 Recommendation: ${sol.recommendation}. Because: ${sol.because.join(' / ')}. Common misses: ${sol.commonMisses.join(' / ')}. Risks: ${sol.risks.join(' / ')}. Next steps: ${sol.nextSteps.join(' / ')}`;
   const content = `The case prompt: ${sol.prompt}
 
-How the session went (time per stage, how each exhibit ended): ${stats}. ${beats}. The case ended ${state.endReason === 'time_limit' ? 'because the 30 minutes ran out' : 'after the last stage'}.
+How the session went (time per stage, how each exhibit ended): ${stats}. ${beats}. The case ended ${state.endReason === 'time_limit' ? 'because the time ran out' : 'after the last stage'}.
 Stages with no response from the student are missing from the record below: list them under "unfinished".
 
 THE STUDENT'S WRITING, IN ORDER:

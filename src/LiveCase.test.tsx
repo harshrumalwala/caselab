@@ -67,20 +67,20 @@ describe('starting a live case', () => {
     render(<App backend={env.backend} />);
     await user.click(await screen.findByRole('button', { name: 'Start a live case' }));
     await screen.findByRole('heading', { name: 'Practise a case with Bucket' });
-    expect(screen.getByText(/30-minute clock/)).toBeInTheDocument();
+    expect(screen.getByText(/35-minute clock/)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /Army Hotel/ })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'Improvement Areas' }).some((l) => l.getAttribute('aria-current') === 'page')).toBe(true); // still under Improvement Areas
   });
 
-  it('starts the 30-minute clock when the prompt first appears, and keeps the case name secret', async () => {
+  it('starts the clock when the prompt first appears, and keeps the case name secret', async () => {
     const env = createFakeEnv();
     await startCase(env);
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('30:00');
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('35:00');
     expect(screen.getByRole('timer', { name: 'Time left in this part' })).toHaveTextContent('3:00');
     expect(screen.queryByText(/The base houses 20,000 soldiers/)).not.toBeInTheDocument(); // the interviewer's facts come out only when asked
     expect(screen.queryByText('Army Hotel')).not.toBeInTheDocument();
     await pass(61);
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('28:59');
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('33:59');
   });
 });
 
@@ -106,7 +106,7 @@ describe('the opening stages', () => {
     await screen.findByLabelText('Your framework');
     // the time saved on the prompt stage is still in the overall clock, which never reset
     const left = screen.getByRole('timer', { name: 'Time left in the case' }).textContent!;
-    expect(Number(left.split(':')[0])).toBeGreaterThanOrEqual(27);
+    expect(Number(left.split(':')[0])).toBeGreaterThanOrEqual(32);
   });
 
   it('asks where they would start after the framework, then brings out the first exhibit', async () => {
@@ -221,7 +221,7 @@ describe('refreshing and failing', () => {
     await within(again.container).findByText('Two large chains compete.');
     expect(within(again.container).getByLabelText('Ask a clarifying question')).toHaveValue('And what about prices');
     const left = within(again.container).getByRole('timer', { name: 'Time left in the case' }).textContent!;
-    expect(left).toBe('29:20'); // the 40 seconds that passed are gone: the clock kept running instead of starting again
+    expect(left).toBe('34:20'); // the 40 seconds that passed are gone: the clock kept running instead of starting again
   });
 
   it('says so when Bucket cannot reply, and keeps what was written', async () => {
