@@ -184,7 +184,7 @@ function parseChart(v: unknown, columns: string[], rows: string[][], depth = 0):
   const kind = KINDS.find((k) => k === o.kind);
   if (!kind) return null;
 
-  let categories = strs(o.categories, 80, 40);
+  let categories = strs(o.categories, 80, 70);
   let series: ChartSeries[] = (Array.isArray(o.series) ? o.series : [])
     .map((x) => {
       const so = obj(x);
@@ -227,9 +227,9 @@ function parseChart(v: unknown, columns: string[], rows: string[][], depth = 0):
     unit: str(o.unit, 12),
     categories,
     series,
-    totals: strs(o.totals, 30, 40),
+    totals: strs(o.totals, 30, 70),
     belowRows: (Array.isArray(o.belowRows) ? o.belowRows : [])
-      .map((r) => ({ label: str(obj(r).label, 40), values: strs(obj(r).values, 30, 40) }))
+      .map((r) => ({ label: str(obj(r).label, 40), values: strs(obj(r).values, 30, 70) }))
       .filter((r) => r.values.length > 0)
       .slice(0, 4),
     sideNotes: sideItems.length > 0 ? { heading: str(sn.heading, 60), items: sideItems } : null,
@@ -295,7 +295,7 @@ export function parseBookSolution(raw: unknown): BookSolution | null {
       const rows = (Array.isArray(o.rows) ? o.rows : [])
         .map((r) => (Array.isArray(r) ? r.map((c) => str(c, 120)).slice(0, columns.length || 16) : []))
         .filter((r) => r.some((c) => c !== ''))
-        .slice(0, 30);
+        .slice(0, 70);
       return {
         title: str(o.title, 200),
         caption: str(o.caption, 300),
