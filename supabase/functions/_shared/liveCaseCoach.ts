@@ -25,6 +25,7 @@ import {
   submit,
   timeInStages,
   userSays,
+  addUsage,
   deadlines,
   type Assessment,
   type Beat,
@@ -34,6 +35,7 @@ import {
   type SessionState,
   type Stage,
   type Submission,
+  type Usage,
 } from './liveCase.ts';
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -381,6 +383,8 @@ const HELP: Record<NudgeLevel, string> = {
 };
 
 export interface TurnRequest {
+  /** Which model does it: the short replies go to a small, cheap one, the feedback to a stronger one (the function chooses). */
+  model: 'coach' | 'feedback';
   system: string;
   messages: { role: 'user' | 'assistant'; content: string }[];
   schema: Record<string, unknown>;
@@ -423,7 +427,7 @@ export function turnRequest(sol: LiveSolution, state: SessionState, kind: TurnKi
   const last = messages[messages.length - 1];
   if (last.role === 'user') last.content += directive;
   else messages.push({ role: 'user', content: `(The student has said nothing new.)${directive}` });
-  return { system: systemPrompt(sol), messages, schema: TURN_SCHEMA, maxTokens: 600, effort: 'low' };
+  return { model: 'coach', system: systemPrompt(sol), messages, schema: TURN_SCHEMA, maxTokens: 600, effort: 'low' };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -560,7 +564,7 @@ THE STUDENT'S WRITING, IN ORDER:
 ${writtenRecord(state) || '(nothing was written)'}
 
 ${reference}`;
-  return { system: FEEDBACK_RULES, messages: [{ role: 'user', content }], schema: FEEDBACK_SCHEMA, maxTokens: 5000, effort: 'medium' };
+  return { model: 'feedback', system: FEEDBACK_RULES, messages: [{ role: 'user', content }], schema: FEEDBACK_SCHEMA, maxTokens: 5000, effort: 'medium' };
 }
 
 const rating = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5 ? v : null);
@@ -645,7 +649,7 @@ export interface LiveDeps {
   /** Saves only if the stored version is still `expectedVersion`. */
   saveSession(stored: StoredSession, expectedVersion: number): Promise<boolean>;
   countStarts(userId: string, sinceMs: number): Promise<number>;
-  ask(request: TurnRequest): Promise<{ text: string; stopReason: string | null }>;
+  ask(request: TurnRequest): Promise<{ text: string; stopReason: string | null; usage?: Partial<Omit<Usage, 'calls'>> }>;
 }
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -801,8 +805,10 @@ async function converse(deps: LiveDeps, userId: string, sessionId: string, text:
 
   // 2. Ask the model.
   let turn: Turn | null = null;
+  let used: Partial<Omit<Usage, 'calls'>> | undefined;
   try {
     const answer = await deps.ask(turnRequest(sol, saved.state, kind, help));
+    used = answer.usage;
     if (answer.stopReason !== 'refusal') turn = parseTurn(answer.text, privateNotes(sol, saved.state));
   } catch {
     turn = null;
@@ -816,7 +822,7 @@ async function converse(deps: LiveDeps, userId: string, sessionId: string, text:
     const now = deps.now();
     const st = await settleStored(deps, cur, false);
     if (fingerprint(st.state) !== before) return { status: 'ok', view: toView(st, sol, c.info, now) };
-    const next: StoredSession = { ...st, state: applyTurn(st, turn, kind, now, help), version: cur.version + 1 };
+    const next: StoredSession = { ...st, state: addUsage(applyTurn(st, turn, kind, now, help), used), version: cur.version + 1 };
     next.status = next.state.stage === 'done' ? 'done' : 'active';
     if (await deps.saveSession(next, cur.version)) return { status: 'ok', view: toView(next, sol, c.info, now) };
   }
@@ -875,14 +881,16 @@ async function finishCase(deps: LiveDeps, userId: string, sessionId: string, mut
   if (typeof counted === 'string') return refuse(counted);
   if (counted.feedback) return { status: 'ok', view: view(counted) };
   let feedback: Feedback | null = null;
+  let fed: Partial<Omit<Usage, 'calls'>> | undefined;
   try {
     const answer = await deps.ask(feedbackRequest(sol, counted.state));
+    fed = answer.usage;
     if (answer.stopReason !== 'refusal') feedback = parseFeedback(answer.text, counted.state);
   } catch {
     feedback = null;
   }
   if (!feedback) return { status: 'failed', message: 'The feedback could not be written just now. Your answers are saved: try again.' };
   const kept = feedback;
-  const done = await mutate((st) => (st.feedback ? st : { ...st, feedback: kept }));
+  const done = await mutate((st) => (st.feedback ? st : { ...st, feedback: kept, state: addUsage(st.state, fed) }));
   return typeof done === 'string' ? refuse(done) : { status: 'ok', view: view(done) };
 }
