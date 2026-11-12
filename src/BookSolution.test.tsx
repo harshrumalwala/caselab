@@ -244,6 +244,16 @@ describe('a write-up read from the database', () => {
     expect(s?.exhibits[0].rows[0][12]).toBe('12');
   });
 
+  it('keeps long tables and charts whole: up to seventy rows and seventy plotted points', () => {
+    const n = 61;
+    const rows = Array.from({ length: n }, (_, i) => [`M${i + 1}`, String(100 + i)]);
+    const chart = { kind: 'line', categories: rows.map((r) => r[0]), series: [{ name: 'Price', values: rows.map((r) => Number(r[1])) }] };
+    const s = parseBookSolution({ ...good, exhibits: [{ title: 'Monthly price', columns: ['Month', 'Price'], rows, chart }] });
+    expect(s?.exhibits[0].rows).toHaveLength(n);
+    expect(s?.exhibits[0].chart?.categories).toHaveLength(n);
+    expect(s?.exhibits[0].chart?.series[0].values).toHaveLength(n);
+  });
+
   it('tolerates missing lists and an odd confidence, and cuts rows to the columns', () => {
     const s = parseBookSolution({ prompt: 'q', recommendation: 'r', steps: [{ title: 't', body: 'b' }], confidence: 'weird', exhibits: [{ title: 'E', columns: ['A'], rows: [['1', '2', '3']] }] });
     expect(s).toMatchObject({ facts: [], structure: [], risks: [], nextSteps: [], ourTakeaways: [], confidence: 'high' });

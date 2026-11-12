@@ -94,6 +94,47 @@ describe("the book's charts, redrawn", () => {
     expect(svg.getAttribute('aria-label')).toMatch(/Exhibit 1: 2006 100; 2007 120/);
   });
 
+  it('stacks only the bar series: a line laid over a stacked chart stays a line', () => {
+    const svg = draw({
+      kind: 'stacked',
+      categories: ['2013', '2014'],
+      series: [series('Own', [40, 40]), series('Other', [55, 50]), series('Total', [95, 90], { type: 'line' })],
+      yMax: 100,
+      yStep: 20,
+    });
+    expect(svg.querySelectorAll('rect')).toHaveLength(4);
+    expect(svg.querySelectorAll('polyline')).toHaveLength(1);
+  });
+
+  it('prints every few category labels on a long monthly series, and all of them on a short one', () => {
+    const months = Array.from({ length: 61 }, (_, i) => `Mon-${2010 + Math.floor(i / 12)}-${i}`);
+    const long = draw({ kind: 'line', categories: months, series: [series('Price', months.map((_, i) => 100 + i))] });
+    const printed = text(long).filter((t) => t?.startsWith('Mon-'));
+    expect(printed.length).toBeGreaterThan(5);
+    expect(printed.length).toBeLessThan(31);
+    const short = draw({ kind: 'line', categories: ['2013', '2014', '2015'], series: [series('Price', [1, 2, 3])] });
+    expect(text(short)).toEqual(expect.arrayContaining(['2013', '2014', '2015']));
+  });
+
+  it('can leave the names off a scatter (the book labels none of the points), and wraps a long line name at the end of the line', () => {
+    const base = { kind: 'scatter' as const, categories: ['Contract 1', 'Contract 2'], xValues: [10, 20], series: [series('Bid', [3000, 4000])] };
+    expect(text(draw(base))).toEqual(expect.arrayContaining(['Contract 1', 'Contract 2']));
+    const quiet = draw({ ...base, pointLabels: false });
+    expect(text(quiet).filter((t) => t?.startsWith('Contract'))).toHaveLength(0);
+    expect(text(quiet)).toEqual(expect.arrayContaining(['10', '20']));
+    const line = draw({ kind: 'line', categories: ['a', 'b'], series: [series('Years to commercialization (right-hand axis, 0 to 8)', [7, 2])] });
+    const lines = text(line).filter((t) => t && /commercialization|right-hand|axis/.test(t));
+    expect(lines.length).toBeGreaterThan(1);
+  });
+
+  it('breaks a long footnote into lines, so none runs off the edge', () => {
+    const note = 'Expected YoY Market Growth: 10% for stage one and 20% for stage two. Likeliness of commercial success: Stage 1 10%, Stage 2 25%, Stage 3 60%.';
+    const svg = draw({ kind: 'bar', categories: ['a', 'b'], series: [series('x', [1, 2])], footnote: note });
+    const lines = text(svg).filter((t) => t && /Expected|Stage|growth|success/i.test(t));
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.join(' ')).toContain('Stage 3 60%.');
+  });
+
   it('is only drawn for a chart that can be drawn: a parsed chart always lines up with its categories', () => {
     const s = parseBookSolution({
       prompt: 'A question here',
