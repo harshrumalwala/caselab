@@ -70,7 +70,7 @@ export function CaseDetail({ caseId, onClose }: { caseId: string; onClose: () =>
     <>
       <Dialog
         open
-        variant="drawer"
+        width="xl"
         onClose={onClose}
         title={c.title || 'Untitled case'}
         description={formatDate(c.date)}
@@ -105,7 +105,7 @@ export function CaseDetail({ caseId, onClose }: { caseId: string; onClose: () =>
         }
       >
         <div className="space-y-7">
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-3">
             <Detail label="Case source">{c.source || <span className="text-muted">–</span>}</Detail>
             <Detail label="Interviewer / partner">{c.partner || <span className="text-muted">–</span>}</Detail>
             <Detail label="Industry">{c.industry || <span className="text-muted">Not specified</span>}</Detail>
@@ -147,13 +147,15 @@ export function CaseDetail({ caseId, onClose }: { caseId: string; onClose: () =>
           </section>
 
           {hasTakeaways && (
-            <section aria-label="Takeaways" className="space-y-4">
-              <h3 className="eyebrow">Takeaways</h3>
-              <Note label="What went well" text={c.wentWell} />
-              <Note label="What I struggled with" text={c.struggled} />
-              <Note label="Concepts learned" text={c.concepts} />
-              <Note label="Practice next" text={c.nextFocus} />
-              <Note label="Other notes" text={c.otherNotes} />
+            <section aria-label="Takeaways">
+              <h3 className="eyebrow mb-4">Takeaways</h3>
+              <div className="grid gap-x-8 gap-y-4 md:grid-cols-2">
+                <Note label="What went well" text={c.wentWell} />
+                <Note label="What I struggled with" text={c.struggled} />
+                <Note label="Concepts learned" text={c.concepts} />
+                <Note label="Practice next" text={c.nextFocus} />
+                <Note label="Other notes" text={c.otherNotes} />
+              </div>
             </section>
           )}
 
