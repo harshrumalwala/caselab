@@ -57,7 +57,8 @@ function metrics(chart: Chart, width: number) {
   const hasSide = chart.sideNotes !== null;
   const endLabels = chart.series.some((s) => s.type === 'line' || chart.kind === 'line') && chart.kind !== 'pie';
   const left = chart.kind === 'pie' ? 10 : 52 + (chart.axisEnds ? 62 : 0);
-  const right = hasSide ? 110 : endLabels ? 74 : 14;
+  const endLen = Math.max(0, ...chart.series.filter((s) => s.type === 'line' || chart.kind === 'line').map((s) => s.name.length));
+  const right = hasSide ? 110 : endLabels ? Math.min(150, Math.max(74, Math.min(endLen, 22) * 6 + 14)) : 14;
   const slot = (width - left - right) / Math.max(chart.categories.length, 1);
   const maxCh = Math.max(5, Math.floor(slot / 6));
   const wrapped = chart.kind !== 'pie' && !(chart.kind === 'bar' && chart.horizontal) && chart.categories.some((c) => wrap(c, maxCh).length > 1);
@@ -69,6 +70,20 @@ interface Box {
   y: number;
   w: number;
   h: number;
+}
+
+/** Breaks a long label into at most four lines of about `max` characters, at spaces. */
+function wrapWords(label: string, max: number): string[] {
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of label.split(' ')) {
+    if (cur && `${cur} ${w}`.length > max) {
+      lines.push(cur);
+      cur = w;
+    } else cur = cur ? `${cur} ${w}` : w;
+  }
+  if (cur) lines.push(cur);
+  return lines.slice(0, 4);
 }
 
 function Text({ x, y, children, anchor = 'middle', size = 11, weight = 400, fill = INK, opacity = 1 }: { x: number; y: number; children: ReactNode; anchor?: 'start' | 'middle' | 'end'; size?: number; weight?: number; fill?: string; opacity?: number }) {
@@ -91,6 +106,8 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
 
   const n = Math.max(chart.categories.length, 1);
   const slot = plot.w / n;
+  // with many categories (a monthly series), print every few labels so they stay readable
+  const labelStep = n > 14 ? Math.max(1, Math.ceil((Math.max(...chart.categories.map((c) => c.length)) * 5.6) / slot)) : 1;
   const barSeries = chart.series.filter((s) => s.type === 'bar' && chart.kind !== 'line');
   const stacked = chart.kind === 'stacked';
 
@@ -169,11 +186,13 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
       const xx = (v: number) => plot.x + 14 + ((v - xMin) / (xMax - xMin || 1)) * (plot.w - 28);
       xs.forEach((xv, i) => {
         body.push(<circle key={`p${i}`} cx={xx(xv)} cy={y(chart.series[0].values[i])} r={4.5} fill={GREYS[3]} />);
-        body.push(
-          <Text key={`pl${i}`} x={xx(xv)} y={y(chart.series[0].values[i]) - 8} size={10}>
-            {chart.categories[i]}
-          </Text>,
-        );
+        if (chart.pointLabels) {
+          body.push(
+            <Text key={`pl${i}`} x={xx(xv)} y={y(chart.series[0].values[i]) - 8} size={10}>
+              {chart.categories[i]}
+            </Text>,
+          );
+        }
         body.push(
           <Text key={`px${i}`} x={xx(xv)} y={plot.y + plot.h + 16} size={10} opacity={0.8}>
             {short(xv)}
@@ -219,7 +238,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
         if (stacked) {
           const tot = chart.percent ? stackTotals[i] || 1 : 1;
           let acc = 0;
-          chart.series.forEach((s, si) => {
+          barSeries.forEach((s, si) => {
             const v = chart.percent ? (s.values[i] / tot) * 100 : s.values[i];
             const y0 = y(acc);
             const y1 = y(acc + v);
@@ -261,7 +280,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
             );
           }
         }
-        wrap(c, maxCh).forEach((line, li) =>
+        (i % labelStep === 0 ? wrap(c, maxCh) : []).forEach((line, li) =>
           body.push(
             <Text key={`cat${i}-${li}`} x={cx(i)} y={plot.y + plot.h + 16 + li * 12} size={10}>
               {line}
@@ -286,10 +305,13 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
           }
         });
         const last = s.values.length - 1;
-        body.push(
-          <Text key={`le${li}`} x={cx(last) + 10} y={y(s.values[last]) + 4} anchor="start" size={11} fill={col} weight={500}>
-            {s.name}
-          </Text>,
+        const nameLines = wrapWords(s.name, Math.max(8, Math.floor((right - 12) / 6)));
+        nameLines.forEach((line, ni) =>
+          body.push(
+            <Text key={`le${li}-${ni}`} x={cx(last) + 10} y={y(s.values[last]) + 4 + ni * 12 - ((nameLines.length - 1) * 12) / 2} anchor="start" size={11} fill={col} weight={500}>
+              {line}
+            </Text>,
+          ),
         );
       });
     }
@@ -351,20 +373,23 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
         </Text>
       )}
       {body}
-      {chart.footnote && (
-        <Text x={4} y={top + plotH + catH + rowsH + 14} anchor="start" size={10} opacity={0.85}>
-          {chart.footnote}
+      {footnoteLines(chart, width).map((line, li) => (
+        <Text key={`fn${li}`} x={4} y={top + plotH + catH + rowsH + 14 + li * 12} anchor="start" size={10} opacity={0.85}>
+          {line}
         </Text>
-      )}
+      ))}
       <title>{chart.heading || chart.axisTitle}</title>
     </g>
   );
 }
 
+/** The footnote, broken into lines that fit the panel's width. */
+const footnoteLines = (c: Chart, width: number): string[] => (c.footnote ? wrapWords(c.footnote, Math.max(20, Math.floor((width - 8) / 5.3))) : []);
+
 const panelHeight = (c: Chart, width: number): number => {
   const top = (c.heading ? 22 : 0) + (c.axisTitle ? 22 : 8) + (c.totals.length > 0 ? 14 : 0);
   const { wrapped } = metrics(c, width);
-  return top + (c.kind === 'pie' ? 190 : 170) + (c.kind === 'pie' ? 0 : wrapped ? 42 : 30) + c.belowRows.length * 16 + (c.footnote ? 16 : 0) + 12;
+  return top + (c.kind === 'pie' ? 190 : 170) + (c.kind === 'pie' ? 0 : wrapped ? 42 : 30) + c.belowRows.length * 16 + (c.footnote ? 4 + footnoteLines(c, width).length * 12 : 0) + 12;
 };
 
 /**

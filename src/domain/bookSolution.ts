@@ -57,6 +57,8 @@ export interface ExhibitChart {
   xValues: number[];
   /** Print the value on each bar or point. Off when the book prints none (the labels it does print are always shown). */
   valueLabels: boolean;
+  /** For a scatter chart: print the name beside each point (the books sometimes label none). */
+  pointLabels: boolean;
   /** A note the book prints under or beside the chart, such as a footnote or a callout. */
   footnote: string;
   /** Words the book prints at the two ends of the vertical axis, such as "Extremely important" and "Not at all important". */
@@ -84,6 +86,7 @@ export const blankChart: ExhibitChart = {
   segmentNames: false,
   xValues: [],
   valueLabels: true,
+  pointLabels: true,
   footnote: '',
   axisEnds: null,
   panels: [],
@@ -241,6 +244,7 @@ function parseChart(v: unknown, columns: string[], rows: string[][], depth = 0):
     segmentNames: o.segmentNames === true,
     xValues: (Array.isArray(o.xValues) ? o.xValues : []).map((n) => num(n) ?? NaN).filter((n) => Number.isFinite(n)),
     valueLabels: o.valueLabels !== false,
+    pointLabels: o.pointLabels !== false,
     footnote: str(o.footnote, 240),
     axisEnds: str(obj(o.axisEnds).top, 40) || str(obj(o.axisEnds).bottom, 40) ? { top: str(obj(o.axisEnds).top, 40), bottom: str(obj(o.axisEnds).bottom, 40) } : null,
     panels,
