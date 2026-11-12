@@ -235,6 +235,15 @@ describe('a write-up read from the database', () => {
     expect(s?.exhibits[0].rows).toEqual([['Total Cost Synergies', '$10,000,000']]);
   });
 
+  it('keeps a wide table whole: up to sixteen columns, so no column of the books table is cut off', () => {
+    const columns = Array.from({ length: 13 }, (_, i) => (i === 0 ? '' : `Product ${i}`));
+    const row = columns.map((_, i) => (i === 0 ? 'Revenue' : String(i)));
+    const s = parseBookSolution({ ...good, exhibits: [{ title: 'Revenue and Cost by Product', columns, rows: [row] }] });
+    expect(s?.exhibits[0].columns).toHaveLength(13);
+    expect(s?.exhibits[0].rows[0]).toHaveLength(13);
+    expect(s?.exhibits[0].rows[0][12]).toBe('12');
+  });
+
   it('tolerates missing lists and an odd confidence, and cuts rows to the columns', () => {
     const s = parseBookSolution({ prompt: 'q', recommendation: 'r', steps: [{ title: 't', body: 'b' }], confidence: 'weird', exhibits: [{ title: 'E', columns: ['A'], rows: [['1', '2', '3']] }] });
     expect(s).toMatchObject({ facts: [], structure: [], risks: [], nextSteps: [], ourTakeaways: [], confidence: 'high' });
