@@ -11,7 +11,10 @@
 --       - One ACTIVE session per member at a time (a partial unique index).
 --       - Deleted with the account.
 --
---   * live_case_catalog(): the casebook cases that have a write-up, so the member can pick one to practise. Names only (what search_library()
+--   * Only FULL write-ups can be practised: marked complete (confidence 'high', not 'partial'), with the prompt, a recommendation and something
+--     to work through (exhibits or steps). library_solution_is_full() holds that rule, and the list and "surprise me" both use it.
+--
+--   * live_case_catalog(): the casebook cases with a full write-up, so the member can pick one to practise. Names only (what search_library()
 --     already shows any member), and whether this member has already logged the case. Verified members only. Releases nothing about the case.
 --
 --   * live_case_pick_for(user): a random case with a write-up that the user has not logged, for "surprise me". Callable only by the service
@@ -44,6 +47,26 @@ create index live_case_sessions_user_idx on public.live_case_sessions (user_id, 
 alter table public.live_case_sessions enable row level security;
 revoke all on public.live_case_sessions from anon, authenticated;
 
+create function public.library_solution_is_full(p_solution jsonb)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select p_solution ->> 'confidence' = 'high'
+    and length(btrim(coalesce(p_solution ->> 'prompt', ''))) > 0
+    and length(btrim(coalesce(p_solution ->> 'recommendation', ''))) > 0
+    and (
+      case when jsonb_typeof(p_solution -> 'exhibits') = 'array' then jsonb_array_length(p_solution -> 'exhibits') else 0 end
+      + case when jsonb_typeof(p_solution -> 'steps') = 'array' then jsonb_array_length(p_solution -> 'steps') else 0 end
+    ) > 0;
+$$;
+
+comment on function public.library_solution_is_full(jsonb) is
+  'True for a complete write-up (confidence high, with a prompt, a recommendation and exhibits or steps): the only kind a live case is run on.';
+
+revoke all on function public.library_solution_is_full(jsonb) from public, anon, authenticated;
+
 create function public.live_case_catalog()
 returns table (
   id           uuid,
@@ -65,12 +88,12 @@ as $$
          exists (select 1 from public.cases m where m.library_id = c.id and m.user_id = (select auth.uid())) as done
   from public.library_cases c
   join public.library_case_solutions s on s.case_id = c.id
-  where (select public.is_member())
+  where (select public.is_member()) and public.library_solution_is_full(s.solution)
   order by c.cochair_pick desc, c.year desc, c.name;
 $$;
 
 comment on function public.live_case_catalog() is
-  'The library cases that can be practised live (those with a write-up), with whether the caller has logged each. Verified members only. Returns names only, nothing about the cases themselves.';
+  'The library cases that can be practised live (those with a full write-up), with whether the caller has logged each. Verified members only. Returns names only, nothing about the cases themselves.';
 
 revoke all on function public.live_case_catalog() from public, anon, authenticated;
 grant execute on function public.live_case_catalog() to authenticated;
@@ -84,12 +107,13 @@ set search_path = ''
 as $$
   select s.case_id
   from public.library_case_solutions s
-  where not exists (select 1 from public.cases m where m.library_id = s.case_id and m.user_id = p_user)
+  where public.library_solution_is_full(s.solution)
+    and not exists (select 1 from public.cases m where m.library_id = s.case_id and m.user_id = p_user)
   order by random()
   limit 1;
 $$;
 
 comment on function public.live_case_pick_for(uuid) is
-  'A random library case with a write-up that the user has not logged. Only the live-case Edge Function (service role) may call it.';
+  'A random library case with a full write-up that the user has not logged. Only the live-case Edge Function (service role) may call it.';
 
 revoke all on function public.live_case_pick_for(uuid) from public, anon, authenticated;

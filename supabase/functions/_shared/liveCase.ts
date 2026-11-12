@@ -76,21 +76,36 @@ export interface CasePlan {
 
 /** The little the plan needs to know about a case's write-up. */
 export interface PlanSource {
-  exhibits: readonly unknown[];
+  exhibits: readonly { title?: string }[];
   steps: readonly { title: string }[];
 }
 
 const BRAINSTORM = /brainstorm/i;
+const FRAMEWORK_STEP = /^\s*(framework|structure|structuring|clarifying questions?)\s*$/i;
+
+/**
+ * Some of a write-up's tables are the interviewer's own: guidance, solutions, a sample approach, "calculation to be performed by the candidate",
+ * a list of brainstorm ideas. They are never shown to the member (they would give the case away); they are reference for Bucket only.
+ */
+const INTERVIEWER_SIDE = /interviewer|guidance|\bguide\b|solution|sample|approach|performed by|answer|brainstorm|expected|calculation|\bmath\b/i;
+export const isInterviewerSide = (title: string): boolean => INTERVIEWER_SIDE.test(title);
 
 export function buildPlan(solution: PlanSource): CasePlan {
   const brainstormStep = solution.steps.find((s) => BRAINSTORM.test(s.title));
-  const exhibitBeats: Beat[] = solution.exhibits.map((_, index) => ({ kind: 'exhibit', index }));
-  // A case with no exhibits is worked through the book's own steps instead (the brainstorm has its own stages).
-  const stepBeats: Beat[] = solution.steps.flatMap((s, index) => (BRAINSTORM.test(s.title) ? [] : [{ kind: 'step' as const, index }]));
+  const brainstormTable = solution.exhibits.find((e) => BRAINSTORM.test(e.title ?? ''));
+  // Only the exhibits meant for the candidate are brought out.
+  const exhibitBeats: Beat[] = solution.exhibits.flatMap((e, index) => (isInterviewerSide(e.title ?? '') ? [] : [{ kind: 'exhibit' as const, index }]));
+  // A case with no exhibits for the candidate is worked through the book's own steps instead (the brainstorm has its own stages).
+  // (The framework is done in its own stages, so a step that is just the framework is not discussed again.)
+  const stepBeats: Beat[] = solution.steps.flatMap((s, index) => (BRAINSTORM.test(s.title) || FRAMEWORK_STEP.test(s.title) ? [] : [{ kind: 'step' as const, index }]));
   return {
     beats: exhibitBeats.length > 0 ? exhibitBeats : stepBeats,
-    hasBrainstorm: Boolean(brainstormStep),
-    brainstormTopic: brainstormStep ? brainstormStep.title.replace(/^\s*brainstorm(?:s|ing)?\s*[:\-–]?\s*/i, '').trim() : '',
+    hasBrainstorm: Boolean(brainstormStep || brainstormTable),
+    brainstormTopic: brainstormStep
+      ? brainstormStep.title.replace(/^\s*brainstorm(?:s|ing)?\s*[:\-–]?\s*/i, '').trim()
+      : brainstormTable && brainstormTable.title?.includes(':')
+        ? brainstormTable.title.slice(brainstormTable.title.indexOf(':') + 1).trim()
+        : '',
   };
 }
 

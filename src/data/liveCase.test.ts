@@ -68,6 +68,27 @@ describe('the plan from a case', () => {
     expect(p.hasBrainstorm).toBe(true);
   });
 
+  it("keeps the interviewer's own tables off the screen: only the exhibits meant for the candidate come out", () => {
+    const p = buildPlan({
+      exhibits: [{ title: 'Exhibit 1: Sales by region' }, { title: 'Interviewer Guidance: Revenue' }, { title: 'Exhibit 2 - Solution' }, { title: 'Exhibit #2: Costs' }, { title: 'Calculation to be performed by candidate' }, { title: 'Sample Approach: Costs' }],
+      steps: [{ title: 'Framework' }],
+    });
+    expect(p.beats).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'exhibit', index: 3 }]);
+  });
+
+  it('works through the steps when every table is the interviewer\'s (as in a case whose only table is a guide)', () => {
+    const p = buildPlan({ exhibits: [{ title: 'Interviewer Guidance: Revenue' }], steps: [{ title: 'Framework' }, { title: 'Pricing analysis' }, { title: 'Brainstorm: costs' }] });
+    expect(p.beats).toEqual([{ kind: 'step', index: 1 }]); // the "Framework" step is not discussed again, and the brainstorm has its own stages
+    expect(p.hasBrainstorm).toBe(true);
+  });
+
+  it('finds a brainstorm in a table of brainstorm ideas, and what it is about', () => {
+    const p = buildPlan({ exhibits: [{ title: 'Exhibit 1: Sales' }, { title: 'Brainstorm #1: costs along the value chain' }], steps: [] });
+    expect(p.hasBrainstorm).toBe(true);
+    expect(p.brainstormTopic).toBe('costs along the value chain');
+    expect(p.beats).toEqual([{ kind: 'exhibit', index: 0 }]);
+  });
+
   it('has no brainstorm when the case has none', () => {
     expect(buildPlan({ exhibits: [{}], steps: [{ title: 'Size demand' }] }).hasBrainstorm).toBe(false);
   });

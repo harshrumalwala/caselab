@@ -2,7 +2,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   handleLive,
+  isFullSolution,
   leaks,
+  openingText,
   MAX_FEEDBACK_ATTEMPTS,
   MAX_STARTS_PER_DAY,
   parseFeedback,
@@ -34,6 +36,7 @@ const EXHIBIT = (n: number) => ({
 });
 
 const SOLUTION = {
+  confidence: 'high',
   prompt: 'Should a hotel chain open a new property near a military base?',
   facts: ['The base houses 20,000 soldiers.'],
   clarifyingQuestions: [{ question: 'Who pays for the rooms?', answer: 'The army pays a fixed per diem per soldier.', why: 'SECRET-WHY' }],
@@ -43,7 +46,7 @@ const SOLUTION = {
     { title: 'Size peak demand', body: 'Peak fills the hotel for four months SECRET-STEP', calc: [], whatToNotice: 'The base is busy only part of the year', commonMiss: [], checkYourself: [] },
     { title: 'Brainstorm: ways to grow revenue', body: 'Ideas SECRET-BRAINSTORM', calc: [], whatToNotice: '', commonMiss: [], checkYourself: [] },
   ],
-  exhibits: [EXHIBIT(1), EXHIBIT(2)],
+  exhibits: [EXHIBIT(1), EXHIBIT(2), { ...EXHIBIT(3), title: 'Interviewer Guidance: Revenue', rows: [['Basic', 'SECRET-GUIDE-70,000']], howToRead: '', takeaways: [] }],
   recommendation: 'Open the hotel only if off-peak occupancy clears the break-even SECRET-REC',
   recommendationDetail: { because: ['Because off-peak is below break-even SECRET-BECAUSE'], delivery: 'I would not open it yet SECRET-DELIVERY', commonMisses: [] },
   risks: ['Base closure'],
@@ -171,8 +174,9 @@ describe('starting a live case', () => {
   it('starts the clock with the prompt and what the interviewer says up front, and keeps the case name secret', async () => {
     const v = await begin();
     expect(v.stage).toBe('prompt');
-    expect(v.messages[0].text).toContain('Should a hotel chain open a new property');
-    expect(v.messages[0].text).toContain('The base houses 20,000 soldiers.');
+    expect(v.messages[0].text).toContain('Should a hotel chain open a new property near a military base?');
+    // Only the prompt, word for word. What the interviewer holds comes out when the student asks for it.
+    expect(v.messages[0].text).not.toContain('The base houses 20,000 soldiers.');
     expect(v.startedAt).toBe(T0);
     expect(v.endsAt).toBe(T0 + sec(1800));
     expect(v.caseInfo).toBeNull(); // the name would spoil it
@@ -628,7 +632,90 @@ describe('reading what comes back', () => {
     expect(readSolution({ prompt: '' })).toBeNull();
     const s = readSolution({ prompt: 'Q?', exhibits: [{ title: 'E', rows: [[1, 2]], columns: ['a', 'b'] }, 'junk'], steps: 'nope' })!;
     expect(s.exhibits).toHaveLength(1); // the junk entry is dropped
-    expect(s.exhibits[0].rows).toEqual([['', '']]); // only text is kept
+    expect(s.exhibits[0].rows).toEqual([['1', '2']]); // figures are kept, as text
     expect(s.steps).toEqual([]);
+  });
+});
+
+describe('word for word, and full write-ups only', () => {
+  const long = 'x'.repeat(313);
+
+  it('keeps the prompt, the facts, the answers, the exhibit captions and every table cell exactly as written, including long ones', () => {
+    const sol = readSolution({
+      prompt: 'First paragraph, exactly as written.\r\n\r\nSecond paragraph with   odd  spacing kept tidy.',
+      facts: ['Hilton $110, Hampton Inn $75, Days Inn $40.'],
+      clarifyingQuestions: [{ question: 'Who is the hotel for?', answer: 'Soldiers in training and soldiers moving base.' }],
+      exhibits: [{ title: 'Exhibit 1: Revenue', caption: 'c'.repeat(614), columns: ['Type', 'Rooms'], rows: [[long, 5], ...Array.from({ length: 60 }, (_, i) => [`row ${i}`, i])], approx: true }],
+    })!;
+    expect(sol.prompt).toBe('First paragraph, exactly as written.\n\nSecond paragraph with odd spacing kept tidy.');
+    expect(sol.facts).toEqual(['Hilton $110, Hampton Inn $75, Days Inn $40.']);
+    expect(sol.clarifying[0].answer).toBe('Soldiers in training and soldiers moving base.');
+    expect(sol.exhibits[0].caption).toHaveLength(614); // not cut
+    expect(sol.exhibits[0].rows[0]).toEqual([long, '5']); // a 313-character cell is whole, and figures stay figures
+    expect(sol.exhibits[0].rows).toHaveLength(61); // every row of a 61-row exhibit
+    expect(sol.exhibits[0].approx).toBe(true);
+  });
+
+  it('opens with the prompt exactly as written and nothing else of the case', () => {
+    const sol = readSolution({ ...SOLUTION, prompt: 'A private equity firm may build a 400-room hotel inside an army base.' })!;
+    const text = openingText(sol);
+    expect(text.startsWith('A private equity firm may build a 400-room hotel inside an army base.')).toBe(true);
+    expect(text).not.toContain('soldiers');
+  });
+
+  it('tells the model to give the facts exactly as written, and keeps the whole fact sheet away from the screen', async () => {
+    const v = await begin();
+    await call({ type: 'say', sessionId: v.sessionId, text: 'How many soldiers are on the base?' });
+    const req = w.asked[0];
+    expect(req.system).toContain('The base houses 20,000 soldiers.');
+    expect(JSON.stringify(req.messages)).toContain('exactly as written');
+    expect(JSON.stringify(view(await call({ type: 'resume', sessionId: v.sessionId })).messages)).not.toContain('Peak season runs four months');
+  });
+
+  it('counts a write-up as full only when it is marked complete and has a prompt, a recommendation and something to work through', () => {
+    const full = { confidence: 'high', prompt: 'P', recommendation: 'R', steps: [{ title: 'S' }], exhibits: [] };
+    expect(isFullSolution(full)).toBe(true);
+    expect(isFullSolution({ ...full, steps: [], exhibits: [{ title: 'E' }] })).toBe(true);
+    expect(isFullSolution({ ...full, confidence: 'partial' })).toBe(false);
+    expect(isFullSolution({ ...full, confidence: undefined })).toBe(false);
+    expect(isFullSolution({ ...full, prompt: '  ' })).toBe(false);
+    expect(isFullSolution({ ...full, recommendation: '' })).toBe(false);
+    expect(isFullSolution({ ...full, steps: [], exhibits: [] })).toBe(false);
+    expect(isFullSolution(null)).toBe(false);
+  });
+
+  it('never starts a case whose write-up is only partial', async () => {
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, confidence: 'partial' } } : real(id));
+    expect(await call({ type: 'start', libraryId: LIB })).toMatchObject({ status: 'refused' });
+    expect(w.db.size).toBe(0);
+  });
+});
+
+describe("the interviewer's own tables", () => {
+  it('are never shown to the member, and never counted as an exhibit', async () => {
+    const id = await toExhibits();
+    for (let i = 0; i < 2; i++) {
+      w.script.reply = () => turn('Good.', { assessment: 'progress', beat_complete: true });
+      const v = view(await call({ type: 'say', sessionId: id, text: `My view ${i}` }));
+      expect(JSON.stringify(v)).not.toContain('SECRET-GUIDE');
+      expect(JSON.stringify(v)).not.toContain('Interviewer Guidance');
+      expect(v.beatsTotal).toBe(2);
+    }
+  });
+
+  it('are given to the model as private reference while the exhibits are discussed, with a warning not to hand them over', async () => {
+    const id = await toExhibits();
+    await call({ type: 'say', sessionId: id, text: 'Peak is 95 and off-peak is 31' });
+    const last = w.asked[0].messages.at(-1)!.content;
+    expect(last).toContain('Interviewer reference tables (private');
+    expect(last).toContain('SECRET-GUIDE-70,000');
+    expect(last).toContain('never quote them');
+  });
+
+  it('are kept from the model while the student is still asking clarifying questions', async () => {
+    const v = await begin();
+    await call({ type: 'say', sessionId: v.sessionId, text: 'Who pays for the rooms?' });
+    expect(JSON.stringify(w.asked[0])).not.toContain('SECRET-GUIDE');
   });
 });

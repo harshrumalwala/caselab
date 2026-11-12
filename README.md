@@ -575,11 +575,11 @@ person's profile (**Message *name***). There is no way to message someone you ha
 
 ### Live case: practise a whole case with Bucket
 
-**Improvement Areas → Start a live case.** You get one casebook case that has a write-up (a random one you have not logged, or one you pick), typed, against one continuous 30-minute clock that starts when the prompt first appears. Bucket plays the interviewer. When the case ends you get feedback on what you actually wrote, and the case is added to your case log.
+**Improvement Areas → Start a live case.** You get one casebook case that has a full write-up (a random one you have not logged, or one you pick), typed, against one continuous 30-minute clock that starts when the prompt first appears. Bucket plays the interviewer. When the case ends you get feedback on what you actually wrote, and the case is added to your case log.
 
 | Part | Planned time | What happens |
 |---|---|---|
-| Prompt and clarifying questions | 3:00 | Ask three or four questions; Bucket answers only from the case and says so when it has nothing |
+| Prompt and clarifying questions | 3:00 | You see the case prompt, word for word. Ask three or four questions; Bucket gives the facts as written and says so when it has nothing |
 | Framework thinking | 1:30 | Protected: no questions, no hints, a private scratchpad (kept apart from what you hand in) |
 | Framework and starting direction | 3:00 | Write the framework, then say where you would start |
 | Exhibits and discussion | 15:00 | Exhibit by exhibit: what you notice, your calculations, what it means for the client, your next step |
@@ -588,6 +588,7 @@ person's profile (**Message *name***). There is no way to message someone you ha
 
 That is 25:30 planned and 4:30 of flexible time. Time you save by moving on early carries into the exhibit discussion, which may run past its 15 minutes only while you keep making progress and never into the closing time: the recommendation always starts by 28:30 (the brainstorm, if there is one, by 27:00). A case with no brainstorm skips those two stages; a case with no exhibits is worked through the book's steps in conversation. At 30:00 anything you were typing is saved as an unfinished draft (marked as such), the case ends, and the feedback is written afterwards (it need not fit in the 30 minutes).
 
+- **Word for word, and only full write-ups.** The prompt, the interviewer's facts and answers, and every exhibit (title, caption, table and the chart as the book draws it, with its approximate flag) come from the write-up exactly as written, never summarised: nothing is shortened (long table cells and 60-plus-row exhibits included), and the exhibit is drawn by the same code as in the full solution. The facts the interviewer holds are given only when you ask, exactly as written. Only complete write-ups can be practised (marked `confidence: high` with a prompt, a recommendation and exhibits or steps; the 10 of 346 marked partial are left out), both in the list and in "Surprise me".
 - **The clock and the rules are the app's; the words are the model's.** Which stage you are in, how long it lasts, when a hint is due and when the next exhibit comes out are plain, tested functions (`supabase/functions/_shared/liveCase.ts`). The model (Claude Sonnet 5.5) only writes Bucket's short replies and judges what you wrote. Thinking and writing stages move on by themselves; refreshing or coming back restores the clock, the conversation, your drafts and your scratchpad.
 - **Hints, then moving on.** If you stop making progress on an exhibit (and are not typing), Bucket gives one process hint, then one more specific directional hint, then brings out the next exhibit without explaining the last. How long that takes depends on how many exhibits are left (more exhibits, shorter exchanges) and on whether the case is running behind; roughly 60 to 120 seconds without progress. If you do make progress, nothing interrupts you. Each exhibit is recorded as reached alone, hinted, or moved on by the coach.
 - **It cannot give the answer away.** Each reply sees only what you have been shown so far: the prompt, the facts and the clarifying answers while you ask questions, and later only the exhibit on the table with private notes about it, never the next exhibit, the recommendation or the brainstorm. A reply that repeats a sentence of those notes is replaced. Everything you write is treated as your answer, not as instructions. Neither the notes nor the case's name reach the screen until the case is over.
@@ -600,7 +601,7 @@ To switch it on for your own project:
 1. Apply the migration `supabase/migrations/20261123120000_live_case.sql` (`npx supabase db push --linked`).
 2. Make sure the function has `ANTHROPIC_API_KEY` (`npx supabase secrets set ANTHROPIC_API_KEY=...`; `ANTHROPIC_MODEL` is optional, default `claude-sonnet-5-5`). It is the same secret the Compare with the book feature uses.
 3. Deploy it: `npx supabase functions deploy live-case` (`supabase/config.toml` already turns off the gateway's sign-in check for it, because the function checks the sign-in itself).
-4. The case library needs write-ups (`library_case_solutions`) for the cases to practise; a case without one is not offered.
+4. The case library needs write-ups (`library_case_solutions`) for the cases to practise; a case without a full one (`confidence` high, with a prompt, a recommendation and exhibits or steps) is not offered.
 
 ### Warm-up: a mental-math sprint
 

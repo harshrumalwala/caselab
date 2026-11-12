@@ -6,6 +6,7 @@
 
 import {
   buildPlan,
+  isInterviewerSide,
   coachSays,
   endFrameworkStage,
   hardEnd,
@@ -40,6 +41,19 @@ import {
 // ---------------------------------------------------------------------------------------------------------------------------
 
 const str = (v: unknown, max = 2000): string => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+/** Text as written: paragraphs and line breaks kept, only stray spaces tidied. For anything the member reads word for word. */
+const verbatim = (v: unknown, max: number): string =>
+  typeof v === 'string'
+    ? v
+        .replace(/\r\n?/g, '\n')
+        .split('\n')
+        .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+        .slice(0, max)
+    : '';
+const cell = (v: unknown): string => (typeof v === 'number' ? String(v) : verbatim(v, 800).replace(/\n+/g, ' '));
 const strs = (v: unknown, max = 600, cap = 30): string[] => (Array.isArray(v) ? v.map((x) => str(x, max)).filter(Boolean).slice(0, cap) : []);
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 
@@ -66,12 +80,17 @@ export interface LiveStep {
 
 export interface LiveSolution {
   prompt: string;
+  /** The interviewer's fact sheet: given only when the student asks, never all at once. */
   facts: string[];
+  /** The write-up is complete (not partial). */
+  confident: boolean;
   clarifying: { question: string; answer: string }[];
   structure: { heading: string; keyQuestion: string; points: string[] }[];
   hypothesis: string;
   steps: LiveStep[];
   exhibits: LiveExhibit[];
+  /** The interviewer's own tables (guidance, solutions): for the model's reference only, never shown to the member. */
+  reference: LiveExhibit[];
   recommendation: string;
   because: string[];
   delivery: string;
@@ -80,15 +99,30 @@ export interface LiveSolution {
   nextSteps: string[];
 }
 
+function readExhibits(raw: unknown): LiveExhibit[] {
+  return (Array.isArray(raw) ? raw : []).map((e) => ({
+      title: verbatim(obj(e).title, 400).replace(/\n+/g, ' '),
+      caption: verbatim(obj(e).caption, 3000),
+      columns: (Array.isArray(obj(e).columns) ? (obj(e).columns as unknown[]) : []).slice(0, 40).map(cell),
+      rows: (Array.isArray(obj(e).rows) ? (obj(e).rows as unknown[]) : []).slice(0, 400).map((r) => (Array.isArray(r) ? r.slice(0, 40).map(cell) : [])),
+      approx: obj(e).approx === true,
+      howToRead: str(obj(e).howToRead, 800),
+      takeaways: strs(obj(e).takeaways, 500, 10),
+      chart: obj(e).chart && typeof obj(e).chart === 'object' ? obj(e).chart : null,
+    })).filter((e) => e.title || e.rows.length).slice(0, 20);
+}
+
 export function readSolution(raw: unknown): LiveSolution | null {
   const o = obj(raw);
-  const prompt = str(o.prompt, 3000);
+  const prompt = verbatim(o.prompt, 8000);
   if (!prompt) return null;
   const detail = obj(o.recommendationDetail);
+  const exhibits = readExhibits(o.exhibits);
   return {
     prompt,
-    facts: strs(o.facts, 500),
-    clarifying: (Array.isArray(o.clarifyingQuestions) ? o.clarifyingQuestions : []).map((q) => ({ question: str(obj(q).question, 400), answer: str(obj(q).answer, 800) })).filter((q) => q.question && q.answer).slice(0, 40),
+    facts: (Array.isArray(o.facts) ? o.facts : []).map((f) => verbatim(f, 2000)).filter(Boolean).slice(0, 60),
+    clarifying: (Array.isArray(o.clarifyingQuestions) ? o.clarifyingQuestions : []).map((q) => ({ question: verbatim(obj(q).question, 600), answer: verbatim(obj(q).answer, 3000) })).filter((q) => q.question && q.answer).slice(0, 60),
+    confident: o.confidence === 'high',
     structure: (Array.isArray(o.structure) ? o.structure : []).map((b) => ({ heading: str(obj(b).heading, 200), keyQuestion: str(obj(b).keyQuestion, 400), points: strs(obj(b).points, 300, 12) })).slice(0, 12),
     hypothesis: str(obj(o.hypothesis).statement, 600),
     steps: (Array.isArray(o.steps) ? o.steps : []).map((s) => ({
@@ -98,16 +132,8 @@ export function readSolution(raw: unknown): LiveSolution | null {
       whatToNotice: str(obj(s).whatToNotice, 600),
       commonMiss: strs(obj(s).commonMiss, 300, 8),
     })).slice(0, 30),
-    exhibits: (Array.isArray(o.exhibits) ? o.exhibits : []).map((e) => ({
-      title: str(obj(e).title, 300),
-      caption: str(obj(e).caption, 600),
-      columns: strs(obj(e).columns, 120, 20),
-      rows: (Array.isArray(obj(e).rows) ? (obj(e).rows as unknown[]) : []).slice(0, 60).map((r) => (Array.isArray(r) ? r.map((c) => str(c, 120)) : [])),
-      approx: obj(e).approx === true,
-      howToRead: str(obj(e).howToRead, 800),
-      takeaways: strs(obj(e).takeaways, 500, 10),
-      chart: obj(e).chart && typeof obj(e).chart === 'object' ? obj(e).chart : null,
-    })).filter((e) => e.title || e.rows.length).slice(0, 20),
+    exhibits,
+    reference: exhibits.filter((e) => isInterviewerSide(e.title)),
     recommendation: str(o.recommendation, 1500),
     because: strs(detail.because, 500, 10),
     delivery: str(detail.delivery, 2000),
@@ -119,10 +145,19 @@ export function readSolution(raw: unknown): LiveSolution | null {
 
 export const planFor = (s: LiveSolution) => buildPlan({ exhibits: s.exhibits, steps: s.steps });
 
-/** What the member reads when the case starts: the question and what the interviewer says up front. */
+/** What the member reads when the case starts: the case prompt exactly as written (the facts the interviewer holds come out only when asked). */
 export function openingText(s: LiveSolution): string {
-  const facts = s.facts.length ? `\n\nThe interviewer adds:\n${s.facts.map((f) => `- ${f}`).join('\n')}` : '';
-  return `${s.prompt}${facts}\n\nAsk your clarifying questions when you are ready (aim for three or four), then choose "Ready for framework".`;
+  return `${s.prompt}\n\nAsk your clarifying questions when you are ready (three or four is plenty), then choose "Ready for framework".`;
+}
+
+/**
+ * A write-up we can run a case on: marked complete (not "partial"), with the prompt, a recommendation, and something to work through
+ * (exhibits or steps). The database applies the same rule to the list of cases and to "surprise me".
+ */
+export function isFullSolution(raw: unknown): boolean {
+  const o = obj(raw);
+  const list = (v: unknown) => (Array.isArray(v) ? v.length : 0);
+  return o.confidence === 'high' && Boolean(verbatim(o.prompt, 10)) && Boolean(verbatim(o.recommendation, 10)) && list(o.exhibits) + list(o.steps) > 0;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -272,9 +307,12 @@ export function systemPrompt(s: LiveSolution): string {
 
 <case>
 Prompt: ${s.prompt}
-${s.facts.length ? `The interviewer has already told the student:\n${s.facts.map((f) => `- ${f}`).join('\n')}\n` : ''}
-Information you may give when the student asks a clarifying question (give only what a question asks for, in your own short words):
-${qa || '(none beyond the prompt)'}
+The student has read only the prompt above. The rest is held by the interviewer (you) and is given only when the student asks for it, one answer at a time.
+Facts you hold, in the case's own words:
+${s.facts.length ? s.facts.map((f) => `- ${f}`).join('\n') : '(none)'}
+
+Questions students usually ask, and the answers:
+${qa || '(none)'}
 </case>`;
 }
 
@@ -294,7 +332,7 @@ Shown to the student: ${e.title}${e.caption ? ` (${e.caption})` : ''}
 ${tableText(e)}
 Private notes for you only. Never quote or reveal them, and never state these conclusions for the student:
 How to read it: ${e.howToRead || '(none)'}
-What a strong answer concludes: ${e.takeaways.join(' / ') || '(none)'}
+What a strong answer concludes: ${e.takeaways.join(' / ') || '(none)'}${referenceNotes(sol)}
 </exhibit>`;
   }
   const st = sol.steps[beat.index];
@@ -305,15 +343,22 @@ Private notes for you only. Never quote or reveal them, and never state these co
 Topic: ${st.title}
 ${st.body}
 ${st.calc.length ? `Worked lines: ${st.calc.join(' / ')}\n` : ''}What a strong candidate notices: ${st.whatToNotice || '(none)'}
-Common misses: ${st.commonMiss.join(' / ') || '(none)'}
+Common misses: ${st.commonMiss.join(' / ') || '(none)'}${referenceNotes(sol)}
 </exhibit>`;
+}
+
+/** The interviewer's own tables, as private reference: the answers a strong candidate reaches, to judge by and never to hand over. */
+function referenceNotes(sol: LiveSolution): string {
+  if (sol.reference.length === 0) return '';
+  const tables = sol.reference.map((e) => `${e.title}\n${tableText(e)}`).join('\n\n');
+  return `\nInterviewer reference tables (private; these hold the answers, so never quote them or state their results for the student):\n${tables.length > 6000 ? `${tables.slice(0, 6000)}\n...` : tables}`;
 }
 
 export type TurnKind = 'clarify' | 'direction' | 'exhibit' | 'nudge_process' | 'nudge_directional';
 
 const DIRECTIVES: Record<TurnKind, string> = {
   clarify:
-    'The student asked a clarifying question. Answer it using only the case information, briefly. If it is too vague, ask them to be specific. If there is no information, say so and let them continue. Do not hint at the framework. After about four questions you may say they can take their framework time when ready. Set assessment to "progress", beat_complete and direction_clear to false.',
+    'The student asked a clarifying question. Answer it using only the case information, briefly, giving every figure, name and detail exactly as written there (do not round, summarise, generalise or add anything), and only what the question asks for. If it is too vague, ask them to be specific. If there is no information, say so and let them continue. Do not hint at the framework. After about four questions you may say they can take their framework time when ready. Set assessment to "progress", beat_complete and direction_clear to false.',
   direction:
     'The student has handed in a framework (you will not see it) and has now said where they would start. Reply in one or two sentences: acknowledge their starting point, and say you will show them some data. If their direction is unclear or off-track, instead ask ONE focused follow-up question about where they would start. Do not teach, rewrite or praise at length. Set direction_clear to true when their starting direction is clear enough to move on.',
   exhibit:
@@ -624,7 +669,7 @@ export async function handleLive(userId: string, action: LiveAction, deps: LiveD
     const libraryId = action.libraryId ?? (await deps.pickCase(userId));
     if (!libraryId) return refuse('There is no case to practise right now.');
     const c = await deps.loadCase(libraryId);
-    const solution = c ? readSolution(c.solution) : null;
+    const solution = c && isFullSolution(c.solution) ? readSolution(c.solution) : null;
     if (!c || !solution) return refuse('That case is not ready for live practice yet.');
     const state = newSession(planFor(solution), now, openingText(solution));
     const stored: StoredSession = { id: crypto.randomUUID(), userId, libraryId, state, status: 'active', feedback: null, feedbackAttempts: 0, loggedCaseId: null, actions: 0, llmCalls: 0, version: 0, createdAt: now };

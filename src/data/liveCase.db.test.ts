@@ -22,12 +22,14 @@ beforeEach(async () => {
   await db.exec('truncate public.live_case_sessions');
 });
 
-const libraryCase = async (name: string, withSolution = true) => {
+const FULL = { confidence: 'high', prompt: 'SECRET PROMPT', recommendation: 'SECRET RECOMMENDATION', steps: [{ title: 'Step' }], exhibits: [] };
+
+const libraryCase = async (name: string, withSolution: boolean | Record<string, unknown> = true) => {
   const { rows } = await db.query<{ id: string }>(
     "insert into public.library_cases (book, school, year, name, case_type, industry) values ('Booth MCG 2026-2027', 'Booth', 2026, $1, 'Profitability', 'Other') returning id",
     [name],
   );
-  if (withSolution) await db.query('insert into public.library_case_solutions (case_id, solution) values ($1, $2)', [rows[0].id, JSON.stringify({ prompt: 'SECRET PROMPT' })]);
+  if (withSolution) await db.query('insert into public.library_case_solutions (case_id, solution) values ($1, $2)', [rows[0].id, JSON.stringify(withSolution === true ? FULL : withSolution)]);
   return rows[0].id;
 };
 const logCase = (uid: string, libraryId: string | null) =>
@@ -125,5 +127,30 @@ describe('picking a case at random', () => {
     expect(await fails('select public.live_case_pick_for($1)', [ALICE])).toMatch(/permission denied/);
     await as(db, 'anon');
     expect(await fails('select public.live_case_pick_for($1)', [ALICE])).toMatch(/permission denied/);
+  });
+});
+
+describe('only full write-ups can be practised', () => {
+  it('lists, and picks, only cases whose write-up is complete', async () => {
+    const full = await libraryCase('Full Case');
+    await libraryCase('Partial Case', { ...FULL, confidence: 'partial' });
+    await libraryCase('No Recommendation', { ...FULL, recommendation: '' });
+    await libraryCase('Nothing To Work Through', { ...FULL, steps: [], exhibits: [] });
+    await libraryCase('Unmarked', { prompt: 'P', recommendation: 'R', steps: [{ title: 'S' }] });
+    await libraryCase('Exhibits Only', { ...FULL, steps: [], exhibits: [{ title: 'E' }] });
+    await libraryCase('Odd Shapes', { ...FULL, steps: 'not a list', exhibits: 7 });
+    await as(db, 'authenticated', ALICE);
+    const names = (await db.query<{ name: string }>('select name from public.live_case_catalog()')).rows.map((r) => r.name).sort();
+    expect(names).toEqual(['Exhibits Only', 'Full Case']);
+    await as(db, 'postgres');
+    const picked = new Set<string>();
+    for (let i = 0; i < 25; i++) picked.add((await db.query<{ live_case_pick_for: string }>('select public.live_case_pick_for($1)', [ALICE])).rows[0].live_case_pick_for);
+    expect(picked.has(full)).toBe(true);
+    expect(picked.size).toBeLessThanOrEqual(2); // never a partial one
+  });
+
+  it('keeps the rule itself out of reach of the API roles', async () => {
+    await as(db, 'authenticated', ALICE);
+    expect(await fails('select public.library_solution_is_full($1)', [JSON.stringify(FULL)])).toMatch(/permission denied/);
   });
 });

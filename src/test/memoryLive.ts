@@ -2,6 +2,7 @@
 // It lives with the tests so that none of it (the prompts included) is part of the app that ships.
 import {
   handleLive,
+  isFullSolution,
   type CaseInfo,
   type LiveAction,
   type LiveDeps,
@@ -66,7 +67,7 @@ export function createMemoryLive(options: MemoryLiveOptions) {
   const deps: LiveDeps = {
     now,
     loadCase: async (id) => options.cases[id] ?? null,
-    pickCase: async () => Object.keys(options.cases).find((id) => !(options.logged?.() ?? []).includes(id)) ?? null,
+    pickCase: async () => Object.keys(options.cases).find((id) => isFullSolution(options.cases[id].solution) && !(options.logged?.() ?? []).includes(id)) ?? null,
     getSession: async (userId, id) => {
       const s = db.get(id);
       return s && s.userId === userId ? structuredClone(s) : null;
@@ -104,7 +105,7 @@ export function createMemoryLive(options: MemoryLiveOptions) {
     return handleLive(options.userId, action, deps);
   };
   const list = async (): Promise<LiveCatalogCase[]> =>
-    Object.entries(options.cases).map(([id, c]) => ({
+    Object.entries(options.cases).filter(([, c]) => isFullSolution(c.solution)).map(([id, c]) => ({
       id,
       name: c.info.name,
       book: c.info.book,

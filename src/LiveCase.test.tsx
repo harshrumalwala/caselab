@@ -77,7 +77,7 @@ describe('starting a live case', () => {
     await startCase(env);
     expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('30:00');
     expect(screen.getByRole('timer', { name: 'Time left in this part' })).toHaveTextContent('3:00');
-    expect(screen.getByText(/The base houses 20,000 soldiers/)).toBeInTheDocument();
+    expect(screen.queryByText(/The base houses 20,000 soldiers/)).not.toBeInTheDocument(); // the interviewer's facts come out only when asked
     expect(screen.queryByText('Army Hotel')).not.toBeInTheDocument();
     await pass(61);
     expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('28:59');
