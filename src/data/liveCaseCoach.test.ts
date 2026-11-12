@@ -752,3 +752,32 @@ describe("the interviewer's sheets, found by what they say", () => {
     expect(w.asked[0].messages.at(-1)!.content).toContain('Revenue Size (Keep Private)');
   });
 });
+
+describe('which model, and what it cost', () => {
+  it('sends the short replies to the cheap model and the feedback to the stronger one', async () => {
+    const id = await toExhibits();
+    await call({ type: 'say', sessionId: id, text: 'Peak is 95 and off-peak is 31' });
+    expect(w.asked[0].model).toBe('coach');
+    at(5000);
+    await call({ type: 'resume', sessionId: id });
+    w.script.reply = () => GOOD_FEEDBACK;
+    await call({ type: 'finish', sessionId: id });
+    expect(w.asked.at(-1)!.model).toBe('feedback');
+  });
+
+  it('keeps the tokens every model call used with the case, so the real cost can be read back', async () => {
+    const real = w.deps.ask;
+    w.deps.ask = async (req) => ({ ...(await real(req)), usage: { inputTokens: 1000, outputTokens: 100, cacheReadTokens: 400, cacheWriteTokens: 50 } });
+    const v = await begin();
+    await call({ type: 'say', sessionId: v.sessionId, text: 'Who pays for the rooms?' });
+    await call({ type: 'say', sessionId: v.sessionId, text: 'And who else?' });
+    expect(w.db.get(v.sessionId)!.state.usage).toEqual({ calls: 2, inputTokens: 2000, outputTokens: 200, cacheReadTokens: 800, cacheWriteTokens: 100 });
+    at(5000);
+    await call({ type: 'resume', sessionId: v.sessionId });
+    w.script.reply = () => GOOD_FEEDBACK;
+    await call({ type: 'finish', sessionId: v.sessionId });
+    expect(w.db.get(v.sessionId)!.state.usage?.calls).toBe(3); // the feedback counts too
+    expect(JSON.stringify(view(await call({ type: 'resume', sessionId: v.sessionId })))).not.toContain('inputTokens'); // and the member never sees it
+  });
+});
+

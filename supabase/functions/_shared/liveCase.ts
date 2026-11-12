@@ -175,8 +175,18 @@ export interface StageLogEntry {
   endedBy: 'user' | 'timer' | 'coach' | 'limit' | null;
 }
 
+/** What the model used for this case, summed over its calls, so the real cost can be read back (see the README). */
+export interface Usage {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+}
+
 export interface SessionState {
   version: 1;
+  usage?: Usage;
   /** Bumped by every change, so a late reply from the model can tell that the session moved on. */
   rev: number;
   startedAt: number;
@@ -202,6 +212,21 @@ const exhibitPlanned = (s: SessionState): number => s.plan.exhibitMs ?? PLANNED_
 const stageIndex = (stage: Stage): number => ORDER.indexOf(stage);
 const clamp = (n: number, lo: number, hi: number): number => Math.min(Math.max(n, lo), hi);
 const clip = (t: string): string => t.replace(/\r\n/g, '\n').trim().slice(0, MAX_RESPONSE_CHARS);
+
+/** Adds one model call's tokens to the case's running total. Not a change the member can see, so the revision stays as it is. */
+export function addUsage(state: SessionState, used: Partial<Omit<Usage, 'calls'>> | undefined): SessionState {
+  if (!used) return state;
+  const s = structuredClone(state);
+  const u = s.usage ?? { calls: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+  s.usage = {
+    calls: u.calls + 1,
+    inputTokens: u.inputTokens + (used.inputTokens ?? 0),
+    outputTokens: u.outputTokens + (used.outputTokens ?? 0),
+    cacheReadTokens: u.cacheReadTokens + (used.cacheReadTokens ?? 0),
+    cacheWriteTokens: u.cacheWriteTokens + (used.cacheWriteTokens ?? 0),
+  };
+  return s;
+}
 
 export function newSession(plan: CasePlan, now: number, promptText: string): SessionState {
   const s: SessionState = {

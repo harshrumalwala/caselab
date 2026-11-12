@@ -7,7 +7,8 @@
 // The member's own sign-in is checked here (the gateway's check cannot read this project's ES256 tokens; see supabase/config.toml).
 // The Anthropic key exists only here.
 //
-// Secrets: ANTHROPIC_API_KEY (and optionally ANTHROPIC_MODEL, default claude-sonnet-5-5); the same ones as compare-case.
+// Secrets: ANTHROPIC_API_KEY. Optional: ANTHROPIC_COACH_MODEL for the short replies (default claude-haiku-5-5, cheap) and
+// ANTHROPIC_FEEDBACK_MODEL for the feedback (default ANTHROPIC_MODEL, else claude-sonnet-5-5). The tokens each case used are kept with it.
 import Anthropic from 'npm:@anthropic-ai/sdk';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { handleLive, type CaseInfo, type LiveAction, type LiveDeps, type StoredSession, type TurnRequest } from '../_shared/liveCaseCoach.ts';
@@ -73,7 +74,10 @@ Deno.serve(async (req) => {
     console.log('live-case: ANTHROPIC_API_KEY is not set, so there is no coach');
     return reply(200, { status: 'failed', message: 'The live case is not available right now.' });
   }
-  const model = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-sonnet-5-5';
+  const models = {
+    coach: Deno.env.get('ANTHROPIC_COACH_MODEL') ?? 'claude-haiku-5-5',
+    feedback: Deno.env.get('ANTHROPIC_FEEDBACK_MODEL') ?? Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-sonnet-5-5',
+  };
   const db = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
   const anthropic = new Anthropic({ apiKey });
 
@@ -144,6 +148,7 @@ Deno.serve(async (req) => {
       return count ?? 0;
     },
     ask: async (request: TurnRequest) => {
+      const model = models[request.model];
       const response = await anthropic.messages.create({
         model,
         max_tokens: request.maxTokens,
@@ -153,7 +158,13 @@ Deno.serve(async (req) => {
         output_config: { effort: request.effort, format: { type: 'json_schema', schema: request.schema } },
       });
       const block = response.content.find((b) => b.type === 'text');
-      return { text: block && block.type === 'text' ? block.text : '', stopReason: response.stop_reason };
+      const u = response.usage;
+      console.log(`live-case tokens: ${request.model} ${model} in=${u.input_tokens} out=${u.output_tokens} cache_read=${u.cache_read_input_tokens ?? 0} cache_write=${u.cache_creation_input_tokens ?? 0}`);
+      return {
+        text: block && block.type === 'text' ? block.text : '',
+        stopReason: response.stop_reason,
+        usage: { inputTokens: u.input_tokens, outputTokens: u.output_tokens, cacheReadTokens: u.cache_read_input_tokens ?? 0, cacheWriteTokens: u.cache_creation_input_tokens ?? 0 },
+      };
     },
   };
 
