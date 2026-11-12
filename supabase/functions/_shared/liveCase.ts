@@ -41,6 +41,13 @@ export const DRAFT_ACTIVE_MS = 20 * SECOND;
 export const PROGRESS_WINDOW_MS = 60 * SECOND;
 /** The least time between two nudges. */
 export const MIN_NUDGE_GAP_MS = 15 * SECOND;
+/**
+ * When the member says nothing and types nothing, the clock speaks up only after real silence, counted from the last thing they did (the
+ * exhibit appearing, a message, typing): reading and thinking come first. A hint, a sharper hint, and then the next exhibit.
+ */
+export const SILENCE_FIRST_MS = 150 * SECOND;
+export const SILENCE_SECOND_MS = 240 * SECOND;
+export const SILENCE_MOVE_ON_MS = 330 * SECOND;
 /** A saved response is cut to this long. */
 export const MAX_RESPONSE_CHARS = 4000;
 
@@ -76,7 +83,7 @@ export interface CasePlan {
 
 /** The little the plan needs to know about a case's write-up. */
 export interface PlanSource {
-  exhibits: readonly { title?: string }[];
+  exhibits: readonly { title?: string; caption?: string; columns?: readonly string[]; rows?: readonly (readonly string[])[] }[];
   steps: readonly { title: string }[];
 }
 
@@ -90,11 +97,27 @@ const FRAMEWORK_STEP = /^\s*(framework|structure|structuring|clarifying question
 const INTERVIEWER_SIDE = /interviewer|guidance|\bguide\b|solution|sample|approach|performed by|answer|brainstorm|expected|calculation|\bmath\b/i;
 export const isInterviewerSide = (title: string): boolean => INTERVIEWER_SIDE.test(title);
 
+/** Words in a table's caption, column headings or cells that mark it as the interviewer's sheet ("Information for Interviewee", "Keep Private", "interviewer's math page"). */
+const INTERVIEWER_WORDS = /keep private|interviewee|interviewer|not for (the )?candidate|only when the candidate asks|given if prompted/i;
+
+/** How a caption says the table is the book's own working or answer (the ordinary words "solution" and "working" are not enough on their own). */
+const SOLUTION_CAPTION = /solution page|solution table|book'?s (working|solution|sizing|math)|\bworking for\b|completed in the book|math solution|guidance for/i;
+/** A cell that gives the answer away. */
+const ANSWER_CELL = /\(answer\b|answer key/i;
+
+/** A table the member must not see: the interviewer's by its title, or by what its caption, headings or cells say. */
+export function isInterviewerSideExhibit(e: { title?: string; caption?: string; columns?: readonly string[]; rows?: readonly (readonly string[])[] }): boolean {
+  if (isInterviewerSide(e.title ?? '')) return true;
+  if (INTERVIEWER_WORDS.test(e.caption ?? '') || SOLUTION_CAPTION.test(e.caption ?? '')) return true;
+  if ((e.columns ?? []).some((c) => INTERVIEWER_WORDS.test(c))) return true;
+  return (e.rows ?? []).slice(0, 80).some((r) => r.some((c) => INTERVIEWER_WORDS.test(c) || ANSWER_CELL.test(c)));
+}
+
 export function buildPlan(solution: PlanSource): CasePlan {
   const brainstormStep = solution.steps.find((s) => BRAINSTORM.test(s.title));
   const brainstormTable = solution.exhibits.find((e) => BRAINSTORM.test(e.title ?? ''));
   // Only the exhibits meant for the candidate are brought out.
-  const exhibitBeats: Beat[] = solution.exhibits.flatMap((e, index) => (isInterviewerSide(e.title ?? '') ? [] : [{ kind: 'exhibit' as const, index }]));
+  const exhibitBeats: Beat[] = solution.exhibits.flatMap((e, index) => (isInterviewerSideExhibit(e) ? [] : [{ kind: 'exhibit' as const, index }]));
   // A case with no exhibits for the candidate is worked through the book's own steps instead (the brainstorm has its own stages).
   // (The framework is done in its own stages, so a step that is just the framework is not discussed again.)
   const stepBeats: Beat[] = solution.steps.flatMap((s, index) => (BRAINSTORM.test(s.title) || FRAMEWORK_STEP.test(s.title) ? [] : [{ kind: 'step' as const, index }]));
@@ -126,6 +149,8 @@ export interface BeatRecord {
   revealedAt: number;
   /** The last time the member made progress here (or when it was revealed). Hints and the move-on rule count from it. */
   lastProgressAt: number;
+  /** The last time the member wrote to Bucket about this exhibit (or when it appeared). */
+  lastUserAt: number;
   lastNudgeAt: number;
   /** The time this one is worth, set when it comes out from what is left. */
   budgetMs: number;
@@ -448,7 +473,10 @@ export function userSays(settled: SessionState, text: string, now: number): Acti
     delete s.drafts.direction;
   } else if (s.stage === 'exhibits') {
     const b = openBeat(s);
-    if (b) b.userMessages += 1;
+    if (b) {
+      b.userMessages += 1;
+      b.lastUserAt = now;
+    }
     delete s.drafts.exhibit;
   } else {
     return refuse('There is nothing to answer right now.');
@@ -505,7 +533,7 @@ function revealBeat(s: SessionState, at: number): boolean {
   const index = s.beats.length;
   const beat = s.plan.beats[index];
   if (!beat) return false;
-  s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastNudgeAt: 0, budgetMs: beatBudget(s, at), hints: 0, userMessages: 0, outcome: 'open' });
+  s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastUserAt: at, lastNudgeAt: 0, budgetMs: beatBudget(s, at), hints: 0, userMessages: 0, outcome: 'open' });
   const first = index === 0;
   const text =
     beat.kind === 'exhibit'
@@ -550,28 +578,34 @@ function thresholdFor(b: BeatRecord, behind: boolean): number {
   return b.hints === 0 ? u * 0.5 : b.hints === 1 ? u : u * 1.5;
 }
 
-/** What the coach should do about an exhibit the member is not getting anywhere with, by the clock alone. */
-export function nudgeLevel(s: SessionState, now: number): NudgeLevel {
+/**
+ * What the coach should do about an exhibit the member is not getting anywhere with, by the clock.
+ *  - 'message': the member has just written to Bucket. The hint ladder follows how long it has been since their last real progress.
+ *  - 'timer': the member has said nothing. Only real silence counts (see SILENCE_*), so nobody gets a hint while still reading or typing.
+ */
+export function nudgeLevel(s: SessionState, now: number, via: 'message' | 'timer' = 'message'): NudgeLevel {
   const b = openBeat(s);
   if (!b || s.stage !== 'exhibits') return 'none';
+  if (via === 'timer') {
+    if (b.lastNudgeAt && now - b.lastNudgeAt < MIN_NUDGE_GAP_MS) return 'none';
+    return now - lastActivity(s, b) >= silenceNeeded(b) ? levelFor(b) : 'none';
+  }
   if (s.drafts.exhibit?.trim() && now - s.lastDraftAt < DRAFT_ACTIVE_MS) return 'none';
   if (b.lastNudgeAt && now - b.lastNudgeAt < MIN_NUDGE_GAP_MS) return 'none';
   if (now - b.lastProgressAt < thresholdFor(b, behindSchedule(b, now))) return 'none';
-  return b.hints === 0 ? 'process_hint' : b.hints === 1 ? 'directional_hint' : 'advance';
+  return levelFor(b);
 }
 
-/** When `nudgeLevel` next becomes something (for the app to wake up at), or null when no exhibit is open. */
+const levelFor = (b: BeatRecord): NudgeLevel => (b.hints === 0 ? 'process_hint' : b.hints === 1 ? 'directional_hint' : 'advance');
+const lastActivity = (s: SessionState, b: BeatRecord): number => Math.max(b.revealedAt, b.lastUserAt, s.lastDraftAt);
+const silenceNeeded = (b: BeatRecord): number => (b.hints === 0 ? SILENCE_FIRST_MS : b.hints === 1 ? SILENCE_SECOND_MS : SILENCE_MOVE_ON_MS);
+
+/** When the clock next speaks up if the member stays silent (for the app to wake up at), or null when no exhibit is open. */
 export function nextNudgeAt(s: SessionState, now: number): number | null {
   const b = openBeat(s);
   if (!b || s.stage !== 'exhibits') return null;
   const gap = b.lastNudgeAt ? b.lastNudgeAt + MIN_NUDGE_GAP_MS : 0;
-  const behindAt = b.revealedAt + b.budgetMs;
-  const normal = b.lastProgressAt + thresholdFor(b, false);
-  const late = b.lastProgressAt + thresholdFor(b, true);
-  let at = normal <= behindAt ? normal : Math.max(behindAt + 1, late);
-  at = Math.max(at, gap);
-  if (s.drafts.exhibit?.trim()) at = Math.max(at, s.lastDraftAt + DRAFT_ACTIVE_MS);
-  return Math.max(at, now);
+  return Math.max(lastActivity(s, b) + silenceNeeded(b), gap, now);
 }
 
 /** Records that the coach gave a hint (level 1 or 2) on the open exhibit. */

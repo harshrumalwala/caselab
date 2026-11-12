@@ -6,7 +6,7 @@
 
 import {
   buildPlan,
-  isInterviewerSide,
+  isInterviewerSideExhibit,
   coachSays,
   endFrameworkStage,
   hardEnd,
@@ -133,7 +133,7 @@ export function readSolution(raw: unknown): LiveSolution | null {
       commonMiss: strs(obj(s).commonMiss, 300, 8),
     })).slice(0, 30),
     exhibits,
-    reference: exhibits.filter((e) => isInterviewerSide(e.title)),
+    reference: exhibits.filter((e) => isInterviewerSideExhibit(e)),
     recommendation: str(o.recommendation, 1500),
     because: strs(detail.because, 500, 10),
     delivery: str(detail.delivery, 2000),
@@ -831,13 +831,13 @@ async function nudge(deps: LiveDeps, userId: string, sessionId: string, mutate: 
   const sol = c ? readSolution(c.solution) : null;
   if (!c || !sol) return { status: 'failed', message: 'The case could not be loaded.' };
   const now = deps.now();
-  const level = nudgeLevel(stored.state, now);
+  const level = nudgeLevel(stored.state, now, 'timer');
   const plain: LiveResponse = { status: 'ok', view: toView(stored, sol, c.info, now) };
   if (level === 'none') return plain;
 
   if (level === 'advance') {
     // Moving the case on needs no words from the model: the app says it, and brings out the next exhibit.
-    const r = await mutate((st, t) => (nudgeLevel(st.state, t) === 'advance' ? { ...st, state: nextBeat(coachSays(st.state, 'Let us move on to the next piece.', t, 'hint'), t, 'coach_moved') } : st));
+    const r = await mutate((st, t) => (nudgeLevel(st.state, t, 'timer') === 'advance' ? { ...st, state: nextBeat(coachSays(st.state, 'Let us move on to the next piece.', t, 'hint'), t, 'coach_moved') } : st));
     return typeof r === 'string' ? refuse(r) : { status: 'ok', view: toView(r, sol, c.info, deps.now()) };
   }
   if (stored.llmCalls >= MAX_COACH_CALLS) return plain;
@@ -854,7 +854,7 @@ async function nudge(deps: LiveDeps, userId: string, sessionId: string, mutate: 
     turn = null;
   }
   if (!turn) return plain;
-  const r = await mutate((st, t) => (fingerprint(st.state) === before && nudgeLevel(st.state, t) === level ? { ...st, state: applyTurn(st, turn, kind, t) } : st));
+  const r = await mutate((st, t) => (fingerprint(st.state) === before && nudgeLevel(st.state, t, 'timer') === level ? { ...st, state: applyTurn(st, turn, kind, t) } : st));
   return typeof r === 'string' ? refuse(r) : { status: 'ok', view: toView(r, sol, c.info, deps.now()) };
 }
 

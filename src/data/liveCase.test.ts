@@ -82,6 +82,33 @@ describe('the plan from a case', () => {
     expect(p.hasBrainstorm).toBe(true);
   });
 
+  it("hides a table by what it says even when its title is innocent: 'Information for Interviewee', 'Keep Private', 'the interviewer's math page'", () => {
+    const p = buildPlan({
+      exhibits: [
+        { title: 'Current Revenues (1 of 2): Revenues', columns: ['Revenues', 'Information for Interviewee', 'Revenue Size (Keep Private)'], rows: [['Ticket Sales', 'x', '$80M']] },
+        { title: 'Market sizes', caption: "From the interviewer's solution page." },
+        { title: 'Costs', rows: [['Salaries', 'Give figures to the interviewee when asked']] },
+        { title: 'Exhibit 3: Revenue by region', columns: ['Region', 'Private Pension', 'Private Label'], rows: [['US', '5', '6']] },
+      ],
+      steps: [],
+    });
+    expect(p.beats).toEqual([{ kind: 'exhibit', index: 3 }]); // "Private Pension" and "Private Label" are just words in a real exhibit
+  });
+
+  it("hides the book's own working and answers, found in a caption or a cell, but not tables that only use ordinary words", () => {
+    const p = buildPlan({
+      exhibits: [
+        { title: 'Part 5 - Warranty breakeven', caption: "Table on the book's solution page for step 5." },
+        { title: 'Question 1A: Revenue ($M)', caption: "Book's working for the revenues the buyer would receive in 2017." },
+        { title: 'Question 1', rows: [['Solve For (Answer $14M)', '']] },
+        { title: 'Required additional capacity', caption: 'Part 2 solution table, in GW.' },
+        { title: 'Exhibit 1: Market share', columns: ['Company', 'Share'], rows: [['NeoCare Solutions', '40%'], ['Guidance Counselor Co', '10%'], ['Working adults', '5%']], caption: 'Share of the market, by company.' },
+      ],
+      steps: [],
+    });
+    expect(p.beats).toEqual([{ kind: 'exhibit', index: 4 }]);
+  });
+
   it('finds a brainstorm in a table of brainstorm ideas, and what it is about', () => {
     const p = buildPlan({ exhibits: [{ title: 'Exhibit 1: Sales' }, { title: 'Brainstorm #1: costs along the value chain' }], steps: [] });
     expect(p.hasBrainstorm).toBe(true);
@@ -320,15 +347,33 @@ describe('the exhibit discussion', () => {
     expect(nudgeLevel(s, b.revealedAt + sec(80))).not.toBe('none'); // stopped typing for 25 seconds
   });
 
-  it('is quicker to help once behind schedule', () => {
-    const s = inExhibits(6);
+  it('does not speak up while the member is reading, thinking or typing: only real silence brings a hint', () => {
+    const s = inExhibits(3);
     const b = openBeat(s)!;
-    const onTimeWait = nextNudgeAt(s, b.revealedAt)! - b.revealedAt;
-    const behind = structuredClone(s);
-    behind.beats[0].revealedAt = b.revealedAt - b.budgetMs - sec(10); // it has already taken longer than it is worth
-    behind.beats[0].lastProgressAt = b.revealedAt;
-    const behindWait = nextNudgeAt(behind, b.revealedAt)! - b.revealedAt;
-    expect(behindWait).toBeLessThan(onTimeWait);
+    const at = (n: number) => b.revealedAt + sec(n);
+    expect(nudgeLevel(s, at(100), 'timer')).toBe('none'); // reading the exhibit takes time
+    expect(nudgeLevel(s, at(149), 'timer')).toBe('none');
+    expect(nudgeLevel(s, at(151), 'timer')).toBe('process_hint'); // two and a half minutes of nothing
+    // typing counts as being busy, and so does writing to Bucket: the silence is counted again from there
+    const typing = saveDraft(s, 'exhibit', 'revenue is 300 and', at(140));
+    expect(nudgeLevel(typing, at(200), 'timer')).toBe('none');
+    expect(nudgeLevel(typing, at(140 + 151), 'timer')).toBe('process_hint');
+    const talked = ok(userSays(s, 'Revenue is 300', at(100)));
+    expect(nudgeLevel(talked, at(200), 'timer')).toBe('none');
+    expect(nudgeLevel(talked, at(100 + 151), 'timer')).toBe('process_hint');
+  });
+
+  it('then a sharper hint, then the next exhibit, each after more silence', () => {
+    let s = inExhibits(3);
+    const b = openBeat(s)!;
+    const at = (n: number) => b.revealedAt + sec(n);
+    s = recordHint(s, at(151));
+    expect(nudgeLevel(s, at(170), 'timer')).toBe('none');
+    expect(nudgeLevel(s, at(239), 'timer')).toBe('none');
+    expect(nudgeLevel(s, at(241), 'timer')).toBe('directional_hint');
+    s = recordHint(s, at(241));
+    expect(nudgeLevel(s, at(325), 'timer')).toBe('none');
+    expect(nudgeLevel(s, at(331), 'timer')).toBe('advance'); // five and a half minutes without a word
   });
 
   it('tells the app when to wake up for the next nudge, never in the past', () => {
@@ -336,7 +381,7 @@ describe('the exhibit discussion', () => {
     const b = openBeat(s)!;
     const wake = nextNudgeAt(s, b.revealedAt + sec(1))!;
     expect(wake).toBeGreaterThan(b.revealedAt);
-    expect(nudgeLevel(s, wake)).not.toBe('none');
+    expect(nudgeLevel(s, wake, 'timer')).not.toBe('none');
     expect(nextNudgeAt(s, wake + sec(1000))).toBeGreaterThanOrEqual(wake + sec(1000));
     expect(nextNudgeAt(start(), T0)).toBeNull();
   });

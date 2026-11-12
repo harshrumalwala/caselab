@@ -369,15 +369,15 @@ describe('the exhibit discussion', () => {
     const id = await toExhibits();
     const start = clock.t;
     // a quiet student: the app asks on its own
-    clock.t = start + sec(45);
+    clock.t = start + sec(155);
     w.script.reply = (kind) => turn(`A ${kind} hint`);
     let r = view(await call({ type: 'nudge', sessionId: id }));
     expect(r.messages.at(-1)).toMatchObject({ kind: 'hint', text: 'A nudge_process hint' });
-    clock.t = start + sec(100);
+    clock.t = start + sec(245);
     r = view(await call({ type: 'nudge', sessionId: id }));
     expect(r.messages.at(-1)).toMatchObject({ kind: 'hint', text: 'A nudge_directional hint' });
     const askedBefore = w.asked.length;
-    clock.t = start + sec(160);
+    clock.t = start + sec(335);
     r = view(await call({ type: 'nudge', sessionId: id }));
     expect(w.asked.length).toBe(askedBefore); // moving on needs no words from the model
     expect(r.exhibits).toHaveLength(2);
@@ -421,17 +421,17 @@ describe('the exhibit discussion', () => {
     const id = await toExhibits();
     const start = clock.t;
     w.script.reply = () => turn('A hint');
-    clock.t = start + sec(45);
+    clock.t = start + sec(155);
     await call({ type: 'nudge', sessionId: id });
-    clock.t = start + sec(100);
+    clock.t = start + sec(245);
     await call({ type: 'nudge', sessionId: id });
-    clock.t = start + sec(150); // the clock now says: move on
+    clock.t = start + sec(335); // the clock now says: move on
 
     w.script.reply = () => turn('Good, that is the implication.', { assessment: 'progress' });
     const good = view(await call({ type: 'say', sessionId: id, text: 'Off-peak is only 31 percent, so I would test costs next' }));
     expect(good.exhibits).toHaveLength(1); // not cut off
 
-    clock.t = start + sec(300);
+    clock.t = start + sec(500);
     w.script.reply = () => turn('Let us move on to the next piece.', { assessment: 'stuck' });
     const stuck = view(await call({ type: 'say', sessionId: id, text: 'I really do not know' }));
     expect(stuck.exhibits).toHaveLength(2);
@@ -717,5 +717,61 @@ describe("the interviewer's own tables", () => {
     const v = await begin();
     await call({ type: 'say', sessionId: v.sessionId, text: 'Who pays for the rooms?' });
     expect(JSON.stringify(w.asked[0])).not.toContain('SECRET-GUIDE');
+  });
+});
+
+describe('hints that nobody asked for', () => {
+  it('never come while the member is still reading or typing', async () => {
+    const id = await toExhibits();
+    const start = clock.t;
+    for (const t of [30, 60, 100, 140]) {
+      clock.t = start + sec(t);
+      const r = view(await call({ type: 'nudge', sessionId: id }));
+      expect(r.messages.filter((m) => m.kind === 'hint'), `at ${t}s`).toHaveLength(0);
+    }
+    expect(w.asked).toHaveLength(0);
+    await call({ type: 'draft', sessionId: id, key: 'exhibit', text: 'Peak is 95 and off-peak is' });
+    clock.t = start + sec(260); // long after the exhibit appeared, but they were typing 120 seconds ago
+    expect(view(await call({ type: 'nudge', sessionId: id })).messages.filter((m) => m.kind === 'hint')).toHaveLength(0);
+  });
+
+  it('wait for two and a half minutes of real silence before a first, gentle hint', async () => {
+    const id = await toExhibits();
+    clock.t += sec(155);
+    w.script.reply = () => turn('Try comparing the two seasons.');
+    const r = view(await call({ type: 'nudge', sessionId: id }));
+    expect(r.messages.at(-1)).toMatchObject({ kind: 'hint' });
+  });
+});
+
+describe("the interviewer's sheets, found by what they say", () => {
+  const sheet = {
+    title: 'Current Revenues and Costs (1 of 2): Revenues',
+    caption: '',
+    columns: ['Revenues', 'Information for Interviewee', 'Revenue Size (Keep Private)'],
+    rows: [['Ticket Sales', 'Give blue font figures to interviewee', '$80,000,000']],
+    approx: false,
+    howToRead: '',
+    takeaways: [],
+    chart: null,
+  };
+
+  it('are not shown even when their title looks innocent', async () => {
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, exhibits: [sheet, EXHIBIT(1)] } } : real(id));
+    const id = await toExhibits();
+    const v = view(await call({ type: 'resume', sessionId: id }));
+    expect(JSON.stringify(v)).not.toContain('Keep Private');
+    expect(JSON.stringify(v)).not.toContain('$80,000,000');
+    expect(v.exhibits.map((e) => e.title)).toEqual(['Exhibit 1: Occupancy by season']);
+    expect(v.beatsTotal).toBe(1);
+  });
+
+  it('are given to the model as private reference instead', async () => {
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, exhibits: [sheet, EXHIBIT(1)] } } : real(id));
+    const id = await toExhibits();
+    await call({ type: 'say', sessionId: id, text: 'Peak is 95 and off-peak is 31' });
+    expect(w.asked[0].messages.at(-1)!.content).toContain('Revenue Size (Keep Private)');
   });
 });
