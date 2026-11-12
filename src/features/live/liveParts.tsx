@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Loader2, Send } from 'lucide-react';
+import { Send } from 'lucide-react';
 import type { DraftKey, LiveView, Message, PublicExhibit } from '../../data/liveCase';
 import { parseBookSolution } from '../../domain/bookSolution';
 import { formatClock, STAGE_LABEL, STEPS } from '../../domain/liveCase';
 import { Button } from '../../components/ui/Button';
 import { ExhibitChart } from '../caselog/ExhibitChart';
+import { BucketAvatar } from '../improvement/BucketAvatar';
 
 /** Saves what is typed a moment after typing stops, and once more when the box goes away, so a refresh or a timeout never loses a draft. */
 export function useAutosave(value: string, save: (text: string) => void, delayMs = 1000): void {
@@ -91,6 +92,7 @@ export function ClockBar({ view, now }: { view: LiveView; now: number }) {
                 aria-current={i === stepIndex ? 'step' : undefined}
                 className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${i === stepIndex ? 'border-accent bg-accent text-accent-ink' : i < stepIndex ? 'border-line bg-surface-2 text-ink-2' : 'border-line text-muted'}`}
               >
+                {i === stepIndex && <BucketAvatar className="mr-1 inline size-4 -translate-y-px" />}
                 {s.label}
               </li>
             ))}
@@ -136,8 +138,14 @@ export function Thread({ messages, pending, typing }: { messages: Message[]; pen
       )}
       {pending && <Bubble mine>{pending}</Bubble>}
       {typing && (
-        <p className="flex items-center gap-2 text-xs text-muted" role="status">
-          <Loader2 className="size-3.5 animate-spin" /> Bucket is replying…
+        <p className="flex items-center gap-2 text-xs font-medium text-muted" role="status">
+          <BucketAvatar mood="thinking" className="size-9 animate-bob" />
+          <span>Bucket is replying</span>
+          <span className="flex gap-1" aria-hidden>
+            {[0, 1, 2].map((i) => (
+              <span key={i} className="size-1.5 animate-bump rounded-full bg-muted" style={{ animationDelay: `${i * 0.15}s` }} />
+            ))}
+          </span>
         </p>
       )}
       <div ref={end} />
@@ -147,8 +155,13 @@ export function Thread({ messages, pending, typing }: { messages: Message[]; pen
 
 function Bubble({ mine, hint = false, children }: { mine: boolean; hint?: boolean; children: string }) {
   return (
-    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-      <p className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${mine ? 'bg-accent text-accent-ink' : 'border border-line bg-surface text-ink'}`}>
+    <div className={`flex items-end gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
+      {!mine && <BucketAvatar mood={hint ? 'hint' : 'happy'} className="size-9 shrink-0" />}
+      <p
+        className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+          mine ? 'rounded-br-md bg-accent text-accent-ink' : 'rounded-bl-md border-2 border-ink/80 bg-surface text-ink'
+        }`}
+      >
         {!mine && <span className="mb-0.5 block text-xs font-bold text-accent-text">{hint ? 'Bucket (a hint)' : 'Bucket'}</span>}
         {children}
       </p>

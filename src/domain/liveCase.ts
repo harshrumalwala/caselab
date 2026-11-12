@@ -1,4 +1,5 @@
-import type { CaseInfo, Feedback, LiveView, Stage } from '../data/liveCase';
+import type { BucketMood } from '../features/improvement/BucketAvatar';
+import type { CaseInfo, Feedback, LiveCatalogCase, LiveView, Stage } from '../data/liveCase';
 import { CASE_TYPES, SKILLS, type CaseType, type Rating } from './constants';
 import { emptySkills } from './factory';
 import { todayISO } from './dates';
@@ -77,4 +78,78 @@ export function liveCaseToInput(view: Pick<LiveView, 'submissions' | 'endReason'
     shareMode: 'profile',
     libraryId: info.libraryId ?? null,
   };
+}
+
+export interface BucketLine {
+  mood: BucketMood;
+  text: string;
+}
+
+/** A few ways to say it, so the same stage does not always sound the same: the choice depends on the case, not on chance, so a refresh keeps it. */
+const pick = <T,>(options: readonly T[], seed: string): T => options[[...seed].reduce((n, c) => n + c.charCodeAt(0), 0) % options.length];
+
+const LINES: Record<Stage, readonly string[]> = {
+  prompt: [
+    "Hi, I'm Bucket, your interviewer today! Read the case, then ask me whatever you need. I only know what is in the case.",
+    "Welcome in! Take a moment with the prompt, then fire away with your clarifying questions.",
+    "Ready when you are! Ask me anything about the case. If I do not have it, I will say so.",
+  ],
+  framework_think: [
+    "Shh, thinking time. I will sit very quietly. Scribble on your scratchpad, nobody is looking.",
+    "Take your time with the structure. I will not peek, promise.",
+  ],
+  framework_write: [
+    "Write your framework down, then tell me where you would start.",
+    "Pen out! Put your structure on the page. Then it is your call where we begin.",
+  ],
+  exhibits: [
+    "You are driving now. What do you notice? Show me your maths, and tell me what it means for the client.",
+    "Over to you! Read it, work it, and tell me what you would do next.",
+    "Your call where this goes. I will only nudge if you ask for it by getting stuck.",
+  ],
+  brainstorm_think: ["Brainstorm coming up. A moment to think first, I will keep quiet."],
+  brainstorm_write: ["Ideas, ideas! Get them down, quantity first and sorting later."],
+  recommend_think: [
+    "Almost there! Pull it all together in your head. Answer first, then the why.",
+    "Last stretch. Think about what you would tell the client, I am not going anywhere.",
+  ],
+  recommend_write: ["Write it up like you are talking to the client: answer, reasons, risks, next steps."],
+  done: ["Nice work! You made it all the way through."],
+};
+
+/** What Bucket says (and how Bucket looks) right now, from the stage, the time left, and what just happened. */
+export function bucketLine(view: Pick<LiveView, 'stage' | 'sessionId' | 'frameworkPhase' | 'serverNow' | 'endsAt'>, now: number, lastWasHint: boolean): BucketLine {
+  const seed = view.sessionId;
+  if (view.stage === 'done') return { mood: 'cheer', text: pick(LINES.done, seed) };
+  if (view.endsAt - now <= 120_000) return { mood: 'worried', text: "Clock is getting low. Wrap up this thought and finish strong!" };
+  if (view.stage === 'framework_write' && view.frameworkPhase === 'direction') return { mood: 'happy', text: 'Structure noted. Now, where would you begin?' };
+  if (view.stage === 'exhibits' && lastWasHint) return { mood: 'hint', text: "A little nudge for you. Take it or leave it, you are still driving." };
+  const thinking = view.stage === 'framework_think' || view.stage === 'brainstorm_think' || view.stage === 'recommend_think';
+  return { mood: thinking ? 'thinking' : 'happy', text: pick(LINES[view.stage], seed) };
+}
+
+export interface Lane {
+  name: string;
+  cases: LiveCatalogCase[];
+  /** How many of them the member has already logged. */
+  done: number;
+}
+
+/** The cases gathered by case type or by industry, the biggest lane first. A case with no industry goes in "Other". */
+export function groupLanes(cases: readonly LiveCatalogCase[], by: 'type' | 'industry'): Lane[] {
+  const lanes = new Map<string, LiveCatalogCase[]>();
+  for (const c of cases) {
+    const name = (by === 'type' ? c.caseType : c.industry).trim() || 'Other';
+    lanes.set(name, [...(lanes.get(name) ?? []), c]);
+  }
+  return [...lanes.entries()]
+    .map(([name, list]) => ({ name, cases: list, done: list.filter((c) => c.done).length }))
+    .sort((a, b) => b.cases.length - a.cases.length || a.name.localeCompare(b.name));
+}
+
+/** Cases whose name, book, type or industry contain every word typed. */
+export function searchCases(cases: readonly LiveCatalogCase[], query: string): LiveCatalogCase[] {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  return cases.filter((c) => words.every((w) => `${c.name} ${c.book} ${c.caseType} ${c.industry}`.toLowerCase().includes(w)));
 }

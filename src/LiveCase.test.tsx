@@ -67,8 +67,8 @@ describe('starting a live case', () => {
     render(<App backend={env.backend} />);
     await user.click(await screen.findByRole('button', { name: 'Start a live case' }));
     await screen.findByRole('heading', { name: 'Practise a case with Bucket' });
-    expect(screen.getByText(/35-minute clock/)).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /Army Hotel/ })).toBeInTheDocument();
+    expect(screen.getByText(/The clock is 35 minutes/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Market Entry/ })).toBeInTheDocument(); // the lanes, not a list of every case
     expect(screen.getAllByRole('link', { name: 'Improvement Areas' }).some((l) => l.getAttribute('aria-current') === 'page')).toBe(true); // still under Improvement Areas
   });
 
@@ -81,6 +81,53 @@ describe('starting a live case', () => {
     expect(screen.queryByText('Army Hotel')).not.toBeInTheDocument();
     await pass(61);
     expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('33:59');
+  });
+});
+
+describe('picking a case', () => {
+  it('shows the lanes first, by case type or by industry, and a case only after a lane is chosen', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    expect(await screen.findByRole('tab', { name: 'By case type', selected: true })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Army Hotel/ })).not.toBeInTheDocument(); // not listed until a lane is chosen
+    const lane = await screen.findByRole('button', { name: /Market Entry/ });
+    expect(lane).toHaveTextContent('1 case');
+
+    await user.click(lane);
+    expect(await screen.findByRole('button', { name: /Army Hotel/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /All lanes/ }));
+    expect(screen.queryByRole('button', { name: /Army Hotel/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'By industry' }));
+    await user.click(await screen.findByRole('button', { name: /Travel \/ Hospitality/ }));
+    await user.click(await screen.findByRole('button', { name: /Army Hotel/ }));
+    await screen.findByText(/Should a hotel chain open a new property/);
+  });
+
+  it('searches across every lane, and says so when nothing matches', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    await user.type(await screen.findByLabelText('Search cases'), 'army');
+    expect(await screen.findByRole('button', { name: /Army Hotel/ })).toBeInTheDocument();
+    await user.clear(screen.getByLabelText('Search cases'));
+    await user.type(screen.getByLabelText('Search cases'), 'zzzz');
+    expect(await screen.findByText(/No case matches that/)).toBeInTheDocument();
+  });
+
+  it('starts a random case from the chosen lane', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    await user.click(await screen.findByRole('button', { name: /Market Entry/ }));
+    await user.click(await screen.findByRole('button', { name: /Surprise me in Market Entry/ }));
+    await screen.findByText(/Should a hotel chain open a new property/);
+  });
+
+  it('has Bucket guiding from the first screen to the last', async () => {
+    const env = createFakeEnv();
+    const user = await startCase(env);
+    expect(screen.getByText(/I'm Bucket, your interviewer|Welcome in|Ask me anything/)).toBeInTheDocument(); // Bucket at the prompt
+    await user.click(screen.getByRole('button', { name: 'Ready for framework' }));
+    expect(await screen.findByText(/thinking time|Take your time with the structure/)).toBeInTheDocument(); // and while thinking
   });
 });
 

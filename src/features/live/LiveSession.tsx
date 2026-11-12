@@ -2,7 +2,8 @@ import { Brain, Clock } from 'lucide-react';
 import type { LiveView } from '../../data/liveCase';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { isThinking } from '../../domain/liveCase';
+import { bucketLine, isThinking } from '../../domain/liveCase';
+import { BucketSays } from './BucketSays';
 import { ChatInput, ClockBar, ExhibitView, Scratchpad, Thread, WriteBox } from './liveParts';
 import type { LiveSession } from './useLiveSession';
 
@@ -64,6 +65,9 @@ export function LiveSessionScreen({ s, view }: { s: LiveSession; view: LiveView 
   const thinking = THINK_TEXT[view.stage];
   const thread = view.messages;
 
+  const bucket = bucketLine(view, now, view.messages.at(-1)?.kind === 'hint');
+  const says = <BucketSays mood={bucket.mood}>{bucket.text}</BucketSays>;
+
   const warning =
     view.stage === 'prompt' && stageLeft <= 20_000
       ? `Framework thinking starts in ${Math.max(0, Math.ceil(stageLeft / 1000))} seconds. Choose "Ready for framework" now if you are ready.`
@@ -74,6 +78,8 @@ export function LiveSessionScreen({ s, view }: { s: LiveSession; view: LiveView 
   return (
     <div className="space-y-5">
       <ClockBar view={view} now={now} />
+
+      {view.stage !== 'exhibits' && says}
 
       {warning && (
         <p role="status" className="flex items-center gap-2 rounded-xl border border-line bg-sun-soft px-4 py-2.5 text-sm font-semibold text-ink">
@@ -189,6 +195,7 @@ export function LiveSessionScreen({ s, view }: { s: LiveSession; view: LiveView 
             </section>
           )}
           <div className="space-y-4">
+            {says}
             <Thread messages={thread.filter((m) => m.stage === 'exhibits')} pending={pending} typing={busy && Boolean(pending)} />
             <ChatInput
               draftKey="exhibit"
