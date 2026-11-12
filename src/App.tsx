@@ -34,6 +34,8 @@ import { takeImportIntent } from './state/afterSignup';
 import { useRoute } from './state/route';
 import { MessagesProvider } from './state/MessagesProvider';
 import { PracticeProvider } from './state/PracticeProvider';
+import { LiveProvider } from './state/LiveProvider';
+import { LiveCase } from './features/live/LiveCase';
 import { GameProvider, useGame } from './state/game';
 import { ThemeProvider } from './state/theme';
 import { GoalProvider } from './state/GoalProvider';
@@ -177,6 +179,7 @@ function Shell() {
           {location.route === 'people' && <People />}
           {location.route === 'inbox' && <Inbox />}
           {location.route === 'messages' && <ConversationScreen />}
+          {location.route === 'live' && <LiveCase />}
           {location.route === 'warmup' && (
             // Demo mode never touches the account, so the record stays on this device there.
             <WarmupSyncContext.Provider value={mode === 'demo' ? null : warmupSync}>
@@ -272,6 +275,7 @@ function AuthGate({ backend }: { backend: Backend }) {
             interviewed: backend.createInterviewed(),
             practice: backend.createPractice(),
             messages: backend.createMessages(),
+            live: backend.createLive(),
           }
         : null,
     [backend, userId],
@@ -291,7 +295,9 @@ function AuthGate({ backend }: { backend: Backend }) {
                   <InterviewedProvider repository={repos.interviewed}>
                     <PracticeProvider practice={repos.practice}>
                       <MessagesProvider messages={repos.messages}>
-                        <Shell />
+                        <LiveProvider repository={repos.live}>
+                          <Shell />
+                        </LiveProvider>
                       </MessagesProvider>
                     </PracticeProvider>
                   </InterviewedProvider>

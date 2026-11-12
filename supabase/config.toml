@@ -420,3 +420,7 @@ enabled = true
 # ES256 tokens this project signs with, so it would refuse every call from the app before the function ran.
 [functions.notify-request]
 verify_jwt = false
+
+# live-case also checks the sign-in itself, for the same reason.
+[functions.live-case]
+verify_jwt = false

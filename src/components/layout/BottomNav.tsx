@@ -1,7 +1,7 @@
 import { LayoutDashboard, ListChecks, Target, Timer, Users, type LucideIcon } from 'lucide-react';
 import { CountDot } from '../ui/CountDot';
 import { useNavBadge } from '../../state/badge';
-import { ROUTES, UNDER_COMMUNITY, type NavRoute } from '../../state/route';
+import { ROUTES, UNDER_COMMUNITY, UNDER_IMPROVE, type NavRoute } from '../../state/route';
 import { useUI } from '../../state/ui';
 
 const ICONS: Record<NavRoute, LucideIcon> = {
@@ -24,7 +24,7 @@ export function BottomNav() {
       <ul className="mx-auto grid max-w-md grid-cols-5">
         {ROUTES.map((r) => {
           const Icon = ICONS[r.id];
-          const on = route === r.id || (r.id === 'people' && UNDER_COMMUNITY.includes(route)); // The Inbox and conversations live under Community
+          const on = route === r.id || (r.id === 'people' && UNDER_COMMUNITY.includes(route)) || (r.id === 'improve' && UNDER_IMPROVE.includes(route)); // The Inbox and conversations live under Community
           const waiting = r.id === 'people' ? badge.total : 0;
           const spoken = r.id === 'people' ? badge.spoken : null;
           return (

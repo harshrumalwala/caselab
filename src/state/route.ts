@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type Route = 'dashboard' | 'log' | 'improve' | 'people' | 'warmup' | 'inbox' | 'messages';
+export type Route = 'dashboard' | 'log' | 'improve' | 'people' | 'warmup' | 'inbox' | 'messages' | 'live';
 /** The screens that have a tab in the navigation. The Inbox and a conversation live under the Community (people) tab. */
-export type NavRoute = Exclude<Route, 'inbox' | 'messages'>;
+export type NavRoute = Exclude<Route, 'inbox' | 'messages' | 'live'>;
 
 /** The screens that sit under the Community tab. */
 export const UNDER_COMMUNITY: readonly Route[] = ['inbox', 'messages'];
+/** The live case sits under Improvement Areas. */
+export const UNDER_IMPROVE: readonly Route[] = ['live'];
 
 export const ROUTES: { id: NavRoute; label: string; /** For tight spaces (the phone bar, a narrow top bar). */ short: string }[] = [
   { id: 'dashboard', label: 'Dashboard', short: 'Dashboard' },
@@ -23,7 +25,7 @@ export interface Location {
 
 function parse(): Location {
   const [first, second] = window.location.hash.replace(/^#\/?/, '').split('/');
-  if (first === 'log' || first === 'improve' || first === 'warmup' || first === 'inbox') return { route: first, param: undefined };
+  if (first === 'log' || first === 'improve' || first === 'warmup' || first === 'inbox' || first === 'live') return { route: first, param: undefined };
   // Older addresses still work: requests and the list of conversations are both the Inbox now.
   if (first === 'requests') return { route: 'inbox', param: undefined };
   if (first === 'messages') return second ? { route: 'messages', param: decodeURIComponent(second) } : { route: 'inbox', param: undefined };

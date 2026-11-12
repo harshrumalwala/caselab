@@ -5,6 +5,7 @@ import { createMemoryRepository } from '../data/memoryRepository';
 import type { CaseLabRepository } from '../data/repository';
 import { createMemoryMessages } from '../data/messages';
 import { createMemoryPractice } from '../data/practiceRequests';
+import { createMemoryLive } from './memoryLive';
 import { createMemoryInterviewed } from '../data/interviewed';
 import { toSharedInterviewed, type SharedInterviewed } from '../domain/interviewed';
 import { createMemoryGoal } from '../data/weeklyGoal';
@@ -138,6 +139,8 @@ export interface FakeEnv {
   practice: ReturnType<typeof createMemoryPractice> & { mine: ReturnType<ReturnType<typeof createMemoryPractice>['as']> };
   /** Conversations between all the fake members; `as(userId)` is that member's view. */
   chat: ReturnType<typeof createMemoryMessages> & { mine: ReturnType<ReturnType<typeof createMemoryMessages>['as']> };
+  /** The member's live case with Bucket: the real engine and handler over an in-memory "database", with a scripted coach (`live.control.reply`). */
+  live: ReturnType<typeof createMemoryLive>;
   /** The member's Warm-up record, as the "database" holds it. */
   warmup: ReturnType<typeof createMemoryWarmup>;
   /** The cases the member ran as the interviewer, as the "database" holds them. */
@@ -255,6 +258,10 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
   const myPractice = practice.as(TEST_USER.userId);
   const chat = createMemoryMessages(practice, () => community.profiles.map((p) => ({ userId: p.userId, name: p.displayName })));
   const myChat = chat.as(TEST_USER.userId);
+  const live = createMemoryLive({
+    userId: TEST_USER.userId,
+    cases: { [SAMPLE_LIBRARY[0].id]: { info: { name: SAMPLE_LIBRARY[0].name, book: SAMPLE_LIBRARY[0].book, caseType: SAMPLE_LIBRARY[0].caseType, industry: SAMPLE_LIBRARY[0].industry }, solution: SAMPLE_LIBRARY_SOLUTIONS[SAMPLE_LIBRARY[0].id] } },
+  });
   const publicReader = createMemoryPublic({ profiles: () => community.profiles, shared });
 
   return {
@@ -270,6 +277,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
         createInterviewed: () => interviewed,
         createPractice: () => myPractice,
         createMessages: () => myChat,
+        createLive: () => live,
         createPublicCommunity: () => publicReader,
       },
     },
@@ -282,6 +290,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
     interviewed,
     practice: Object.assign(practice, { mine: myPractice }),
     chat: Object.assign(chat, { mine: myChat }),
+    live,
     publicReader,
     calls: flaky.calls,
     failOn: flaky.failOn,
