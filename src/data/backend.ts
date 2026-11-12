@@ -9,6 +9,7 @@ import { SupabaseLibrary, type LibraryRepository } from './caseLibrary';
 import { SupabaseWarmup, type WarmupRepository } from './warmupBest';
 import { PublicCommunity, SupabaseCommunity } from './supabaseCommunity';
 import { SupabaseMessages, type MessagesRepository } from './messages';
+import { SupabaseLive, type LiveCaseRepository } from './liveCase';
 import { SupabasePractice, type PracticeRepository } from './practiceRequests';
 import { SupabaseRepository } from './supabaseRepository';
 
@@ -19,6 +20,8 @@ export interface Backend {
   createCommunity(userId: string): CommunityRepository;
   /** The signed-in member's practice requests (sent and received). */
   createPractice(): PracticeRepository;
+  /** The signed-in member's live case with Bucket (a timed practice case). */
+  createLive(): LiveCaseRepository;
   /** The signed-in member's private conversations. */
   createMessages(): MessagesRepository;
   /** The signed-in member's best Warm-up score and streak. */
@@ -89,6 +92,7 @@ export function createSupabaseBackend(
       createRepository: () => new SupabaseRepository(client),
       createCommunity: (userId) => new SupabaseCommunity(client, userId, anon),
       createPractice: () => new SupabasePractice(client),
+      createLive: () => new SupabaseLive(client),
       createMessages: () => new SupabaseMessages(client),
       createWarmup: () => new SupabaseWarmup(client),
       createGoal: (userId) => new SupabaseGoal(client, userId),
