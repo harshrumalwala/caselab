@@ -178,7 +178,7 @@ describe('starting a live case', () => {
     // Only the prompt, word for word. What the interviewer holds comes out when the student asks for it.
     expect(v.messages[0].text).not.toContain('The base houses 20,000 soldiers.');
     expect(v.startedAt).toBe(T0);
-    expect(v.endsAt).toBe(T0 + sec(1800));
+    expect(v.endsAt).toBe(T0 + sec(2100)); // 35 minutes for a case with up to four exhibits
     expect(v.caseInfo).toBeNull(); // the name would spoil it
     expect(v.exhibits).toEqual([]);
     expect(w.asked).toHaveLength(0); // starting costs nothing
@@ -365,26 +365,6 @@ describe('the exhibit discussion', () => {
     }
   });
 
-  it('gives a process hint, then a directional hint, then moves on, when the member stays stuck', async () => {
-    const id = await toExhibits();
-    const start = clock.t;
-    // a quiet student: the app asks on its own
-    clock.t = start + sec(45);
-    w.script.reply = (kind) => turn(`A ${kind} hint`);
-    let r = view(await call({ type: 'nudge', sessionId: id }));
-    expect(r.messages.at(-1)).toMatchObject({ kind: 'hint', text: 'A nudge_process hint' });
-    clock.t = start + sec(100);
-    r = view(await call({ type: 'nudge', sessionId: id }));
-    expect(r.messages.at(-1)).toMatchObject({ kind: 'hint', text: 'A nudge_directional hint' });
-    const askedBefore = w.asked.length;
-    clock.t = start + sec(160);
-    r = view(await call({ type: 'nudge', sessionId: id }));
-    expect(w.asked.length).toBe(askedBefore); // moving on needs no words from the model
-    expect(r.exhibits).toHaveLength(2);
-    const stored = [...w.db.values()][0].state;
-    expect(stored.beats[0]).toMatchObject({ outcome: 'coach_moved', hints: 2 });
-  });
-
   it('does nothing at all when the member has been making progress', async () => {
     const id = await toExhibits();
     w.script.reply = () => turn('Good.', { assessment: 'progress' });
@@ -406,36 +386,6 @@ describe('the exhibit discussion', () => {
     expect(r.messages.at(-1)).toMatchObject({ kind: 'hint' });
     expect(JSON.stringify(w.asked.at(-1))).toContain('ONE brief process-oriented hint');
     expect([...w.db.values()][0].state.beats[0].hints).toBe(1);
-  });
-
-  it('tells the screen when the next nudge is due, and does nothing if it is called early', async () => {
-    const id = await toExhibits();
-    const v = view(await call({ type: 'resume', sessionId: id }));
-    expect(v.nextNudgeAt).toBeGreaterThan(clock.t);
-    const r = view(await call({ type: 'nudge', sessionId: id }));
-    expect(r.messages.filter((m) => m.kind === 'hint')).toHaveLength(0);
-    expect(w.asked).toHaveLength(0);
-  });
-
-  it('moves on after two hints, but not if a good answer arrives just as the case was due to move on', async () => {
-    const id = await toExhibits();
-    const start = clock.t;
-    w.script.reply = () => turn('A hint');
-    clock.t = start + sec(45);
-    await call({ type: 'nudge', sessionId: id });
-    clock.t = start + sec(100);
-    await call({ type: 'nudge', sessionId: id });
-    clock.t = start + sec(150); // the clock now says: move on
-
-    w.script.reply = () => turn('Good, that is the implication.', { assessment: 'progress' });
-    const good = view(await call({ type: 'say', sessionId: id, text: 'Off-peak is only 31 percent, so I would test costs next' }));
-    expect(good.exhibits).toHaveLength(1); // not cut off
-
-    clock.t = start + sec(300);
-    w.script.reply = () => turn('Let us move on to the next piece.', { assessment: 'stuck' });
-    const stuck = view(await call({ type: 'say', sessionId: id, text: 'I really do not know' }));
-    expect(stuck.exhibits).toHaveLength(2);
-    expect([...w.db.values()][0].state.beats[0].outcome).toBe('coach_moved');
   });
 
   it('shares the exhibit time out so that a case with more exhibits gets shorter exchanges', async () => {
@@ -717,5 +667,88 @@ describe("the interviewer's own tables", () => {
     const v = await begin();
     await call({ type: 'say', sessionId: v.sessionId, text: 'Who pays for the rooms?' });
     expect(JSON.stringify(w.asked[0])).not.toContain('SECRET-GUIDE');
+  });
+});
+
+describe('the member drives', () => {
+  it('gets a hint in reply to what they write when they are stuck: a process hint, then a sharper one, then the next exhibit once the exhibit has run long', async () => {
+    const id = await toExhibits();
+    const start = clock.t;
+    w.script.reply = () => turn('A hint.', { assessment: 'stuck' });
+    clock.t = start + sec(10);
+    let r = view(await call({ type: 'say', sessionId: id, text: 'I am not sure' }));
+    expect(r.messages.at(-1)).toMatchObject({ kind: 'hint' });
+    clock.t = start + sec(40);
+    r = view(await call({ type: 'say', sessionId: id, text: 'Still not sure' }));
+    expect(JSON.stringify(w.asked.at(-1))).toContain('more specific directional hint');
+    clock.t = start + sec(60);
+    r = view(await call({ type: 'say', sessionId: id, text: 'Hmm' }));
+    expect(r.exhibits).toHaveLength(1); // two hints given, but the exhibit has not yet taken longer than it is worth: they carry on
+    clock.t = start + sec(900);
+    w.script.reply = () => turn('Good, that is the implication.', { assessment: 'progress' });
+    expect(view(await call({ type: 'say', sessionId: id, text: 'Off-peak is only 31 percent, so I would test costs next' })).exhibits).toHaveLength(1); // a good answer is never cut off
+    w.script.reply = () => turn('Let us move on to the next piece.', { assessment: 'stuck' });
+    const stuck = view(await call({ type: 'say', sessionId: id, text: 'I really do not know' }));
+    expect(stuck.exhibits).toHaveLength(2);
+    expect([...w.db.values()][0].state.beats[0].outcome).toBe('coach_moved');
+  });
+
+  it('never gives a hint on its own, however long it is quiet', async () => {
+    const id = await toExhibits();
+    for (const t of [200, 600, 1000]) {
+      clock.t = T0 + sec(t);
+      expect(view(await call({ type: 'nudge', sessionId: id })).messages.filter((m) => m.kind === 'hint')).toHaveLength(0);
+    }
+    expect(w.asked).toHaveLength(0);
+    expect(view(await call({ type: 'resume', sessionId: id })).nextNudgeAt).toBeNull();
+  });
+});
+
+describe('hints that nobody asked for', () => {
+  it('never come while the member is still reading or typing', async () => {
+    const id = await toExhibits();
+    const start = clock.t;
+    for (const t of [30, 60, 100, 140]) {
+      clock.t = start + sec(t);
+      const r = view(await call({ type: 'nudge', sessionId: id }));
+      expect(r.messages.filter((m) => m.kind === 'hint'), `at ${t}s`).toHaveLength(0);
+    }
+    expect(w.asked).toHaveLength(0);
+    await call({ type: 'draft', sessionId: id, key: 'exhibit', text: 'Peak is 95 and off-peak is' });
+    clock.t = start + sec(260); // long after the exhibit appeared, but they were typing 120 seconds ago
+    expect(view(await call({ type: 'nudge', sessionId: id })).messages.filter((m) => m.kind === 'hint')).toHaveLength(0);
+  });
+
+});
+
+describe("the interviewer's sheets, found by what they say", () => {
+  const sheet = {
+    title: 'Current Revenues and Costs (1 of 2): Revenues',
+    caption: '',
+    columns: ['Revenues', 'Information for Interviewee', 'Revenue Size (Keep Private)'],
+    rows: [['Ticket Sales', 'Give blue font figures to interviewee', '$80,000,000']],
+    approx: false,
+    howToRead: '',
+    takeaways: [],
+    chart: null,
+  };
+
+  it('are not shown even when their title looks innocent', async () => {
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, exhibits: [sheet, EXHIBIT(1)] } } : real(id));
+    const id = await toExhibits();
+    const v = view(await call({ type: 'resume', sessionId: id }));
+    expect(JSON.stringify(v)).not.toContain('Keep Private');
+    expect(JSON.stringify(v)).not.toContain('$80,000,000');
+    expect(v.exhibits.map((e) => e.title)).toEqual(['Exhibit 1: Occupancy by season']);
+    expect(v.beatsTotal).toBe(1);
+  });
+
+  it('are given to the model as private reference instead', async () => {
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, exhibits: [sheet, EXHIBIT(1)] } } : real(id));
+    const id = await toExhibits();
+    await call({ type: 'say', sessionId: id, text: 'Peak is 95 and off-peak is 31' });
+    expect(w.asked[0].messages.at(-1)!.content).toContain('Revenue Size (Keep Private)');
   });
 });

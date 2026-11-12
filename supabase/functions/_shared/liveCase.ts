@@ -28,9 +28,9 @@ export const PLANNED_MS: Record<Exclude<Stage, 'done'>, number> = {
   framework_write: 3 * 60 * SECOND,
   exhibits: 15 * 60 * SECOND,
   brainstorm_think: 30 * SECOND,
-  brainstorm_write: 60 * SECOND,
+  brainstorm_write: 90 * SECOND,
   recommend_think: 30 * SECOND,
-  recommend_write: 60 * SECOND,
+  recommend_write: 90 * SECOND,
 };
 
 /** How much longer a writing stage may run for someone still typing when its time is up. */
@@ -39,8 +39,7 @@ export const WRITING_GRACE_MS = 30 * SECOND;
 export const DRAFT_ACTIVE_MS = 20 * SECOND;
 /** The exhibit discussion may run past its planned 15 minutes only while the member keeps making progress within this long. */
 export const PROGRESS_WINDOW_MS = 60 * SECOND;
-/** The least time between two nudges. */
-export const MIN_NUDGE_GAP_MS = 15 * SECOND;
+
 /** A saved response is cut to this long. */
 export const MAX_RESPONSE_CHARS = 4000;
 
@@ -68,6 +67,10 @@ export interface Beat {
 }
 
 export interface CasePlan {
+  /** The time the exhibit discussion is planned for. Plans saved before this existed use 15 minutes. */
+  exhibitMs?: number;
+  /** The whole case. Plans saved before this existed use 30 minutes. */
+  limitMs?: number;
   beats: Beat[];
   hasBrainstorm: boolean;
   /** What the brainstorm is about, from the book's own step (never its ideas). */
@@ -76,7 +79,7 @@ export interface CasePlan {
 
 /** The little the plan needs to know about a case's write-up. */
 export interface PlanSource {
-  exhibits: readonly { title?: string }[];
+  exhibits: readonly { title?: string; caption?: string; columns?: readonly string[]; rows?: readonly (readonly string[])[] }[];
   steps: readonly { title: string }[];
 }
 
@@ -90,16 +93,37 @@ const FRAMEWORK_STEP = /^\s*(framework|structure|structuring|clarifying question
 const INTERVIEWER_SIDE = /interviewer|guidance|\bguide\b|solution|sample|approach|performed by|answer|brainstorm|expected|calculation|\bmath\b/i;
 export const isInterviewerSide = (title: string): boolean => INTERVIEWER_SIDE.test(title);
 
+/** Words in a table's caption, column headings or cells that mark it as the interviewer's sheet ("Information for Interviewee", "Keep Private", "interviewer's math page"). */
+const INTERVIEWER_WORDS = /keep private|interviewee|interviewer|not for (the )?candidate|only when the candidate asks|given if prompted/i;
+
+/** How a caption says the table is the book's own working or answer (the ordinary words "solution" and "working" are not enough on their own). */
+const SOLUTION_CAPTION = /solution page|solution table|book'?s (working|solution|sizing|math)|\bworking for\b|completed in the book|math solution|guidance for/i;
+/** A cell that gives the answer away. */
+const ANSWER_CELL = /\(answer\b|answer key/i;
+
+/** A table the member must not see: the interviewer's by its title, or by what its caption, headings or cells say. */
+export function isInterviewerSideExhibit(e: { title?: string; caption?: string; columns?: readonly string[]; rows?: readonly (readonly string[])[] }): boolean {
+  if (isInterviewerSide(e.title ?? '')) return true;
+  if (INTERVIEWER_WORDS.test(e.caption ?? '') || SOLUTION_CAPTION.test(e.caption ?? '')) return true;
+  if ((e.columns ?? []).some((c) => INTERVIEWER_WORDS.test(c))) return true;
+  return (e.rows ?? []).slice(0, 80).some((r) => r.some((c) => INTERVIEWER_WORDS.test(c) || ANSWER_CELL.test(c)));
+}
+
 export function buildPlan(solution: PlanSource): CasePlan {
   const brainstormStep = solution.steps.find((s) => BRAINSTORM.test(s.title));
   const brainstormTable = solution.exhibits.find((e) => BRAINSTORM.test(e.title ?? ''));
   // Only the exhibits meant for the candidate are brought out.
-  const exhibitBeats: Beat[] = solution.exhibits.flatMap((e, index) => (isInterviewerSide(e.title ?? '') ? [] : [{ kind: 'exhibit' as const, index }]));
+  const exhibitBeats: Beat[] = solution.exhibits.flatMap((e, index) => (isInterviewerSideExhibit(e) ? [] : [{ kind: 'exhibit' as const, index }]));
   // A case with no exhibits for the candidate is worked through the book's own steps instead (the brainstorm has its own stages).
   // (The framework is done in its own stages, so a step that is just the framework is not discussed again.)
   const stepBeats: Beat[] = solution.steps.flatMap((s, index) => (BRAINSTORM.test(s.title) || FRAMEWORK_STEP.test(s.title) ? [] : [{ kind: 'step' as const, index }]));
+  const beats = exhibitBeats.length > 0 ? exhibitBeats : stepBeats;
+  // More to cover, more time: 20 minutes of exhibits in a 35-minute case, or 25 in 40 when there are more than four.
+  const long = beats.length > 4;
   return {
-    beats: exhibitBeats.length > 0 ? exhibitBeats : stepBeats,
+    exhibitMs: (long ? 25 : 20) * 60 * SECOND,
+    limitMs: (long ? 40 : 35) * 60 * SECOND,
+    beats,
     hasBrainstorm: Boolean(brainstormStep || brainstormTable),
     brainstormTopic: brainstormStep
       ? brainstormStep.title.replace(/^\s*brainstorm(?:s|ing)?\s*[:\-–]?\s*/i, '').trim()
@@ -126,6 +150,8 @@ export interface BeatRecord {
   revealedAt: number;
   /** The last time the member made progress here (or when it was revealed). Hints and the move-on rule count from it. */
   lastProgressAt: number;
+  /** The last time the member wrote to Bucket about this exhibit (or when it appeared). */
+  lastUserAt: number;
   lastNudgeAt: number;
   /** The time this one is worth, set when it comes out from what is left. */
   budgetMs: number;
@@ -171,7 +197,8 @@ export interface SessionState {
   endReason: 'completed' | 'time_limit' | null;
 }
 
-export const hardEnd = (s: SessionState): number => s.startedAt + LIMIT_MS;
+export const hardEnd = (s: SessionState): number => s.startedAt + (s.plan.limitMs ?? LIMIT_MS);
+const exhibitPlanned = (s: SessionState): number => s.plan.exhibitMs ?? PLANNED_MS.exhibits;
 const stageIndex = (stage: Stage): number => ORDER.indexOf(stage);
 const clamp = (n: number, lo: number, hi: number): number => Math.min(Math.max(n, lo), hi);
 const clip = (t: string): string => t.replace(/\r\n/g, '\n').trim().slice(0, MAX_RESPONSE_CHARS);
@@ -217,7 +244,7 @@ function laterPlanned(s: SessionState, stage: Stage): number {
     if (next === 'done') continue;
     if (next === 'exhibits' && s.plan.beats.length === 0) continue;
     if ((next === 'brainstorm_think' || next === 'brainstorm_write') && !s.plan.hasBrainstorm) continue;
-    total += PLANNED_MS[next];
+    total += next === 'exhibits' ? exhibitPlanned(s) : PLANNED_MS[next];
   }
   return total;
 }
@@ -239,7 +266,7 @@ export function deadlines(s: SessionState, stage: Stage, startAt: number): Deadl
   if (stage === 'done') return { soft: end, hard: end };
   if (stage === 'exhibits') {
     const latest = Math.max(startAt, end - closingNeeded(s));
-    return { soft: Math.min(startAt + PLANNED_MS.exhibits, latest), hard: latest };
+    return { soft: Math.min(startAt + exhibitPlanned(s), latest), hard: latest };
   }
   const soft = Math.min(startAt + PLANNED_MS[stage], end);
   const writing = stage === 'framework_write' || stage === 'brainstorm_write' || stage === 'recommend_write';
@@ -281,9 +308,9 @@ const LINES = {
   framework_write: 'Time to write. Put your framework down, then tell me where you would start.',
   direction: 'Thanks. Where would you start, and what would you want to understand first?',
   brainstorm_think: (topic: string) => `Brainstorm${topic ? `: ${topic}` : ''}. You have 30 seconds to think before you write.`,
-  brainstorm_write: 'Write your ideas now. You have one minute.',
+  brainstorm_write: 'Write your ideas now. You have a minute and a half.',
   recommend_think: 'Time to bring it together. You have 30 seconds to think about your recommendation, using what you have worked through.',
-  recommend_write: 'Write your recommendation now. You have one minute.',
+  recommend_write: 'Write your recommendation now. You have a minute and a half.',
   wrap_up: 'Let us move to your recommendation using what you have so far.',
   to_brainstorm: 'Let us move on to brainstorming.',
 };
@@ -448,7 +475,10 @@ export function userSays(settled: SessionState, text: string, now: number): Acti
     delete s.drafts.direction;
   } else if (s.stage === 'exhibits') {
     const b = openBeat(s);
-    if (b) b.userMessages += 1;
+    if (b) {
+      b.userMessages += 1;
+      b.lastUserAt = now;
+    }
     delete s.drafts.exhibit;
   } else {
     return refuse('There is nothing to answer right now.');
@@ -505,7 +535,7 @@ function revealBeat(s: SessionState, at: number): boolean {
   const index = s.beats.length;
   const beat = s.plan.beats[index];
   if (!beat) return false;
-  s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastNudgeAt: 0, budgetMs: beatBudget(s, at), hints: 0, userMessages: 0, outcome: 'open' });
+  s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastUserAt: at, lastNudgeAt: 0, budgetMs: beatBudget(s, at), hints: 0, userMessages: 0, outcome: 'open' });
   const first = index === 0;
   const text =
     beat.kind === 'exhibit'
@@ -541,37 +571,26 @@ export function recordAssessment(settled: SessionState, assessment: Assessment, 
   return bump(s);
 }
 
-const unproductiveWindow = (b: BeatRecord, behind: boolean): number => clamp(b.budgetMs / 3, 45 * SECOND, 75 * SECOND) * (behind ? 0.5 : 1);
-
 const behindSchedule = (b: BeatRecord, at: number): boolean => at > b.revealedAt + b.budgetMs;
 
-function thresholdFor(b: BeatRecord, behind: boolean): number {
-  const u = unproductiveWindow(b, behind);
-  return b.hints === 0 ? u * 0.5 : b.hints === 1 ? u : u * 1.5;
+/**
+ * What help to give on the exhibit on the table. The member drives: nothing is said unless they write something.
+ *  - 'message': they have written to Bucket. If it shows they are stuck, they get a process hint, then a sharper one, and (only if the exhibit
+ *    has already taken longer than it is worth) the next exhibit.
+ *  - 'timer': they have said nothing. The clock never speaks up on its own: how much they cover in the time is up to them, and when the
+ *    exhibit time is used up the case moves on to the next part.
+ */
+export function nudgeLevel(s: SessionState, now: number, via: 'message' | 'timer' = 'message'): NudgeLevel {
+  const b = openBeat(s);
+  if (!b || s.stage !== 'exhibits' || via === 'timer') return 'none';
+  if (b.hints === 0) return 'process_hint';
+  if (b.hints === 1) return 'directional_hint';
+  return behindSchedule(b, now) ? 'advance' : 'none';
 }
 
-/** What the coach should do about an exhibit the member is not getting anywhere with, by the clock alone. */
-export function nudgeLevel(s: SessionState, now: number): NudgeLevel {
-  const b = openBeat(s);
-  if (!b || s.stage !== 'exhibits') return 'none';
-  if (s.drafts.exhibit?.trim() && now - s.lastDraftAt < DRAFT_ACTIVE_MS) return 'none';
-  if (b.lastNudgeAt && now - b.lastNudgeAt < MIN_NUDGE_GAP_MS) return 'none';
-  if (now - b.lastProgressAt < thresholdFor(b, behindSchedule(b, now))) return 'none';
-  return b.hints === 0 ? 'process_hint' : b.hints === 1 ? 'directional_hint' : 'advance';
-}
-
-/** When `nudgeLevel` next becomes something (for the app to wake up at), or null when no exhibit is open. */
-export function nextNudgeAt(s: SessionState, now: number): number | null {
-  const b = openBeat(s);
-  if (!b || s.stage !== 'exhibits') return null;
-  const gap = b.lastNudgeAt ? b.lastNudgeAt + MIN_NUDGE_GAP_MS : 0;
-  const behindAt = b.revealedAt + b.budgetMs;
-  const normal = b.lastProgressAt + thresholdFor(b, false);
-  const late = b.lastProgressAt + thresholdFor(b, true);
-  let at = normal <= behindAt ? normal : Math.max(behindAt + 1, late);
-  at = Math.max(at, gap);
-  if (s.drafts.exhibit?.trim()) at = Math.max(at, s.lastDraftAt + DRAFT_ACTIVE_MS);
-  return Math.max(at, now);
+/** Nothing wakes the screen up for a hint: they only come in reply to the member. */
+export function nextNudgeAt(_s: SessionState, _now: number): number | null {
+  return null;
 }
 
 /** Records that the coach gave a hint (level 1 or 2) on the open exhibit. */
