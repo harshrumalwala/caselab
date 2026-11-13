@@ -364,7 +364,7 @@ const DIRECTIVES: Record<TurnKind, string> = {
   direction:
     'The student has handed in a framework (you will not see it) and has now said where they would start. Reply in one or two sentences: acknowledge their starting point, and say you will show them some data. If their direction is unclear or off-track, instead ask ONE focused follow-up question about where they would start. Do not teach, rewrite or praise at length. Set direction_clear to true when their starting direction is clear enough to move on.',
   exhibit:
-    'The student is working on the exhibit. Judge what they just wrote, then respond in one to three short sentences: if they are on a good track, let them continue or ask for the implication for the client, then the next step they would take. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell). Set beat_complete to true only when they have independently stated what the exhibit means for the client AND a sensible next step. Do not give a hint unless told to below.',
+    'The student is working on the exhibit. Judge what they just wrote, then respond in one to three short sentences: if they are on a good track, let them continue or ask for the implication for the client, then the next step they would take. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell). Set beat_complete to true only when they have independently stated what the exhibit means for the client AND a sensible next step. Do not give a hint unless told to below. If the student asks to see data or an exhibit that is in the case information or in the exhibit shown to them, give it plainly, exactly as written, instead of answering with a question; if it is not there, say so briefly.',
   nudge_process:
     'The student has made no progress for a while. Give ONE brief process-oriented hint: suggest a way to approach the data (what to compare, what to ask of it, how to structure the calculation) without telling them what to conclude. One or two sentences.',
   nudge_directional:
@@ -378,6 +378,8 @@ const HELP: Record<NudgeLevel, string> = {
     ' The student has been stuck for a while. If (and only if) this message shows they are still stuck, add ONE brief process-oriented hint: a way to approach the data, without saying what to conclude.',
   directional_hint:
     ' The student has been stuck for a while and has had a hint. If (and only if) this message shows they are still stuck, add ONE more specific directional hint about where to look, without stating the conclusion or any result.',
+  lead:
+    ' The student has now written several times without getting traction, so stop asking open questions and lead them. In two or three short sentences: say plainly where to look or what to compare; if they asked to see an exhibit or data, give them the figures they need, exactly as written in the case information, the exhibit shown to them or the topic notes below (the inputs and facts only, never a conclusion or the result of a calculation); then end with ONE specific, easy question they can answer from that. Never answer a request for information with "what do you think?".',
   advance:
     ' The student has been stuck for a long time. If (and only if) this message shows they are still stuck, say one short, neutral sentence that you will move on to the next piece, and do NOT explain, solve or summarise this one.',
 };
@@ -443,8 +445,10 @@ export interface Turn {
 
 const norm = (t: string): string => t.toLowerCase().replace(/[^a-z0-9%$.]+/g, ' ').replace(/\s+/g, ' ').trim();
 const FALLBACK = 'Let us stay with your reasoning. What would you take from that, and what would you do next?';
+/** When a reply that was meant to lead has to be thrown away, the stand-in still points somewhere, instead of asking the member to think again. */
+const LEAD_FALLBACK = 'Let me get you moving. Start with the biggest number, or the biggest change, in what you have in front of you: what is it, and what could be driving it?';
 
-export function parseTurn(text: string, privateText: readonly string[]): Turn | null {
+export function parseTurn(text: string, privateText: readonly string[], fallback: string = FALLBACK): Turn | null {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -455,7 +459,7 @@ export function parseTurn(text: string, privateText: readonly string[]): Turn | 
   const message = str(o.message, 700);
   if (!message) return null;
   const assessment: Assessment = (['progress', 'partial', 'stuck', 'unclear'] as const).find((a) => a === o.assessment) ?? 'unclear';
-  return { message: leaks(message, privateText) ? FALLBACK : message, assessment, beatComplete: o.beat_complete === true, directionClear: o.direction_clear === true };
+  return { message: leaks(message, privateText) ? fallback : message, assessment, beatComplete: o.beat_complete === true, directionClear: o.direction_clear === true };
 }
 
 /** True when the reply repeats a sentence of the private notes: a model that has just been told the answer must not pass it on. */
@@ -470,16 +474,17 @@ export function leaks(message: string, privateText: readonly string[]): boolean 
   return false;
 }
 
-function privateNotes(sol: LiveSolution, state: SessionState): string[] {
+/** What a reply must not repeat. When Bucket is leading, the facts and inputs it may hand over (how to read the exhibit, the topic's body) are left out: only the conclusions stay private. */
+function privateNotes(sol: LiveSolution, state: SessionState, leading = false): string[] {
   const out = [sol.recommendation, sol.delivery, sol.hypothesis, ...sol.because];
   const beat = openBeat(state);
   const b = beat ? state.plan.beats[beat.index] : undefined;
   if (b?.kind === 'exhibit') {
     const e = sol.exhibits[b.index];
-    if (e) out.push(e.howToRead, ...e.takeaways);
+    if (e) out.push(...(leading ? [] : [e.howToRead]), ...e.takeaways);
   } else if (b) {
     const st = sol.steps[b.index];
-    if (st) out.push(st.body, st.whatToNotice);
+    if (st) out.push(...(leading ? [] : [st.body]), st.whatToNotice);
   }
   return out.filter(Boolean);
 }
@@ -765,6 +770,8 @@ function applyTurn(st: StoredSession, turn: Turn, kind: TurnKind, now: number, h
     const stuck = turn.assessment === 'stuck' || turn.assessment === 'unclear';
     // Help only for a member who is in fact stuck: a good answer that arrives as help falls due is never cut off.
     if (stuck && (help === 'process_hint' || help === 'directional_hint')) return recordHint(coachSays(s, turn.message, now, 'hint'), now);
+    // The third message without getting anywhere: Bucket leads, whatever the clock says, unless the member has just made a clear step forward.
+    if (help === 'lead' && turn.assessment !== 'progress') return recordHint(coachSays(s, turn.message, now, 'hint'), now);
     if (stuck && help === 'advance') return nextBeat(coachSays(s, turn.message, now), now, 'coach_moved');
     return coachSays(s, turn.message, now);
   }
@@ -809,7 +816,7 @@ async function converse(deps: LiveDeps, userId: string, sessionId: string, text:
   try {
     const answer = await deps.ask(turnRequest(sol, saved.state, kind, help));
     used = answer.usage;
-    if (answer.stopReason !== 'refusal') turn = parseTurn(answer.text, privateNotes(sol, saved.state));
+    if (answer.stopReason !== 'refusal') turn = parseTurn(answer.text, privateNotes(sol, saved.state, help === 'lead'), help === 'lead' ? LEAD_FALLBACK : FALLBACK);
   } catch {
     turn = null;
   }
