@@ -291,6 +291,32 @@ describe('the whole case', () => {
   });
 });
 
+describe('moving on early', () => {
+  it('lets a member who has covered the exhibit move on to the next section, once they have said something', async () => {
+    const env = createFakeEnv();
+    const user = await startCase(env);
+    reply(env, () => ({ message: 'Go on.', beat_complete: false }));
+    await user.click(screen.getByRole('button', { name: 'Ready for framework' }));
+    await user.click(await screen.findByRole('button', { name: 'Ready to write' }));
+    await user.type(await screen.findByLabelText('Your framework'), 'Demand, supply and cost');
+    await user.click(screen.getByRole('button', { name: 'Hand in framework' }));
+    await user.type(await screen.findByLabelText('Where would you start?'), 'Demand by season');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    await screen.findByText('Exhibit 1 of 1');
+
+    const done = screen.getByRole('button', { name: 'Done with the exhibits' }); // the only exhibit, so it says so
+    expect(done).toBeDisabled(); // nothing said about it yet
+    await user.type(screen.getByLabelText('Your thinking'), 'Off-peak is 40 percent, so costs next');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    await screen.findByText('Go on.');
+    expect(screen.getByRole('button', { name: 'Done with the exhibits' })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Done with the exhibits' }));
+    expect(await screen.findByRole('heading', { name: 'Think about your recommendation' })).toBeInTheDocument();
+    expect([...env.live.db.values()][0].state.beats[0].outcome).toBe('member_moved');
+  });
+});
+
 describe('the two modes', () => {
   const pickMode = (user: ReturnType<typeof userEvent.setup>, name: RegExp) => user.click(screen.getByRole('radio', { name }));
 

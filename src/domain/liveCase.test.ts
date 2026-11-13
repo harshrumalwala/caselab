@@ -116,4 +116,3 @@ describe('what Bucket says, and how Bucket looks', () => {
     expect(texts.size).toBeGreaterThan(1);
   });
 });
-

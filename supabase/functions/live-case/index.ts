@@ -36,6 +36,7 @@ function readAction(b: Record<string, unknown>): LiveAction | null {
       return b.sessionId === undefined || isId(b.sessionId) ? { type: 'resume', sessionId: b.sessionId as string | undefined } : null;
     case 'ready':
     case 'nudge':
+    case 'next':
     case 'pause':
     case 'continue':
     case 'end':

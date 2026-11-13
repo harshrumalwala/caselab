@@ -57,7 +57,7 @@ export const ORDER: Stage[] = [
 
 export type DraftKey = 'clarify' | 'framework' | 'direction' | 'exhibit' | 'brainstorm' | 'recommendation';
 export type SubmissionKind = 'framework' | 'direction' | 'brainstorm' | 'recommendation';
-export type BeatOutcome = 'open' | 'independent' | 'hinted' | 'coach_moved' | 'timed_out';
+export type BeatOutcome = 'open' | 'independent' | 'hinted' | 'coach_moved' | 'member_moved' | 'timed_out';
 /** Practice mode can be paused and ended early; interview mode is the real thing, with the clock running from start to finish. */
 export type LiveMode = 'practice' | 'interview';
 export type NudgeLevel = 'none' | 'process_hint' | 'directional_hint' | 'lead' | 'advance';
@@ -657,15 +657,28 @@ function revealBeat(s: SessionState, at: number): boolean {
 }
 
 /** Closes the open exhibit (the member got there, or the coach moved on) and brings out the next one, or ends the discussion. */
-export function nextBeat(settled: SessionState, now: number, how: 'independent' | 'coach_moved'): SessionState {
+export function nextBeat(settled: SessionState, now: number, how: 'independent' | 'coach_moved' | 'member_moved'): SessionState {
   const s = structuredClone(settled);
   const b = openBeat(s);
-  if (b) b.outcome = how === 'coach_moved' ? 'coach_moved' : b.hints > 0 ? 'hinted' : 'independent';
+  if (b) b.outcome = how === 'coach_moved' ? 'coach_moved' : how === 'member_moved' ? 'member_moved' : b.hints > 0 ? 'hinted' : 'independent';
   if (!revealBeat(s, now)) {
     say(s, now, s.plan.hasBrainstorm ? LINES.to_brainstorm : LINES.wrap_up, 'notice');
     endStage(s, now, 'coach');
   }
   return bump(s);
+}
+
+/**
+ * The member says they are done with this exhibit: on to the next one, or, after the last, on to the next section (the time saved carries over).
+ * Bucket's job is to help them drive and cover the exhibit; this is the way out for a member who is stuck or has had enough. They have to have
+ * said something about it first, so a stray click can't skip an exhibit nobody looked at.
+ */
+export function moveOn(settled: SessionState, now: number): ActionResult {
+  if (settled.pausedAt != null) return refuse(PAUSED);
+  const b = settled.stage === 'exhibits' ? openBeat(settled) : undefined;
+  if (!b) return refuse('There is nothing to move on from right now.');
+  if (b.userMessages < 1) return refuse('Tell me what you make of this one first.');
+  return { ok: true, state: nextBeat(settled, now, 'member_moved') };
 }
 
 /** What the member's last message showed: progress, partial progress, being stuck, or not enough to tell. */

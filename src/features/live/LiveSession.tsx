@@ -145,6 +145,10 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
   const thinking = THINK_TEXT[view.stage];
   const thread = view.messages;
 
+  // The member has written something about the exhibit on the table, so moving on is theirs to choose.
+  const lastExhibitAt = view.messages.map((m) => m.kind).lastIndexOf('exhibit');
+  const saidSomething = view.messages.slice(lastExhibitAt + 1).some((m) => m.from === 'user');
+
   const bucket = bucketLine(view, now, view.messages.at(-1)?.kind === 'hint');
   const says = <BucketSays mood={bucket.mood}>{bucket.text}</BucketSays>;
 
@@ -286,6 +290,11 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
               busy={busy}
               onSend={(t) => void s.say(t)}
               onDraft={(k, t) => void s.saveDraft(k, t)}
+              extra={
+                <Button variant="secondary" onClick={() => void s.next()} disabled={busy || !saidSomething} title={saidSomething ? undefined : 'Tell Bucket what you make of it first'}>
+                  {view.beatsShown >= view.beatsTotal ? 'Done with the exhibits' : "I'm done with this exhibit"}
+                </Button>
+              }
             />
           </div>
         </div>

@@ -157,6 +157,7 @@ export function useLiveSession(repo: LiveCaseRepository) {
     ready: () => run(() => repo.ready(need())),
     submit: (text: string) => run(() => repo.submit(need(), text)),
     say: (text: string) => run(() => repo.say(need(), text), text),
+    next: () => run(() => repo.next(need())),
     pause: () => run(() => repo.pause(need())),
     unpause: () => run(() => repo.unpause(need())),
     end: () => run(() => repo.end(need())),
