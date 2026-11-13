@@ -682,8 +682,12 @@ describe('the member drives', () => {
     r = view(await call({ type: 'say', sessionId: id, text: 'Still not sure' }));
     expect(JSON.stringify(w.asked.at(-1))).toContain('more specific directional hint');
     clock.t = start + sec(60);
+    w.script.reply = () => turn('Look at off-peak against peak. Occupancy is 31% off-peak. What does that suggest?', { assessment: 'stuck' });
     r = view(await call({ type: 'say', sessionId: id, text: 'Hmm' }));
-    expect(r.exhibits).toHaveLength(1); // two hints given, but the exhibit has not yet taken longer than it is worth: they carry on
+    expect(JSON.stringify(w.asked.at(-1))).toContain('stop asking open questions and lead them'); // the third message: no more open questions
+    expect(r.messages.at(-1)).toMatchObject({ kind: 'hint', text: expect.stringContaining('Occupancy is 31% off-peak') });
+    expect(r.exhibits).toHaveLength(1); // led, not moved on: they carry on with what they were given
+    w.script.reply = () => turn('A hint.', { assessment: 'stuck' });
     clock.t = start + sec(900);
     w.script.reply = () => turn('Good, that is the implication.', { assessment: 'progress' });
     expect(view(await call({ type: 'say', sessionId: id, text: 'Off-peak is only 31 percent, so I would test costs next' })).exhibits).toHaveLength(1); // a good answer is never cut off
@@ -691,6 +695,30 @@ describe('the member drives', () => {
     const stuck = view(await call({ type: 'say', sessionId: id, text: 'I really do not know' }));
     expect(stuck.exhibits).toHaveLength(2);
     expect([...w.db.values()][0].state.beats[0].outcome).toBe('coach_moved');
+  });
+
+  it('leads on the third message even when the earlier replies were not hints, and never answers a request for the exhibit with a question', async () => {
+    const id = await toExhibits();
+    w.script.reply = () => turn('What do you think?', { assessment: 'partial' });
+    await call({ type: 'say', sessionId: id, text: 'Can you show me the exhibit?' });
+    await call({ type: 'say', sessionId: id, text: 'Where is the data?' });
+    expect(JSON.stringify(w.asked.at(-1))).not.toContain('stop asking open questions'); // the second message: not yet
+    expect(JSON.stringify(w.asked.at(-1))).toContain('give it plainly, exactly as written'); // a request for data is answered with the data
+    w.script.reply = () => turn('Look at the seasons side by side. Peak is 82% full and off-peak is 31%. Which gap matters most?', { assessment: 'partial' });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'Please just show me' }));
+    expect(JSON.stringify(w.asked.at(-1))).toContain('stop asking open questions and lead them');
+    expect(r.messages.at(-1)).toMatchObject({ kind: 'hint', text: expect.stringContaining('Peak is 82% full') });
+  });
+
+  it('may hand over the facts when leading, but a lead that repeats the conclusion is replaced by one that still points somewhere', async () => {
+    const id = await toExhibits();
+    w.script.reply = () => turn('A hint.', { assessment: 'stuck' });
+    await call({ type: 'say', sessionId: id, text: 'One' });
+    await call({ type: 'say', sessionId: id, text: 'Two' });
+    w.script.reply = () => turn('Off-peak occupancy is the number that decides the case SECRET-TAKE1', { assessment: 'stuck' });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'Three' }));
+    expect(JSON.stringify(r.messages.at(-1))).not.toContain('SECRET-TAKE1');
+    expect(r.messages.at(-1)).toMatchObject({ kind: 'hint', text: expect.stringContaining('biggest number') }); // not "what do you think?"
   });
 
   it('never gives a hint on its own, however long it is quiet', async () => {

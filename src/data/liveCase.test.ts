@@ -323,15 +323,37 @@ describe('the exhibit discussion', () => {
     expect(nextNudgeAt(s, b.revealedAt)).toBeNull();
   });
 
-  it('helps in reply to the member: a process hint, then a sharper one, and moves on only once the exhibit has taken longer than it is worth', () => {
+  it('helps in reply to the member: a process hint, a sharper one, then on the third message it leads, and it moves on if they are still stuck', () => {
     let s = inExhibits(3);
     const b = openBeat(s)!;
     expect(nudgeLevel(s, b.revealedAt + sec(5))).toBe('process_hint');
     s = recordHint(s, b.revealedAt + sec(5));
     expect(nudgeLevel(s, b.revealedAt + sec(20))).toBe('directional_hint');
     s = recordHint(s, b.revealedAt + sec(20));
-    expect(nudgeLevel(s, b.revealedAt + sec(30))).toBe('none'); // still within the time it is worth: let them carry on
+    expect(nudgeLevel(s, b.revealedAt + sec(30))).toBe('lead'); // no more open questions: Bucket says where to look
+    s = recordHint(s, b.revealedAt + sec(30));
+    expect(nudgeLevel(s, b.revealedAt + sec(40))).toBe('advance'); // still stuck after being led: on to the next piece, whatever the clock says
+  });
+
+  it('moves on at the third message if the exhibit has already taken longer than it is worth', () => {
+    let s = inExhibits(3);
+    const b = openBeat(s)!;
+    s = recordHint(recordHint(s, b.revealedAt + sec(5)), b.revealedAt + sec(20));
     expect(nudgeLevel(s, b.revealedAt + openBeat(s)!.budgetMs + sec(1))).toBe('advance');
+  });
+
+  it('leads on the third message even when no hint was given, counting the messages that got nowhere, and starts again after a clear step forward', () => {
+    let s = inExhibits(3);
+    const t = openBeat(s)!.revealedAt;
+    s = ok(userSays(s, 'Can I see the exhibit?', t + sec(5)));
+    s = recordAssessment(s, 'partial', t + sec(5)); // a reply that was neither a hint nor progress
+    expect(nudgeLevel(s, t + sec(10))).toBe('directional_hint');
+    s = ok(userSays(s, 'Where is the data?', t + sec(10)));
+    expect(nudgeLevel(s, t + sec(15))).toBe('lead'); // the third message, with no hints recorded at all
+    s = recordAssessment(s, 'progress', t + sec(20)); // then they get somewhere
+    expect(openBeat(s)!.asked).toBe(0);
+    s = ok(userSays(s, 'So costs are rising faster than price', t + sec(25)));
+    expect(nudgeLevel(s, t + sec(30))).toBe('directional_hint'); // the count started again
   });
 
   it('gives a case 20 minutes of exhibits in 35, or 25 in 40 when it has more than four exhibits', () => {
