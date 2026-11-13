@@ -9,6 +9,7 @@ interface Step {
 }
 
 const STEPS: Step[] = [
+  { target: 'live', title: 'Practise a whole case with Bucket', body: 'A live case in writing: Bucket plays your interviewer, you work against the clock, and you get feedback on what you wrote.' },
   { target: 'log', title: 'Log a case here', body: 'After each practice case, a minute is all it takes. Press N from anywhere to open it.' },
   { target: 'import', title: 'Coming from Excel?', body: 'Import your whole log in one step. You see everything first, and nothing is saved until you say so.' },
   { target: 'community', title: 'Find someone to case with', body: 'Browse members, ask for a case, and share only what you choose. Everything starts private.' },
@@ -34,7 +35,7 @@ function markSeen(userId: string) {
 }
 
 /**
- * A three-stop tour for a brand-new account: Log Case, Import and Community, one note at a time. It points at the real
+ * A four-stop tour for a brand-new account: the live case with Bucket, Log Case, Import and Community, one note at a time. It points at the real
  * buttons, skips a stop whose button isn't on screen, can be skipped with a click or Escape, and never comes back once
  * finished or skipped.
  */

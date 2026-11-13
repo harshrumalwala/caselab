@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -59,8 +59,45 @@ const reply = (env: FakeEnv, fn: (kind: string) => Record<string, unknown>) => {
       : { assessment: 'progress', beat_complete: false, direction_clear: kind === 'direction', ...fn(kind) };
 };
 
+describe('finding the live case', () => {
+  it('has a tab of its own in the navigation, right after the Dashboard, with Bucket for its icon', async () => {
+    const env = createFakeEnv();
+    window.location.hash = '#/dashboard';
+    render(<App backend={env.backend} />);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    const links = screen.getAllByRole('link', { name: 'Live Case' }); // the top bar and the phone bar
+    expect(links.length).toBeGreaterThan(0);
+    const order = within(screen.getAllByRole('navigation', { name: 'Primary' })[0]).getAllByRole('link').map((l) => l.getAttribute('aria-label'));
+    expect(order.slice(0, 2)).toEqual(['Dashboard', 'Live Case']);
+    expect(links.every((l) => l.getAttribute('aria-current') !== 'page')).toBe(true);
+  });
+
+  it('is the first thing on the Dashboard: a banner that opens the live case, whose tab then shows as current', async () => {
+    const env = createFakeEnv();
+    window.location.hash = '#/dashboard';
+    const user = userEvent.setup({ advanceTimers: (ms) => void vi.advanceTimersByTime(ms) });
+    render(<App backend={env.backend} />);
+    const banner = await screen.findByRole('region', { name: 'Practise a whole case with Bucket' });
+    expect(within(banner).getByText('35 minutes, typed')).toBeInTheDocument();
+    await user.click(within(banner).getByRole('button', { name: /Start a live case/ }));
+    await screen.findByRole('heading', { name: 'Practise a case with Bucket' });
+    expect(screen.getAllByRole('link', { name: 'Live Case' }).some((l) => l.getAttribute('aria-current') === 'page')).toBe(true);
+    expect(screen.getAllByRole('link', { name: 'Improvement Areas' }).every((l) => l.getAttribute('aria-current') !== 'page')).toBe(true);
+  });
+
+  it('is not offered in demo mode, which has no account to run it on', async () => {
+    const env = createFakeEnv();
+    window.location.hash = '#/dashboard';
+    const user = userEvent.setup({ advanceTimers: (ms) => void vi.advanceTimersByTime(ms) });
+    render(<App backend={env.backend} />);
+    await screen.findByRole('region', { name: 'Practise a whole case with Bucket' });
+    await user.click(screen.getByRole('button', { name: 'Explore with demo data' }));
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Practise a whole case with Bucket' })).not.toBeInTheDocument());
+  });
+});
+
 describe('starting a live case', () => {
-  it('is reached from Improvement Areas, explains the 30 minutes, and lists the cases that can be practised', async () => {
+  it('is reached from Improvement Areas, explains the clock, and lists the lanes of cases that can be practised', async () => {
     const env = createFakeEnv();
     window.location.hash = '#/improve';
     const user = userEvent.setup({ advanceTimers: (ms) => void vi.advanceTimersByTime(ms) });
@@ -69,7 +106,7 @@ describe('starting a live case', () => {
     await screen.findByRole('heading', { name: 'Practise a case with Bucket' });
     expect(screen.getByText(/The clock is 35 minutes/)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /Market Entry/ })).toBeInTheDocument(); // the lanes, not a list of every case
-    expect(screen.getAllByRole('link', { name: 'Improvement Areas' }).some((l) => l.getAttribute('aria-current') === 'page')).toBe(true); // still under Improvement Areas
+    expect(screen.getAllByRole('link', { name: 'Live Case' }).some((l) => l.getAttribute('aria-current') === 'page')).toBe(true); // it has its own tab now
   });
 
   it('starts the clock when the prompt first appears, and keeps the case name secret', async () => {

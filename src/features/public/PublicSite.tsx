@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowRight, BarChart3, Check, ChevronRight, Compass, EyeOff, FileSpreadsheet, Lock, Search, ShieldCheck, Timer, Users } from 'lucide-react';
+import { ArrowRight, BarChart3, Check, ChevronRight, Compass, EyeOff, FileSpreadsheet, Lock, MessageCircle, Search, ShieldCheck, Timer } from 'lucide-react';
 import { Logo } from '../../components/layout/Header';
 import { describeError } from '../../data/errors';
 import type { PublicReader, RecentCaser } from '../../data/community';
@@ -8,6 +8,7 @@ import { quipOfTheDay } from '../../domain/quips';
 import { chipClass } from '../../components/ui/chips';
 import { HeroScene, Sparkle, Sticky } from '../../components/ui/Doodles';
 import { HeroVideo } from '../../components/ui/HeroVideo';
+import { BucketAvatar } from '../improvement/BucketAvatar';
 import { RevealOnView } from '../../components/ui/RevealOnView';
 import type { Profile } from '../../domain/community';
 import { Button } from '../../components/ui/Button';
@@ -157,6 +158,102 @@ function RecentCasers({ reader, onOpen }: { reader: PublicReader; onOpen: (id: s
   );
 }
 
+const BUCKET_POINTS = [
+  'You lead the case. Bucket answers your questions, shows the exhibits, and nudges you when you are stuck.',
+  'Real cases, not made-up ones. Bucket follows each case’s own script and never invents data.',
+  'Pick a case by type or industry, or let Bucket surprise you with one you haven’t done.',
+  'Feedback on what you actually wrote, and the case lands in your log on its own.',
+];
+
+const LIVE_STEPS = ['Prompt', 'Questions', 'Framework', 'Exhibits', 'Recommendation', 'Feedback'];
+
+/** A picture of a live case in progress: the clock, the stage, and a short exchange with Bucket. It is decoration, so it is hidden from screen readers. */
+function LiveMock() {
+  return (
+    <div aria-hidden className="sticker rotate-1 bg-surface p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-3 border-b-2 border-ink/10 pb-3">
+        <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
+          {['Prompt', 'Framework', 'Exhibits', 'Recommend'].map((s) => (
+            <span key={s} className={`rounded-full border-2 px-2.5 py-0.5 ${s === 'Exhibits' ? 'border-ink/80 bg-sun text-on-sun' : 'border-ink/20 text-muted'}`}>
+              {s}
+            </span>
+          ))}
+        </div>
+        <span className="num rounded-lg border-2 border-ink/80 bg-surface-2 px-2 py-0.5 font-display text-sm font-extrabold text-ink">24:10</span>
+      </div>
+      <div className="space-y-3 pt-4 text-sm">
+        <div className="flex items-end gap-2">
+          <BucketAvatar className="size-10 shrink-0" />
+          <p className="rounded-2xl rounded-bl-md border-2 border-ink/80 bg-teal-soft px-3.5 py-2.5 font-medium text-ink">
+            Here is Exhibit 2. What stands out to you about the margin?
+          </p>
+        </div>
+        <p className="ml-auto max-w-[85%] rounded-2xl rounded-br-md border-2 border-ink/80 bg-accent px-3.5 py-2.5 font-medium text-accent-ink">
+          Margin fell six points while volume grew, so I would check cost per room before touching price.
+        </p>
+        <div className="flex items-end gap-2">
+          <BucketAvatar mood="hint" className="size-10 shrink-0" />
+          <p className="rounded-2xl rounded-bl-md border-2 border-ink/80 bg-teal-soft px-3.5 py-2.5 font-medium text-ink">
+            Good instinct. Which costs would you split out first?
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-3 rounded-xl border-2 border-ink/20 bg-surface-2 px-3.5 py-2.5 text-muted">
+          <span>Type your answer…</span>
+          <span className="rounded-lg bg-accent px-2.5 py-1 text-xs font-bold text-accent-ink">Send</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The live case with Bucket, sold properly: it is what sets CaseLab apart, so it sits right under the hero. */
+function BucketSection() {
+  return (
+    <section id="bucket" aria-labelledby="bucket-title" className="sticker relative scroll-mt-24 overflow-hidden bg-teal-soft p-6 sm:p-8 md:p-10">
+      <Sparkle className="absolute right-6 top-5 size-8 text-sun" />
+      <Sparkle className="absolute bottom-24 right-1/3 hidden size-5 text-coral md:block" />
+      <div className="grid gap-8 md:grid-cols-[1.05fr_1fr] md:items-center md:gap-10">
+        <div>
+          <BucketAvatar className="size-20 animate-bob motion-reduce:animate-none" />
+          <p className="eyebrow mt-4 text-teal-ink">Live case</p>
+          <h2 id="bucket-title" className="mt-1.5 text-3xl font-extrabold leading-tight tracking-tight text-ink sm:text-4xl">
+            Meet Bucket, <span className="marker">your interviewer</span>
+          </h2>
+          <p className="mt-3 text-base leading-relaxed text-ink-2">
+            Practise a whole case in writing, 35 minutes against the clock, with Bucket across the table. No scheduling, no partner needed, any time you have the time.
+          </p>
+          <ul className="mt-5 space-y-2.5">
+            {BUCKET_POINTS.map((text) => (
+              <li key={text} className="flex items-start gap-3 text-sm leading-relaxed text-ink-2">
+                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 border-ink/80 bg-sun text-on-sun" aria-hidden>
+                  <Check className="size-3" strokeWidth={3} />
+                </span>
+                {text}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
+            <a href="#/signup" className={PRIMARY}>
+              Try a live case, it’s free <ArrowRight className="size-4" aria-hidden />
+            </a>
+            <span className="text-sm font-medium text-ink-2">Typed, not spoken. Takes 35 minutes (40 for a longer case).</span>
+          </div>
+        </div>
+        <LiveMock />
+      </div>
+
+      <ol aria-label="How a live case runs" className="mt-8 flex flex-wrap items-center gap-x-2 gap-y-2.5 text-sm font-bold text-ink">
+        {LIVE_STEPS.map((step, i) => (
+          <li key={step} className="flex items-center gap-2">
+            <span className="rounded-full border-2 border-ink/80 bg-surface px-3 py-1">{step}</span>
+            {i < LIVE_STEPS.length - 1 && <ChevronRight className="size-4 text-ink-2" aria-hidden />}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 const IMPORT_STEPS: { title: string; text: string; tone: Tone }[] = [
   { title: 'Create your free account', text: 'It takes a minute.', tone: 'coral' },
   { title: 'Choose your Excel file', text: 'Your case log, saved as an .xlsx file.', tone: 'sun' },
@@ -230,6 +327,7 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
   }, []);
 
   const scrollToFind = () => findRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  const scrollToBucket = () => document.getElementById('bucket')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
 
   return (
     <>
@@ -240,23 +338,28 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
               Consulting case practice
             </p>
             <h1 className="mt-5 text-5xl font-extrabold leading-[1.02] tracking-tight text-ink sm:text-7xl">
-              Case <span className="marker">smarter.</span>
+              Case with <span className="marker">Bucket.</span>
               <br />
               Track your progress.
             </h1>
             <p className="mt-5 max-w-md text-lg leading-relaxed text-ink-2">
-              Practicing casing for consulting? CaseLab is a simple log of every case you do. See how you&rsquo;re improving, where
-              you&rsquo;re still weak, and what to practice next.
+              Meet Bucket, your AI interviewer. Practise a whole case in writing, 35 minutes against the clock, then get feedback on what you wrote.
+              Every case lands in your log, so you see how you&rsquo;re improving and what to practise next.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <a href="#/signup" className={PRIMARY}>
-                Start your log, it’s free <ArrowRight className="size-4" aria-hidden />
+                Try a live case, it’s free <ArrowRight className="size-4" aria-hidden />
               </a>
-              <button type="button" onClick={scrollToFind} className={SUNNY}>
-                <Users className="size-4" aria-hidden /> See who&rsquo;s casing
+              <button type="button" onClick={scrollToBucket} className={SUNNY}>
+                <MessageCircle className="size-4" aria-hidden /> See how it works
               </button>
             </div>
-            <p className="mt-4 text-sm text-ink-2">Your practice is private by default. Nothing is shown to anyone unless you switch it on.</p>
+            <p className="mt-4 text-sm text-ink-2">
+              Your practice is private by default. Nothing is shown to anyone unless you switch it on.{' '}
+              <button type="button" onClick={scrollToFind} className="font-semibold text-accent-text underline-offset-2 hover:underline">
+                See who&rsquo;s casing
+              </button>
+            </p>
           </div>
 
           <div className="relative mx-auto w-full max-w-xl">
@@ -314,6 +417,8 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
           </ul>
         </section>
 
+        <BucketSection />
+
         <section id="find" ref={findRef} aria-labelledby="find-title" className="scroll-mt-24">
           <div className="max-w-xl">
             <h2 id="find-title" className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
@@ -359,10 +464,10 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
         <section className="sticker relative overflow-hidden bg-accent px-6 py-10 text-accent-ink sm:px-12 sm:py-14">
           <Sparkle className="absolute right-8 top-6 size-10 text-sun" />
           <Sparkle className="absolute bottom-6 right-24 size-6 text-coral" />
-          <h2 className="max-w-lg text-3xl font-extrabold tracking-tight sm:text-4xl">Ready to start tracking your cases?</h2>
+          <h2 className="max-w-lg text-3xl font-extrabold tracking-tight sm:text-4xl">Ready for your first case with Bucket?</h2>
           <p className="mt-3 max-w-xl text-base leading-relaxed text-accent-ink/90">
-            A free account gives you your own case log, dashboard and improvement plan. Appearing in the list of people casing is optional
-            and stays off until you switch it on.
+            A free account gives you live cases with Bucket, your own case log, dashboard and improvement plan. Appearing in the list of
+            people casing is optional and stays off until you switch it on.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <a href="#/signup" className={`${BUTTON} border-2 border-ink/80 bg-sun text-on-sun hover:brightness-95`}>
@@ -400,6 +505,15 @@ export function PublicSite({ reader }: { reader: PublicReader }) {
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-4 px-4 sm:px-6">
           <Logo />
           <nav aria-label="Account" className="flex items-center gap-2">
+            {view.kind === 'home' && (
+              <button
+                type="button"
+                onClick={() => document.getElementById('bucket')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })}
+                className="hidden items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold text-ink-2 transition hover:bg-sun-soft hover:text-ink sm:inline-flex"
+              >
+                <BucketAvatar className="size-5" /> Live case
+              </button>
+            )}
             <a href="#/signin" className="whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold text-ink-2 transition hover:bg-sun-soft hover:text-ink sm:px-3.5">
               Sign in
             </a>

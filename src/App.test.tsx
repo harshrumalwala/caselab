@@ -46,7 +46,7 @@ describe('sign in', () => {
     const env = createFakeEnv({ signedIn: false });
     const user = userEvent.setup();
     render(<App backend={env.backend} />);
-    expect(await screen.findByRole('heading', { name: /Case smarter/  })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Case with Bucket/  })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Dashboard' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Log case' })).not.toBeInTheDocument();
     expect(env.calls).toEqual([]); // no request for personal data without a session
@@ -82,7 +82,7 @@ describe('sign in', () => {
 
     await user.click(screen.getByRole('button', { name: 'Data and settings' }));
     await user.click(await screen.findByRole('button', { name: 'Sign out' }));
-    expect(await screen.findByRole('heading', { name: /Case smarter/  })).toBeInTheDocument(); // back to the public page
+    expect(await screen.findByRole('heading', { name: /Case with Bucket/  })).toBeInTheDocument(); // back to the public page
     expect(screen.queryByText('Keep me')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('link', { name: 'Sign in' }));

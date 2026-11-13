@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { NO_SHARING, type Profile, type SharedCase } from './domain/community';
 import { createFakeEnv, MY_PROFILE, TEST_PASSWORD, TEST_USER, type FakeEnv } from './test/fakeBackend';
@@ -63,10 +63,34 @@ const bobRow = async () => (await screen.findAllByRole('button', { name: /Bob Br
 const everyone = async () => within((await screen.findByRole('heading', { name: 'Everyone' })).parentElement!);
 
 describe('the public front page', () => {
+  it('sells the live case with Bucket: in the headline, in a section of its own lower down, in the top bar and in the closing call', async () => {
+    const env = visitor();
+    const { user } = await open(env);
+    await screen.findByRole('heading', { name: /Case with Bucket/ });
+
+    const tries = screen.getAllByRole('link', { name: /Try a live case, it.s free/ }); // the headline's button and the section's
+    expect(tries).toHaveLength(2);
+    tries.forEach((l) => expect(l).toHaveAttribute('href', '#/signup'));
+
+    const section = screen.getByRole('region', { name: /Meet Bucket/ });
+    expect(within(section).getByText(/35 minutes against the clock/)).toBeInTheDocument();
+    expect(within(section).getByRole('list', { name: 'How a live case runs' })).toHaveTextContent('Exhibits');
+    expect(within(section).getByRole('link', { name: /Try a live case/ })).toHaveAttribute('href', '#/signup');
+
+    // The top bar and the headline's second button both go to the section.
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    await user.click(screen.getByRole('button', { name: 'Live case' }));
+    await user.click(screen.getByRole('button', { name: /See how it works/ }));
+    expect(scroll).toHaveBeenCalledTimes(2);
+
+    expect(screen.getByRole('heading', { name: /Ready for your first case with Bucket/ })).toBeInTheDocument();
+  });
+
   it('lets anyone browse members who chose to be public, without an account', async () => {
     const env = visitor();
     const { user } = await open(env);
-    expect(await screen.findByRole('heading', { name: /Case smarter/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Case with Bucket/ })).toBeInTheDocument();
     // The full list (and its search) isn't loaded until the visitor opts to look.
     await screen.findByRole('button', { name: 'Search all members' });
     expect(screen.queryByLabelText('Search members by name')).not.toBeInTheDocument();
@@ -155,7 +179,7 @@ describe('the public front page', () => {
   it('explains the tool in general terms, without singling out a class year or one school', async () => {
     const env = visitor();
     await open(env);
-    await screen.findByRole('heading', { name: /Case smarter/ });
+    await screen.findByRole('heading', { name: /Case with Bucket/ });
     const text = document.body.textContent ?? '';
     expect(text).toMatch(/Track your progress/);
     expect(text).not.toMatch(/first-year|second-year|1Y|2Y|Booth/i);
@@ -252,7 +276,7 @@ describe('the public front page', () => {
     await user.click(await screen.findByRole('link', { name: 'Create account' }));
     expect(await screen.findByRole('heading', { name: 'Create your account' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Back to CaseLab/ }));
-    expect(await screen.findByRole('heading', { name: /Case smarter/  })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Case with Bucket/  })).toBeInTheDocument();
     await user.click(screen.getByRole('link', { name: 'Sign in' }));
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
   });

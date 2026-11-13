@@ -2,15 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 
 export type Route = 'dashboard' | 'log' | 'improve' | 'people' | 'warmup' | 'inbox' | 'messages' | 'live';
 /** The screens that have a tab in the navigation. The Inbox and a conversation live under the Community (people) tab. */
-export type NavRoute = Exclude<Route, 'inbox' | 'messages' | 'live'>;
+export type NavRoute = Exclude<Route, 'inbox' | 'messages'>;
 
 /** The screens that sit under the Community tab. */
 export const UNDER_COMMUNITY: readonly Route[] = ['inbox', 'messages'];
-/** The live case sits under Improvement Areas. */
-export const UNDER_IMPROVE: readonly Route[] = ['live'];
 
 export const ROUTES: { id: NavRoute; label: string; /** For tight spaces (the phone bar, a narrow top bar). */ short: string }[] = [
   { id: 'dashboard', label: 'Dashboard', short: 'Dashboard' },
+  // The live case with Bucket is the heart of the app, so it has a tab of its own, right after the Dashboard.
+  { id: 'live', label: 'Live Case', short: 'Live Case' },
   { id: 'log', label: 'My Case Log', short: 'My Cases' },
   { id: 'improve', label: 'Improvement Areas', short: 'Improve' },
   { id: 'people', label: 'Community', short: 'Community' },
