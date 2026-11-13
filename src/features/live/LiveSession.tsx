@@ -1,8 +1,9 @@
-import { Brain, Clock } from 'lucide-react';
+import { useState } from 'react';
+import { Brain, Clock, Pause, Play } from 'lucide-react';
 import type { LiveView } from '../../data/liveCase';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { bucketLine, isThinking } from '../../domain/liveCase';
+import { bucketLine, formatClock, isThinking } from '../../domain/liveCase';
 import { BucketSays } from './BucketSays';
 import { ChatInput, ClockBar, ExhibitView, Scratchpad, Thread, WriteBox } from './liveParts';
 import type { LiveSession } from './useLiveSession';
@@ -55,7 +56,86 @@ function WorkSoFar({ view }: { view: LiveView }) {
   );
 }
 
+/** Pause and end, always within reach: a break is allowed, and so is stopping here and getting feedback on what is written. */
+function CaseControls({ s }: { s: LiveSession }) {
+  const [confirming, setConfirming] = useState(false);
+  if (confirming) {
+    return (
+      <div role="group" aria-label="End the case" className="flex flex-wrap items-center justify-end gap-2 text-sm">
+        <span className="font-medium text-ink">End the case here and get feedback on what you have written?</span>
+        <Button variant="danger" size="sm" disabled={s.busy} onClick={() => void s.end()}>
+          Yes, end it
+        </Button>
+        <Button size="sm" onClick={() => setConfirming(false)}>
+          Keep going
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <Button size="sm" disabled={s.busy} onClick={() => void s.pause()} title="Stops the clock until you continue">
+        <Pause className="size-3.5" aria-hidden /> Pause
+      </Button>
+      <Button size="sm" variant="ghost" disabled={s.busy} onClick={() => setConfirming(true)}>
+        End case
+      </Button>
+    </div>
+  );
+}
+
+/** The case on hold: the clock is stopped and the work is hidden, so a pause is a rest and not extra time to think. */
+function PausedScreen({ s, view }: { s: LiveSession; view: LiveView }) {
+  const [confirming, setConfirming] = useState(false);
+  const left = view.endsAt - (view.pausedAt ?? view.serverNow);
+  return (
+    <div className="mx-auto max-w-2xl space-y-5 pt-4">
+      <BucketSays mood="thinking" big>
+        Paused. The clock is stopped, and your work is saved. Take a breather, and tell me when you are ready to carry on.
+      </BucketSays>
+      {s.error && (
+        <p role="alert" className="rounded-xl border border-bad/40 bg-bad-soft px-4 py-2.5 text-sm font-medium text-bad-text">
+          {s.error}
+        </p>
+      )}
+      <Card className="space-y-4" strip="sun">
+        <div>
+          <p className="eyebrow">Time left in the case</p>
+          <p className="num text-4xl font-extrabold tabular-nums text-ink" role="timer" aria-label="Time left in the case">
+            {formatClock(left)}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="primary" size="lg" disabled={s.busy} onClick={() => void s.unpause()}>
+            <Play className="size-4" aria-hidden /> Continue
+          </Button>
+          {confirming ? (
+            <span role="group" aria-label="End the case" className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-medium text-ink">End it here and get feedback?</span>
+              <Button variant="danger" size="sm" disabled={s.busy} onClick={() => void s.end()}>
+                Yes, end it
+              </Button>
+              <Button size="sm" onClick={() => setConfirming(false)}>
+                Keep it paused
+              </Button>
+            </span>
+          ) : (
+            <Button variant="ghost" onClick={() => setConfirming(true)}>
+              End case
+            </Button>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 export function LiveSessionScreen({ s, view }: { s: LiveSession; view: LiveView }) {
+  if (view.pausedAt != null) return <PausedScreen s={s} view={view} />;
+  return <RunningCase s={s} view={view} />;
+}
+
+function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
   const { now, busy, pending } = s;
   const stageLeft = view.stageEndsAt - now;
   const key = `${view.stage}-${view.frameworkPhase}`;
@@ -78,6 +158,7 @@ export function LiveSessionScreen({ s, view }: { s: LiveSession; view: LiveView 
   return (
     <div className="space-y-5">
       <ClockBar view={view} now={now} />
+      {view.mode === 'practice' ? <CaseControls s={s} /> : <p className="text-right text-xs font-semibold text-muted">Interview mode: the clock does not stop.</p>}
 
       {view.stage !== 'exhibits' && says}
 

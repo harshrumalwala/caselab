@@ -849,3 +849,87 @@ describe('which model, and what it cost', () => {
   });
 });
 
+
+describe('modes, pausing and ending, in the handler', () => {
+  it('starts in practice mode unless interview mode is asked for, and says which in the view', async () => {
+    expect((await begin()).mode).toBe('practice');
+    w.db.clear();
+    const v = view(await call({ type: 'start', libraryId: LIB, mode: 'interview' }));
+    expect(v.mode).toBe('interview');
+    expect(v.pausedAt).toBeNull();
+  });
+
+  it('refuses a pause or an early end in interview mode, and leaves the case running', async () => {
+    const v = view(await call({ type: 'start', libraryId: LIB, mode: 'interview' }));
+    for (const type of ['pause', 'end'] as const) {
+      const r = await call({ type, sessionId: v.sessionId });
+      expect(r).toMatchObject({ status: 'refused', message: expect.stringContaining('Interview mode') });
+    }
+    expect(view(await call({ type: 'resume', sessionId: v.sessionId })).status).toBe('active');
+  });
+
+  it('treats a case saved before there were modes as practice', async () => {
+    const v = await begin();
+    const stored = w.db.get(v.sessionId)!;
+    delete stored.state.mode;
+    expect(view(await call({ type: 'pause', sessionId: v.sessionId })).pausedAt).not.toBeNull();
+  });
+
+  it('pauses and continues with the time that was left, and shows when it was paused', async () => {
+    at(0);
+    const v = await begin();
+    at(100);
+    const paused = view(await call({ type: 'pause', sessionId: v.sessionId }));
+    expect(paused.pausedAt).toBe(T0 + sec(100));
+    at(100 + 5000);
+    const still = view(await call({ type: 'resume', sessionId: v.sessionId }));
+    expect(still.pausedAt).toBe(T0 + sec(100));
+    expect(still.stage).toBe('prompt');
+    const back = view(await call({ type: 'continue', sessionId: v.sessionId }));
+    expect(back.pausedAt).toBeNull();
+    expect(back.endsAt - (T0 + sec(100 + 5000))).toBe(v.endsAt - (T0 + sec(100)));
+  });
+
+  it('turns away what is said, handed in or typed while paused', async () => {
+    const v = await begin();
+    await call({ type: 'pause', sessionId: v.sessionId });
+    expect(await call({ type: 'say', sessionId: v.sessionId, text: 'hello' })).toMatchObject({ status: 'refused' });
+    expect(await call({ type: 'ready', sessionId: v.sessionId })).toMatchObject({ status: 'refused' });
+    await call({ type: 'draft', sessionId: v.sessionId, key: 'clarify', text: 'typing' });
+    expect(w.db.get(v.sessionId)!.state.drafts.clarify).toBeUndefined();
+  });
+
+  it('drops a reply from the model that comes in while the case is paused', async () => {
+    const id = await toExhibits();
+    w.script.reply = async () => {
+      await call({ type: 'pause', sessionId: id }); // paused while Bucket is still thinking
+      return turn('A late reply.', { assessment: 'progress' });
+    };
+    await call({ type: 'say', sessionId: id, text: 'Off-peak is low' });
+    const v = view(await call({ type: 'resume', sessionId: id }));
+    expect(v.pausedAt).not.toBeNull();
+    expect(JSON.stringify(v.messages)).not.toContain('A late reply.');
+    expect(v.messages.at(-1)).toMatchObject({ from: 'user', text: 'Off-peak is low' });
+  });
+
+  it('ends early: the case is over for the feedback, with the reason', async () => {
+    const id = await toExhibits();
+    const done = view(await call({ type: 'end', sessionId: id }));
+    expect(done).toMatchObject({ status: 'done', stage: 'done', endReason: 'ended_early' });
+    w.asked.length = 0;
+    w.script.reply = (kind) => (kind === 'feedback' ? GOOD_FEEDBACK : turn('ok'));
+    const fed = view(await call({ type: 'finish', sessionId: id }));
+    expect(fed.feedback).not.toBeNull();
+    expect(JSON.stringify(w.asked.at(-1))).toContain('chose to end it early');
+  });
+
+  it('does not ask the model for feedback on a case that was ended before anything was written', async () => {
+    const v = await begin();
+    view(await call({ type: 'end', sessionId: v.sessionId }));
+    w.asked.length = 0;
+    const fed = view(await call({ type: 'finish', sessionId: v.sessionId }));
+    expect(w.asked).toHaveLength(0);
+    expect(fed.feedback?.overall.rating).toBeNull();
+    expect(fed.feedback?.overall.feedback).toContain('before writing anything');
+  });
+});

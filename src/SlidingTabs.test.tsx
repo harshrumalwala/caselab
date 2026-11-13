@@ -76,11 +76,11 @@ describe('the sliding highlight', () => {
     render(<App backend={createFakeEnv().backend} />);
     const nav = (await screen.findAllByRole('navigation', { name: 'Primary' }))[0];
     expect(within(nav).getByRole('link', { name: 'Warm-up' })).toHaveAttribute('data-slide-active', 'true');
-    await waitFor(() => expect(mark(nav)).toHaveStyle({ transform: 'translate(550px, 0px)' })); // the sixth link
+    await waitFor(() => expect(mark(nav)).toHaveStyle({ transform: 'translate(440px, 0px)' })); // the fifth link
 
     window.location.hash = '#/inbox';
     await waitFor(() => expect(within(nav).getByRole('link', { name: /^Community/ })).toHaveAttribute('data-slide-active', 'true'));
-    await waitFor(() => expect(mark(nav)).toHaveStyle({ transform: 'translate(440px, 0px)' })); // the fifth link
+    await waitFor(() => expect(mark(nav)).toHaveStyle({ transform: 'translate(330px, 0px)' })); // the fourth link
   });
 
   it('is placed instantly the first time and only glides afterwards, so nothing slides in from the corner', () => {

@@ -1,5 +1,5 @@
 import { Moon, Plus, Settings, Sun, UserRound } from 'lucide-react';
-import { ROUTES, UNDER_COMMUNITY } from '../../state/route';
+import { ROUTES, UNDER_COMMUNITY, UNDER_LOG } from '../../state/route';
 import { BucketAvatar } from '../../features/improvement/BucketAvatar';
 import { useTheme } from '../../state/theme';
 import { useUI } from '../../state/ui';
@@ -37,12 +37,12 @@ export function Header() {
         <SlideRow
           as="nav"
           aria-label="Primary"
-          activeKey={ROUTES.find((r) => route === r.id || (r.id === 'people' && UNDER_COMMUNITY.includes(route)))?.id ?? ''}
+          activeKey={ROUTES.find((r) => route === r.id || (r.id === 'people' && UNDER_COMMUNITY.includes(route)) || (r.id === 'log' && UNDER_LOG.includes(route)))?.id ?? ''}
           markClass="rounded-full bg-sun shadow-[2px_2px_0_0_rgb(28_26_24/0.85)] ring-2 ring-ink/80"
           className="ml-4 hidden items-center gap-0.5 lg:flex xl:gap-1"
         >
           {ROUTES.map((r) => {
-            const on = route === r.id || (r.id === 'people' && UNDER_COMMUNITY.includes(route)); // The Inbox and conversations live under Community
+            const on = route === r.id || (r.id === 'people' && UNDER_COMMUNITY.includes(route)) || (r.id === 'log' && UNDER_LOG.includes(route)); // The Inbox and conversations live under Community
             const waiting = r.id === 'people' ? badge.total : 0;
             const spoken = r.id === 'people' ? badge.spoken : null;
             return (

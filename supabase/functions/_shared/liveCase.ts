@@ -58,6 +58,8 @@ export const ORDER: Stage[] = [
 export type DraftKey = 'clarify' | 'framework' | 'direction' | 'exhibit' | 'brainstorm' | 'recommendation';
 export type SubmissionKind = 'framework' | 'direction' | 'brainstorm' | 'recommendation';
 export type BeatOutcome = 'open' | 'independent' | 'hinted' | 'coach_moved' | 'timed_out';
+/** Practice mode can be paused and ended early; interview mode is the real thing, with the clock running from start to finish. */
+export type LiveMode = 'practice' | 'interview';
 export type NudgeLevel = 'none' | 'process_hint' | 'directional_hint' | 'lead' | 'advance';
 
 /** One thing to work through in the main section: an exhibit, or (for a case without exhibits) a step of the book's analysis. */
@@ -211,7 +213,13 @@ export interface SessionState {
   clarifyCount: number;
   directionFollowUps: number;
   endedAt: number | null;
-  endReason: 'completed' | 'time_limit' | null;
+  endReason: 'completed' | 'time_limit' | 'ended_early' | null;
+  /** When the member paused the case: the clock stands still until they continue. Missing or null when it is running. */
+  pausedAt?: number | null;
+  /** How many times the case has been paused. */
+  pauses?: number;
+  /** Missing (a case from before there were two modes) counts as practice. */
+  mode?: LiveMode;
 }
 
 export const hardEnd = (s: SessionState): number => s.startedAt + (s.plan.limitMs ?? LIMIT_MS);
@@ -235,9 +243,10 @@ export function addUsage(state: SessionState, used: Partial<Omit<Usage, 'calls'>
   return s;
 }
 
-export function newSession(plan: CasePlan, now: number, promptText: string): SessionState {
+export function newSession(plan: CasePlan, now: number, promptText: string, mode: LiveMode = 'practice'): SessionState {
   const s: SessionState = {
     version: 1,
+    mode,
     rev: 0,
     startedAt: now,
     plan,
@@ -385,7 +394,7 @@ function nextStage(s: SessionState, from: Stage): Stage {
   return 'done';
 }
 
-function finish(s: SessionState, at: number, reason: 'completed' | 'time_limit'): void {
+function finish(s: SessionState, at: number, reason: 'completed' | 'time_limit' | 'ended_early'): void {
   s.stage = 'done';
   s.endedAt = at;
   s.endReason = reason;
@@ -414,6 +423,7 @@ function endStage(s: SessionState, at: number, by: StageLogEntry['endedBy']): vo
  * was away comes back to the right place), and at 30 minutes everything still open is saved and the case ends.
  */
 export function settle(input: SessionState, now: number): SessionState {
+  if (input.pausedAt != null) return input; // the clock is stopped: nothing runs out while the case is paused
   const s = structuredClone(input);
   let guard = 0;
   while (s.stage !== 'done' && guard++ < 16) {
@@ -448,14 +458,75 @@ const sameShape = (a: SessionState, b: SessionState): boolean =>
 export type ActionResult = { ok: true; state: SessionState } | { ok: false; reason: string };
 
 const refuse = (reason: string): ActionResult => ({ ok: false, reason });
+const PAUSED = 'The case is paused. Continue when you are ready.';
+const INTERVIEW = 'Interview mode has no pause and no early end. The clock runs until the case is over.';
 
 function bump(s: SessionState): SessionState {
   s.rev += 1;
   return s;
 }
 
+/** Stops the clock. Nothing runs out, nothing can be written or asked, until the member continues (or ends the case). */
+export function pause(settled: SessionState, now: number): ActionResult {
+  if (settled.mode === 'interview') return refuse(INTERVIEW);
+  if (settled.stage === 'done') return refuse('The case is over.');
+  if (settled.pausedAt != null) return refuse('The case is already paused.');
+  const s = structuredClone(settled);
+  s.pausedAt = now;
+  s.pauses = (s.pauses ?? 0) + 1;
+  return { ok: true, state: bump(s) };
+}
+
+/** Moves every moment in the case on by `ms`, so that what was left on the clock when it was paused is what is left when it starts again. */
+function shiftTimes(s: SessionState, ms: number): void {
+  s.startedAt += ms;
+  s.stageStartedAt += ms;
+  if (s.lastDraftAt > 0) s.lastDraftAt += ms;
+  for (const e of s.stageLog) {
+    e.startedAt += ms;
+    if (e.endedAt !== null) e.endedAt += ms;
+  }
+  for (const m of s.messages) m.at += ms;
+  for (const x of s.submissions) x.at += ms;
+  for (const b of s.beats) {
+    b.revealedAt += ms;
+    b.lastProgressAt += ms;
+    b.lastUserAt += ms;
+    if (b.lastNudgeAt > 0) b.lastNudgeAt += ms;
+  }
+}
+
+/** Starts the clock again, with exactly the time that was left. */
+export function continueCase(settled: SessionState, now: number): ActionResult {
+  if (settled.pausedAt == null) return refuse('The case is not paused.');
+  const s = structuredClone(settled);
+  shiftTimes(s, Math.max(0, now - settled.pausedAt));
+  s.pausedAt = null;
+  return { ok: true, state: bump(s) };
+}
+
+/**
+ * The member ends the case here (paused or not). What is in the box they were writing in is kept as an unfinished draft, whatever stages are
+ * left are left, and the case goes to feedback like any other that ends.
+ */
+export function endEarly(settled: SessionState, now: number): ActionResult {
+  if (settled.mode === 'interview') return refuse(INTERVIEW);
+  if (settled.stage === 'done') return refuse('The case is already over.');
+  const s = structuredClone(settled);
+  const at = settled.pausedAt ?? now; // a paused case ends at the moment it was paused
+  captureTimedOut(s, at);
+  const b = openBeat(s);
+  if (b) b.outcome = 'timed_out';
+  logEnd(s, at, 'user');
+  finish(s, at, 'ended_early');
+  s.pausedAt = null;
+  say(s, at, 'You ended the case here.', 'notice');
+  return { ok: true, state: bump(s) };
+}
+
 /** "Ready": ends the prompt stage or a thinking stage early. The time saved stays in the case's flexible time. */
 export function ready(settled: SessionState, now: number): ActionResult {
+  if (settled.pausedAt != null) return refuse(PAUSED);
   if (!['prompt', 'framework_think', 'brainstorm_think', 'recommend_think'].includes(settled.stage)) return refuse('Nothing to move on from right now.');
   const s = structuredClone(settled);
   endStage(s, now, 'user');
@@ -464,6 +535,7 @@ export function ready(settled: SessionState, now: number): ActionResult {
 
 /** Hands in the response of a writing stage. The framework is followed by "where would you start?"; the other two move the case on. */
 export function submit(settled: SessionState, text: string, now: number): ActionResult {
+  if (settled.pausedAt != null) return refuse(PAUSED);
   const body = clip(text);
   if (!body) return refuse('Write something first.');
   const s = structuredClone(settled);
@@ -494,6 +566,7 @@ export function endFrameworkStage(settled: SessionState, now: number): SessionSt
 
 /** A chat message from the member: a clarifying question, their starting direction, or their reasoning on an exhibit. */
 export function userSays(settled: SessionState, text: string, now: number): ActionResult {
+  if (settled.pausedAt != null) return refuse(PAUSED);
   const body = clip(text);
   if (!body) return refuse('Write something first.');
   const s = structuredClone(settled);
@@ -528,6 +601,7 @@ export function coachSays(s0: SessionState, text: string, now: number, kind: Mes
 }
 
 export function saveDraft(settled: SessionState, key: DraftKey, text: string, now: number): SessionState {
+  if (settled.pausedAt != null) return settled;
   const s = structuredClone(settled);
   const allowed: Record<DraftKey, boolean> = {
     clarify: s.stage === 'prompt',
@@ -547,7 +621,7 @@ export function saveDraft(settled: SessionState, key: DraftKey, text: string, no
 
 /** The private scratchpad of the framework thinking stage (kept apart from the framework that is handed in). */
 export function saveScratchpad(settled: SessionState, text: string): SessionState {
-  if (!['framework_think', 'framework_write'].includes(settled.stage)) return settled;
+  if (!['framework_think', 'framework_write'].includes(settled.stage) || settled.pausedAt != null) return settled;
   const s = structuredClone(settled);
   s.scratchpad = text.slice(0, MAX_RESPONSE_CHARS);
   return bump(s);

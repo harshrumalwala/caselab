@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -25,6 +25,9 @@ const saved = () => act(async () => void (await new Promise((r) => setTimeout(r,
 async function pass(seconds: number) {
   for (let i = 0; i < seconds; i++) await act(async () => void vi.advanceTimersByTime(1000));
 }
+
+/** A long wait in one step (a break of hours), where `pass` would tick through it second by second. */
+const skip = (ms: number) => act(async () => void vi.advanceTimersByTime(ms));
 
 async function openLive(env: FakeEnv) {
   window.location.hash = '#/live';
@@ -82,7 +85,6 @@ describe('finding the live case', () => {
     await user.click(within(banner).getByRole('button', { name: /Start a live case/ }));
     await screen.findByRole('heading', { name: 'Practise a case with Bucket' });
     expect(screen.getAllByRole('link', { name: 'Live Case' }).some((l) => l.getAttribute('aria-current') === 'page')).toBe(true);
-    expect(screen.getAllByRole('link', { name: 'Improvement Areas' }).every((l) => l.getAttribute('aria-current') !== 'page')).toBe(true);
   });
 
   it('is not offered in demo mode, which has no account to run it on', async () => {
@@ -266,15 +268,17 @@ describe('the whole case', () => {
     expect(cases[0].otherNotes).toContain('drafted by the AI');
   });
 
-  it('logs the case only once, even if the page is opened again', async () => {
+  it('logs the case only once, and opening the tab afterwards starts afresh instead of showing the last case', async () => {
     const env = createFakeEnv();
     const user = await startCase(env);
     await throughToTheEnd(env, user);
     await screen.findByText(/Saved to your case log/);
     expect((await env.repo.loadAll()).cases).toHaveLength(1);
-    // Opening it again does not log it again.
-    const again = render(<App backend={env.backend} />);
-    await within(again.container).findAllByText(/Saved to your case log/);
+    // Opening it again does not log it again, and does not bring back the finished case: it is in the log.
+    cleanup();
+    render(<App backend={env.backend} />);
+    expect(await screen.findByRole('heading', { name: 'Practise a case with Bucket' })).toBeInTheDocument();
+    expect(screen.queryByText(/Saved to your case log/)).not.toBeInTheDocument();
     expect((await env.repo.loadAll()).cases).toHaveLength(1);
   });
 
@@ -284,6 +288,147 @@ describe('the whole case', () => {
     await throughToTheEnd(env, user);
     await user.click(await screen.findByRole('button', { name: 'Practise another case' }));
     expect(await screen.findByRole('heading', { name: 'Practise a case with Bucket' })).toBeInTheDocument();
+  });
+});
+
+describe('the two modes', () => {
+  const pickMode = (user: ReturnType<typeof userEvent.setup>, name: RegExp) => user.click(screen.getByRole('radio', { name }));
+
+  it('starts in practice mode, where the case can be paused and ended', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    expect(screen.getByRole('radio', { name: /Practice mode/ })).toBeChecked();
+    await user.click(await screen.findByRole('button', { name: /Surprise me/ }));
+    await screen.findByText(/Should a hotel chain open a new property/);
+    expect(screen.getByRole('button', { name: /Pause/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'End case' })).toBeInTheDocument();
+  });
+
+  it('has no pause and no end in interview mode, where the clock keeps running', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    await pickMode(user, /Interview mode/);
+    expect(screen.getByRole('radio', { name: /Interview mode/ })).toBeChecked();
+    await user.click(await screen.findByRole('button', { name: /Surprise me/ }));
+    await screen.findByText(/Should a hotel chain open a new property/);
+    expect(screen.queryByRole('button', { name: /Pause/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'End case' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Interview mode: the clock does not stop/)).toBeInTheDocument();
+    expect([...env.live.db.values()][0].state.mode).toBe('interview');
+  });
+
+  it('is enforced by the server too: interview mode refuses a pause or an early end', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    await pickMode(user, /Interview mode/);
+    await user.click(await screen.findByRole('button', { name: /Surprise me/ }));
+    await screen.findByText(/Should a hotel chain open a new property/);
+    const id = [...env.live.db.values()][0].id;
+    await expect(env.live.pause(id)).rejects.toThrow(/Interview mode has no pause/);
+    await expect(env.live.end(id)).rejects.toThrow(/no early end/);
+  });
+});
+
+describe('pausing and ending', () => {
+  it('pauses: the clock stands still and the work is hidden, and continuing gives back the time that was left', async () => {
+    const env = createFakeEnv();
+    await startCase(env);
+    const user = userEvent.setup({ advanceTimers: (ms) => void vi.advanceTimersByTime(ms) });
+    await pass(30);
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('34:30');
+    await user.click(screen.getByRole('button', { name: /Pause/ }));
+    await screen.findByText(/Paused\. The clock is stopped/);
+    expect(screen.queryByText(/Should a hotel chain open a new property/)).not.toBeInTheDocument(); // no studying during a break
+    const frozen = screen.getByRole('timer', { name: 'Time left in the case' }).textContent;
+    await skip(600_000); // a ten-minute break
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent(frozen!);
+
+    await user.click(screen.getByRole('button', { name: /Continue/ }));
+    await screen.findByText(/Should a hotel chain open a new property/);
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('34:30'); // not a second lost to the break
+    await pass(10);
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('34:20');
+  });
+
+  it('is still paused after the page is opened again, and nothing runs out meanwhile', async () => {
+    const env = createFakeEnv();
+    const user = await startCase(env);
+    await user.click(screen.getByRole('button', { name: /Pause/ }));
+    await screen.findByText(/Paused\. The clock is stopped/);
+    await skip(3 * 3600_000);
+    cleanup();
+    render(<App backend={env.backend} />);
+    expect(await screen.findByText(/Paused\. The clock is stopped/)).toBeInTheDocument();
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('35:00');
+  });
+
+  it('ends a case that nothing was written in without asking for feedback or logging it', async () => {
+    const env = createFakeEnv();
+    const user = await startCase(env);
+    await user.click(screen.getByRole('button', { name: 'End case' }));
+    await user.click(screen.getByRole('button', { name: 'Yes, end it' }));
+    expect(await screen.findByText('You ended the case')).toBeInTheDocument();
+    expect(await screen.findByText(/Nothing was written, so there is nothing to log/)).toBeInTheDocument();
+    expect(env.live.asked).toHaveLength(0); // no model call for nothing
+    expect((await env.repo.loadAll()).cases).toHaveLength(0);
+    await user.click(await screen.findByRole('button', { name: 'Practise another case' }));
+    expect(await screen.findByRole('heading', { name: 'Practise a case with Bucket' })).toBeInTheDocument();
+  });
+
+  it('ends a case that was started: feedback on what was written, and it is logged as ended early', async () => {
+    const env = createFakeEnv();
+    const user = await startCase(env);
+    reply(env, () => ({ message: 'Good question.' }));
+    await user.type(screen.getByLabelText('Ask a clarifying question'), 'Who pays for the rooms?');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    await screen.findByText('Good question.');
+    await user.click(screen.getByRole('button', { name: 'End case' }));
+    await user.click(screen.getByRole('button', { name: 'Keep going' })); // the question is asked first
+    expect(screen.getByRole('button', { name: 'End case' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'End case' }));
+    await user.click(screen.getByRole('button', { name: 'Yes, end it' }));
+    expect(await screen.findByText('You ended the case')).toBeInTheDocument();
+    expect(await screen.findByText('You found the main issue and kept going.')).toBeInTheDocument();
+    expect(await screen.findByText(/Saved to your case log/)).toBeInTheDocument();
+    const { cases } = await env.repo.loadAll();
+    expect(cases[0].otherNotes).toContain('Ended early, by choice.');
+  });
+
+  it('can be ended from the pause screen', async () => {
+    const env = createFakeEnv();
+    const user = await startCase(env);
+    await user.click(screen.getByRole('button', { name: /Pause/ }));
+    await screen.findByText(/Paused\. The clock is stopped/);
+    await user.click(screen.getByRole('button', { name: 'End case' }));
+    await user.click(screen.getByRole('button', { name: 'Yes, end it' }));
+    expect(await screen.findByText('You ended the case')).toBeInTheDocument();
+  });
+});
+
+describe('Improvement Areas under My Case Log', () => {
+  it('has no tab of its own: it is the second view of My Case Log, which stays the current tab', async () => {
+    const env = createFakeEnv();
+    window.location.hash = '#/improve';
+    render(<App backend={env.backend} />);
+    await screen.findByRole('heading', { name: 'Improvement Areas' });
+    const top = screen.getAllByRole('navigation', { name: 'Primary' });
+    for (const nav of top) expect(within(nav).queryByRole('link', { name: 'Improvement Areas' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'My Case Log' }).every((l) => l.getAttribute('aria-current') === 'page')).toBe(true);
+    const views = screen.getByRole('navigation', { name: 'Case log sections' });
+    expect(within(views).getByRole('link', { name: 'Improvement Areas' })).toHaveAttribute('aria-current', 'page');
+    expect(within(views).getByRole('link', { name: 'Cases' })).toHaveAttribute('href', '#/log');
+  });
+
+  it('is one click from the case log, and back', async () => {
+    const env = createFakeEnv();
+    window.location.hash = '#/log';
+    const user = userEvent.setup({ advanceTimers: (ms) => void vi.advanceTimersByTime(ms) });
+    render(<App backend={env.backend} />);
+    await screen.findByRole('heading', { name: 'My Case Log' });
+    await user.click(within(screen.getByRole('navigation', { name: 'Case log sections' })).getByRole('link', { name: 'Improvement Areas' }));
+    await screen.findByRole('heading', { name: 'Improvement Areas' });
+    await user.click(within(screen.getByRole('navigation', { name: 'Case log sections' })).getByRole('link', { name: 'Cases' }));
+    await screen.findByRole('heading', { name: 'My Case Log' });
   });
 });
 

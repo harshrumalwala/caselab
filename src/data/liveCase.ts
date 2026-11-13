@@ -1,9 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CaseInfo, Feedback, LiveAction, LiveResponse, LiveView, PublicExhibit } from '../../supabase/functions/_shared/liveCaseCoach';
-import type { DraftKey, Message, Stage } from '../../supabase/functions/_shared/liveCase';
+import type { DraftKey, LiveMode, Message, Stage } from '../../supabase/functions/_shared/liveCase';
 import { DataError } from './errors';
 
-export type { CaseInfo, DraftKey, Feedback, LiveView, Message, PublicExhibit, Stage };
+export type { CaseInfo, DraftKey, Feedback, LiveMode, LiveView, Message, PublicExhibit, Stage };
 
 /** A casebook case that can be practised live. Names only: nothing about the case. */
 export interface LiveCatalogCase {
@@ -26,13 +26,18 @@ export interface LiveCatalogCase {
 export interface LiveCaseRepository {
   catalog(): Promise<LiveCatalogCase[]>;
   /** Starts a case (a random one when `libraryId` is null), or returns the one already running. */
-  start(libraryId: string | null): Promise<LiveView>;
+  start(libraryId: string | null, mode?: LiveMode): Promise<LiveView>;
   /** The running case, or the latest finished one; null if there has never been one. */
   resume(): Promise<LiveView | null>;
   ready(sessionId: string): Promise<LiveView>;
   submit(sessionId: string, text: string): Promise<LiveView>;
   say(sessionId: string, text: string): Promise<LiveView>;
   nudge(sessionId: string): Promise<LiveView>;
+  /** Stops the clock until `unpause`. */
+  pause(sessionId: string): Promise<LiveView>;
+  unpause(sessionId: string): Promise<LiveView>;
+  /** Ends the case here: what was written goes to feedback. */
+  end(sessionId: string): Promise<LiveView>;
   finish(sessionId: string): Promise<LiveView>;
   logged(sessionId: string, caseId: string): Promise<void>;
   saveDraft(sessionId: string, key: DraftKey, text: string): Promise<void>;
@@ -53,7 +58,7 @@ export class LiveClient implements LiveCaseRepository {
   }
 
   catalog = () => this.list();
-  start = (libraryId: string | null) => this.view({ type: 'start', libraryId });
+  start = (libraryId: string | null, mode: LiveMode = 'practice') => this.view({ type: 'start', libraryId, mode });
   async resume(): Promise<LiveView | null> {
     const r = await this.send({ type: 'resume' });
     if (r.status === 'ok') return r.view;
@@ -64,6 +69,9 @@ export class LiveClient implements LiveCaseRepository {
   submit = (sessionId: string, text: string) => this.view({ type: 'submit', sessionId, text });
   say = (sessionId: string, text: string) => this.view({ type: 'say', sessionId, text });
   nudge = (sessionId: string) => this.view({ type: 'nudge', sessionId });
+  pause = (sessionId: string) => this.view({ type: 'pause', sessionId });
+  unpause = (sessionId: string) => this.view({ type: 'continue', sessionId });
+  end = (sessionId: string) => this.view({ type: 'end', sessionId });
   finish = (sessionId: string) => this.view({ type: 'finish', sessionId });
   async logged(sessionId: string, caseId: string): Promise<void> {
     await this.send({ type: 'logged', sessionId, caseId });

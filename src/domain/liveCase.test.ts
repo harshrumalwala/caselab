@@ -47,9 +47,16 @@ describe('the case log entry for a finished live case', () => {
 
   it('says in the notes that it is a draft, that time ran out, what was saved unfinished and what was not done', () => {
     expect(input.otherNotes).toContain('drafted by the AI');
-    expect(input.otherNotes).toContain('30 minutes ran out');
+    expect(input.otherNotes).toContain('The time ran out before the end.');
     expect(input.otherNotes).toContain('Saved as a draft when time ran out: recommendation.');
     expect(input.otherNotes).toContain('Not finished: Brainstorm.');
+  });
+
+  it('says when the member chose to end the case early', () => {
+    const early = liveCaseToInput({ ...VIEW, endReason: 'ended_early' }, INFO, FEEDBACK);
+    expect(early.otherNotes).toContain('Ended early, by choice.');
+    expect(early.otherNotes).toContain('Saved as a draft when the case ended: recommendation.');
+    expect(early.otherNotes).not.toContain('ran out');
   });
 
   it('keeps the notes short when nothing went wrong, and falls back to "Other" for a type it does not know', () => {
