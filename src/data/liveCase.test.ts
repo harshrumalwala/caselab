@@ -9,6 +9,7 @@ import {
   endFrameworkStage,
   hardEnd,
   LIMIT_MS,
+  moveOn,
   newSession,
   nextBeat,
   nextNudgeAt,
@@ -503,5 +504,36 @@ describe('pausing, continuing and ending early', () => {
     const done = ok(endEarly(s, at(5000)));
     expect(done.endedAt).toBe(at(210));
     expect(done.pausedAt).toBeNull();
+  });
+});
+
+describe('moving on from an exhibit', () => {
+  it('waits until the member has said something about the exhibit, then brings out the next one', () => {
+    let s = toExhibits(plan(3), 200);
+    expect(moveOn(s, at(210)).ok).toBe(false); // nothing said yet: a stray click does not skip an exhibit
+    s = ok(userSays(s, 'Off-peak is half of peak', at(220)));
+    s = ok(moveOn(s, at(230)));
+    expect(s.beats.map((b) => b.outcome)).toEqual(['member_moved', 'open']);
+    expect(s.messages.at(-1)).toMatchObject({ kind: 'exhibit', beat: 1 });
+    expect(moveOn(s, at(240)).ok).toBe(false); // and the next exhibit starts from nothing again
+  });
+
+  it('after the last exhibit goes on to the next section right away, so the time saved carries over', () => {
+    let s = toExhibits(plan(1, true), 200);
+    s = ok(userSays(s, 'Costs are the issue', at(260)));
+    const early = ok(moveOn(s, at(300))); // five minutes into a twenty-minute discussion
+    expect(early.stage).toBe('brainstorm_think');
+    expect(early.stageStartedAt).toBe(at(300));
+    expect(early.stageLog.find((e) => e.stage === 'exhibits')).toMatchObject({ endedAt: at(300), endedBy: 'coach' });
+
+    const noBrainstorm = ok(moveOn(ok(userSays(toExhibits(plan(1, false), 200), 'Costs', at(260))), at(300)));
+    expect(noBrainstorm.stage).toBe('recommend_think');
+  });
+
+  it('is refused outside the exhibit discussion and while paused', () => {
+    expect(moveOn(start(), at(10)).ok).toBe(false);
+    let s = toExhibits(plan(3), 200);
+    s = ok(userSays(s, 'Costs', at(210)));
+    expect(moveOn(ok(pause(s, at(215))), at(220)).ok).toBe(false);
   });
 });

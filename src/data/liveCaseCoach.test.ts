@@ -933,3 +933,29 @@ describe('modes, pausing and ending, in the handler', () => {
     expect(fed.feedback?.overall.feedback).toContain('before writing anything');
   });
 });
+
+describe('the member moves on from an exhibit', () => {
+  it('is refused before they have said anything about it, then brings out the next exhibit', async () => {
+    const id = await toExhibits();
+    expect(await call({ type: 'next', sessionId: id })).toMatchObject({ status: 'refused', message: expect.stringContaining('what you make of this one first') });
+    w.script.reply = () => turn('Go on.', { assessment: 'partial' });
+    await call({ type: 'say', sessionId: id, text: 'Off-peak is 31 percent' });
+    const v = view(await call({ type: 'next', sessionId: id }));
+    expect(v.exhibits).toHaveLength(2);
+    expect(v.messages.at(-1)).toMatchObject({ kind: 'exhibit' });
+    expect(w.db.get(id)!.state.beats[0].outcome).toBe('member_moved');
+  });
+
+  it('says in the feedback request that the student chose to move on', async () => {
+    const id = await toExhibits();
+    w.script.reply = () => turn('Go on.', { assessment: 'partial' });
+    await call({ type: 'say', sessionId: id, text: 'Off-peak is 31 percent' });
+    await call({ type: 'next', sessionId: id });
+    await call({ type: 'say', sessionId: id, text: 'Off-peak is 32 percent' });
+    await call({ type: 'next', sessionId: id }); // after the last exhibit: on to the next section
+    w.script.reply = (kind) => (kind === 'feedback' ? GOOD_FEEDBACK : turn('ok'));
+    await call({ type: 'end', sessionId: id });
+    await call({ type: 'finish', sessionId: id });
+    expect(JSON.stringify(w.asked.at(-1))).toContain('the student chose to move on');
+  });
+});

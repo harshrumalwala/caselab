@@ -29,6 +29,7 @@ import {
   continueCase,
   deadlines,
   endEarly,
+  moveOn,
   pause,
   type Assessment,
   type Beat,
@@ -390,7 +391,7 @@ const DIRECTIVES: Record<TurnKind, string> = {
   direction:
     'The student has handed in a framework (you will not see it) and has now said where they would start. Reply in one or two sentences: acknowledge their starting point, and say you will show them some data. If their direction is unclear or off-track, instead ask ONE focused follow-up question about where they would start. Do not teach, rewrite or praise at length. Set direction_clear to true when their starting direction is clear enough to move on.',
   exhibit:
-    'The student is working on the exhibit. Judge what they just wrote, then respond in one to three short sentences: if they are on a good track, let them continue or ask for the implication for the client, then the next step they would take. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell). Set beat_complete to true only when they have independently stated what the exhibit means for the client AND a sensible next step. Do not give a hint unless told to below. If the student asks to see data or an exhibit, or for a number they need for their calculation, and it is in the case information, in the exhibit shown to them or in the data you hold for them (listed below), give it instead of answering with a question. Data you hold for them is read out in full, every figure, in plain spoken sentences exactly as written (as an interviewer reads a table aloud), and then you ask what they make of it or what they would calculate. Never say a result, a total, a ratio or what it means. The case must keep moving: if the information is not there, say so briefly and ask them to state an assumption and carry on.',
+    'The student is working on the exhibit. Judge what they just wrote, then respond in one to three short sentences: if they are on a good track, let them continue or ask for the implication for the client, then the next step they would take. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell). Set beat_complete to true as soon as they have independently stated what the exhibit means for the client (a sensible next step is welcome but not needed), so a student who gets it quickly moves on without being held here. Do not give a hint unless told to below. If the student asks to see data or an exhibit, or for a number they need for their calculation, and it is in the case information, in the exhibit shown to them or in the data you hold for them (listed below), give it instead of answering with a question. Data you hold for them is read out in full, every figure, in plain spoken sentences exactly as written (as an interviewer reads a table aloud), and then you ask what they make of it or what they would calculate. Never say a result, a total, a ratio or what it means. The case must keep moving: if the information is not there, say so briefly and ask them to state an assumption and carry on.',
   nudge_process:
     'The student has made no progress for a while. Give ONE brief process-oriented hint: suggest a way to approach the data (what to compare, what to ask of it, how to structure the calculation) without telling them what to conclude. One or two sentences.',
   nudge_directional:
@@ -579,7 +580,7 @@ function studentText(state: SessionState): string {
 
 export function feedbackRequest(sol: LiveSolution, state: SessionState): TurnRequest {
   const stats = timeInStages(state).map((t) => `${STAGE_LABEL[t.stage] ?? t.stage}: ${t.seconds}s${t.endedBy ? ` (ended by ${t.endedBy})` : ''}`).join('; ');
-  const beats = state.beats.map((b, i) => `Exhibit/topic ${i + 1}: ${b.outcome}${b.hints ? `, ${b.hints} hint(s)` : ''}`).join('; ');
+  const beats = state.beats.map((b, i) => `Exhibit/topic ${i + 1}: ${b.outcome === 'member_moved' ? 'the student chose to move on' : b.outcome}${b.hints ? `, ${b.hints} hint(s)` : ''}`).join('; ');
   const reference = `Reference solution (a yardstick only):
 Hypothesis: ${sol.hypothesis || '(none)'}
 Strong structure: ${sol.structure.map((b) => `${b.heading} (${b.points.join(', ')})`).join('; ') || '(none)'}
@@ -673,6 +674,7 @@ export type LiveAction =
   | { type: 'draft'; sessionId: string; key: DraftKey; text: string }
   | { type: 'scratch'; sessionId: string; text: string }
   | { type: 'nudge'; sessionId: string }
+  | { type: 'next'; sessionId: string }
   | { type: 'pause'; sessionId: string }
   | { type: 'continue'; sessionId: string }
   | { type: 'end'; sessionId: string }
@@ -764,6 +766,8 @@ export async function handleLive(userId: string, action: LiveAction, deps: LiveD
       return sayOk(await mutate((st, now) => withState(st, ready(st.state, now))));
     case 'submit':
       return sayOk(await mutate((st, now) => withState(st, submit(st.state, action.text, now))));
+    case 'next':
+      return sayOk(await mutate((st, now) => withState(st, moveOn(st.state, now))));
     case 'pause':
       return sayOk(await mutate((st, now) => withState(st, pause(st.state, now))));
     case 'continue':
