@@ -135,6 +135,29 @@ describe("the book's charts, redrawn", () => {
     expect(lines.join(' ')).toContain('Stage 3 60%.');
   });
 
+  it('leaves room for the long names beside sideways bars, and prints only the x values of a crowded scatter that fit', () => {
+    const names = ['Customer service', 'Electronic products', 'Close to home'];
+    const svg = draw({ kind: 'bar', horizontal: true, categories: names, series: [series('Client', [80, 70, 60])], yStep: 20 });
+    names.forEach((n) => {
+      const t = [...svg.querySelectorAll('text')].find((el) => el.textContent === n);
+      expect(t).toBeTruthy();
+      // the name ends at the plot's left edge and starts to the right of the SVG's own left edge
+      expect(Number(t!.getAttribute('x')) - n.length * 5.4).toBeGreaterThan(0);
+    });
+    const xs = Array.from({ length: 40 }, (_, i) => 10 + i * 0.05);
+    const crowded = draw({ kind: 'scatter', pointLabels: false, categories: xs.map((_, i) => `P${i}`), xValues: xs, series: [series('Y', xs.map((v) => v * 2))] });
+    expect(text(crowded).filter((t) => t && /^1\d(\.\d)?$/.test(t)).length).toBeLessThan(25);
+  });
+
+  it('names each bar in a key when a bar chart has several series, and prints no key for one series', () => {
+    const several = draw({ kind: 'bar', categories: ['2005', '2006'], series: [series('Public', [10, 12]), series('Private', [4, 5])] });
+    expect(text(several)).toEqual(expect.arrayContaining(['Public', 'Private']));
+    const sideways = draw({ kind: 'bar', horizontal: true, categories: ['Price'], series: [series('Client', [80]), series('Competitor', [70])] });
+    expect(text(sideways)).toEqual(expect.arrayContaining(['Client', 'Competitor']));
+    const one = draw({ kind: 'bar', categories: ['2005'], series: [series('Public', [10])] });
+    expect(text(one)).not.toContain('Public');
+  });
+
   it('is only drawn for a chart that can be drawn: a parsed chart always lines up with its categories', () => {
     const s = parseBookSolution({
       prompt: 'A question here',

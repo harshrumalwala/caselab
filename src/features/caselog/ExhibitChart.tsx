@@ -56,7 +56,10 @@ function wrap(label: string, max = 12): string[] {
 function metrics(chart: Chart, width: number) {
   const hasSide = chart.sideNotes !== null;
   const endLabels = chart.series.some((s) => s.type === 'line' || chart.kind === 'line') && chart.kind !== 'pie';
-  const left = chart.kind === 'pie' ? 10 : 52 + (chart.axisEnds ? 62 : 0);
+  // sideways bars print their category names down the left, so that margin grows with the longest name
+  const sideways = chart.kind === 'bar' && chart.horizontal;
+  const nameRoom = sideways ? Math.min(150, Math.max(52, Math.min(Math.max(0, ...chart.categories.map((c) => c.length)), 26) * 5.4 + 12)) : 52;
+  const left = chart.kind === 'pie' ? 10 : nameRoom + (chart.axisEnds ? 62 : 0);
   const endLen = Math.max(0, ...chart.series.filter((s) => s.type === 'line' || chart.kind === 'line').map((s) => s.name.length));
   const right = hasSide ? 110 : endLabels ? Math.min(150, Math.max(74, Math.min(endLen, 22) * 6 + 14)) : 14;
   const slot = (width - left - right) / Math.max(chart.categories.length, 1);
@@ -86,6 +89,10 @@ function wrapWords(label: string, max: number): string[] {
   return lines.slice(0, 4);
 }
 
+/** Clustered bars (more than one bar series, each named) need a key saying which bar is which. */
+const hasLegend = (c: Chart): boolean => c.kind === 'bar' && c.series.filter((s) => s.type === 'bar' && s.name.trim() !== '').length > 1;
+const LEGEND_H = 18;
+
 function Text({ x, y, children, anchor = 'middle', size = 11, weight = 400, fill = INK, opacity = 1 }: { x: number; y: number; children: ReactNode; anchor?: 'start' | 'middle' | 'end'; size?: number; weight?: number; fill?: string; opacity?: number }) {
   return (
     <text x={x} y={y} textAnchor={anchor} fontSize={size} fontWeight={weight} fill={fill} opacity={opacity}>
@@ -98,7 +105,8 @@ function Text({ x, y, children, anchor = 'middle', size = 11, weight = 400, fill
 function Panel({ chart, width }: { chart: Chart; width: number }) {
   const lineSeries = chart.series.filter((s) => s.type === 'line' || chart.kind === 'line');
   const { left, right, maxCh, wrapped } = metrics(chart, width);
-  const top = (chart.heading ? 22 : 0) + (chart.axisTitle ? 22 : 8) + (chart.totals.length > 0 ? 14 : 0);
+  const legendH = hasLegend(chart) ? LEGEND_H : 0;
+  const top = (chart.heading ? 22 : 0) + (chart.axisTitle ? 22 : 8) + (chart.totals.length > 0 ? 14 : 0) + legendH;
   const rowsH = chart.belowRows.length * 16;
   const plotH = chart.kind === 'pie' ? 190 : 170;
   const catH = chart.kind === 'pie' ? 0 : wrapped ? 42 : 30;
@@ -184,6 +192,17 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
       const xMin = Math.min(...xs);
       const xMax = Math.max(...xs);
       const xx = (v: number) => plot.x + 14 + ((v - xMin) / (xMax - xMin || 1)) * (plot.w - 28);
+      // print an x value under a point only when there is room: left to right, at least 30px from the last one printed
+      const shownX = new Set<number>();
+      let lastX = -Infinity;
+      Array.from(xs.keys())
+        .sort((a, b) => xs[a] - xs[b])
+        .forEach((i) => {
+          if (xx(xs[i]) - lastX >= 30) {
+            shownX.add(i);
+            lastX = xx(xs[i]);
+          }
+        });
       xs.forEach((xv, i) => {
         body.push(<circle key={`p${i}`} cx={xx(xv)} cy={y(chart.series[0].values[i])} r={4.5} fill={GREYS[3]} />);
         if (chart.pointLabels) {
@@ -193,11 +212,13 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
             </Text>,
           );
         }
-        body.push(
-          <Text key={`px${i}`} x={xx(xv)} y={plot.y + plot.h + 16} size={10} opacity={0.8}>
-            {short(xv)}
-          </Text>,
-        );
+        if (shownX.has(i)) {
+          body.push(
+            <Text key={`px${i}`} x={xx(xv)} y={plot.y + plot.h + 16} size={10} opacity={0.8}>
+              {short(xv)}
+            </Text>,
+          );
+        }
       });
     } else if (chart.kind === 'bar' && chart.horizontal) {
       // sideways bars: categories down the left, bars to the right
@@ -217,7 +238,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
         const cy = plot.y + rowH * i + rowH / 2;
         body.push(
           <Text key={`c${i}`} x={plot.x - 6} y={cy + 4} anchor="end" size={10}>
-            {c.length > 16 ? `${c.slice(0, 15)}…` : c}
+            {c.length > 26 ? `${c.slice(0, 25)}…` : c}
           </Text>,
         );
         barSeries.forEach((s, si) => {
@@ -368,10 +389,28 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
         </Text>
       )}
       {chart.axisTitle && (
-        <Text x={chart.kind === 'pie' ? width / 2 : 4} y={top - (chart.totals.length > 0 ? 18 : 8)} anchor={chart.kind === 'pie' ? 'middle' : 'start'} size={11} opacity={0.85}>
+        <Text x={chart.kind === 'pie' ? width / 2 : 4} y={top - legendH - (chart.totals.length > 0 ? 18 : 8)} anchor={chart.kind === 'pie' ? 'middle' : 'start'} size={11} opacity={0.85}>
           {chart.axisTitle}
         </Text>
       )}
+      {legendH > 0 &&
+        (() => {
+          let lx = chart.kind === 'bar' && chart.horizontal ? plot.x : 4;
+          return chart.series
+            .filter((sr) => sr.type === 'bar')
+            .map((sr, si) => {
+              const x0 = lx;
+              lx += 22 + Math.min(sr.name.length, 30) * 5.6;
+              return (
+                <g key={`lg${si}`}>
+                  <rect x={x0} y={top - legendH - 2} width={10} height={10} fill={greyFor(si)} />
+                  <Text x={x0 + 14} y={top - legendH + 7} anchor="start" size={10}>
+                    {sr.name}
+                  </Text>
+                </g>
+              );
+            });
+        })()}
       {body}
       {footnoteLines(chart, width).map((line, li) => (
         <Text key={`fn${li}`} x={4} y={top + plotH + catH + rowsH + 14 + li * 12} anchor="start" size={10} opacity={0.85}>
@@ -387,7 +426,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
 const footnoteLines = (c: Chart, width: number): string[] => (c.footnote ? wrapWords(c.footnote, Math.max(20, Math.floor((width - 8) / 5.3))) : []);
 
 const panelHeight = (c: Chart, width: number): number => {
-  const top = (c.heading ? 22 : 0) + (c.axisTitle ? 22 : 8) + (c.totals.length > 0 ? 14 : 0);
+  const top = (c.heading ? 22 : 0) + (c.axisTitle ? 22 : 8) + (c.totals.length > 0 ? 14 : 0) + (hasLegend(c) ? LEGEND_H : 0);
   const { wrapped } = metrics(c, width);
   return top + (c.kind === 'pie' ? 190 : 170) + (c.kind === 'pie' ? 0 : wrapped ? 42 : 30) + c.belowRows.length * 16 + (c.footnote ? 4 + footnoteLines(c, width).length * 12 : 0) + 12;
 };
