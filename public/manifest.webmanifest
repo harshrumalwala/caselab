@@ -1,7 +1,7 @@
 {
   "name": "CaseLab",
   "short_name": "CaseLab",
-  "description": "Log every practice case, spot your gaps, and find someone to case with.",
+  "description": "Practise a whole case live with Bucket, then track every case, spot your gaps and find someone to case with.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

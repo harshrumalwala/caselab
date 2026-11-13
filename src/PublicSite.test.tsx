@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { NO_SHARING, type Profile, type SharedCase } from './domain/community';
 import { createFakeEnv, MY_PROFILE, TEST_PASSWORD, TEST_USER, type FakeEnv } from './test/fakeBackend';
@@ -63,6 +63,25 @@ const bobRow = async () => (await screen.findAllByRole('button', { name: /Bob Br
 const everyone = async () => within((await screen.findByRole('heading', { name: 'Everyone' })).parentElement!);
 
 describe('the public front page', () => {
+  it('sells the live case with Bucket in a section of its own lower down, with a link in the top bar, and leaves the headline alone', async () => {
+    const env = visitor();
+    const { user } = await open(env);
+    await screen.findByRole('heading', { name: /Case smarter/ });
+
+    expect(screen.getByRole('link', { name: /Start your log/ })).toHaveAttribute('href', '#/signup'); // the headline is unchanged
+
+    const section = screen.getByRole('region', { name: /Meet Bucket/ });
+    expect(within(section).getByText(/35 minutes against the clock/)).toBeInTheDocument();
+    expect(within(section).getByRole('list', { name: 'How a live case runs' })).toHaveTextContent('Exhibits');
+    expect(within(section).getByRole('link', { name: /Try a live case/ })).toHaveAttribute('href', '#/signup');
+
+    // The top bar's link goes to the section.
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    await user.click(screen.getByRole('button', { name: 'Live case' }));
+    expect(scroll).toHaveBeenCalledTimes(1);
+  });
+
   it('lets anyone browse members who chose to be public, without an account', async () => {
     const env = visitor();
     const { user } = await open(env);

@@ -131,15 +131,19 @@ describe('the first-login tour', () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it('walks a new account through Log Case, Import and Community, once', async () => {
+  it('walks a new account through the live case, Log Case, Import and Community, once', async () => {
     const { user } = await open();
     const tour = await screen.findByRole('dialog', { name: 'Quick tour' });
-    expect(within(tour).getByText('1 of 3')).toBeInTheDocument();
-    expect(within(tour).getByText('Log a case here')).toBeInTheDocument();
+    expect(within(tour).getByText('1 of 4')).toBeInTheDocument();
+    expect(within(tour).getByText('Practise a whole case with Bucket')).toBeInTheDocument(); // the first stop: the main thing to do here
+
+    await user.click(within(tour).getByRole('button', { name: 'Next' }));
+    expect(await within(tour).findByText('Log a case here')).toBeInTheDocument();
+    expect(within(tour).getByText('2 of 4')).toBeInTheDocument();
 
     await user.click(within(tour).getByRole('button', { name: 'Next' }));
     expect(await within(tour).findByText('Coming from Excel?')).toBeInTheDocument();
-    expect(within(tour).getByText('2 of 3')).toBeInTheDocument();
+    expect(within(tour).getByText('3 of 4')).toBeInTheDocument();
 
     await user.click(within(tour).getByRole('button', { name: 'Next' }));
     expect(await within(tour).findByText('Find someone to case with')).toBeInTheDocument();

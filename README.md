@@ -6,13 +6,13 @@ dashboard, and can choose to share some of it with other members, or with anyone
 **Design goal: logging a finished case takes under two minutes.** Only a title, case type and industry are required.
 Everything else (ratings, notes, sharing) is optional and one tap away.
 
+- **Live case with Bucket**: the headline feature, with a tab of its own (and the banner at the top of the Dashboard). Practise a whole casebook case in writing against a 35-minute clock, with Bucket (an AI interviewer) giving the prompt, answering clarifying questions, showing the exhibits and keeping the case moving; feedback at the end, and the case is logged for you
 - **Dashboard**: totals, skill averages, trends, case-type and industry coverage, next-practice suggestions, weekly history, milestones
 - **My Case Log**: searchable, filterable list of your cases with full-detail view, edit and delete
 - **Improvement Areas**: thin spots in your coverage, skills to sharpen, and a searchable history of what you've learned
-- **A public front page**: anyone, with no account, can search the members who chose to be visible and read what they share
+- **A public front page**: has a "Meet Bucket" section (with a picture of a case in progress) and a Live case link in the top bar, and anyone, with no account, can search the members who chose to be visible and read what they share
 - **Warm-up**: an optional mental-math sprint of 30, 60 or 120 seconds for a break between cases, across fifteen kinds of quant question (your best score and streak for each length follow your account)
 - **Community**: one tab with two views. **Members**: find a fellow member, see only what they've chosen to share, and work out which case to give them. **Inbox**: practice requests and your conversations together
-- **Live case with Bucket**: a whole casebook case in writing against a 30-minute clock, with Bucket (an AI interviewer) giving the prompt, answering clarifying questions, showing the exhibits and keeping the case moving; feedback at the end, and the case is logged for you. It lives under Improvement Areas
 - **Practice requests**: ask a member to case (with a proposed case and time), and answer when someone asks you. Open to every member, and short notes only
 - **Messages**: once a request is accepted, a private conversation between the two of you, to settle a time, share a link or go over a case afterwards. It lives in the Community tab's Inbox, and the Dashboard tells you when something is waiting
 - **Email notifications**: an email when someone asks you to case (with the case, casebook, time and their note, so you know what you're answering) and when someone says yes. On by default, one switch in Profile & privacy turns it off
@@ -575,7 +575,7 @@ person's profile (**Message *name***). There is no way to message someone you ha
 
 ### Live case: practise a whole case with Bucket
 
-**Improvement Areas → Start a live case.** You get one casebook case that has a full write-up (a random one you have not logged, or one you pick), typed, against one continuous clock that starts when the prompt first appears (35 minutes, or 40 for a case with more than four exhibits). Bucket plays the interviewer. When the case ends you get feedback on what you actually wrote, and the case is added to your case log.
+**Live Case tab → Surprise me (or pick a lane).** The Dashboard banner, the Improvement Areas card and the first-login tour all lead here too. You get one casebook case that has a full write-up (a random one you have not logged, or one you pick), typed, against one continuous clock that starts when the prompt first appears (35 minutes, or 40 for a case with more than four exhibits). Bucket plays the interviewer. When the case ends you get feedback on what you actually wrote, and the case is added to your case log.
 
 | Part | Planned time | What happens |
 |---|---|---|

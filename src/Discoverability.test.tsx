@@ -53,12 +53,13 @@ beforeEach(() => {
   window.location.hash = '';
 });
 
-describe('five tabs, with people and messages together under Community', () => {
-  it('has Dashboard, My Case Log, Improvement Areas, Community and Warm-up in the top bar and the phone bar', async () => {
+describe('six tabs, with people and messages together under Community', () => {
+  it('has Dashboard, Live Case, My Case Log, Improvement Areas, Community and Warm-up in the top bar and the phone bar', async () => {
     await openAt(createFakeEnv(), '#/dashboard', 'Dashboard');
     for (const nav of screen.getAllByRole('navigation', { name: 'Primary' })) {
       expect(within(nav).getAllByRole('link').map((l) => l.getAttribute('aria-label') ?? l.textContent)).toEqual([
         'Dashboard',
+        'Live Case',
         'My Case Log',
         'Improvement Areas',
         'Community',
@@ -79,7 +80,7 @@ describe('five tabs, with people and messages together under Community', () => {
     ] as const) {
       const { unmount } = await openAtAndKeep(env, hash, heading);
       for (const tab of screen.getAllByRole('link', { name: /^Community/ })) expect(tab).toHaveAttribute('aria-current', 'page');
-      for (const tab of screen.getAllByRole('link', { name: /^(Dashboard|My Case Log|Improvement Areas|Warm-up)/ })) expect(tab).not.toHaveAttribute('aria-current');
+      for (const tab of screen.getAllByRole('link', { name: /^(Dashboard|Live Case|My Case Log|Improvement Areas|Warm-up)/ })) expect(tab).not.toHaveAttribute('aria-current');
       unmount();
     }
   });

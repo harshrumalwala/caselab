@@ -19,6 +19,7 @@ import { useData } from '../../state/DataProvider';
 import { useUI } from '../../state/ui';
 import { useNow } from '../../state/useToday';
 import { useGame } from '../../state/game';
+import { LiveCaseBanner } from '../live/LiveCaseBanner';
 import { LevelChip } from '../progress/LevelChip';
 import { ProgressDialog, type ProgressTab } from '../progress/ProgressDialog';
 import { progressFor } from '../../domain/progress';
@@ -81,6 +82,9 @@ export function Dashboard() {
 
       {/* Real requests and messages have no place beside demo data. */}
       {mode !== 'demo' && <NeedsYou />}
+
+      {/* The live case with Bucket comes first: it is the main thing to do here. */}
+      <LiveCaseBanner />
 
       {total === 0 && (
         <Card strip="sun" className="relative">
