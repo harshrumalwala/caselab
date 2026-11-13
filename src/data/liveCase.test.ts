@@ -116,6 +116,19 @@ describe('the plan from a case', () => {
     expect(p.beats).toEqual([{ kind: 'exhibit', index: 0 }]);
   });
 
+  it('shows an exhibit whose title merely says "solutions" (what the case is about), and keeps the book\'s own solutions to itself', () => {
+    const p = buildPlan({
+      exhibits: [{ title: 'Exhibit #1: Current solutions for retirees' }, { title: 'Market sizes (given if prompted)', caption: 'From the interviewer guidance for Exhibit 1.' }, { title: 'Solutions to Exhibit 1' }, { title: 'Solution: market size' }],
+      steps: [{ title: 'Framework for revenue growth' }, { title: 'Sizing the market' }],
+    });
+    expect(p.beats).toEqual([{ kind: 'exhibit', index: 0 }]); // the member does get an exhibit to look at
+  });
+
+  it('does not discuss a framework step again, whether it is called "Framework", "Framework for ...", "Framework: ..." or "Structure the problem", but keeps a step that has more in it', () => {
+    const steps = ['Framework', 'Framework for revenue growth', 'Framework: what to weigh', 'Structure the problem', 'Framework and Exhibit 1', 'Pricing'].map((title) => ({ title }));
+    expect(buildPlan({ exhibits: [], steps }).beats).toEqual([{ kind: 'step', index: 4 }, { kind: 'step', index: 5 }]);
+  });
+
   it('has no brainstorm when the case has none', () => {
     expect(buildPlan({ exhibits: [{}], steps: [{ title: 'Size demand' }] }).hasBrainstorm).toBe(false);
   });

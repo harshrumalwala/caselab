@@ -84,14 +84,19 @@ export interface PlanSource {
 }
 
 const BRAINSTORM = /brainstorm/i;
-const FRAMEWORK_STEP = /^\s*(framework|structure|structuring|clarifying questions?)\s*$/i;
+// A step that is only about building the framework ("Framework", "Framework for revenue growth", "Framework: what to weigh", "Structure the problem"): the framework
+// has its own stages, so it is not discussed again. ("Framework and Exhibit 1" has more in it, so it stays.)
+const FRAMEWORK_STEP = /^\s*(framework|structure|structuring|clarifying questions?)(\s+for\b.*|\s*[:/].*|\s+the\s+(problem|approach|project)\b.*)?\s*$/i;
 
 /**
  * Some of a write-up's tables are the interviewer's own: guidance, solutions, a sample approach, "calculation to be performed by the candidate",
  * a list of brainstorm ideas. They are never shown to the member (they would give the case away); they are reference for Bucket only.
  */
-const INTERVIEWER_SIDE = /interviewer|guidance|\bguide\b|solution|sample|approach|performed by|answer|brainstorm|expected|calculation|\bmath\b/i;
-export const isInterviewerSide = (title: string): boolean => INTERVIEWER_SIDE.test(title);
+const INTERVIEWER_SIDE = /interviewer|guidance|\bguide\b|\bsolution\b|sample|approach|performed by|answer|brainstorm|expected|calculation|\bmath\b/i;
+/** "Solutions" is the interviewer's when it is the book's answer ("Solutions to Exhibit 2"), but not when it is what the case is about ("Exhibit 1: Current solutions for retirees"). */
+const SOLUTIONS_OF_THE_CASE = /\b(current|existing|possible|potential|alternative|competing|available|other|rival|today'?s)\s+solutions\b/i;
+export const isInterviewerSide = (title: string): boolean =>
+  INTERVIEWER_SIDE.test(title) || (/\bsolutions\b/i.test(title) && !SOLUTIONS_OF_THE_CASE.test(title));
 
 /** Words in a table's caption, column headings or cells that mark it as the interviewer's sheet ("Information for Interviewee", "Keep Private", "interviewer's math page"). */
 const INTERVIEWER_WORDS = /keep private|interviewee|interviewer|not for (the )?candidate|only when the candidate asks|given if prompted/i;

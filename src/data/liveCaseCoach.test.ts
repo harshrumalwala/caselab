@@ -660,7 +660,7 @@ describe("the interviewer's own tables", () => {
     const last = w.asked[0].messages.at(-1)!.content;
     expect(last).toContain('Interviewer reference tables (private');
     expect(last).toContain('SECRET-GUIDE-70,000');
-    expect(last).toContain('never quote them');
+    expect(last).toContain('never state a result, total, ratio or conclusion');
   });
 
   it('are kept from the model while the student is still asking clarifying questions', async () => {
@@ -703,7 +703,7 @@ describe('the member drives', () => {
     await call({ type: 'say', sessionId: id, text: 'Can you show me the exhibit?' });
     await call({ type: 'say', sessionId: id, text: 'Where is the data?' });
     expect(JSON.stringify(w.asked.at(-1))).not.toContain('stop asking open questions'); // the second message: not yet
-    expect(JSON.stringify(w.asked.at(-1))).toContain('give it plainly, exactly as written'); // a request for data is answered with the data
+    expect(JSON.stringify(w.asked.at(-1))).toContain('give it instead of answering with a question'); // a request for data is answered with the data
     w.script.reply = () => turn('Look at the seasons side by side. Peak is 82% full and off-peak is 31%. Which gap matters most?', { assessment: 'partial' });
     const r = view(await call({ type: 'say', sessionId: id, text: 'Please just show me' }));
     expect(JSON.stringify(w.asked.at(-1))).toContain('stop asking open questions and lead them');
@@ -778,6 +778,46 @@ describe("the interviewer's sheets, found by what they say", () => {
     const id = await toExhibits();
     await call({ type: 'say', sessionId: id, text: 'Peak is 95 and off-peak is 31' });
     expect(w.asked[0].messages.at(-1)!.content).toContain('Revenue Size (Keep Private)');
+  });
+});
+
+describe('data the interviewer gives out when asked', () => {
+  const sizes = {
+    title: 'Market sizes (given if prompted)',
+    caption: 'From the interviewer guidance for Exhibit 1.',
+    columns: ['Product', 'Market size'],
+    rows: [['Refinance', '$900B'], ['Reverse Mortgages', '$10B']],
+    approx: false,
+    howToRead: '',
+    takeaways: [],
+    chart: null,
+  };
+
+  it('is not shown as an exhibit, but Bucket is told to read all of it out, as an interviewer would, so the member is never stuck chatting', async () => {
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, exhibits: [EXHIBIT(1), sizes] } } : real(id));
+    const id = await toExhibits();
+    const v = view(await call({ type: 'resume', sessionId: id }));
+    expect(JSON.stringify(v)).not.toContain('$900B'); // never shown as a table
+    expect(v.exhibits.map((e) => e.title)).toEqual(['Exhibit 1: Occupancy by season']);
+
+    await call({ type: 'say', sessionId: id, text: 'What are the market sizes?' });
+    const sent = w.asked.at(-1)!.messages.at(-1)!.content;
+    expect(sent).toContain('Data you hold and read out when the student asks');
+    expect(sent).toContain('$900B');
+    expect(sent).toContain('$10B'); // all of it, not only what was asked for: the member works out the rest
+    expect(sent).toContain('Read ALL of it out, every row and every figure'); // as an interviewer reads a table aloud, then asks what they make of it
+    expect(sent).toContain('Never do the calculation for them'); // but never the results
+    expect(sent).toContain('give it instead of answering with a question'); // a request for data is answered with the data
+    expect(sent).not.toMatch(/never state a result[^]*Market sizes/); // it is not filed with the answers
+  });
+
+  it('is not offered when the table is the book\'s solution, even if it is called a sample', async () => {
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, exhibits: [EXHIBIT(1), { ...sizes, title: 'Solution: market sizes (given if prompted)' }] } } : real(id));
+    const id = await toExhibits();
+    await call({ type: 'say', sessionId: id, text: 'What are the market sizes?' });
+    expect(w.asked.at(-1)!.messages.at(-1)!.content).not.toContain('Data you hold and read out when the student asks');
   });
 });
 

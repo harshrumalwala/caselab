@@ -93,6 +93,8 @@ export interface LiveSolution {
   exhibits: LiveExhibit[];
   /** The interviewer's own tables (guidance, solutions): for the model's reference only, never shown to the member. */
   reference: LiveExhibit[];
+  /** Interviewer-side tables that are data for the member's own working ("given if prompted"): Bucket hands them over when asked, as written. */
+  onRequest: LiveExhibit[];
   recommendation: string;
   because: string[];
   delivery: string;
@@ -113,6 +115,12 @@ function readExhibits(raw: unknown): LiveExhibit[] {
       chart: obj(e).chart && typeof obj(e).chart === 'object' ? obj(e).chart : null,
     })).filter((e) => e.title || e.rows.length).slice(0, 20);
 }
+
+/** A table the book says the interviewer gives out when asked ("Market sizes (given if prompted)"): inputs for the member's calculation, not an answer. */
+const GIVEN_ON_REQUEST = /given if prompted|if prompted|(only )?(if|when) (the )?(candidate|interviewee|student) asks|on request|if asked/i;
+/** ...unless its own title says it is the working or the answer. */
+const IS_ANSWER = /solution|answer|calculation|\bmath\b|expected|guidance|sample|approach|performed by/i;
+export const givenOnRequest = (e: { title: string; caption: string }): boolean => GIVEN_ON_REQUEST.test(`${e.title} ${e.caption}`) && !IS_ANSWER.test(e.title);
 
 export function readSolution(raw: unknown): LiveSolution | null {
   const o = obj(raw);
@@ -135,7 +143,8 @@ export function readSolution(raw: unknown): LiveSolution | null {
       commonMiss: strs(obj(s).commonMiss, 300, 8),
     })).slice(0, 30),
     exhibits,
-    reference: exhibits.filter((e) => isInterviewerSideExhibit(e)),
+    reference: exhibits.filter((e) => isInterviewerSideExhibit(e) && !givenOnRequest(e)),
+    onRequest: exhibits.filter((e) => isInterviewerSideExhibit(e) && givenOnRequest(e)),
     recommendation: str(o.recommendation, 1500),
     because: strs(detail.because, 500, 10),
     delivery: str(detail.delivery, 2000),
@@ -334,7 +343,7 @@ Shown to the student: ${e.title}${e.caption ? ` (${e.caption})` : ''}
 ${tableText(e)}
 Private notes for you only. Never quote or reveal them, and never state these conclusions for the student:
 How to read it: ${e.howToRead || '(none)'}
-What a strong answer concludes: ${e.takeaways.join(' / ') || '(none)'}${referenceNotes(sol)}
+What a strong answer concludes: ${e.takeaways.join(' / ') || '(none)'}${referenceNotes(sol)}${onRequestNotes(sol)}
 </exhibit>`;
   }
   const st = sol.steps[beat.index];
@@ -345,15 +354,22 @@ Private notes for you only. Never quote or reveal them, and never state these co
 Topic: ${st.title}
 ${st.body}
 ${st.calc.length ? `Worked lines: ${st.calc.join(' / ')}\n` : ''}What a strong candidate notices: ${st.whatToNotice || '(none)'}
-Common misses: ${st.commonMiss.join(' / ') || '(none)'}${referenceNotes(sol)}
+Common misses: ${st.commonMiss.join(' / ') || '(none)'}${referenceNotes(sol)}${onRequestNotes(sol)}
 </exhibit>`;
+}
+
+/** The data the interviewer gives out when asked: shown to the model so it can answer "what are the market sizes?" with the numbers, instead of asking what the member thinks. */
+function onRequestNotes(sol: LiveSolution): string {
+  if (sol.onRequest.length === 0) return '';
+  const tables = sol.onRequest.map((e) => `${e.title}\n${tableText(e)}`).join('\n\n');
+  return `\nData you hold and read out when the student asks for it or asks for the numbers (inputs for their own calculation, not answers). Read ALL of it out, every row and every figure, in plain spoken sentences exactly as written, the way an interviewer would read a table aloud to a candidate. Then ask what they make of it, or what they would work out from it. Never do the calculation for them and never say what it means:\n${tables.length > 4000 ? `${tables.slice(0, 4000)}\n...` : tables}`;
 }
 
 /** The interviewer's own tables, as private reference: the answers a strong candidate reaches, to judge by and never to hand over. */
 function referenceNotes(sol: LiveSolution): string {
   if (sol.reference.length === 0) return '';
   const tables = sol.reference.map((e) => `${e.title}\n${tableText(e)}`).join('\n\n');
-  return `\nInterviewer reference tables (private; these hold the answers, so never quote them or state their results for the student):\n${tables.length > 6000 ? `${tables.slice(0, 6000)}\n...` : tables}`;
+  return `\nInterviewer reference tables (private; they may hold the answers, so never state a result, total, ratio or conclusion from one, and never say a figure that is marked private or is itself the answer. But when the student asks for the data, or you are leading them, read out the INPUT figures from it, all of them, in plain spoken sentences, and ask what they would calculate; do not paste the table):\n${tables.length > 6000 ? `${tables.slice(0, 6000)}\n...` : tables}`;
 }
 
 export type TurnKind = 'clarify' | 'direction' | 'exhibit' | 'nudge_process' | 'nudge_directional';
@@ -364,7 +380,7 @@ const DIRECTIVES: Record<TurnKind, string> = {
   direction:
     'The student has handed in a framework (you will not see it) and has now said where they would start. Reply in one or two sentences: acknowledge their starting point, and say you will show them some data. If their direction is unclear or off-track, instead ask ONE focused follow-up question about where they would start. Do not teach, rewrite or praise at length. Set direction_clear to true when their starting direction is clear enough to move on.',
   exhibit:
-    'The student is working on the exhibit. Judge what they just wrote, then respond in one to three short sentences: if they are on a good track, let them continue or ask for the implication for the client, then the next step they would take. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell). Set beat_complete to true only when they have independently stated what the exhibit means for the client AND a sensible next step. Do not give a hint unless told to below. If the student asks to see data or an exhibit that is in the case information or in the exhibit shown to them, give it plainly, exactly as written, instead of answering with a question; if it is not there, say so briefly.',
+    'The student is working on the exhibit. Judge what they just wrote, then respond in one to three short sentences: if they are on a good track, let them continue or ask for the implication for the client, then the next step they would take. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell). Set beat_complete to true only when they have independently stated what the exhibit means for the client AND a sensible next step. Do not give a hint unless told to below. If the student asks to see data or an exhibit, or for a number they need for their calculation, and it is in the case information, in the exhibit shown to them or in the data you hold for them (listed below), give it instead of answering with a question. Data you hold for them is read out in full, every figure, in plain spoken sentences exactly as written (as an interviewer reads a table aloud), and then you ask what they make of it or what they would calculate. Never say a result, a total, a ratio or what it means. The case must keep moving: if the information is not there, say so briefly and ask them to state an assumption and carry on.',
   nudge_process:
     'The student has made no progress for a while. Give ONE brief process-oriented hint: suggest a way to approach the data (what to compare, what to ask of it, how to structure the calculation) without telling them what to conclude. One or two sentences.',
   nudge_directional:
@@ -379,7 +395,7 @@ const HELP: Record<NudgeLevel, string> = {
   directional_hint:
     ' The student has been stuck for a while and has had a hint. If (and only if) this message shows they are still stuck, add ONE more specific directional hint about where to look, without stating the conclusion or any result.',
   lead:
-    ' The student has now written several times without getting traction, so stop asking open questions and lead them. In two or three short sentences: say plainly where to look or what to compare; if they asked to see an exhibit or data, give them the figures they need, exactly as written in the case information, the exhibit shown to them or the topic notes below (the inputs and facts only, never a conclusion or the result of a calculation); then end with ONE specific, easy question they can answer from that. Never answer a request for information with "what do you think?".',
+    ' The student has now written several times without getting traction, so stop asking open questions and lead them. In two or three short sentences: say plainly where to look or what to compare; if they asked to see an exhibit or data, give them the figures they need, exactly as written in the case information, the exhibit shown to them, the data you hold for them, the interviewer reference tables or the topic notes below, said in plain spoken sentences (all the input figures and facts they need for their own working, never a conclusion or the result of a calculation); then end with ONE specific, easy question they can answer from that. When you give data, read all of its input figures out, every one, as an interviewer would read a table aloud. Never answer a request for information with "what do you think?".',
   advance:
     ' The student has been stuck for a long time. If (and only if) this message shows they are still stuck, say one short, neutral sentence that you will move on to the next piece, and do NOT explain, solve or summarise this one.',
 };
