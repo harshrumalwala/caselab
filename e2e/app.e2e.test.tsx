@@ -100,7 +100,7 @@ describe.skipIf(!HAVE_USER_A)('live Supabase: the real app, signed in as a test 
     // --- Sign out ---
     await user.click(screen.getByRole('button', { name: 'Data and settings' }));
     await user.click(await screen.findByRole('button', { name: 'Sign out' }));
-    expect(await screen.findByRole('heading', { name: /Case smarter/  }, LONG)).toBeInTheDocument(); // back to the public page
+    expect(await screen.findByRole('heading', { name: /Case with Bucket/ }, LONG)).toBeInTheDocument(); // back to the public page
     view.unmount();
   });
 });
