@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowRight, BarChart3, Check, ChevronRight, Compass, EyeOff, FileSpreadsheet, Lock, Search, ShieldCheck, Timer, Users } from 'lucide-react';
+import { ArrowRight, BarChart3, Check, ChevronRight, Compass, EyeOff, FileSpreadsheet, Lock, MessageCircle, Search, ShieldCheck, Timer } from 'lucide-react';
 import { Logo } from '../../components/layout/Header';
 import { describeError } from '../../data/errors';
 import type { PublicReader, RecentCaser } from '../../data/community';
@@ -327,6 +327,7 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
   }, []);
 
   const scrollToFind = () => findRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  const scrollToBucket = () => document.getElementById('bucket')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
 
   return (
     <>
@@ -337,23 +338,28 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
               Consulting case practice
             </p>
             <h1 className="mt-5 text-5xl font-extrabold leading-[1.02] tracking-tight text-ink sm:text-7xl">
-              Case <span className="marker">smarter.</span>
+              Case with <span className="marker">Bucket.</span>
               <br />
               Track your progress.
             </h1>
             <p className="mt-5 max-w-md text-lg leading-relaxed text-ink-2">
-              Practicing casing for consulting? CaseLab is a simple log of every case you do. See how you&rsquo;re improving, where
-              you&rsquo;re still weak, and what to practice next.
+              Meet Bucket, your AI interviewer. Practise a whole case in writing, 35 minutes against the clock, then get feedback on what you wrote.
+              Every case lands in your log, so you see how you&rsquo;re improving and what to practise next.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <a href="#/signup" className={PRIMARY}>
-                Start your log, it’s free <ArrowRight className="size-4" aria-hidden />
+                Try a live case, it’s free <ArrowRight className="size-4" aria-hidden />
               </a>
-              <button type="button" onClick={scrollToFind} className={SUNNY}>
-                <Users className="size-4" aria-hidden /> See who&rsquo;s casing
+              <button type="button" onClick={scrollToBucket} className={SUNNY}>
+                <MessageCircle className="size-4" aria-hidden /> See how it works
               </button>
             </div>
-            <p className="mt-4 text-sm text-ink-2">Your practice is private by default. Nothing is shown to anyone unless you switch it on.</p>
+            <p className="mt-4 text-sm text-ink-2">
+              Your practice is private by default. Nothing is shown to anyone unless you switch it on.{' '}
+              <button type="button" onClick={scrollToFind} className="font-semibold text-accent-text underline-offset-2 hover:underline">
+                See who&rsquo;s casing
+              </button>
+            </p>
           </div>
 
           <div className="relative mx-auto w-full max-w-xl">
@@ -458,7 +464,7 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
         <section className="sticker relative overflow-hidden bg-accent px-6 py-10 text-accent-ink sm:px-12 sm:py-14">
           <Sparkle className="absolute right-8 top-6 size-10 text-sun" />
           <Sparkle className="absolute bottom-6 right-24 size-6 text-coral" />
-          <h2 className="max-w-lg text-3xl font-extrabold tracking-tight sm:text-4xl">Ready to start tracking your cases?</h2>
+          <h2 className="max-w-lg text-3xl font-extrabold tracking-tight sm:text-4xl">Ready for your first case with Bucket?</h2>
           <p className="mt-3 max-w-xl text-base leading-relaxed text-accent-ink/90">
             A free account gives you live cases with Bucket, your own case log, dashboard and improvement plan. Appearing in the list of
             people casing is optional and stays off until you switch it on.

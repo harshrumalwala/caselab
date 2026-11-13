@@ -523,7 +523,7 @@ describe('Warm-up in the app', () => {
   it('is not part of the public site for visitors who are not signed in', async () => {
     window.location.hash = '#/warmup';
     render(<App backend={createFakeEnv({ signedIn: false }).backend} />);
-    expect(await screen.findByRole('heading', { name: /Case smarter/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Case with Bucket/ })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Warm-up' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Warm-up' })).not.toBeInTheDocument();
   });

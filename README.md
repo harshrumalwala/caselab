@@ -10,7 +10,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **Dashboard**: totals, skill averages, trends, case-type and industry coverage, next-practice suggestions, weekly history, milestones
 - **My Case Log**: searchable, filterable list of your cases with full-detail view, edit and delete
 - **Improvement Areas**: thin spots in your coverage, skills to sharpen, and a searchable history of what you've learned
-- **A public front page**: has a "Meet Bucket" section (with a picture of a case in progress) and a Live case link in the top bar, and anyone, with no account, can search the members who chose to be visible and read what they share
+- **A public front page**: leads with Bucket (the headline, a "Meet Bucket" section with a picture of a case in progress, and a Live case link in the top bar), and anyone, with no account, can search the members who chose to be visible and read what they share
 - **Warm-up**: an optional mental-math sprint of 30, 60 or 120 seconds for a break between cases, across fifteen kinds of quant question (your best score and streak for each length follow your account)
 - **Community**: one tab with two views. **Members**: find a fellow member, see only what they've chosen to share, and work out which case to give them. **Inbox**: practice requests and your conversations together
 - **Practice requests**: ask a member to case (with a proposed case and time), and answer when someone asks you. Open to every member, and short notes only

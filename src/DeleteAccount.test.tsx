@@ -66,7 +66,7 @@ describe('deleting your account from Settings', () => {
     await user.type(within(confirm).getByRole('textbox'), 'DELETE');
     await user.click(within(confirm).getByRole('button', { name: 'Delete my account' }));
 
-    expect(await screen.findByRole('heading', { name: /Case smarter/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Case with Bucket/ })).toBeInTheDocument();
     expect(env.deletedAccounts).toEqual([TEST_USER.userId]);
     expect(env.signedIn()).toBe(false);
     expect(await screen.findByText('Your account was deleted')).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe('deleting your account from Settings', () => {
     const confirm = await screen.findByRole('dialog', { name: 'Delete your account?' });
     await user.type(within(confirm).getByRole('textbox'), 'DELETE');
     await user.click(within(confirm).getByRole('button', { name: 'Delete my account' }));
-    await screen.findByRole('heading', { name: /Case smarter/ });
+    await screen.findByRole('heading', { name: /Case with Bucket/ });
 
     expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull();
     expect(window.localStorage.getItem(warmupKeyFor(TEST_USER.userId))).toBeNull();
@@ -112,7 +112,7 @@ describe('deleting your account from Settings', () => {
     env.failAccountDeletion(undefined); // the connection is back
     await user.type(again.getByRole('textbox'), 'DELETE');
     await user.click(again.getByRole('button', { name: 'Delete my account' }));
-    await screen.findByRole('heading', { name: /Case smarter/ });
+    await screen.findByRole('heading', { name: /Case with Bucket/ });
     expect(env.deletedAccounts).toEqual([TEST_USER.userId]);
   });
 
