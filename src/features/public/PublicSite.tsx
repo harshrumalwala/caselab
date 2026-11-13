@@ -387,6 +387,8 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
       </div>
 
       <div className="mx-auto w-full max-w-5xl space-y-16 px-4 pb-20 pt-12 sm:px-6 sm:pt-16">
+        <BucketSection />
+
         <ImportCallout />
 
         <section aria-labelledby="what-title">
@@ -416,8 +418,6 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
             </Tile>
           </ul>
         </section>
-
-        <BucketSection />
 
         <section id="find" ref={findRef} aria-labelledby="find-title" className="scroll-mt-24">
           <div className="max-w-xl">

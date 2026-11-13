@@ -26,9 +26,13 @@ import {
   timeInStages,
   userSays,
   addUsage,
+  continueCase,
   deadlines,
+  endEarly,
+  pause,
   type Assessment,
   type Beat,
+  type LiveMode,
   type DraftKey,
   type Message,
   type NudgeLevel,
@@ -256,6 +260,10 @@ export interface LiveView {
   hasBrainstorm: boolean;
   status: 'active' | 'done';
   endReason: SessionState['endReason'];
+  /** Practice mode can be paused and ended early; interview mode cannot. */
+  mode: LiveMode;
+  /** When the member paused the case (the clock stands still); null while it runs. */
+  pausedAt: number | null;
   feedback: Feedback | null;
   feedbackAttempts: number;
   /** Only once the case is over: the case's name would spoil it before. */
@@ -291,6 +299,8 @@ export function toView(stored: StoredSession, solution: LiveSolution | null, inf
     hasBrainstorm: s.plan.hasBrainstorm,
     status: stored.status,
     endReason: s.endReason,
+    mode: s.mode ?? 'practice',
+    pausedAt: s.pausedAt ?? null,
     feedback: stored.feedback,
     feedbackAttempts: stored.feedbackAttempts,
     caseInfo: s.stage === 'done' && info ? { ...info, libraryId: stored.libraryId } : null,
@@ -558,7 +568,7 @@ export function writtenRecord(state: SessionState): string {
     else if (m.kind === 'exhibit') lines.push(`[${STAGE_LABEL[m.stage] ?? m.stage}] Interviewer showed ${state.plan.beats[m.beat ?? 0]?.kind === 'step' ? 'the next topic' : 'an exhibit'}.`);
   }
   for (const sub of state.submissions) {
-    lines.push(`[${sub.kind}] Student ${sub.timedOut ? '(unfinished draft captured when time ran out)' : 'handed in'}: ${sub.text}`);
+    lines.push(`[${sub.kind}] Student ${sub.timedOut ? '(unfinished draft captured when the case ended)' : 'handed in'}: ${sub.text}`);
   }
   return lines.join('\n');
 }
@@ -578,7 +588,7 @@ Analysis steps: ${sol.steps.map((s) => `${s.title}: ${s.whatToNotice} ${s.calc.j
 Recommendation: ${sol.recommendation}. Because: ${sol.because.join(' / ')}. Common misses: ${sol.commonMisses.join(' / ')}. Risks: ${sol.risks.join(' / ')}. Next steps: ${sol.nextSteps.join(' / ')}`;
   const content = `The case prompt: ${sol.prompt}
 
-How the session went (time per stage, how each exhibit ended): ${stats}. ${beats}. The case ended ${state.endReason === 'time_limit' ? 'because the time ran out' : 'after the last stage'}.
+How the session went (time per stage, how each exhibit ended): ${stats}. ${beats}. The case ended ${state.endReason === 'time_limit' ? 'because the time ran out' : state.endReason === 'ended_early' ? 'because the student chose to end it early, so the stages after this point were never reached (judge only what they did, and list what they did not reach under "unfinished")' : 'after the last stage'}.
 Stages with no response from the student are missing from the record below: list them under "unfinished".
 
 THE STUDENT'S WRITING, IN ORDER:
@@ -586,6 +596,22 @@ ${writtenRecord(state) || '(nothing was written)'}
 
 ${reference}`;
   return { model: 'feedback', system: FEEDBACK_RULES, messages: [{ role: 'user', content }], schema: FEEDBACK_SCHEMA, maxTokens: 5000, effort: 'medium' };
+}
+
+/** The feedback for a case that was ended before anything was written: no ratings, one honest sentence. */
+export function nothingToJudge(): Feedback {
+  const skills = Object.fromEntries(SKILL_KEYS.map((k) => [k, { rating: null, feedback: '', evidence: '' }])) as Record<SkillKey, SkillFeedback>;
+  return {
+    overall: { rating: null, feedback: 'You ended the case before writing anything, so there is nothing for me to give feedback on. Come back to it whenever you like.' },
+    skills,
+    wentWell: '',
+    struggled: '',
+    concepts: '',
+    nextFocus: '',
+    improvementArea: null,
+    debrief: [],
+    unfinished: [],
+  };
 }
 
 const rating = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5 ? v : null);
@@ -639,7 +665,7 @@ export const MAX_COACH_CALLS = 90;
 export const MAX_FEEDBACK_ATTEMPTS = 3;
 
 export type LiveAction =
-  | { type: 'start'; libraryId?: string | null }
+  | { type: 'start'; libraryId?: string | null; mode?: LiveMode }
   | { type: 'resume'; sessionId?: string }
   | { type: 'ready'; sessionId: string }
   | { type: 'submit'; sessionId: string; text: string }
@@ -647,6 +673,9 @@ export type LiveAction =
   | { type: 'draft'; sessionId: string; key: DraftKey; text: string }
   | { type: 'scratch'; sessionId: string; text: string }
   | { type: 'nudge'; sessionId: string }
+  | { type: 'pause'; sessionId: string }
+  | { type: 'continue'; sessionId: string }
+  | { type: 'end'; sessionId: string }
   | { type: 'finish'; sessionId: string }
   | { type: 'logged'; sessionId: string; caseId: string };
 
@@ -696,7 +725,7 @@ export async function handleLive(userId: string, action: LiveAction, deps: LiveD
     const c = await deps.loadCase(libraryId);
     const solution = c && isFullSolution(c.solution) ? readSolution(c.solution) : null;
     if (!c || !solution) return refuse('That case is not ready for live practice yet.');
-    const state = newSession(planFor(solution), now, openingText(solution));
+    const state = newSession(planFor(solution), now, openingText(solution), action.mode === 'interview' ? 'interview' : 'practice');
     const stored: StoredSession = { id: crypto.randomUUID(), userId, libraryId, state, status: 'active', feedback: null, feedbackAttempts: 0, loggedCaseId: null, actions: 0, llmCalls: 0, version: 0, createdAt: now };
     await deps.createSession(stored);
     return { status: 'ok', view: toView(stored, solution, c.info, now) };
@@ -735,6 +764,12 @@ export async function handleLive(userId: string, action: LiveAction, deps: LiveD
       return sayOk(await mutate((st, now) => withState(st, ready(st.state, now))));
     case 'submit':
       return sayOk(await mutate((st, now) => withState(st, submit(st.state, action.text, now))));
+    case 'pause':
+      return sayOk(await mutate((st, now) => withState(st, pause(st.state, now))));
+    case 'continue':
+      return sayOk(await mutate((st, now) => withState(st, continueCase(st.state, now))));
+    case 'end':
+      return sayOk(await mutate((st, now) => withState(st, endEarly(st.state, now))));
     case 'draft':
     case 'scratch': {
       const r = await mutate((st, now) => {
@@ -844,7 +879,7 @@ async function converse(deps: LiveDeps, userId: string, sessionId: string, text:
     if (!cur) return refuse('That live case was not found.');
     const now = deps.now();
     const st = await settleStored(deps, cur, false);
-    if (fingerprint(st.state) !== before) return { status: 'ok', view: toView(st, sol, c.info, now) };
+    if (fingerprint(st.state) !== before || st.state.pausedAt != null) return { status: 'ok', view: toView(st, sol, c.info, now) }; // a late reply, or one that came in while paused, is dropped
     const next: StoredSession = { ...st, state: addUsage(applyTurn(st, turn, kind, now, help), used), version: cur.version + 1 };
     next.status = next.state.stage === 'done' ? 'done' : 'active';
     if (await deps.saveSession(next, cur.version)) return { status: 'ok', view: toView(next, sol, c.info, now) };
@@ -897,6 +932,11 @@ async function finishCase(deps: LiveDeps, userId: string, sessionId: string, mut
   const view = (st: StoredSession) => toView(st, sol, c.info, deps.now());
   if (stored.state.stage !== 'done') return refuse('The case is still running.', view(stored));
   if (stored.feedback) return { status: 'ok', view: view(stored) };
+  if (!studentText(stored.state).trim()) {
+    // A case ended before a word was written has nothing to give feedback on, so the model is not asked.
+    const empty = await mutate((st) => (st.feedback ? st : { ...st, feedback: nothingToJudge() }));
+    return typeof empty === 'string' ? refuse(empty) : { status: 'ok', view: view(empty) };
+  }
   if (stored.feedbackAttempts >= MAX_FEEDBACK_ATTEMPTS) return refuse('The feedback could not be written. Your answers are saved.', view(stored));
 
   // Count the try first (a draft saved at the same moment must not make this give up), then ask, then keep the answer.

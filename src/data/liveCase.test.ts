@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildPlan,
   coachSays,
+  continueCase,
   deadlines,
+  endEarly,
   endFrameworkStage,
   hardEnd,
   LIMIT_MS,
@@ -12,6 +14,7 @@ import {
   nextNudgeAt,
   nudgeLevel,
   openBeat,
+  pause,
   PLANNED_MS,
   ready,
   recordAssessment,
@@ -422,5 +425,83 @@ describe('late replies and refresh', () => {
     const reloaded = JSON.parse(JSON.stringify(s)) as SessionState;
     expect(settle(reloaded, at(130))).toEqual(settle(s, at(130)));
     expect(reloaded.drafts.exhibit).toBe('half a thought');
+  });
+});
+
+describe('pausing, continuing and ending early', () => {
+  it('stops the clock: nothing runs out while paused, however long the break', () => {
+    let s = start();
+    s = ok(pause(s, at(60)));
+    expect(s.pausedAt).toBe(at(60));
+    const later = settle(s, at(60 + 3 * 3600)); // three hours on
+    expect(later).toBe(s);
+    expect(later.stage).toBe('prompt');
+    expect(later.messages).toHaveLength(1);
+  });
+
+  it('starts it again with exactly the time that was left', () => {
+    let s = start();
+    s = ok(pause(s, at(60)));
+    const left = hardEnd(s) - at(60);
+    const leftInStage = stageEndsAt(s) - at(60);
+    s = ok(continueCase(s, at(60 + 600))); // a ten-minute break
+    expect(s.pausedAt).toBeNull();
+    expect(hardEnd(s) - at(60 + 600)).toBe(left);
+    expect(stageEndsAt(s) - at(60 + 600)).toBe(leftInStage);
+    expect(settle(s, at(60 + 600 + 5)).stage).toBe('prompt'); // not a second lost to the break
+    expect(settle(s, at(60 + 600) + leftInStage + 1).stage).toBe('framework_think'); // and it runs out when it should
+  });
+
+  it('keeps the exhibit timings in step too, so a break is not counted against the exhibit', () => {
+    let s = toExhibits(plan(3), 200);
+    const b = openBeat(s)!;
+    const spent = at(230) - b.revealedAt;
+    s = ok(pause(s, at(230)));
+    s = ok(continueCase(s, at(230 + 900)));
+    const after = openBeat(s)!;
+    expect(at(230 + 900) - after.revealedAt).toBe(spent);
+    expect(after.lastProgressAt).toBe(b.lastProgressAt + 900_000);
+  });
+
+  it('refuses everything but continuing or ending while paused', () => {
+    let s = toExhibits(plan(3), 200);
+    s = ok(pause(s, at(210)));
+    expect(userSays(s, 'hello', at(220)).ok).toBe(false);
+    expect(ready(s, at(220)).ok).toBe(false);
+    expect(submit(s, 'text', at(220)).ok).toBe(false);
+    expect(saveDraft(s, 'exhibit', 'typing', at(220))).toBe(s);
+    expect(pause(s, at(220)).ok).toBe(false); // already paused
+    expect(continueCase(start(), at(5)).ok).toBe(false); // nothing to continue
+  });
+
+  it('ends early: keeps the draft in the box, closes the open exhibit and goes to feedback', () => {
+    let s = toExhibits(plan(3), 200);
+    s = ok(userSays(s, 'Occupancy is low off-peak', at(210)));
+    s = saveDraft(s, 'exhibit', 'Half a thought', at(215));
+    const done = ok(endEarly(s, at(220)));
+    expect(done.stage).toBe('done');
+    expect(done.endReason).toBe('ended_early');
+    expect(done.endedAt).toBe(at(220));
+    expect(done.beats[0].outcome).toBe('timed_out');
+    expect(done.messages.at(-1)?.text).toBe('You ended the case here.');
+    expect(done.stageLog.at(-1)).toMatchObject({ stage: 'exhibits', endedBy: 'user' });
+    expect(endEarly(done, at(230)).ok).toBe(false);
+  });
+
+  it('keeps what was typed in a writing stage as an unfinished draft', () => {
+    let s = start();
+    s = ok(ready(s, at(10)));
+    s = ok(ready(s, at(20)));
+    s = saveDraft(s, 'framework', 'Demand, supply, cost', at(30));
+    const done = ok(endEarly(s, at(40)));
+    expect(done.submissions).toEqual([expect.objectContaining({ kind: 'framework', text: 'Demand, supply, cost', timedOut: true })]);
+  });
+
+  it('ends a paused case at the moment it was paused', () => {
+    let s = toExhibits(plan(3), 200);
+    s = ok(pause(s, at(210)));
+    const done = ok(endEarly(s, at(5000)));
+    expect(done.endedAt).toBe(at(210));
+    expect(done.pausedAt).toBeNull();
   });
 });

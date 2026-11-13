@@ -1,14 +1,13 @@
-import { LayoutDashboard, ListChecks, Target, Timer, Users, type LucideIcon } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Timer, Users, type LucideIcon } from 'lucide-react';
 import { CountDot } from '../ui/CountDot';
 import { useNavBadge } from '../../state/badge';
-import { ROUTES, UNDER_COMMUNITY, type NavRoute } from '../../state/route';
+import { ROUTES, UNDER_COMMUNITY, UNDER_LOG, type NavRoute } from '../../state/route';
 import { BucketAvatar } from '../../features/improvement/BucketAvatar';
 import { useUI } from '../../state/ui';
 
 const ICONS: Record<Exclude<NavRoute, 'live'>, LucideIcon> = {
   dashboard: LayoutDashboard,
   log: ListChecks,
-  improve: Target,
   people: Users,
   warmup: Timer,
 };
@@ -29,9 +28,9 @@ export function BottomNav() {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
     >
-      <ul className="mx-auto grid max-w-lg grid-cols-6">
+      <ul className="mx-auto grid max-w-md grid-cols-5">
         {ROUTES.map((r) => {
-          const on = route === r.id || (r.id === 'people' && UNDER_COMMUNITY.includes(route)); // The Inbox and conversations live under Community
+          const on = route === r.id || (r.id === 'people' && UNDER_COMMUNITY.includes(route)) || (r.id === 'log' && UNDER_LOG.includes(route)); // The Inbox and conversations live under Community
           const waiting = r.id === 'people' ? badge.total : 0;
           const spoken = r.id === 'people' ? badge.spoken : null;
           return (

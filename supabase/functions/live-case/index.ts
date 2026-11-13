@@ -29,11 +29,16 @@ const DRAFTS = ['clarify', 'framework', 'direction', 'exhibit', 'brainstorm', 'r
 function readAction(b: Record<string, unknown>): LiveAction | null {
   switch (b.type) {
     case 'start':
-      return b.libraryId === undefined || b.libraryId === null || isId(b.libraryId) ? { type: 'start', libraryId: (b.libraryId as string | null | undefined) ?? null } : null;
+      return (b.libraryId === undefined || b.libraryId === null || isId(b.libraryId)) && (b.mode === undefined || b.mode === 'practice' || b.mode === 'interview')
+        ? { type: 'start', libraryId: (b.libraryId as string | null | undefined) ?? null, mode: (b.mode as 'practice' | 'interview' | undefined) ?? 'practice' }
+        : null;
     case 'resume':
       return b.sessionId === undefined || isId(b.sessionId) ? { type: 'resume', sessionId: b.sessionId as string | undefined } : null;
     case 'ready':
     case 'nudge':
+    case 'pause':
+    case 'continue':
+    case 'end':
     case 'finish':
       return isId(b.sessionId) ? { type: b.type, sessionId: b.sessionId } : null;
     case 'submit':

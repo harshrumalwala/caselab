@@ -8,8 +8,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 
 - **Live case with Bucket**: the headline feature, with a tab of its own (and the banner at the top of the Dashboard). Practise a whole casebook case in writing against a 35-minute clock, with Bucket (an AI interviewer) giving the prompt, answering clarifying questions, showing the exhibits and keeping the case moving; feedback at the end, and the case is logged for you
 - **Dashboard**: totals, skill averages, trends, case-type and industry coverage, next-practice suggestions, weekly history, milestones
-- **My Case Log**: searchable, filterable list of your cases with full-detail view, edit and delete
-- **Improvement Areas**: thin spots in your coverage, skills to sharpen, and a searchable history of what you've learned
+- **My Case Log**: searchable, filterable list of your cases with full-detail view, edit and delete. It has a second view, **Improvement Areas** (thin spots in your coverage, skills to sharpen, and a searchable history of what you've learned), so the top bar needs one tab for both
 - **A public front page**: leads with Bucket (the headline, a "Meet Bucket" section with a picture of a case in progress, and a Live case link in the top bar), and anyone, with no account, can search the members who chose to be visible and read what they share
 - **Warm-up**: an optional mental-math sprint of 30, 60 or 120 seconds for a break between cases, across fifteen kinds of quant question (your best score and streak for each length follow your account)
 - **Community**: one tab with two views. **Members**: find a fellow member, see only what they've chosen to share, and work out which case to give them. **Inbox**: practice requests and your conversations together
@@ -438,7 +437,7 @@ needed; the form also takes the date, case type, industry, book, who you intervi
 
 ## Keyboard shortcuts, the tour and installing
 
-- **Shortcuts** work anywhere you aren't typing in a box or in a window: `N` logs a case, `?` shows the list, and `G` then `D`, `L`, `I`, `C` or `W` jumps to Dashboard, Case Log, Improvement Areas, Community or Warm-up.
+- **Shortcuts** work anywhere you aren't typing in a box or in a window: `N` logs a case, `?` shows the list, and `G` then `D`, `L`, `I`, `C` or `W` jumps to Dashboard, Case Log, Improvement Areas (under the Case Log tab), Community or Warm-up.
 - **First-login tour**: a brand-new account (no cases yet) gets three notes pointing at **Log Case**, **Import** and **Community**, once. Skip it with a click or Escape; it never comes back, and it steps aside whenever a window is open.
 - **Install**: CaseLab has a web manifest and icons, so a browser can offer to install it. Settings → Shortcuts and install shows an **Install CaseLab** button when the browser offers one; on an iPhone use Share → Add to Home Screen.
 
@@ -575,7 +574,9 @@ person's profile (**Message *name***). There is no way to message someone you ha
 
 ### Live case: practise a whole case with Bucket
 
-**Live Case tab → Surprise me (or pick a lane).** The Dashboard banner, the Improvement Areas card and the first-login tour all lead here too. You get one casebook case that has a full write-up (a random one you have not logged, or one you pick), typed, against one continuous clock that starts when the prompt first appears (35 minutes, or 40 for a case with more than four exhibits). Bucket plays the interviewer. When the case ends you get feedback on what you actually wrote, and the case is added to your case log.
+**Live Case tab → pick a mode, then Surprise me (or pick a lane).** The Dashboard banner, the Improvement Areas card and the first-login tour all lead here too. You get one casebook case that has a full write-up (a random one you have not logged, or one you pick), typed, against one continuous clock that starts when the prompt first appears (35 minutes, or 40 for a case with more than four exhibits). Bucket plays the interviewer. When the case ends you get feedback on what you actually wrote, and the case is added to your case log. Opening the tab after a case has finished and been logged starts afresh: its feedback lives in the case log.
+
+- **Two modes.** **Practice** can be paused (the clock stops and the work is hidden, so a pause is a rest and not extra time to think; every moment of the case moves on by the length of the break, so exactly the time that was left comes back) and ended early (what was written goes to feedback, and the case is logged as ended early; a case ended before anything was written asks the model for nothing and is not logged). **Interview** has no pause and no early end, and the server refuses them, so the clock runs from the first screen to the last. A case from before there were modes counts as practice.
 
 | Part | Planned time | What happens |
 |---|---|---|

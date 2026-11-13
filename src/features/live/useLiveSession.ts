@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { describeError } from '../../data/errors';
-import type { DraftKey, LiveCaseRepository, LiveView } from '../../data/liveCase';
+import type { DraftKey, LiveCaseRepository, LiveMode, LiveView } from '../../data/liveCase';
 
 /** Wait this long after a stage's time is up before asking the server to move the case on (it also moves it on at any request). */
 const SETTLE_GRACE_MS = 400;
@@ -54,8 +54,8 @@ export function useLiveSession(repo: LiveCaseRepository) {
     return () => window.clearInterval(timer);
   }, [view?.sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** The server's time now, as best the page can tell. */
-  const now = tick + offset.current;
+  /** The server's time now, as best the page can tell. While the case is paused the clock stands still, so it is the moment it was paused. */
+  const now = view?.pausedAt != null ? view.pausedAt : tick + offset.current;
 
   /** Runs one thing the member does: shows the result, or says what went wrong and looks again at where the case really is. */
   const run = useCallback(
@@ -153,10 +153,13 @@ export function useLiveSession(repo: LiveCaseRepository) {
     /** The server's time now (ms). */
     now,
     clearError: () => setError(null),
-    start: (libraryId: string | null) => run(() => repo.start(libraryId)),
+    start: (libraryId: string | null, mode: LiveMode = 'practice') => run(() => repo.start(libraryId, mode)),
     ready: () => run(() => repo.ready(need())),
     submit: (text: string) => run(() => repo.submit(need(), text)),
     say: (text: string) => run(() => repo.say(need(), text), text),
+    pause: () => run(() => repo.pause(need())),
+    unpause: () => run(() => repo.unpause(need())),
+    end: () => run(() => repo.end(need())),
     retryFeedback: () => {
       setFeedbackError(null);
       last.current.finish = 0;

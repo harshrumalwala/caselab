@@ -32,6 +32,7 @@ import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
 import { WarmupLink } from '../warmup/WarmupLink';
 import { CoachCard } from './CoachCard';
+import { LogViewTabs } from '../caselog/LogViewTabs';
 import { LiveCaseCard } from './LiveCaseCard';
 import { WeeklyPlanCard } from './WeeklyPlanCard';
 
@@ -189,6 +190,7 @@ export function ImprovementAreas() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <LogViewTabs current="improve" />
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Improvement Areas</h1>
         <p className="text-sm text-ink-2">Where your practice is thin, what to sharpen, and what you've learned so far. Think of it as honest friends with a spreadsheet.</p>

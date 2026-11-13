@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Loader2, Shuffle, Timer } from 'lucide-react';
 import { Confetti } from '../../components/ui/Motion';
 import { describeError } from '../../data/errors';
-import type { LiveCatalogCase, LiveView } from '../../data/liveCase';
+import type { LiveCatalogCase, LiveMode, LiveView } from '../../data/liveCase';
 import { Badge, RatingBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -25,13 +25,13 @@ const OUTLINE: [string, string][] = [
   ['0:30 + 1:30', 'Think, then write your recommendation'],
 ];
 
-function CaseButton({ c, s, hint }: { c: LiveCatalogCase; s: LiveSession; hint: string }) {
+function CaseButton({ c, busy, hint, onStart }: { c: LiveCatalogCase; busy: boolean; hint: string; onStart: (id: string) => void }) {
   return (
     <li>
       <button
         type="button"
-        disabled={s.busy}
-        onClick={() => void s.start(c.id)}
+        disabled={busy}
+        onClick={() => onStart(c.id)}
         className="sticker flex w-full items-start justify-between gap-3 p-4 text-left transition hover:-translate-y-0.5 hover:bg-sun-soft disabled:opacity-60"
       >
         <span className="min-w-0">
@@ -53,6 +53,8 @@ function Start({ s }: { s: LiveSession }) {
   const [query, setQuery] = useState('');
   const [by, setBy] = useState<'type' | 'industry'>('type');
   const [lane, setLane] = useState<string | null>(null);
+  const [mode, setMode] = useState<LiveMode>('practice');
+  const begin = (id: string | null) => void s.start(id, mode);
   useEffect(() => {
     let current = true;
     repo
@@ -72,7 +74,7 @@ function Start({ s }: { s: LiveSession }) {
   const surpriseIn = (l: Lane) => {
     const fresh = l.cases.filter((c) => !c.done);
     const from = fresh.length > 0 ? fresh : l.cases;
-    void s.start(from[Math.floor(Math.random() * from.length)].id);
+    begin(from[Math.floor(Math.random() * from.length)].id);
   };
 
   return (
@@ -88,12 +90,38 @@ function Start({ s }: { s: LiveSession }) {
       <BucketSays big mood="happy">
         Ready to case? Pick a lane below and I will find you a case, or let me surprise you!
         <span className="mt-3 flex flex-wrap items-center gap-3">
-          <Button variant="primary" size="lg" disabled={s.busy || cases === null} onClick={() => void s.start(null)}>
+          <Button variant="primary" size="lg" disabled={s.busy || cases === null} onClick={() => begin(null)}>
             <Shuffle className="size-4" /> Surprise me with a case
           </Button>
           <span className="text-xs font-normal text-muted">Picks one you have not logged yet.</span>
         </span>
       </BucketSays>
+
+      <section aria-labelledby="live-mode" className="space-y-2">
+        <h2 id="live-mode" className="text-lg font-bold text-ink">
+          Choose a mode
+        </h2>
+        <div role="radiogroup" aria-labelledby="live-mode" className="grid gap-3 sm:grid-cols-2">
+          {(
+            [
+              ['practice', 'Practice', 'Pause and pick up again, or end the case early and still get feedback. For learning.'],
+              ['interview', 'Interview', 'The clock never stops and there is no pause and no early end. As close to the real thing as it gets.'],
+            ] as const
+          ).map(([id, title, text]) => (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={mode === id}
+              onClick={() => setMode(id)}
+              className={`sticker p-4 text-left transition ${mode === id ? 'bg-sun-soft ring-2 ring-accent' : 'hover:bg-surface-2'}`}
+            >
+              <span className="block font-display text-base font-bold text-ink">{title} mode</span>
+              <span className="mt-1 block text-sm text-ink-2">{text}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <Card strip="sun">
         <div className="space-y-4">
@@ -178,7 +206,7 @@ function Start({ s }: { s: LiveSession }) {
               found.length > 0 ? (
                 <ul className="grid gap-2.5 sm:grid-cols-2">
                   {found.map((c) => (
-                    <CaseButton key={c.id} c={c} s={s} hint={`${c.caseType} · ${c.industry}`} />
+                    <CaseButton key={c.id} c={c} busy={s.busy} onStart={begin} hint={`${c.caseType} · ${c.industry}`} />
                   ))}
                 </ul>
               ) : (
@@ -205,7 +233,7 @@ function Start({ s }: { s: LiveSession }) {
                 </div>
                 <ul className="grid gap-2.5 sm:grid-cols-2">
                   {open.cases.map((c) => (
-                    <CaseButton key={c.id} c={c} s={s} hint={hintFor(c)} />
+                    <CaseButton key={c.id} c={c} busy={s.busy} onStart={begin} hint={hintFor(c)} />
                   ))}
                 </ul>
               </div>
@@ -243,6 +271,9 @@ function Start({ s }: { s: LiveSession }) {
   );
 }
 
+/** A case that was ended before the member said or wrote anything. */
+const nothingWritten = (v: LiveView): boolean => v.submissions.length === 0 && !v.messages.some((m) => m.from === 'user');
+
 function Finished({ s, view, onAgain }: { s: LiveSession; view: LiveView; onAgain: () => void }) {
   const { addCase } = useData();
   const { viewCase, navigate } = useUI();
@@ -252,9 +283,10 @@ function Finished({ s, view, onAgain }: { s: LiveSession; view: LiveView; onAgai
   const waited = useRef(!view.feedback);
   const info = view.caseInfo;
   const feedback = view.feedback;
+  const empty = nothingWritten(view);
 
   const log = async () => {
-    if (!info || !feedback || view.loggedCaseId || logging.current) return;
+    if (!info || !feedback || empty || view.loggedCaseId || logging.current) return;
     logging.current = true;
     setLogError(null);
     try {
@@ -269,13 +301,13 @@ function Finished({ s, view, onAgain }: { s: LiveSession; view: LiveView; onAgai
 
   // The case log is filled in by itself as soon as the feedback is there.
   useEffect(() => {
-    if (feedback && info && !view.loggedCaseId && !logError) void log();
+    if (feedback && info && !empty && !view.loggedCaseId && !logError) void log();
   }, [feedback, info, view.loggedCaseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
-        <p className="eyebrow">{view.endReason === 'time_limit' ? 'Time ran out' : 'Case finished'}</p>
+        <p className="eyebrow">{view.endReason === 'time_limit' ? 'Time ran out' : view.endReason === 'ended_early' ? 'You ended the case' : 'Case finished'}</p>
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">{info ? info.name : 'Your case'}</h1>
         {info && (
           <p className="text-sm text-ink-2">
@@ -284,11 +316,15 @@ function Finished({ s, view, onAgain }: { s: LiveSession; view: LiveView; onAgai
         )}
       </div>
 
-      {waited.current && feedback && <Confetti />}
+      {waited.current && feedback && !empty && view.endReason !== 'ended_early' && <Confetti />}
       <BucketSays mood={feedback ? 'cheer' : 'thinking'} big>
-        {feedback
-          ? 'That is a wrap! Here is how it went, as honestly as I can tell it. Your case is in your log too.'
-          : 'Give me a moment while I read through everything you wrote...'}
+        {empty && feedback
+          ? 'No problem, we can do this another time. Nothing was written, so there is nothing to log.'
+          : feedback
+            ? view.endReason === 'ended_early'
+              ? 'You stopped here, and that is fine. Here is how what you did went, as honestly as I can tell it. It is in your log too.'
+              : 'That is a wrap! Here is how it went, as honestly as I can tell it. Your case is in your log too.'
+            : 'Give me a moment while I read through everything you wrote...'}
       </BucketSays>
 
       {!feedback && !s.feedbackError && view.feedbackAttempts < 3 && (
@@ -310,7 +346,7 @@ function Finished({ s, view, onAgain }: { s: LiveSession; view: LiveView; onAgai
         </Card>
       )}
 
-      {feedback && (
+      {feedback && !empty && (
         <>
           <Card strip="teal">
             <div className="space-y-4">
@@ -421,6 +457,16 @@ export function LiveCase() {
   const s = useLiveSession(repo);
   const [startingAgain, setStartingAgain] = useState(false);
 
+  // Opening the tab after a case is over starts afresh: its feedback is in the case log. Only a case still waiting for its feedback, or
+  // for its place in the log, is shown again, so nothing is lost.
+  const checked = useRef(false);
+  useEffect(() => {
+    if (s.loading || checked.current) return;
+    checked.current = true;
+    const v = s.view;
+    if (v && v.status === 'done' && v.feedback && (v.loggedCaseId || nothingWritten(v))) setStartingAgain(true);
+  }, [s.loading, s.view]);
+
   if (mode === 'demo') {
     return (
       <Card className="max-w-xl space-y-2">
@@ -443,9 +489,9 @@ export function LiveCase() {
     <Start
       s={{
         ...s,
-        start: async (id) => {
+        start: async (id, mode) => {
           setStartingAgain(false);
-          await s.start(id);
+          await s.start(id, mode);
         },
       }}
     />

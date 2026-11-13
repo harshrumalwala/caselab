@@ -46,7 +46,7 @@ const SUBMISSION_LABEL: Record<string, string> = { framework: 'framework', direc
  * The case-log entry for a finished live case, filled in from the feedback. The ratings and the words are Bucket's draft from what the member
  * wrote: the notes say so, and the case opens in the usual editor for them to review.
  */
-export function liveCaseToInput(view: Pick<LiveView, 'submissions' | 'endReason' | 'beatsShown' | 'beatsTotal'>, info: CaseInfo, feedback: Feedback, now: Date = new Date()): CaseInput {
+export function liveCaseToInput(view: Pick<LiveView, 'submissions' | 'endReason' | 'beatsShown' | 'beatsTotal'> & { mode?: LiveView['mode'] }, info: CaseInfo, feedback: Feedback, now: Date = new Date()): CaseInput {
   const skills = emptySkills();
   for (const { key } of SKILLS) {
     const f = feedback.skills[key];
@@ -54,9 +54,10 @@ export function liveCaseToInput(view: Pick<LiveView, 'submissions' | 'endReason'
   }
   const timedOut = view.submissions.filter((s) => s.timedOut).map((s) => SUBMISSION_LABEL[s.kind] ?? s.kind);
   const notes = [
-    'Practised live with Bucket: a typed, 30-minute timed case. The ratings and notes were drafted by the AI from what you wrote, so please check them and change anything that does not match how it went.',
-    view.endReason === 'time_limit' ? 'The 30 minutes ran out before the end.' : '',
-    timedOut.length ? `Saved as a draft when time ran out: ${timedOut.join(', ')}.` : '',
+    'Practised live with Bucket: a typed, timed case. The ratings and notes were drafted by the AI from what you wrote, so please check them and change anything that does not match how it went.',
+    view.mode === 'interview' ? 'Interview mode: the clock never stopped.' : '',
+    view.endReason === 'time_limit' ? 'The time ran out before the end.' : view.endReason === 'ended_early' ? 'Ended early, by choice.' : '',
+    timedOut.length ? `Saved as a draft when ${view.endReason === 'ended_early' ? 'the case ended' : 'time ran out'}: ${timedOut.join(', ')}.` : '',
     feedback.unfinished.length ? `Not finished: ${feedback.unfinished.join('; ')}.` : '',
   ].filter(Boolean);
   return {

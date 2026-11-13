@@ -24,6 +24,7 @@ import { chipClass } from '../../components/ui/chips';
 import { splitMarkClass, splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
 import { SlideRow } from '../../components/ui/useSlidingMark';
 import { useMyProfile } from '../../state/CommunityProvider';
+import { LogViewTabs } from './LogViewTabs';
 import { BurnedPanel } from './BurnedPanel';
 import { InterviewedPanel } from './InterviewedPanel';
 import { MatchCases } from './MatchCases';
@@ -182,6 +183,7 @@ export function CaseLog() {
   if (cases.length === 0) {
     return (
       <div className="space-y-6">
+        <LogViewTabs current="cases" />
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">My Case Log</h1>
         <LogTabs tab={tab} onChange={setTab} burned={burnedCount} interviewed={interviewedCount} />
         {tab === 'burned' && <BurnedPanel />}
@@ -213,6 +215,7 @@ export function CaseLog() {
 
   return (
     <div className="space-y-5">
+      <LogViewTabs current="cases" />
       <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">My Case Log</h1>
