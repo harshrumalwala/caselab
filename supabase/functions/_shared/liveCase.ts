@@ -58,7 +58,7 @@ export const ORDER: Stage[] = [
 export type DraftKey = 'clarify' | 'framework' | 'direction' | 'exhibit' | 'brainstorm' | 'recommendation';
 export type SubmissionKind = 'framework' | 'direction' | 'brainstorm' | 'recommendation';
 export type BeatOutcome = 'open' | 'independent' | 'hinted' | 'coach_moved' | 'timed_out';
-export type NudgeLevel = 'none' | 'process_hint' | 'directional_hint' | 'advance';
+export type NudgeLevel = 'none' | 'process_hint' | 'directional_hint' | 'lead' | 'advance';
 
 /** One thing to work through in the main section: an exhibit, or (for a case without exhibits) a step of the book's analysis. */
 export interface Beat {
@@ -84,14 +84,19 @@ export interface PlanSource {
 }
 
 const BRAINSTORM = /brainstorm/i;
-const FRAMEWORK_STEP = /^\s*(framework|structure|structuring|clarifying questions?)\s*$/i;
+// A step that is only about building the framework ("Framework", "Framework for revenue growth", "Framework: what to weigh", "Structure the problem"): the framework
+// has its own stages, so it is not discussed again. ("Framework and Exhibit 1" has more in it, so it stays.)
+const FRAMEWORK_STEP = /^\s*(framework|structure|structuring|clarifying questions?)(\s+for\b.*|\s*[:/].*|\s+the\s+(problem|approach|project)\b.*)?\s*$/i;
 
 /**
  * Some of a write-up's tables are the interviewer's own: guidance, solutions, a sample approach, "calculation to be performed by the candidate",
  * a list of brainstorm ideas. They are never shown to the member (they would give the case away); they are reference for Bucket only.
  */
-const INTERVIEWER_SIDE = /interviewer|guidance|\bguide\b|solution|sample|approach|performed by|answer|brainstorm|expected|calculation|\bmath\b/i;
-export const isInterviewerSide = (title: string): boolean => INTERVIEWER_SIDE.test(title);
+const INTERVIEWER_SIDE = /interviewer|guidance|\bguide\b|\bsolution\b|sample|approach|performed by|answer|brainstorm|expected|calculation|\bmath\b/i;
+/** "Solutions" is the interviewer's when it is the book's answer ("Solutions to Exhibit 2"), but not when it is what the case is about ("Exhibit 1: Current solutions for retirees"). */
+const SOLUTIONS_OF_THE_CASE = /\b(current|existing|possible|potential|alternative|competing|available|other|rival|today'?s)\s+solutions\b/i;
+export const isInterviewerSide = (title: string): boolean =>
+  INTERVIEWER_SIDE.test(title) || (/\bsolutions\b/i.test(title) && !SOLUTIONS_OF_THE_CASE.test(title));
 
 /** Words in a table's caption, column headings or cells that mark it as the interviewer's sheet ("Information for Interviewee", "Keep Private", "interviewer's math page"). */
 const INTERVIEWER_WORDS = /keep private|interviewee|interviewer|not for (the )?candidate|only when the candidate asks|given if prompted/i;
@@ -157,6 +162,8 @@ export interface BeatRecord {
   budgetMs: number;
   hints: number;
   userMessages: number;
+  /** Messages the member has sent on this exhibit since they last made clear progress on it. Three without getting anywhere, and Bucket leads. (Missing in sessions saved before this was kept: counts as none.) */
+  asked?: number;
   outcome: BeatOutcome;
 }
 
@@ -502,6 +509,7 @@ export function userSays(settled: SessionState, text: string, now: number): Acti
     const b = openBeat(s);
     if (b) {
       b.userMessages += 1;
+      b.asked = (b.asked ?? 0) + 1;
       b.lastUserAt = now;
     }
     delete s.drafts.exhibit;
@@ -560,7 +568,7 @@ function revealBeat(s: SessionState, at: number): boolean {
   const index = s.beats.length;
   const beat = s.plan.beats[index];
   if (!beat) return false;
-  s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastUserAt: at, lastNudgeAt: 0, budgetMs: beatBudget(s, at), hints: 0, userMessages: 0, outcome: 'open' });
+  s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastUserAt: at, lastNudgeAt: 0, budgetMs: beatBudget(s, at), hints: 0, userMessages: 0, asked: 0, outcome: 'open' });
   const first = index === 0;
   const text =
     beat.kind === 'exhibit'
@@ -593,6 +601,7 @@ export function recordAssessment(settled: SessionState, assessment: Assessment, 
   const s = structuredClone(settled);
   const b = openBeat(s);
   if (b && (assessment === 'progress' || assessment === 'partial')) b.lastProgressAt = now;
+  if (b && assessment === 'progress') b.asked = 0; // a clear step forward starts the count again
   return bump(s);
 }
 
@@ -600,17 +609,22 @@ const behindSchedule = (b: BeatRecord, at: number): boolean => at > b.revealedAt
 
 /**
  * What help to give on the exhibit on the table. The member drives: nothing is said unless they write something.
- *  - 'message': they have written to Bucket. If it shows they are stuck, they get a process hint, then a sharper one, and (only if the exhibit
- *    has already taken longer than it is worth) the next exhibit.
+ *  - 'message': they have written to Bucket. If it shows they are stuck, they get a process hint, then a sharper one, and then, on their third
+ *    message without getting anywhere, Bucket leads: it says plainly where to look and hands over what they asked for, instead of another
+ *    question. If they are still stuck after that (or the exhibit has already taken longer than it is worth), the next exhibit.
  *  - 'timer': they have said nothing. The clock never speaks up on its own: how much they cover in the time is up to them, and when the
  *    exhibit time is used up the case moves on to the next part.
  */
 export function nudgeLevel(s: SessionState, now: number, via: 'message' | 'timer' = 'message'): NudgeLevel {
   const b = openBeat(s);
   if (!b || s.stage !== 'exhibits' || via === 'timer') return 'none';
-  if (b.hints === 0) return 'process_hint';
-  if (b.hints === 1) return 'directional_hint';
-  return behindSchedule(b, now) ? 'advance' : 'none';
+  // How far up the ladder this message is: by the hints already given, or by how many messages have gone by without getting anywhere
+  // (the one being answered now is not counted yet, so the third message gets the third step).
+  const rung = Math.max(b.hints, b.asked ?? 0);
+  if (rung === 0) return 'process_hint';
+  if (rung === 1) return 'directional_hint';
+  if (rung === 2) return behindSchedule(b, now) ? 'advance' : 'lead';
+  return 'advance';
 }
 
 /** Nothing wakes the screen up for a hint: they only come in reply to the member. */
