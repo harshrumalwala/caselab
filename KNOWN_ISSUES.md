@@ -95,6 +95,21 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **Live case hides interviewer-only tables by heuristic** (titles and wording in `supabase/functions/_shared/liveCase*.ts`); the README
   accepts that a candidate exhibit might be hidden (the "safer way to be wrong").
 - **Whether a Live case table is "our transcription" is judged by reading the table** (`tableRepeatsChart`, `src/domain/liveExhibit.ts`, issue #105), because no exhibit in the data is flagged as a transcription or a book table. Measured on 2026-11-16 over the 450 charted exhibits a candidate sees: 354 lose their table, 96 keep it. The rule errs toward keeping, so some of the 96 are our own transcription left on screen (about 20 approximate exhibits with a cell the chart does not print, such as a derived total, and 4 that differ by a word) and 35 are kept only because the chart's rows of text under its axis (`belowRows`) do not count as the chart showing a figure. Hiding those 35 as well is one line (count `belowRows` in `collect`), but it would hide DigiBooks "Exhibit A: Market segments", which the owner asked to protect. The reverse error (a book table hidden) was looked for in the hidden set and not found, but the check is by reading figures, not against the books. Run it again after new write-ups are loaded.
+- **Whether a hidden table is data or the book's working is also decided by a heuristic** (`givenOnRequest` in
+  `liveCaseCoach.ts`, widened in issue #83: 18 of the 369 hidden tables in live-eligible cases are classed `onRequest`, up from 2).
+  It reads the title and the caption for who hands what over and when, and refuses anything that also calls itself a solution, a
+  working, a calculation or a completed table, or that shows the book's arithmetic in a cell. **The middle it cannot settle** is the
+  table that is plainly input data but is described as "printed on the book's solution page" (measured example: the "Market Size
+  (2023-2026)" chart table in the AI case). Those stay `reference`, where the input figures are still read out on request and a result
+  never is, so the cost of being wrong is small — but an explicit `audience` field on each exhibit in `private-data/` would settle it
+  properly, at the price of regenerating and reloading the 13 MB seed (the owner's call; not done).
+- **"Never read out the row that is the answer to the open beat" is prompt-only.** Nothing in code can tell that "Profit per customer:
+  $4.20" is the answer while the open beat is profit per customer, so the rule lives in the directive and in the notes around each
+  table (`NOT_THE_ANSWER` in `liveCaseCoach.ts`). `leaks()` catches a repeated sentence of the private notes, not a figure read off a
+  reference table. Only a run against a real model can say whether Bucket keeps to it; that is the pilot in DECISIONS.md.
+- **The early stages carry the interviewer's tables inside a 2,500-character budget** (`EARLY_DATA_CHARS`). Measured over the 235
+  live-eligible cases that have such tables, 232 fit whole; 3 are cut (the largest holds about 4,000 characters), so a member asking
+  for a figure in the last table of one of those three may still be told it is not there.
 - **A busy case is squeezed by the 25-minute ceiling on the exhibit discussion** (`planTimes`, used by `buildPlan` in `supabase/functions/_shared/liveCase.ts`,
   issue #82). The ceiling is today's longest case, which the issue asked not to exceed, so from six beats up every extra beat makes the
   others shorter: 56 of the 847 eligible write-ups have six or more, and at twelve `beatBudget` works out at about two minutes each. If a
