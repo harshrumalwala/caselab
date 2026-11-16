@@ -50,6 +50,17 @@ survive only as a summary plus the owner's message log, so a few early technical
   level, and "open everything". "Who cased me" is off by default because it names a third person who has not agreed.
 - **Visitor visibility is a separate, extra, off-by-default switch with a confirmation.** Free text (feedback, notes) is not shown to
   visitors unless the member opens everything. Why: anything public can be scraped and cannot be recalled.
+- **Proposed 2026-11-16, reversing the public directory: the personal link is the only public way to see a profile (issues #96, #97).**
+  Owner: "remove global search from front page, people are not finding it that helpful instead they can share their personalized link
+  with anyone whom they want but we still want the internal community reach and stuff open". The front page loses "Cased recently" and
+  "Search all members". Hiding the screen is not enough, so a migration revokes the `anon` read on `public_profiles` and `public_shared_cases`
+  (today's grants are in `20261021120000_public_directory.sql`); a single profile stays readable only through `public_person(id)` and
+  `public_person_cases(id)`. The two visitor settings collapse into one, "people with my link can see my profile", default off, still
+  confirmed when turned on; anyone currently listed publicly becomes link-only, which is a reduction in exposure. This reverses PRs #4, #6
+  and #8 (the directory existed because 2Y students and firm reps do not want to sign in); the personal link now serves that need.
+  Community (members only) is untouched. "Reset my link" (#97) is proposed because the link holds the permanent member ID and the only cut-off
+  today is switching visibility off. Merge first, then apply the migration (the old front page would break if it were applied first).
+  **Status: proposed, not approved; applying the migration is the owner's call.**
 - **One-click private cases** (owner request, PR #10), shown with a Private badge and removed from the shared copy at once.
 - **Burned books and burned cases.** Owner's intent: other casers should not give you a case from books you have already worked
   through solo. Burning is advice for the "find a case" screen, not a lock. When the assistant proposed that a single burned case
@@ -87,6 +98,24 @@ survive only as a summary plus the owner's message log, so a few early technical
 - **Edge Functions `notify-request` and `live-case` run with `verify_jwt = false`** and check sign-in themselves, because the gateway's
   check cannot read this project's ES256 tokens and would refuse every app call. (Comment in `supabase/config.toml`; first made for
   notify-request in PR #43.)
+
+## Scheduling inside the community (proposed 2026-11-16, issues #98-#102; none approved)
+
+- **Phase 1 only: no calendar sign-in.** Members save a preferred meeting link and a time zone (#98); a structured propose, confirm, counter and
+  cancel flow replaces the free-text `when_text` (#99 database, #100 screens); confirming a time emails both people a calendar invite (#101); an
+  optional reminder is a separate small issue (#102). Owner: schedule "directly within the community ... such that it can reflect on their
+  calendar too ... set connectivity with their preferred virtual meeting apps". Why phase 1 this way: `.ics` invites reach Google, Outlook and
+  Apple calendars with no OAuth, no refresh tokens and no platform review. Phase 2 (connected calendars) is deliberately not an issue; see
+  ROADMAP R37.
+- **The meeting link is shared only with the person scheduled with, and only once a time is confirmed.** It is never on a profile or in
+  Community, and lives in a table with no API access, behind SECURITY DEFINER functions, like practice requests.
+- **Invites never contain the other person's email address**, because an `.ics` attendee list would show it and the rule is that no email is
+  ever shown to another member.
+- **Emails widen from two events to five** (asked, said yes, plus time confirmed, changed, cancelled), governed by the same switch (the PM
+  recommends this; owner to confirm). Declines and chat messages are still never emailed.
+- **Open for the owner:** whose meeting link goes on the invite (suggested default: whoever asked hosts, the other person's link is the
+  fallback, and if neither has one the invite says to agree a link in messages); whether the reminder (#102) is worth a scheduled job, which
+  the app does not have today; whether the "Free this week" badge (ROADMAP R1) is retired.
 
 ## Design and tone
 
