@@ -87,7 +87,9 @@ assistant has no evidence it was checked by hand in production.
 | Warm-up mental math | done | Fifteen question kinds, 30/60/120 s, bests synced to account. |
 | First-login tour, keyboard shortcuts, installable app | done | No offline mode (no service worker). |
 | Demo mode (16 sample cases, in memory only) | done | |
-| "Free this week" badge on profiles | not started | Owner said "not now". |
+| "Free this week" badge on profiles | not started | Owner said "not now". Overlaps with scheduling; retire or reconsider. |
+| Scheduling inside the community (meeting link, propose/confirm/counter/cancel, calendar invite emails) | not started | Proposed as issues #98-#102, phase 1 only (no calendar sign-in). None approved. |
+| Remove the public member search; personal link as the only public way in | not started | Proposed as issues #96 and #97. Until built, the front page still has the visitor directory above. |
 | Verified-Booth-only sign-up | not started | Designed so it needs no rebuild (see DECISIONS.md). |
 
 ## Data and privacy model (what must stay true)

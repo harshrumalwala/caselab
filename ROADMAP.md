@@ -8,7 +8,7 @@ or **Assistant** (a logical next step the assistant noticed; the owner has not a
 
 | # | Item | Source | Notes |
 |---|---|---|---|
-| R1 | "Free this week" badge on profiles, so people do not negotiate times in messages | Owner (picked from an assistant list on 2026-10-31; later said "not now") | Not started. Would be a new profile field and a share switch; must respect the privacy model (member-only?). Open question for the PM: who sees it. |
+| R1 | "Free this week" badge on profiles, so people do not negotiate times in messages | Owner (picked from an assistant list on 2026-10-31; later said "not now") | Not started. Would be a new profile field and a share switch; must respect the privacy model (member-only?). Open question for the PM: who sees it. Overlaps with scheduling (#98-#102, proposed 2026-11-16); retire or reconsider. |
 | R2 | A verified-email "guest tier" between visitor and full member | Owner (2026-10-20: "I'll consider a verified-email guest tier later") | Not started. Membership is defined only by `public.is_member_id()`, so a tier would need a design decision about what a guest can see. |
 | R3 | Verify the learning mode of Live case on the live site | Assistant | The session that built it (PR #79) said it had not started a Learning case on production nor confirmed Vercel had deployed. Whether the owner has tried it is not known. |
 
@@ -85,3 +85,19 @@ Related existing entries: **R15** (chart kinds we cannot draw) is unaffected —
 problem was rendering, not coverage. **R34** (check live case at phone width, add an end-to-end test that starts a case) is still
 open and still unverified; #81 adds unit coverage but nothing in `e2e/` starts a live case. **R20** (offer partial write-ups in
 Learning mode) is unchanged; the 25 partial write-ups stay excluded.
+
+## Front page and scheduling (proposed 2026-11-16: GitHub issues, none approved)
+
+| Issue | Item | Status | Needs |
+|---|---|---|---|
+| #96 | Remove the front-page member search; revoke `anon` reads of the public tables; one "people with my link" switch | `proposed` | A migration (owner approves); merge first, then apply |
+| #97 | Reset my link (random share token) | `proposed`; after #96 | A migration |
+| #98 | Preferred meeting link and time zone in Profile | `proposed` | A migration |
+| #99 | Database rules for proposing, confirming, countering and cancelling a practice time | `proposed` | A migration |
+| #100 | Screens: pick a time inside a request and a conversation; retire `when_text` | `proposed`; after #98, #99 | App only (a migration only if `when_text` is dropped) |
+| #101 | Invite emails with `.ics` (stable UID, sequence number) on confirm, change, cancel | `proposed`; after #100 | `functions deploy notify-request`; possibly a migration |
+| #102 | Optional reminder email shortly before | `proposed`; after #101; owner to decide it is worth a scheduled job | A scheduler, a migration, possibly a secret |
+
+| # | Item | Source | Notes |
+|---|---|---|---|
+| R37 | **Phase 2: connect Google and Microsoft calendars** (free/busy, availability, automatic event and Meet/Teams link creation) | Assistant, following the owner's request of 2026-11-16 ("reflect on their calendar"). **Deliberately not an issue yet.** | Needs the phase-1 results first. Open questions, each needing a check of the **current** platform documentation before anyone commits (the statements below are not verified): (1) Google OAuth verification: calendar scopes are, I believe, sensitive and may need app verification and a privacy review, and an unverified app may be limited to test users; (2) Microsoft school tenants often block third-party consent unless an admin approves, and whether Booth's tenant would is not known; (3) secure storage of refresh tokens, a new class of secret the project has none of (encrypted in the database or Supabase Vault, deleted with the account, revocable); (4) the availability UI (showing free/busy to a partner without exposing event details); (5) time zones, daylight-saving boundaries and recurring events; (6) the testing cost: real Google and Microsoft accounts and tenants, no CI coverage possible, and the privacy review. Revisit only if phase 1 proves people actually schedule in the app. |
