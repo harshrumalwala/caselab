@@ -220,7 +220,7 @@ function BucketSection() {
             Meet Bucket, <span className="marker">your interviewer</span>
           </h2>
           <p className="mt-3 text-base leading-relaxed text-ink-2">
-            Practise a whole case in writing, 35 minutes against the clock, with Bucket across the table. No scheduling, no partner needed, any time you have the time.
+            Practise a whole case in writing, 20 to 40 minutes against the clock, with Bucket across the table. No scheduling, no partner needed, any time you have the time.
           </p>
           <ul className="mt-5 space-y-2.5">
             {BUCKET_POINTS.map((text) => (
@@ -236,7 +236,7 @@ function BucketSection() {
             <a href="#/signup" className={PRIMARY}>
               Try a live case, it’s free <ArrowRight className="size-4" aria-hidden />
             </a>
-            <span className="text-sm font-medium text-ink-2">Typed, not spoken. Takes 35 minutes (40 for a longer case).</span>
+            <span className="text-sm font-medium text-ink-2">Typed, not spoken. Takes 20 to 40 minutes, as long as the case needs.</span>
           </div>
         </div>
         <LiveMock />
@@ -343,7 +343,7 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
               Track your progress.
             </h1>
             <p className="mt-5 max-w-md text-lg leading-relaxed text-ink-2">
-              Meet Bucket, your AI interviewer. Practise a whole case in writing, 35 minutes against the clock, then get feedback on what you wrote.
+              Meet Bucket, your AI interviewer. Practise a whole case in writing, 20 to 40 minutes against the clock, then get feedback on what you wrote.
               Every case lands in your log, so you see how you&rsquo;re improving and what to practise next.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">

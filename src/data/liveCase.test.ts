@@ -47,6 +47,12 @@ const ok = (r: ActionResult): SessionState => {
   return r.state;
 };
 const stages = (s: SessionState) => s.stageLog.map((e) => e.stage);
+const exhibits = (n: number) => Array.from({ length: n }, (_, i) => ({ title: `Exhibit ${i + 1}: Sales` }));
+/** What a case with `n` things to work through is planned for: the exhibit stage and the whole case, in whole minutes. */
+const minutes = (n: number): [number, number] => {
+  const p = buildPlan({ exhibits: exhibits(n), steps: [] });
+  return [(p.exhibitMs ?? 0) / 60_000, (p.limitMs ?? 0) / 60_000];
+};
 
 /** Gets through the opening stages the quick way and returns the session on the first exhibit, `now` seconds in. */
 function toExhibits(p: CasePlan, now: number): SessionState {
@@ -223,6 +229,29 @@ describe('time saved and flexible time', () => {
     expect(without.hard).toBe(at(1680));
   });
 
+  it('keeps the closing time safe at every size of case, from no beats to twelve, with a brainstorm and without', () => {
+    const opening = PLANNED_MS.prompt + PLANNED_MS.framework_think + PLANNED_MS.framework_write;
+    const closing = PLANNED_MS.recommend_think + PLANNED_MS.recommend_write;
+    const brainstorming = PLANNED_MS.brainstorm_think + PLANNED_MS.brainstorm_write;
+    for (let n = 0; n <= 12; n += 1) {
+      for (const hasBrainstorm of [false, true]) {
+        const built = buildPlan({ exhibits: exhibits(n), steps: hasBrainstorm ? [{ title: 'Brainstorm: ways to grow' }] : [] });
+        const p: CasePlan = { ...built, hasBrainstorm };
+        const needed = closing + (hasBrainstorm ? brainstorming : 0);
+        expect(p.beats).toHaveLength(n);
+        // Everything the case is planned to do fits inside the limit, however much there is to work through.
+        expect(p.limitMs).toBeGreaterThanOrEqual(opening + (p.exhibitMs ?? 0) + needed);
+        const s = newSession(p, T0, 'Prompt');
+        expect(hardEnd(s)).toBe(T0 + p.limitMs!);
+        if (n === 0) continue; // no beats, no exhibit stage to protect the closing from
+        const d = deadlines(s, 'exhibits', T0 + opening); // the discussion opening at its planned moment
+        expect(hardEnd(s) - d.hard).toBe(needed); // the closing stages always get their whole time
+        expect(d.hard).toBeGreaterThan(T0 + opening); // and the discussion still has time of its own
+        expect(d.soft).toBeLessThanOrEqual(d.hard);
+      }
+    }
+  });
+
   it('skips the brainstorm cleanly when the case has none, going straight to the recommendation', () => {
     let s = toExhibits(plan(1, false), 100);
     s = nextBeat(s, at(200), 'independent');
@@ -373,16 +402,52 @@ describe('the exhibit discussion', () => {
     expect(nudgeLevel(s, t + sec(30))).toBe('directional_hint'); // the count started again
   });
 
-  it('gives a case 20 minutes of exhibits in 35, or 25 in 40 when it has more than four exhibits', () => {
-    const exhibits = (n: number) => Array.from({ length: n }, (_, i) => ({ title: `Exhibit ${i + 1}: Sales` }));
-    const standard = buildPlan({ exhibits: exhibits(4), steps: [] });
-    const long = buildPlan({ exhibits: exhibits(5), steps: [] });
-    expect([standard.exhibitMs, standard.limitMs]).toEqual([20 * 60_000, 35 * 60_000]);
-    expect([long.exhibitMs, long.limitMs]).toEqual([25 * 60_000, 40 * 60_000]);
+  it('sizes the case by how much there is to work through: four minutes a beat on top of four to settle in, never past 25 in 40', () => {
+    expect(minutes(1)).toEqual([8, 23]);
+    expect(minutes(2)).toEqual([12, 27]);
+    expect(minutes(4)).toEqual([20, 35]); // the commonest size is exactly what every case used to get
+    expect(minutes(6)).toEqual([25, 40]); // the ceiling, which is what a busy case already had
+    expect(minutes(10)).toEqual([25, 40]);
+    expect(minutes(12)).toEqual([25, 40]);
+    const long = buildPlan({ exhibits: exhibits(6), steps: [] });
     const s = settle(newSession(long, T0, 'Prompt'), at(450));
     expect(hardEnd(s)).toBe(T0 + 40 * 60_000);
     expect(deadlines(s, 'exhibits', s.stageStartedAt).soft - s.stageStartedAt).toBe(25 * 60_000);
     expect(stageEndsAt(s)).toBe(s.stageStartedAt + 25 * 60_000);
+  });
+
+  it('gives a case with one thing to work through a visibly shorter case than one with four, and no case more than before', () => {
+    const [oneExhibit, oneLimit] = minutes(1);
+    const [fourExhibit, fourLimit] = minutes(4);
+    expect(oneExhibit).toBeLessThan(fourExhibit - 5);
+    expect(oneLimit).toBeLessThan(fourLimit - 5);
+    for (let n = 0; n <= 12; n += 1) {
+      const [exhibitMinutes, limitMinutes] = minutes(n);
+      expect(exhibitMinutes).toBeLessThanOrEqual(25); // today's longest exhibit stage
+      expect(limitMinutes).toBeLessThanOrEqual(40); // today's longest case
+      if (n > 0) expect(exhibitMinutes).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  it('plans sanely for a case with nothing for the candidate to work through: no exhibit time, and the stage is skipped as before', () => {
+    const p = buildPlan({ exhibits: [{ title: 'Interviewer Guidance: Revenue' }], steps: [{ title: 'Framework' }] });
+    expect(p.beats).toEqual([]);
+    expect([p.exhibitMs, p.limitMs]).toEqual([0, 15 * 60_000]); // only what the opening, the closing and the flexible time need
+    const s = settle(newSession(p, T0, 'Prompt'), at(450));
+    expect(stages(s)).toEqual(['prompt', 'framework_think', 'framework_write', 'recommend_think']);
+    const done = settle(s, at(900));
+    expect(done.stage).toBe('done');
+    expect(done.endReason).toBe('completed'); // it reaches the recommendation and finishes, rather than running out
+  });
+
+  it('leaves a case that is already running alone: a saved plan keeps the clock it was given', () => {
+    const before: CasePlan = { beats: [{ kind: 'exhibit', index: 0 }], hasBrainstorm: false, brainstormTopic: '' };
+    const old = settle(newSession(before, T0, 'Prompt'), at(450)); // saved before plans carried times at all
+    expect(hardEnd(old)).toBe(T0 + LIMIT_MS);
+    expect(deadlines(old, 'exhibits', old.stageStartedAt).soft - old.stageStartedAt).toBe(PLANNED_MS.exhibits);
+    const inFlight = settle(newSession({ ...before, exhibitMs: 20 * 60_000, limitMs: 35 * 60_000 }, T0, 'Prompt'), at(450));
+    expect(hardEnd(inFlight)).toBe(T0 + 35 * 60_000); // a case started under the old rule runs to the end it was promised
+    expect(deadlines(inFlight, 'exhibits', inFlight.stageStartedAt).soft - inFlight.stageStartedAt).toBe(20 * 60_000);
   });
 
   it('ends the discussion at its planned time, or later only while the member keeps making progress, and never past the closing reserve', () => {

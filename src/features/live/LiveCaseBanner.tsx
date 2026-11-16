@@ -5,7 +5,7 @@ import { useData } from '../../state/DataProvider';
 import { useUI } from '../../state/ui';
 import { BucketAvatar } from '../improvement/BucketAvatar';
 
-const POINTS = ['35 minutes, typed', 'Real cases, by type or industry', 'Feedback on what you wrote, logged for you'];
+const POINTS = ['20 to 40 minutes, typed', 'Real cases, by type or industry', 'Feedback on what you wrote, logged for you'];
 
 /**
  * The live case with Bucket, given the top of the Dashboard: it is the thing CaseLab does that a spreadsheet can't, so it is the first

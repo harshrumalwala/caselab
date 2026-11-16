@@ -17,7 +17,7 @@ export function LiveCaseCard() {
             <Timer className="size-5 text-accent-text" aria-hidden /> Practise a whole case with Bucket
           </h2>
           <p className="mt-1 text-sm text-ink-2">
-            35 minutes, typed: Bucket gives you the prompt, answers your clarifying questions, shows the exhibits and keeps the case moving. Then you get feedback on what you wrote, and the
+            20 to 40 minutes, typed, as long as the case needs: Bucket gives you the prompt, answers your clarifying questions, shows the exhibits and keeps the case moving. Then you get feedback on what you wrote, and the
             case is logged for you.
           </p>
         </div>

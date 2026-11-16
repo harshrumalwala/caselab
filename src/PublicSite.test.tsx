@@ -73,7 +73,7 @@ describe('the public front page', () => {
     tries.forEach((l) => expect(l).toHaveAttribute('href', '#/signup'));
 
     const section = screen.getByRole('region', { name: /Meet Bucket/ });
-    expect(within(section).getByText(/35 minutes against the clock/)).toBeInTheDocument();
+    expect(within(section).getByText(/20 to 40 minutes against the clock/)).toBeInTheDocument();
     expect(within(section).getByRole('list', { name: 'How a live case runs' })).toHaveTextContent('Exhibits');
     expect(within(section).getByRole('link', { name: /Try a live case/ })).toHaveAttribute('href', '#/signup');
 

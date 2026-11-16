@@ -178,7 +178,7 @@ describe('starting a live case', () => {
     // Only the prompt, word for word. What the interviewer holds comes out when the student asks for it.
     expect(v.messages[0].text).not.toContain('The base houses 20,000 soldiers.');
     expect(v.startedAt).toBe(T0);
-    expect(v.endsAt).toBe(T0 + sec(2100)); // 35 minutes for a case with up to four exhibits
+    expect(v.endsAt).toBe(T0 + sec(1620)); // 27 minutes: the case is sized to its two exhibits (12 minutes of discussion plus 15 around it)
     expect(v.caseInfo).toBeNull(); // the name would spoil it
     expect(v.exhibits).toEqual([]);
     expect(w.asked).toHaveLength(0); // starting costs nothing
@@ -688,7 +688,7 @@ describe('the member drives', () => {
     expect(r.messages.at(-1)).toMatchObject({ kind: 'hint', text: expect.stringContaining('Occupancy is 31% off-peak') });
     expect(r.exhibits).toHaveLength(1); // led, not moved on: they carry on with what they were given
     w.script.reply = () => turn('A hint.', { assessment: 'stuck' });
-    clock.t = start + sec(900);
+    clock.t = start + sec(600); // well past what this exhibit is worth, but still inside the discussion
     w.script.reply = () => turn('Good, that is the implication.', { assessment: 'progress' });
     expect(view(await call({ type: 'say', sessionId: id, text: 'Off-peak is only 31 percent, so I would test costs next' })).exhibits).toHaveLength(1); // a good answer is never cut off
     w.script.reply = () => turn('Let us move on to the next piece.', { assessment: 'stuck' });

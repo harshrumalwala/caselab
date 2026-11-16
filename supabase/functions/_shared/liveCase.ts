@@ -119,6 +119,29 @@ export function isInterviewerSideExhibit(e: { title?: string; caption?: string; 
   return (e.rows ?? []).slice(0, 80).some((r) => r.some((c) => INTERVIEWER_WORDS.test(c) || ANSWER_CELL.test(c)));
 }
 
+/**
+ * How the exhibit discussion is sized: a few minutes to settle into the data section, plus a few for every thing to work through.
+ * Four beats comes to exactly the 20 minutes every case used to get, so the common sizes are undisturbed; the ceiling is the 25 minutes
+ * the longest cases already had.
+ */
+const EXHIBIT_SETUP_MS = 4 * 60 * SECOND;
+const EXHIBIT_PER_BEAT_MS = 4 * 60 * SECOND;
+/** A case with something to work through never gets less than this (the formula's own value at one beat), nor more than the ceiling. */
+const EXHIBIT_MIN_MS = 8 * 60 * SECOND;
+const EXHIBIT_MAX_MS = 25 * 60 * SECOND;
+/** Everything around the discussion: 7:30 of prompt and framework, 4:00 the closing stages need, 3:30 of flexible time. */
+const AROUND_EXHIBITS_MS = 15 * 60 * SECOND;
+
+/**
+ * The time a case is planned for, from how much it has in it. A case with nothing to work through has no exhibit stage at all, so it is
+ * given no exhibit time; the opening, the closing and the flexible time are the same for every case, which is what keeps the closing
+ * stages safe at any size.
+ */
+function planTimes(beats: number): { exhibitMs: number; limitMs: number } {
+  const exhibitMs = beats <= 0 ? 0 : Math.min(Math.max(EXHIBIT_SETUP_MS + beats * EXHIBIT_PER_BEAT_MS, EXHIBIT_MIN_MS), EXHIBIT_MAX_MS);
+  return { exhibitMs, limitMs: exhibitMs + AROUND_EXHIBITS_MS };
+}
+
 export function buildPlan(solution: PlanSource): CasePlan {
   const brainstormStep = solution.steps.find((s) => BRAINSTORM.test(s.title));
   const brainstormTable = solution.exhibits.find((e) => BRAINSTORM.test(e.title ?? ''));
@@ -128,11 +151,9 @@ export function buildPlan(solution: PlanSource): CasePlan {
   // (The framework is done in its own stages, so a step that is just the framework is not discussed again.)
   const stepBeats: Beat[] = solution.steps.flatMap((s, index) => (BRAINSTORM.test(s.title) || FRAMEWORK_STEP.test(s.title) ? [] : [{ kind: 'step' as const, index }]));
   const beats = exhibitBeats.length > 0 ? exhibitBeats : stepBeats;
-  // More to cover, more time: 20 minutes of exhibits in a 35-minute case, or 25 in 40 when there are more than four.
-  const long = beats.length > 4;
+  // More to cover, more time: the case is as long as there is to work through, up to the 25-in-40 the busiest cases always had.
   return {
-    exhibitMs: (long ? 25 : 20) * 60 * SECOND,
-    limitMs: (long ? 40 : 35) * 60 * SECOND,
+    ...planTimes(beats.length),
     beats,
     hasBrainstorm: Boolean(brainstormStep || brainstormTable),
     brainstormTopic: brainstormStep
