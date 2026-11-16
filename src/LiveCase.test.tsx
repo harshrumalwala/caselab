@@ -106,7 +106,7 @@ describe('starting a live case', () => {
     render(<App backend={env.backend} />);
     await user.click(await screen.findByRole('button', { name: 'Start a live case' }));
     await screen.findByRole('heading', { name: 'Practise a case with Bucket' });
-    expect(screen.getByText(/The clock is as long as the case has in it/)).toBeInTheDocument();
+    expect(screen.getByText(/The clock fits the case/)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /Market Entry/ })).toBeInTheDocument(); // the lanes, not a list of every case
     expect(screen.getAllByRole('link', { name: 'Live Case' }).some((l) => l.getAttribute('aria-current') === 'page')).toBe(true); // it has its own tab now
   });
@@ -507,9 +507,9 @@ describe('learning mode', () => {
   it('explains that there is no clock once it is chosen', async () => {
     const env = createFakeEnv();
     const user = await openLive(env);
-    expect(screen.getByText(/The clock is as long as the case has in it/)).toBeInTheDocument();
+    expect(screen.getByText(/The clock fits the case/)).toBeInTheDocument();
     await pickLearning(user);
-    expect(screen.queryByText(/The clock is as long as the case has in it/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/The clock fits the case/)).not.toBeInTheDocument();
     expect(screen.getByText(/the same steps, with no clock/i)).toBeInTheDocument();
   });
 
