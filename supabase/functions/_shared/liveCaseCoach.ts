@@ -17,6 +17,7 @@ import {
   openBeat,
   ready,
   recordAssessment,
+  recordDataRequest,
   recordHint,
   saveDraft,
   saveScratchpad,
@@ -462,7 +463,7 @@ const NOT_THE_ANSWER =
   ' One figure is never read out, wherever it is written down: the very thing they have been asked to work out. A table can print it as a row of its own (a "profit per customer" row while they are working out profit per customer); that row is an answer, however input-shaped it looks, so leave it out and read the inputs beside it.';
 /** What to do when the student asks for a number: hand over the inputs, never the result. The same for every mode. */
 const DATA_REQUESTS =
-  ` If the student asks to see data or an exhibit, or for a number they need for their calculation, and it is in the case information, in the exhibit shown to them or in the data you hold for them (listed below), give it instead of answering with a question. Data you hold for them is read out in full, every figure, in plain spoken sentences exactly as written (as an interviewer reads a table aloud), and then you ask what they make of it or what they would calculate. Never say a result, a total, a ratio or what it means.${NOT_THE_ANSWER} Asking for the right data is part of doing the case well: give it without treating it as being stuck. The case must keep moving: if the information really is not there, say so briefly and ask them to state an assumption and carry on.`;
+  ` If the student asks to see data or an exhibit, or for a number they need for their calculation, and it is in the case information, in the exhibit shown to them or in the data you hold for them (listed below), give it instead of answering with a question. Data you hold for them is read out in full, every figure, in plain spoken sentences exactly as written (as an interviewer reads a table aloud), and then you ask what they make of it or what they would calculate. Never say a result, a total, a ratio or what it means.${NOT_THE_ANSWER} Asking for the right data is part of doing the case well: give it without treating it as being stuck. Set data_request to true when their message asks you for something — data, an exhibit, a figure, a fact, or the answer itself — instead of working on the case; it costs them nothing either way. The case must keep moving: if the information really is not there, say so briefly and ask them to state an assumption and carry on.`;
 
 const DIRECTIVES: Record<TurnKind, string> = {
   clarify:
@@ -538,6 +539,8 @@ export const TURN_SCHEMA = {
     assessment: { type: 'string', enum: ['progress', 'partial', 'stuck', 'unclear'] },
     beat_complete: { type: 'boolean' },
     direction_clear: { type: 'boolean' },
+    /** Their message asked for something (data, an exhibit, a figure, the answer) rather than working on the case. It never costs them a rung of help. */
+    data_request: { type: 'boolean' },
   },
   required: ['message', 'assessment', 'beat_complete', 'direction_clear'],
   additionalProperties: false,
@@ -582,6 +585,8 @@ export interface Turn {
   assessment: Assessment;
   beatComplete: boolean;
   directionClear: boolean;
+  /** The member asked for something instead of working on the exhibit, so this message does not climb the help ladder. */
+  dataRequest: boolean;
 }
 
 const norm = (t: string): string => t.toLowerCase().replace(/[^a-z0-9%$.]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -600,7 +605,13 @@ export function parseTurn(text: string, privateText: readonly string[], fallback
   const message = str(o.message, maxChars);
   if (!message) return null;
   const assessment: Assessment = (['progress', 'partial', 'stuck', 'unclear'] as const).find((a) => a === o.assessment) ?? 'unclear';
-  return { message: leaks(message, privateText) ? fallback : message, assessment, beatComplete: o.beat_complete === true, directionClear: o.direction_clear === true };
+  return {
+    message: leaks(message, privateText) ? fallback : message,
+    assessment,
+    beatComplete: o.beat_complete === true,
+    directionClear: o.direction_clear === true,
+    dataRequest: o.data_request === true,
+  };
 }
 
 /** True when the reply repeats a sentence of the private notes: a model that has just been told the answer must not pass it on. */
@@ -958,6 +969,8 @@ function applyTurn(st: StoredSession, turn: Turn, kind: TurnKind, now: number, h
   if (kind === 'exhibit') {
     s = recordAssessment(s, turn.assessment, now);
     if (turn.beatComplete) return nextBeat(coachSays(s, turn.message, now), now, 'independent');
+    // They asked for something rather than being stuck on it: the question is answered and the message is taken back off the help ladder.
+    if (turn.dataRequest) return coachSays(recordDataRequest(s), turn.message, now);
     const stuck = turn.assessment === 'stuck' || turn.assessment === 'unclear';
     // Help only for a member who is in fact stuck: a good answer that arrives as help falls due is never cut off.
     if (stuck && (help === 'process_hint' || help === 'directional_hint')) return recordHint(coachSays(s, turn.message, now, 'hint'), now);

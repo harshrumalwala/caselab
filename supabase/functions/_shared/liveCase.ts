@@ -188,7 +188,7 @@ export interface BeatRecord {
   budgetMs: number;
   hints: number;
   userMessages: number;
-  /** Messages the member has sent on this exhibit since they last made clear progress on it. Three without getting anywhere, and Bucket leads. (Missing in sessions saved before this was kept: counts as none.) */
+  /** Messages the member has sent on this exhibit since they last made clear progress on it, not counting the ones that asked for data. How far up the help ladder they are. (Missing in sessions saved before this was kept: counts as none.) */
   asked?: number;
   outcome: BeatOutcome;
 }
@@ -733,13 +733,40 @@ export function recordAssessment(settled: SessionState, assessment: Assessment, 
   return bump(s);
 }
 
+/**
+ * The message being answered asked for data (or for the answer), not for help: it is taken back off the count that climbs the help ladder,
+ * so asking costs nothing. Asking well is part of doing the case, in every mode (DECISIONS.md, "The interview rubric", section 2).
+ */
+export function recordDataRequest(settled: SessionState): SessionState {
+  const s = structuredClone(settled);
+  const b = openBeat(s);
+  if (b) b.asked = Math.max(0, (b.asked ?? 0) - 1);
+  return bump(s);
+}
+
 const behindSchedule = (b: BeatRecord, at: number): boolean => at > b.revealedAt + b.budgetMs;
 
 /**
+ * The help ladder, one row per mode: what the member's first, second, third ... message on an exhibit that is going nowhere is answered
+ * with. The last entry of a row repeats for every message after it. This table is the whole of the difference in how much help a mode
+ * gives (DECISIONS.md, "The interview rubric", section 1).
+ *  - practice teaches as it goes: a process hint from the first stuck message, a sharper one next, then Bucket leads (it stops asking open
+ *    questions and says plainly where to look), and then it moves the case on.
+ *  - an interview redirects, it never rescues: the first stuck message gets nothing (a real interviewer lets you sit with it), help goes no
+ *    further than a nudge, and there is no 'lead' rung at all. Being stuck costs the beat, which is what 'advance' is for.
+ *  - learning has no clock and Bucket never moves a learner on: it keeps teaching, and the member says when they are done.
+ */
+const LADDER: Record<LiveMode, readonly NudgeLevel[]> = {
+  practice: ['process_hint', 'directional_hint', 'lead', 'advance'],
+  interview: ['none', 'process_hint', 'directional_hint', 'advance'],
+  learning: ['process_hint', 'directional_hint', 'lead'],
+};
+
+/**
  * What help to give on the exhibit on the table. The member drives: nothing is said unless they write something.
- *  - 'message': they have written to Bucket. If it shows they are stuck, they get a process hint, then a sharper one, and then, on their third
- *    message without getting anywhere, Bucket leads: it says plainly where to look and hands over what they asked for, instead of another
- *    question. If they are still stuck after that (or the exhibit has already taken longer than it is worth), the next exhibit.
+ *  - 'message': they have written to Bucket. If it shows they are stuck, they climb their mode's rung of the ladder above; in a timed mode
+ *    the last rung before moving on is skipped once the exhibit has already taken longer than it is worth, and after the top of the ladder
+ *    the case moves on to the next exhibit.
  *  - 'timer': they have said nothing. The clock never speaks up on its own: how much they cover in the time is up to them, and when the
  *    exhibit time is used up the case moves on to the next part.
  */
@@ -749,12 +776,11 @@ export function nudgeLevel(s: SessionState, now: number, via: 'message' | 'timer
   // How far up the ladder this message is: by the hints already given, or by how many messages have gone by without getting anywhere
   // (the one being answered now is not counted yet, so the third message gets the third step).
   const rung = Math.max(b.hints, b.asked ?? 0);
-  if (rung === 0) return 'process_hint';
-  if (rung === 1) return 'directional_hint';
-  // With no clock there is no "behind schedule", and Bucket never moves a learner on: it keeps teaching, and the member says when they are done.
-  if (isUntimed(s)) return rung === 1 ? 'directional_hint' : 'lead';
-  if (rung === 2) return behindSchedule(b, now) ? 'advance' : 'lead';
-  return 'advance';
+  const ladder = LADDER[s.mode ?? 'practice'] ?? LADDER.practice;
+  // The exhibit has already run past the time it is worth: the last rung of help before moving on is skipped. A mode whose ladder never
+  // moves the member on (learning, which has no clock at all) has no such thing.
+  if (ladder[ladder.length - 1] === 'advance' && rung >= ladder.length - 2 && behindSchedule(b, now)) return 'advance';
+  return ladder[Math.min(rung, ladder.length - 1)];
 }
 
 /** Nothing wakes the screen up for a hint: they only come in reply to the member. */

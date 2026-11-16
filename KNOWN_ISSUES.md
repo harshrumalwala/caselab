@@ -228,6 +228,12 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   from the turn kind and a count of their own messages, so every conclusion from the run is about the engine, never about the writing.
   Two harness numbers also shape its verdicts and are not the engine's: the off-track candidate gives up on a beat after 12 messages,
   and a run gives up after 400 turns.
+- **The dry run never exercises `data_request`.** The rule that a message asking for data costs no rung of help (issue #94) depends on
+  the model setting `data_request` on the turn, and the harness's stub never sets it — not even for the `asker` candidate, which asks for
+  data by name. So the rule is covered by unit tests only, and the dry run's rung numbers are the ladder's alone. Two consequences worth
+  keeping in mind: a model that never sets the flag leaves the ladder exactly as it was (the fallback is the old behaviour, which is the
+  safe way round), and a model that sets it on everything would stop the ladder climbing at all. The real-model pilot is the place to
+  measure how often it is set, and `asker` could be taught to send it once that is known.
 - **Learning mode cannot be finished by a member who neither completes a beat nor presses "move on."** Found by the dry run: there is no
   clock (`isUntimed`) and `nudgeLevel` never reaches `advance` for a learner, so nothing but the member ends a beat. A silent member is
   left at the prompt and a stuck one on beat 1; both can still end the case from the screen. It is the design, so the dry run counts those
