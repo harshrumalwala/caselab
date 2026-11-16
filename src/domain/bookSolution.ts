@@ -178,16 +178,30 @@ const KINDS = ['bar', 'stacked', 'line', 'pie', 'scatter'] as const;
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 /**
+ * How much of one exhibit is kept. A whole write-up uses `SOLUTION_EXHIBIT_LIMITS`; a caller that has already cut the exhibit to its own
+ * size (the live case, whose Edge Function allows a bigger table) passes those caps instead, so nothing it sent in full is cut twice.
+ */
+export interface ExhibitLimits {
+  columns: number;
+  rows: number;
+  /** Points on a chart: categories, the totals above them and the rows of text below. */
+  points: number;
+}
+
+/** What a casebook write-up may hold: big enough for every exhibit in the library (see KNOWN_ISSUES on the caps). */
+export const SOLUTION_EXHIBIT_LIMITS: ExhibitLimits = { columns: 16, rows: 70, points: 70 };
+
+/**
  * Reads a chart. A chart either names the table columns it plots (the earlier form: `labelColumn` and `seriesColumns`), or carries the figures
  * the book plots (`categories` and `series`). Anything that cannot be drawn is dropped, so the screen shows the table alone rather than a
  * half-drawn chart.
  */
-function parseChart(v: unknown, columns: string[], rows: string[][], depth = 0): ExhibitChart | null {
+function parseChart(v: unknown, columns: string[], rows: string[][], limits: ExhibitLimits, depth = 0): ExhibitChart | null {
   const o = obj(v);
   const kind = KINDS.find((k) => k === o.kind);
   if (!kind) return null;
 
-  let categories = strs(o.categories, 80, 70);
+  let categories = strs(o.categories, 80, limits.points);
   let series: ChartSeries[] = (Array.isArray(o.series) ? o.series : [])
     .map((x) => {
       const so = obj(x);
@@ -216,7 +230,7 @@ function parseChart(v: unknown, columns: string[], rows: string[][], depth = 0):
     series = cols.map((c) => ({ name: columns[c] ?? '', values: rows.map((r) => parseFigure(r[c] ?? '') ?? 0), labels: [], type: 'bar' as const, color: '' }));
   }
 
-  const panels = depth === 0 ? (Array.isArray(o.panels) ? o.panels : []).map((p) => parseChart(p, columns, rows, 1)).filter((p): p is ExhibitChart => p !== null).slice(0, 4) : [];
+  const panels = depth === 0 ? (Array.isArray(o.panels) ? o.panels : []).map((p) => parseChart(p, columns, rows, limits, 1)).filter((p): p is ExhibitChart => p !== null).slice(0, 4) : [];
   if (series.length === 0 && panels.length === 0) return null;
   // every series must line up with the categories, or it cannot be drawn
   if (series.some((x) => x.values.length !== categories.length)) return null;
@@ -230,9 +244,9 @@ function parseChart(v: unknown, columns: string[], rows: string[][], depth = 0):
     unit: str(o.unit, 12),
     categories,
     series,
-    totals: strs(o.totals, 30, 70),
+    totals: strs(o.totals, 30, limits.points),
     belowRows: (Array.isArray(o.belowRows) ? o.belowRows : [])
-      .map((r) => ({ label: str(obj(r).label, 40), values: strs(obj(r).values, 30, 70) }))
+      .map((r) => ({ label: str(obj(r).label, 40), values: strs(obj(r).values, 30, limits.points) }))
       .filter((r) => r.values.length > 0)
       .slice(0, 4),
     sideNotes: sideItems.length > 0 ? { heading: str(sn.heading, 60), items: sideItems } : null,
@@ -248,6 +262,31 @@ function parseChart(v: unknown, columns: string[], rows: string[][], depth = 0):
     footnote: str(o.footnote, 240),
     axisEnds: str(obj(o.axisEnds).top, 40) || str(obj(o.axisEnds).bottom, 40) ? { top: str(obj(o.axisEnds).top, 40), bottom: str(obj(o.axisEnds).bottom, 40) } : null,
     panels,
+  };
+}
+
+/**
+ * Reads one exhibit: its table, tidied and cut to length, and the chart the book drew over it (null when there is none, or when it is a
+ * kind or a shape we cannot draw). Shared by the full solution and by a live case, so an exhibit looks the same in both. It always returns
+ * an exhibit: whether one with no title or no table is worth showing is the caller's decision.
+ */
+export function parseSolutionExhibit(raw: unknown, limits: ExhibitLimits = SOLUTION_EXHIBIT_LIMITS): SolutionExhibit {
+  const o = obj(raw);
+  // A heading can be blank in the book itself: keep it, so the columns still line up with the rows.
+  const columns = (Array.isArray(o.columns) ? o.columns : []).map((c) => str(c, 80)).slice(0, limits.columns);
+  const rows = (Array.isArray(o.rows) ? o.rows : [])
+    .map((r) => (Array.isArray(r) ? r.map((c) => str(c, 120)).slice(0, columns.length || limits.columns) : []))
+    .filter((r) => r.some((c) => c !== ''))
+    .slice(0, limits.rows);
+  return {
+    title: str(o.title, 200),
+    caption: str(o.caption, 300),
+    columns,
+    rows,
+    approx: o.approx === true,
+    howToRead: str(o.howToRead, 700),
+    takeaways: strs(o.takeaways, 400, 5),
+    chart: parseChart(o.chart, columns, rows, limits),
   };
 }
 
@@ -292,25 +331,7 @@ export function parseBookSolution(raw: unknown): BookSolution | null {
     .slice(0, 8);
 
   const exhibits: SolutionExhibit[] = (Array.isArray(v.exhibits) ? v.exhibits : [])
-    .map((e) => {
-      const o = obj(e);
-      // A heading can be blank in the book itself: keep it, so the columns still line up with the rows.
-      const columns = (Array.isArray(o.columns) ? o.columns : []).map((c) => str(c, 80)).slice(0, 16);
-      const rows = (Array.isArray(o.rows) ? o.rows : [])
-        .map((r) => (Array.isArray(r) ? r.map((c) => str(c, 120)).slice(0, columns.length || 16) : []))
-        .filter((r) => r.some((c) => c !== ''))
-        .slice(0, 70);
-      return {
-        title: str(o.title, 200),
-        caption: str(o.caption, 300),
-        columns,
-        rows,
-        approx: o.approx === true,
-        howToRead: str(o.howToRead, 700),
-        takeaways: strs(o.takeaways, 400, 5),
-        chart: parseChart(o.chart, columns, rows),
-      };
-    })
+    .map((e) => parseSolutionExhibit(e))
     .filter((e) => e.title && e.columns.length > 0 && e.rows.length > 0)
     .slice(0, 12);
 

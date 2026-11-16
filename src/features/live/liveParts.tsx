@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Send } from 'lucide-react';
 import type { DraftKey, LiveView, Message, PublicExhibit } from '../../data/liveCase';
-import { parseBookSolution } from '../../domain/bookSolution';
+import { parseSolutionExhibit, type ExhibitLimits } from '../../domain/bookSolution';
 import { formatClock, STAGE_LABEL, STEPS } from '../../domain/liveCase';
 import { Button } from '../../components/ui/Button';
 import { ExhibitChart } from '../caselog/ExhibitChart';
@@ -30,12 +30,15 @@ export function useAutosave(value: string, save: (text: string) => void, delayMs
   );
 }
 
+/**
+ * What the live case may send: the caps `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts` already applies. Reading the
+ * exhibit with these rather than the write-up's own (smaller) caps means a table the function sent whole is never cut a second time here.
+ */
+const LIVE_EXHIBIT_LIMITS: ExhibitLimits = { columns: 40, rows: 400, points: 400 };
+
 /** An exhibit as the member sees it: its figures and the chart the book drew, drawn from what the case has shown so far. */
 export function ExhibitView({ exhibit }: { exhibit: PublicExhibit }) {
-  const normalised = useMemo(
-    () => parseBookSolution({ prompt: 'x', exhibits: [{ title: exhibit.title, caption: exhibit.caption, columns: exhibit.columns, rows: exhibit.rows, approx: exhibit.approx, chart: exhibit.chart, howToRead: '', takeaways: [] }] })?.exhibits[0],
-    [exhibit],
-  );
+  const normalised = useMemo(() => parseSolutionExhibit(exhibit, LIVE_EXHIBIT_LIMITS), [exhibit]);
   return (
     <figure className="space-y-2 rounded-xl border border-line bg-surface p-3.5">
       <figcaption className="text-sm font-semibold text-ink">
@@ -43,7 +46,7 @@ export function ExhibitView({ exhibit }: { exhibit: PublicExhibit }) {
         {exhibit.approx && <span className="ml-2 text-xs font-normal text-muted">(values read off a chart, approximate)</span>}
       </figcaption>
       {exhibit.caption && <p className="text-xs text-muted">{exhibit.caption}</p>}
-      {normalised?.chart && <ExhibitChart exhibit={normalised} chart={normalised.chart} />}
+      {normalised.chart && <ExhibitChart exhibit={normalised} chart={normalised.chart} />}
       {exhibit.columns.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full text-left text-xs">
