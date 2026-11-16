@@ -29,7 +29,7 @@ export function LiveCaseBanner() {
         </div>
         <div className="col-span-2 row-start-2 min-w-0 md:col-span-1 md:col-start-2">
           <p className="max-w-2xl text-sm leading-relaxed text-ink-2 sm:text-base">
-            Bucket plays your interviewer: the prompt, your clarifying questions, the exhibits, the recommendation, all against the clock. Then you get feedback on what
+            Bucket plays your interviewer: the prompt, your clarifying questions, the exhibits, the recommendation, against the clock or, in learning mode, at your own pace. Then you get feedback on what
             you actually wrote.
           </p>
           <ul className="mt-3 flex flex-wrap gap-2">

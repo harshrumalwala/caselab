@@ -491,3 +491,66 @@ describe('refreshing and failing', () => {
     expect(await screen.findByText('Who pays?')).toBeInTheDocument(); // still in the conversation
   });
 });
+
+describe('learning mode', () => {
+  const pickLearning = (user: ReturnType<typeof userEvent.setup>) => user.click(screen.getByRole('radio', { name: /Learning mode/ }));
+
+  it('is one of three modes in the picker, each explained in plain words', async () => {
+    const env = createFakeEnv();
+    await openLive(env);
+    expect(screen.getAllByRole('radio').map((r) => r.textContent?.split(' mode')[0])).toEqual(['Learning', 'Practice', 'Interview']);
+    expect(screen.getByRole('radio', { name: /Learning mode/ })).toHaveTextContent(/No clock at all.*Nothing is scored/);
+    expect(screen.getByRole('radio', { name: /Practice mode/ })).toHaveTextContent(/Timed, but you can pause/);
+    expect(screen.getByRole('radio', { name: /Interview mode/ })).toHaveTextContent(/clock never stops/);
+  });
+
+  it('explains that there is no clock once it is chosen', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    expect(screen.getByText(/The clock is 35 minutes/)).toBeInTheDocument();
+    await pickLearning(user);
+    expect(screen.queryByText(/The clock is 35 minutes/)).not.toBeInTheDocument();
+    expect(screen.getByText(/the same steps, with no clock/i)).toBeInTheDocument();
+  });
+
+  it('shows no timer and never runs out, however long the member is away, and can still be ended', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    await pickLearning(user);
+    await user.click(await screen.findByRole('button', { name: /Surprise me/ }));
+    await screen.findByText(/Should a hotel chain open a new property/);
+    expect(screen.queryAllByRole('timer')).toHaveLength(0);
+    expect(screen.getByText(/Learning mode: no clock/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Pause/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'End case' })).toBeInTheDocument();
+    expect([...env.live.db.values()][0].state.mode).toBe('learning');
+
+    await skip(5 * 3600 * 1000); // five hours away from the screen
+    expect(screen.getByLabelText('Ask a clarifying question')).toBeInTheDocument(); // still in the prompt stage
+    expect(screen.queryByText(/Case finished|Time ran out/)).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('timer')).toHaveLength(0);
+  });
+
+  it('ends with notes to learn from instead of scores, and saves the case with no ratings', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    await pickLearning(user);
+    await user.click(await screen.findByRole('button', { name: /Surprise me/ }));
+    await screen.findByText(/Should a hotel chain open a new property/);
+    reply(env, () => ({ message: 'Good question.' }));
+    await user.type(screen.getByLabelText('Ask a clarifying question'), 'Demand, supply and cost');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    await screen.findByText('Good question.');
+    await user.click(screen.getByRole('button', { name: 'End case' }));
+    await user.click(screen.getByRole('button', { name: 'Yes, end it' }));
+    expect(await screen.findByText('What to take away')).toBeInTheDocument();
+    expect(screen.getByText(/learning mode, so nothing is scored/i)).toBeInTheDocument();
+    expect(screen.queryByText('Overall')).not.toBeInTheDocument();
+    expect(await screen.findByText(/Saved to your case log, with no ratings/)).toBeInTheDocument();
+    const { cases } = await env.repo.loadAll();
+    expect(cases[0].overall).toBeNull();
+    expect(cases[0].skills.framework.rating).toBeNull();
+    expect(cases[0].skills.framework.feedback).toBe('Clear buckets.');
+    expect(cases[0].otherNotes).toContain('learning mode');
+  });
+});

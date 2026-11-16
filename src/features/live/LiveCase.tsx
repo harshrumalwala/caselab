@@ -82,8 +82,8 @@ function Start({ s }: { s: LiveSession }) {
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Practise a case with Bucket</h1>
         <p className="max-w-2xl text-sm text-ink-2">
-          A whole case in writing against the clock, with Bucket as your interviewer. You lead; Bucket answers, nudges when you get stuck, and gives you
-          feedback at the end.
+          A whole case in writing with Bucket as your interviewer, against the clock or at your own pace. You lead; Bucket answers, helps when you get stuck,
+          and gives you feedback at the end.
         </p>
       </div>
 
@@ -101,10 +101,11 @@ function Start({ s }: { s: LiveSession }) {
         <h2 id="live-mode" className="text-lg font-bold text-ink">
           Choose a mode
         </h2>
-        <div role="radiogroup" aria-labelledby="live-mode" className="grid gap-3 sm:grid-cols-2">
+        <div role="radiogroup" aria-labelledby="live-mode" className="grid gap-3 sm:grid-cols-3">
           {(
             [
-              ['practice', 'Practice', 'Pause and pick up again, or end the case early and still get feedback. For learning.'],
+              ['learning', 'Learning', 'No clock at all. Bucket coaches as you go: hints, why each step matters, what a strong answer looks like. Nothing is scored.'],
+              ['practice', 'Practice', 'Timed, but you can pause and pick up again, or end the case early and still get feedback.'],
               ['interview', 'Interview', 'The clock never stops and there is no pause and no early end. As close to the real thing as it gets.'],
             ] as const
           ).map(([id, title, text]) => (
@@ -131,16 +132,24 @@ function Start({ s }: { s: LiveSession }) {
           <ol className="grid gap-2 sm:grid-cols-2">
             {OUTLINE.map(([time, what]) => (
               <li key={what} className="flex gap-3 text-sm">
-                <span className="w-20 shrink-0 font-bold tabular-nums text-ink">{time}</span>
+                {mode !== 'learning' && <span className="w-20 shrink-0 font-bold tabular-nums text-ink">{time}</span>}
                 <span className="text-ink-2">{what}</span>
               </li>
             ))}
           </ol>
-          <p className="text-xs text-muted">
-            The clock is 35 minutes (40 for a case with more than four exhibits) and starts when you see the prompt. Time you save early carries over. Bucket is
-            an AI: it follows the case's own script and does not make up data. The ratings in your log are its draft from what you wrote, so you can review and
-            change them.
-          </p>
+          {mode === 'learning' ? (
+            <p className="text-xs text-muted">
+              These are the same steps, with no clock: take as long as you like on each, and end the case whenever you want feedback. Bucket explains as it goes and
+              will show you what a strong answer looks like once you have had a go. Bucket is an AI: it follows the case's own script and does not make up data. Your
+              feedback is notes to learn from, not scores, and the case is saved to your log without ratings.
+            </p>
+          ) : (
+            <p className="text-xs text-muted">
+              The clock is 35 minutes (40 for a case with more than four exhibits) and starts when you see the prompt. Time you save early carries over. Bucket is
+              an AI: it follows the case's own script and does not make up data. The ratings in your log are its draft from what you wrote, so you can review and
+              change them.
+            </p>
+          )}
         </div>
       </Card>
 
@@ -284,6 +293,7 @@ function Finished({ s, view, onAgain }: { s: LiveSession; view: LiveView; onAgai
   const info = view.caseInfo;
   const feedback = view.feedback;
   const empty = nothingWritten(view);
+  const learning = view.mode === 'learning';
 
   const log = async () => {
     if (!info || !feedback || empty || view.loggedCaseId || logging.current) return;
@@ -321,7 +331,9 @@ function Finished({ s, view, onAgain }: { s: LiveSession; view: LiveView; onAgai
         {empty && feedback
           ? 'No problem, we can do this another time. Nothing was written, so there is nothing to log.'
           : feedback
-            ? view.endReason === 'ended_early'
+            ? learning
+              ? 'Nice work putting in the reps. These are notes to learn from, with no scores. They are in your log too.'
+              : view.endReason === 'ended_early'
               ? 'You stopped here, and that is fine. Here is how what you did went, as honestly as I can tell it. It is in your log too.'
               : 'That is a wrap! Here is how it went, as honestly as I can tell it. Your case is in your log too.'
             : 'Give me a moment while I read through everything you wrote...'}
@@ -351,11 +363,15 @@ function Finished({ s, view, onAgain }: { s: LiveSession; view: LiveView; onAgai
           <Card strip="teal">
             <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-lg font-bold text-ink">Overall</h2>
-                <RatingBadge value={feedback.overall.rating} />
+                <h2 className="text-lg font-bold text-ink">{learning ? 'What to take away' : 'Overall'}</h2>
+                {!learning && <RatingBadge value={feedback.overall.rating} />}
               </div>
               <p className="text-sm leading-relaxed text-ink">{feedback.overall.feedback}</p>
-              <p className="text-xs text-muted">Bucket's draft from what you wrote. Behavioural skills cannot be judged from text, so they are left blank.</p>
+              <p className="text-xs text-muted">
+                {learning
+                  ? "Bucket's notes from what you wrote. This was learning mode, so nothing is scored."
+                  : "Bucket's draft from what you wrote. Behavioural skills cannot be judged from text, so they are left blank."}
+              </p>
             </div>
           </Card>
 
@@ -372,7 +388,7 @@ function Finished({ s, view, onAgain }: { s: LiveSession; view: LiveView; onAgai
                         {f.feedback && <p className="mt-0.5 text-sm text-ink-2">{f.feedback}</p>}
                         {f.evidence && <p className="mt-1 text-xs italic text-muted">You wrote: “{f.evidence}”</p>}
                       </div>
-                      <RatingBadge value={f.rating} />
+                      {!learning && <RatingBadge value={f.rating} />}
                     </li>
                   );
                 })}
@@ -429,7 +445,7 @@ function Finished({ s, view, onAgain }: { s: LiveSession; view: LiveView; onAgai
         {view.loggedCaseId ? (
           <>
             <p role="status" className="text-sm font-medium text-ink">
-              Saved to your case log. Check the ratings and edit anything that is off.
+              {learning ? 'Saved to your case log, with no ratings. Add your own if you like.' : 'Saved to your case log. Check the ratings and edit anything that is off.'}
             </p>
             <Button variant="primary" onClick={() => viewCase(view.loggedCaseId!)}>
               Open the case

@@ -56,8 +56,8 @@ function WorkSoFar({ view }: { view: LiveView }) {
   );
 }
 
-/** Pause and end, always within reach: a break is allowed, and so is stopping here and getting feedback on what is written. */
-function CaseControls({ s }: { s: LiveSession }) {
+/** Pause and end, always within reach: a break is allowed, and so is stopping here and getting feedback on what is written. A learning case has no clock, so it has nothing to pause. */
+function CaseControls({ s, untimed = false }: { s: LiveSession; untimed?: boolean }) {
   const [confirming, setConfirming] = useState(false);
   if (confirming) {
     return (
@@ -74,9 +74,11 @@ function CaseControls({ s }: { s: LiveSession }) {
   }
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <Button size="sm" disabled={s.busy} onClick={() => void s.pause()} title="Stops the clock until you continue">
-        <Pause className="size-3.5" aria-hidden /> Pause
-      </Button>
+      {!untimed && (
+        <Button size="sm" disabled={s.busy} onClick={() => void s.pause()} title="Stops the clock until you continue">
+          <Pause className="size-3.5" aria-hidden /> Pause
+        </Button>
+      )}
       <Button size="sm" variant="ghost" disabled={s.busy} onClick={() => setConfirming(true)}>
         End case
       </Button>
@@ -152,8 +154,10 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
   const bucket = bucketLine(view, now, view.messages.at(-1)?.kind === 'hint');
   const says = <BucketSays mood={bucket.mood}>{bucket.text}</BucketSays>;
 
-  const warning =
-    view.stage === 'prompt' && stageLeft <= 20_000
+  const untimed = view.mode === 'learning';
+  const warning = untimed
+    ? null
+    : view.stage === 'prompt' && stageLeft <= 20_000
       ? `Framework thinking starts in ${Math.max(0, Math.ceil(stageLeft / 1000))} seconds. Choose "Ready for framework" now if you are ready.`
       : writing && stageLeft <= 30_000
         ? `${Math.max(0, Math.ceil(stageLeft / 1000))} seconds left. What you have written is saved.`
@@ -162,7 +166,7 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
   return (
     <div className="space-y-5">
       <ClockBar view={view} now={now} />
-      {view.mode === 'practice' ? <CaseControls s={s} /> : <p className="text-right text-xs font-semibold text-muted">Interview mode: the clock does not stop.</p>}
+      {view.mode === 'interview' ? <p className="text-right text-xs font-semibold text-muted">Interview mode: the clock does not stop.</p> : <CaseControls s={s} untimed={untimed} />}
 
       {view.stage !== 'exhibits' && says}
 
@@ -195,7 +199,7 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
             }
           />
           <p className="text-xs text-muted">
-            {view.clarifyCount} question{view.clarifyCount === 1 ? '' : 's'} asked. Three or four is plenty. Time you save carries over to later parts.
+            {view.clarifyCount} question{view.clarifyCount === 1 ? '' : 's'} asked. Three or four is plenty.{untimed ? '' : ' Time you save carries over to later parts.'}
           </p>
         </div>
       )}
@@ -316,7 +320,7 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
         </div>
       )}
 
-      {!isThinking(view.stage) && view.stage !== 'done' && <p className="text-xs text-muted">Your answers are saved as you go. If you leave and come back, the clock keeps running and you will pick up where the case is.</p>}
+      {!isThinking(view.stage) && view.stage !== 'done' && <p className="text-xs text-muted">Your answers are saved as you go. If you leave and come back, {untimed ? 'you will pick up where you left off.' : 'the clock keeps running and you will pick up where the case is.'}</p>}
     </div>
   );
 }
