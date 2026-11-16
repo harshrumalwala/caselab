@@ -3,14 +3,12 @@ import type { CaseType } from '../domain/constants';
 import type { Profile, ProfileInput, SharedCase } from '../domain/community';
 import type { SharedInterviewed } from '../domain/interviewed';
 import {
-  PUBLIC_PROFILE_COLUMNS,
   SHARED_COLUMNS,
   profileToRow,
   rowToProfile,
   rowToPublicProfile,
   rowToSharedCase,
   type PublicReader,
-  type RecentCaser,
   type CommunityRepository,
   type ProfileRow,
   type PublicProfileRow,
@@ -18,19 +16,18 @@ import {
 } from './community';
 
 const PAGE = 1000;
-const RECENT_PAGE = 100;
-const RECENT_SCAN = 500; // rows examined while looking for the most recent members
 
-async function pageShared(client: SupabaseClient, table: string, columns: string, ownerId: string, maxRows = Infinity): Promise<SharedCase[]> {
+/** Every case one member shares with signed-in members, a page at a time. */
+async function pageShared(client: SupabaseClient, ownerId: string): Promise<SharedCase[]> {
   const out: SharedRow[] = [];
-  for (let from = 0; from < maxRows; from += PAGE) {
+  for (let from = 0; ; from += PAGE) {
     const { data, error } = await client
-      .from(table)
-      .select(columns)
+      .from('shared_cases')
+      .select(SHARED_COLUMNS)
       .eq('owner_id', ownerId)
       .order('case_date', { ascending: false })
       .order('share_id', { ascending: true })
-      .range(from, Math.min(from + PAGE, maxRows) - 1);
+      .range(from, from + PAGE - 1);
     if (error) throw error;
     const rows = (data ?? []) as unknown as SharedRow[];
     out.push(...rows);
@@ -40,54 +37,20 @@ async function pageShared(client: SupabaseClient, table: string, columns: string
 }
 
 /**
- * Read-only community access for people WITHOUT an account. It uses a client that never holds a session, so
- * every request runs as the database's `anon` role: it can only see members who opted in to being public,
- * and only the columns granted to that role (written feedback and notes only when the member opened everything; never private ids).
+ * Read-only community access for people WITHOUT an account. It uses a client that never holds a session, so every
+ * request runs as the database's `anon` role, and that role can read neither public table directly: both reads below
+ * go through a function that answers on an exact member id, which is the value in that member's own profile link.
+ * There is nothing here that lists, searches or counts members.
  */
 export class PublicCommunity implements PublicReader {
   constructor(private readonly anon: SupabaseClient) {}
 
-  async searchPeople(query: string): Promise<Profile[]> {
-    // The public tables only ever hold members who chose to be visible, so no further filtering is needed.
-    let q = this.anon.from('public_profiles').select(PUBLIC_PROFILE_COLUMNS);
-    const text = query.trim();
-    if (text) q = q.ilike('display_name', `%${text}%`);
-    const { data, error } = await q.order('display_name', { ascending: true }).limit(50);
-    if (error) throw error;
-    return ((data ?? []) as unknown as PublicProfileRow[]).map(rowToPublicProfile);
-  }
-
-  // One member by exact id. This goes through a function rather than the table, because a member who chose "link only"
-  // isn't in what the table returns: only someone who has their exact id can open them.
+  // One member by exact id, through the function: the only way in without an account.
   async getPerson(userId: string): Promise<Profile | null> {
     const { data, error } = await this.anon.rpc('public_person', { p_id: userId });
     if (error) throw error;
     const row = ((data ?? []) as PublicProfileRow[])[0];
     return row ? rowToPublicProfile(row) : null;
-  }
-
-  async recentPeople(limit: number): Promise<RecentCaser[]> {
-    // Newest shared cases first; the first time an owner appears is their most recent case. Scan a few pages at most,
-    // so one very active member can't make the page do unbounded work.
-    const latest = new Map<string, string>();
-    for (let from = 0; from < RECENT_SCAN && latest.size < limit; from += RECENT_PAGE) {
-      const { data, error } = await this.anon
-        .from('public_shared_cases')
-        .select('owner_id, case_date')
-        .order('case_date', { ascending: false })
-        .order('share_id', { ascending: true })
-        .range(from, from + RECENT_PAGE - 1);
-      if (error) throw error;
-      const rows = (data ?? []) as unknown as { owner_id: string; case_date: string }[];
-      for (const r of rows) if (!latest.has(r.owner_id)) latest.set(r.owner_id, r.case_date);
-      if (rows.length < RECENT_PAGE) break;
-    }
-    const ids = [...latest.keys()].slice(0, limit);
-    if (ids.length === 0) return [];
-    const { data, error } = await this.anon.from('public_profiles').select(PUBLIC_PROFILE_COLUMNS).in('user_id', ids);
-    if (error) throw error;
-    const byId = new Map(((data ?? []) as unknown as PublicProfileRow[]).map((r) => [r.user_id, rowToPublicProfile(r)]));
-    return ids.flatMap((id) => (byId.has(id) ? [{ person: byId.get(id)!, lastCased: latest.get(id)! }] : []));
   }
 
   async getSharedCases(ownerId: string): Promise<SharedCase[]> {
@@ -157,7 +120,7 @@ export class SupabaseCommunity implements CommunityRepository {
   }
 
   getSharedCases(ownerId: string): Promise<SharedCase[]> {
-    return pageShared(this.client, 'shared_cases', SHARED_COLUMNS, ownerId);
+    return pageShared(this.client, ownerId);
   }
 
   async getInterviewed(ownerId: string): Promise<SharedInterviewed[]> {

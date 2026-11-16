@@ -50,7 +50,7 @@ function Preview({ profile }: { profile: Profile }) {
   const hidden =
     audience === 'members'
       ? !profile.listed && "You're not listed in People, so other members can't find you and see nothing about you."
-      : !profile.publicProfile && "You haven't turned on visibility without an account, so visitors can't find you and see nothing about you.";
+      : !profile.publicProfile && "You haven't turned your profile link on, so nobody without an account can open your profile.";
 
   return (
     <section aria-labelledby="preview-title" className="rounded-2xl border border-line bg-surface-2/50 p-4 sm:p-5">
@@ -126,8 +126,8 @@ function Preview({ profile }: { profile: Profile }) {
                 {state.shared.length > 4 && <p className="text-xs text-muted">…and {state.shared.length - 4} more.</p>}
               </>
             ))}
-          {audience === 'visitors' && profile.publicProfile && profile.publicLinkOnly && (
-            <p className="text-xs text-muted">You're link only, so this is what people see when they open your link. You aren't on the front page or in search.</p>
+          {audience === 'visitors' && profile.publicProfile && (
+            <p className="text-xs text-muted">This is what someone sees when they open your link. You aren't listed or searchable anywhere outside CaseLab.</p>
           )}
           {audience === 'visitors' && (
             <p className="text-xs text-muted">
@@ -217,15 +217,13 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
     setSaving(true);
     try {
       const listed = next.listed ?? profile.listed;
-      // Being public needs being listed, so unlisting also withdraws public visibility.
+      // Letting people with your link in needs being listed, so unlisting also withdraws it.
       const publicProfile = listed && (next.publicProfile ?? profile.publicProfile);
       await saveProfile({
         displayName: next.displayName ?? profile.displayName,
         mbaClass: next.mbaClass ?? profile.mbaClass,
         listed,
         publicProfile,
-        // Link only needs public, so withdrawing public visibility clears it too.
-        publicLinkOnly: publicProfile && (next.publicLinkOnly ?? profile.publicLinkOnly),
         burnedBooks: next.burnedBooks ?? profile.burnedBooks,
         burnedCases: next.burnedCases ?? profile.burnedCases,
         sharing: next.sharing ?? profile.sharing,
@@ -313,8 +311,6 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
               checked={profile.publicProfile}
               disabled={saving || !profile.listed}
               onChange={(on) => (on ? setConfirmPublic(true) : void save({ publicProfile: false }))}
-              linkOnly={profile.publicLinkOnly}
-              onLinkOnlyChange={(linkOnly) => void save({ publicLinkOnly: linkOnly }, linkOnly ? 'Now only people with your link can find you' : 'Now on the front page')}
               profileLink={profileAddress(profile.userId)}
             />
 
@@ -352,18 +348,20 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
 
       <ConfirmDialog
         open={confirmPublic}
-        title="Show your profile to anyone?"
-        confirmLabel="Make it visible"
+        title="Let people with your link see your profile?"
+        confirmLabel="Turn my link on"
         onCancel={() => setConfirmPublic(false)}
         onConfirm={() => {
           setConfirmPublic(false);
-          void save({ publicProfile: true }, 'Now visible without an account');
+          void save({ publicProfile: true }, 'Your link is on');
         }}
       >
         <p>
-          Anyone on the internet, signed in or not, will be able to find <strong className="text-ink">{profile.displayName}</strong> and
-          see your class and whatever you share below: case history (the case names, casebook names and industries you typed) and
-          any scores or improvement focus you've switched on.
+          Anyone who has your link, signed in or not, will be able to open{' '}
+          <strong className="text-ink">{profile.displayName}</strong> and see your class and whatever you share below: case history
+          (the case names, casebook names and industries you typed) and any scores or improvement focus you've switched on. Nobody can
+          find you without the link: there is no public list or search. A link can be passed on, though, and you can only cut it off by
+          turning this switch off again.
         </p>
         <p>
           This includes every case you've set to "share the case name only" or "share this case in full". A case set to "full" shows
@@ -397,7 +395,7 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
         }}
       >
         <p>
-          You are visible without an account, so anyone who can see you will be able to open each case you share and read its{' '}
+          Your profile link is on, so anyone who has it will be able to open each case you share and read its{' '}
           <strong className="text-ink">scores, written feedback, learning notes and other notes</strong>, in full.
         </p>
         <p>Cases set to "keep this case private" or "share the case name only" stay as they are. You can turn this off at any time.</p>

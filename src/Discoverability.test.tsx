@@ -13,7 +13,6 @@ const member = (userId: string, displayName: string): Profile => ({
   mbaClass: '',
   listed: true,
   publicProfile: false,
-  publicLinkOnly: false,
   burnedBooks: [],
   burnedCases: [],
   sharing: { ...NO_SHARING, cases: true },

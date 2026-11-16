@@ -7,10 +7,7 @@ interface Props {
   checked: boolean;
   disabled?: boolean;
   onChange: (checked: boolean) => void;
-  /** When given (and the switch is on), offer the choice between the front page and "only people with my link". */
-  linkOnly?: boolean;
-  onLinkOnlyChange?: (linkOnly: boolean) => void;
-  /** The address of this member's public profile, shown for copying once they are visible without an account. */
+  /** The address of this member's profile, shown for copying whenever the switch is on. */
   profileLink?: string;
 }
 
@@ -48,56 +45,30 @@ function CopyLink({ link }: { link: string }) {
 }
 
 /**
- * "Also show me to visitors without an account." Off by default. Written feedback, learning notes and other notes
- * reach visitors only if the member has also opened everything.
+ * "People with my link can see my profile." Off by default, and the only way anyone without an account can reach a
+ * member: there is no public list or search. Written feedback, learning notes and other notes reach them only if the
+ * member has also opened everything.
  */
-export function AudienceSwitch({ checked, disabled, onChange, linkOnly = false, onLinkOnlyChange, profileLink }: Props) {
+export function AudienceSwitch({ checked, disabled, onChange, profileLink }: Props) {
   return (
     <div className="rounded-2xl border border-line px-4 py-3.5">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-ink">Also show me to visitors without an account</p>
+          <p className="text-sm font-medium text-ink">People with my link can see my profile</p>
           <p className="text-xs text-muted">
-            Anyone, even without signing in, could then see your name, class and the case history and scores you share.
-            Written feedback and notes stay members-only unless you turn on Open everything. Off by default.
+            Anyone you give your link to can open it without signing in, and see your name, class and the case history and
+            scores you share. You are never listed or searchable out there. Written feedback and notes stay members-only
+            unless you turn on Open everything. Off by default.
           </p>
         </div>
-        <Switch label="Visible without an account" checked={checked} disabled={disabled} onChange={onChange} />
+        <Switch label="People with my link can see my profile" checked={checked} disabled={disabled} onChange={onChange} />
       </div>
-
-      {checked && onLinkOnlyChange && (
-        <fieldset className="mt-4 space-y-2 border-t border-line pt-4">
-          <legend className="label">Where visitors can find you</legend>
-          {(
-            [
-              [false, 'On the front page and in search', 'Anyone can find you by name and see you under "Cased recently".'],
-              [true, 'Only people with my link', "You don't appear on the front page or in search. Anyone who has your link can still open your profile."],
-            ] as const
-          ).map(([value, label, hint]) => (
-            <label key={String(value)} className="flex items-start gap-3 rounded-xl border border-line px-3.5 py-2.5 text-sm">
-              <input
-                type="radio"
-                name="where-visitors-find-me"
-                className="mt-0.5 size-4 accent-[var(--accent)]"
-                checked={linkOnly === value}
-                disabled={disabled}
-                onChange={() => onLinkOnlyChange(value)}
-              />
-              <span>
-                <span className="font-medium text-ink">{label}</span>
-                <span className="block text-xs text-muted">{hint}</span>
-              </span>
-            </label>
-          ))}
-        </fieldset>
-      )}
 
       {checked && profileLink && (
         <div className="mt-4">
           <p className="text-xs text-muted">
-            {linkOnly
-              ? 'Share this address with the people you want to see your profile. It contains your member ID, so anyone you give it to can pass it on. The only way to cut it off is to turn visibility off here.'
-              : 'Your profile address, to share directly.'}
+            Share this address with the people you want to see your profile. It contains your member ID, so anyone you give it
+            to can pass it on. The only way to cut it off is to turn this switch off.
           </p>
           <CopyLink link={profileLink} />
         </div>

@@ -14,7 +14,6 @@ const profile = (userId: string, displayName: string, over: Partial<Profile> = {
   mbaClass: '',
   listed: true,
   publicProfile: false,
-  publicLinkOnly: false,
   burnedBooks: [],
   burnedCases: [],
   sharing: { ...NO_SHARING, cases: true },

@@ -12,7 +12,6 @@ const BOB: Profile = {
   mbaClass: 'Class of 2027',
   listed: true,
   publicProfile: false,
-  publicLinkOnly: false,
   burnedBooks: ['Cosentino'],
   burnedCases: [],
   sharing: { ...NO_SHARING, cases: true },
