@@ -13,6 +13,8 @@ const exhibit = (over: Partial<SolutionExhibit>): SolutionExhibit => ({
   howToRead: '',
   takeaways: [],
   chart: null,
+  cut: [],
+  shortened: [],
   ...over,
 });
 

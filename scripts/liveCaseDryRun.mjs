@@ -51,11 +51,43 @@ export async function loadEngine() {
   return {
     handleLive: coach.handleLive,
     isFullSolution: coach.isFullSolution,
+    readSolution: coach.readSolution,
+    isInterviewerSideExhibit: liveCase.isInterviewerSideExhibit,
     nudgeLevel: liveCase.nudgeLevel,
     timeInStages: liveCase.timeInStages,
     PLANNED_MS: liveCase.PLANNED_MS,
     createMemoryLiveDeps: memory.createMemoryLiveDeps,
   };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The interviewer's own exhibits must never reach the member
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Whether anything of an interviewer-side exhibit reached the member in this run (issue #95). Two checks, over everything the run put in
+ * front of them:
+ *
+ * 1. **Every exhibit handed over is asked the production rule itself.** Not "is its index in the plan" but `isInterviewerSideExhibit` on
+ *    the very payload the member received, so a plan that handed over the wrong index, or a payload assembled some other way, is caught.
+ * 2. **No interviewer-side exhibit is named to the member**: its title or its caption, written out whole in a message. Figures are a
+ *    different question on purpose — the book's data is read out when the member asks for it (issue #83), and that is correct. It is the
+ *    artefact, its title and its caption that must stay unseen.
+ *
+ * It names the title of what leaked and nothing else: no caption, no cell, no figure, so the report stays safe to paste into an issue.
+ */
+export function exhibitLeaks(delivered, texts, solution, isInterviewerSideExhibit) {
+  const out = [];
+  for (const e of delivered) {
+    if (isInterviewerSideExhibit(e)) out.push(`shown as an exhibit: ${e.title || '(no title)'}`);
+  }
+  for (const h of [...solution.reference, ...solution.onRequest]) {
+    const title = h.title.trim();
+    const caption = h.caption.trim();
+    if (title.length >= 8 && texts.some((t) => t.includes(title))) out.push(`its title was written to the member: ${title}`);
+    if (caption.length >= 20 && texts.some((t) => t.includes(caption))) out.push(`its caption was written to the member: ${title || '(no title)'}`);
+  }
+  return [...new Set(out)];
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -194,6 +226,10 @@ export async function playCase(raw, mode, candidate, engine, startAt = START_AT)
     cappedOut: false,
     threw: false,
     error: null,
+    /** How many exhibits the member was actually handed, counted from what arrived rather than from the plan. */
+    exhibitsShown: 0,
+    /** Anything of an interviewer-side exhibit that reached the member. Must stay empty: see `exhibitLeaks`. */
+    leaks: [],
     steps: 0,
     coachCalls: 0,
     refusals: [],
@@ -208,6 +244,15 @@ export async function playCase(raw, mode, candidate, engine, startAt = START_AT)
     limitSeconds: 0,
   };
 
+  // Everything the member was ever handed, gathered as it arrives rather than read off the last view, so a run that throws is still
+  // judged on what reached them before it did.
+  const delivered = new Map();
+  const heard = new Set();
+  const record = (v) => {
+    for (const e of v.exhibits ?? []) delivered.set(`${e.beat}|${e.title}`, e);
+    for (const m of v.messages ?? []) if (m.from !== 'user') heard.add(m.text);
+  };
+
   let view = null;
   try {
     const started = await engine.handleLive(USER, { type: 'start', libraryId: LIB, mode }, deps);
@@ -216,13 +261,16 @@ export async function playCase(raw, mode, candidate, engine, startAt = START_AT)
       return run;
     }
     view = started.view;
+    record(view);
     const id = view.sessionId;
 
     const ask = async (action) => {
       const res = await engine.handleLive(USER, action, deps);
       run.steps += 1;
-      if (res.status === 'ok') view = res.view;
-      else if (res.status === 'refused' || res.status === 'failed') run.refusals.push(`${action.type}: ${res.message}`);
+      if (res.status === 'ok') {
+        view = res.view;
+        record(view);
+      } else if (res.status === 'refused' || res.status === 'failed') run.refusals.push(`${action.type}: ${res.message}`);
       return res;
     };
 
@@ -346,6 +394,10 @@ export async function playCase(raw, mode, candidate, engine, startAt = START_AT)
     run.error = error instanceof Error ? `${error.message}` : String(error);
   }
 
+  const solution = engine.readSolution(raw);
+  run.exhibitsShown = delivered.size;
+  if (solution) run.leaks = exhibitLeaks([...delivered.values()], [...heard], solution, engine.isInterviewerSideExhibit);
+
   const state = [...db.values()][0]?.state;
   if (state) {
     run.stage = state.stage;
@@ -362,6 +414,7 @@ export async function playCase(raw, mode, candidate, engine, startAt = START_AT)
 
 /** Why a run did not reach the end, in words that group: the same sentence means the same defect. */
 export function failureCause(run) {
+  if (run.leaks.length > 0) return 'an interviewer-side exhibit reached the member';
   if (run.threw) return `threw an exception at ${run.stage}: ${run.error}`;
   if (run.error) return run.error;
   if (run.cappedOut) return `still going at ${run.stage} after ${STEP_CAP} turns`;
@@ -382,10 +435,14 @@ export const reachedEnd = (run) => run.stage === 'done' && !run.error && !run.st
  * counted and named, never hidden, but it is not a failure and does not fail the command: see the note in the summary.
  */
 export const openByDesign = (run) =>
-  !reachedEnd(run) && run.mode === 'learning' && run.stalled && !run.threw && !run.cappedOut && !run.error && CANDIDATE_SPECS[run.candidate]?.endsBeats === false;
+  run.leaks.length === 0 && !reachedEnd(run) && run.mode === 'learning' && run.stalled && !run.threw && !run.cappedOut && !run.error && CANDIDATE_SPECS[run.candidate]?.endsBeats === false;
 
-/** A case that broke: it did not reach the end, and the engine did not mean to leave it there. This is what the command exits non-zero on. */
-export const failedTheBar = (run) => !reachedEnd(run) && !openByDesign(run);
+/**
+ * A run that broke: it did not reach the end and the engine did not mean to leave it there, or something of the interviewer's own
+ * exhibits reached the member. This is what the command exits non-zero on. A leak fails whether or not the case finished: a case that
+ * ran beautifully and showed the member the answer key is the worse of the two.
+ */
+export const failedTheBar = (run) => run.leaks.length > 0 || (!reachedEnd(run) && !openByDesign(run));
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Every case
@@ -462,6 +519,8 @@ export function summarise(result) {
     byDesign: byDesign.length,
     threw: runs.filter((r) => r.error).length,
     stalled: runs.filter((r) => r.stalled).length,
+    leaked: runs.filter((r) => r.leaks.length > 0).length,
+    exhibitsDelivered: sum(runs.map((r) => r.exhibitsShown)),
     cells,
     endStates: tally(runs.map((r) => `${r.stage} / ${r.endReason ?? 'still running'}`)),
     causes: tally(failed.map(failureCause)),
@@ -506,15 +565,23 @@ export function formatSummary(s, result) {
     pad('live-eligible, played', s.cases),
     pad('not live-eligible, skipped', s.skipped),
     '',
-    'The bar: no case breaks. A run FAILS when it does not reach stage done in a mode that has a',
-    'clock, when it throws, or when it stops anywhere the engine did not mean to leave it. The',
-    'command exits non-zero on failures only.',
+    'The bar: no case breaks, and nothing of the interviewer\'s own exhibits reaches the member. A run',
+    'FAILS when it does not reach stage done in a mode that has a clock, when it throws, when it stops',
+    'anywhere the engine did not mean to leave it, or when an interviewer-side exhibit reached the',
+    'member. The command exits non-zero on failures only.',
     pad('runs', s.runs),
     pad('reached the end', s.done),
     pad('did not reach the end', s.short),
     pad('  failed the bar', s.failed),
     pad('  open by design (see below)', s.byDesign),
     pad('threw an exception', s.threw),
+    '',
+    'What the member was handed. Every exhibit they received is asked the production rule itself',
+    '(isInterviewerSideExhibit), and no interviewer-side exhibit may be named to them. Figures from',
+    'the interviewer\'s tables are read out on request by design (issue #83) and are not counted here;',
+    'the model is stubbed, so this says what the engine hands over, never what a real Bucket says.',
+    pad('exhibits handed to the member', s.exhibitsDelivered),
+    pad('runs where an interviewer-side exhibit reached them (must be 0)', s.leaked),
     '',
     'Reached the end, by mode and candidate',
     ...result.modes.flatMap((m) => result.candidates.map((c) => cell(`${m}/${c}`))),
@@ -577,6 +644,7 @@ const runLine = (r) => {
     r.reachedRecommendWrite ? '' : 'no recommendation stage',
     r.feedback ? '' : 'no feedback',
     r.error ? `THREW ${r.error}` : '',
+    r.leaks.length > 0 ? `LEAKED ${r.leaks.join('; ')}` : '',
     r.stalled ? (openByDesign(r) ? 'OPEN BY DESIGN' : 'STALLED') : '',
   ].filter(Boolean);
   return `  ${parts.join(' ')}${notes.length > 0 ? `  [${notes.join('; ')}]` : ''}`;
@@ -618,6 +686,7 @@ export function formatReport(result, { dir, files, at, seconds }) {
     `Run: ${at} (${seconds}s)`,
     `Source: ${dir} (${files} file(s))`,
     `Modes: ${result.modes.join(', ')}. Candidates: ${result.candidates.map((c) => `${c} (${CANDIDATE_SPECS[c].what})`).join('; ')}.`,
+    `Exhibits handed to the member: ${s.exhibitsDelivered}. Runs where an interviewer-side exhibit reached them: ${s.leaked} (must be 0).`,
     'Engine: handleLive from supabase/functions/_shared/liveCaseCoach.ts over supabase/functions/_shared/liveCase.ts, on the in-memory deps',
     'in src/test/memoryLiveDeps.ts. No rule is reimplemented here.',
     'The model is stubbed: the candidate decides assessment, beat_complete and direction_clear from which turn was asked for and how many',
@@ -631,12 +700,28 @@ export function formatReport(result, { dir, files, at, seconds }) {
     formatSummary(s, result),
     '```',
     '',
+    `## Interviewer-side exhibits that reached the member (${s.leaked})`,
+    '',
+    'Every exhibit the member was handed is asked `isInterviewerSideExhibit` on the payload itself, and no interviewer-side exhibit may',
+    'be named to them in a message. Figures are a different question on purpose: the interviewer reads out the data a member asks for',
+    '(issue #83), and that is correct. Only titles are printed below, never a caption, a cell or a figure.',
+    '',
+    ...(s.leaked === 0
+      ? ['None: in every mode, for every candidate, over the whole catalogue.', '']
+      : [
+          ...result.cases.flatMap((c) =>
+            c.runs
+              .filter((r) => r.leaks.length > 0)
+              .map((r) => `- ${c.name}${c.book ? ` — ${c.book}` : ''}: ${r.mode}/${r.candidate} — ${r.leaks.join('; ')}`),
+          ),
+          '',
+        ]),
     `## Cases that failed the bar (${s.failed})`,
     '',
-    'A run fails when it does not reach stage done in a mode that has a clock, when it throws, or when it stops anywhere the engine did',
-    'not mean to leave it. The command exits non-zero when this list is not empty.',
+    'A run fails when it does not reach stage done in a mode that has a clock, when it throws, when it stops anywhere the engine did',
+    'not mean to leave it, or when an interviewer-side exhibit reached the member. The command exits non-zero when this list is not empty.',
     '',
-    ...(s.failed === 0 ? ['None: every case reached stage done in every timed mode, for every candidate.', ''] : causeBlocks(failures, 'stopped at')),
+    ...(s.failed === 0 ? ['None: every case reached stage done in every timed mode, for every candidate, and nothing of the interviewer\'s reached them.', ''] : causeBlocks(failures, 'stopped at')),
     `## Open by design (${s.byDesign})`,
     '',
     'An untimed case waiting on a member who neither completed a beat nor chose to move on. Learning mode has no clock and Bucket never',

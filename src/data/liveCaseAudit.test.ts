@@ -9,6 +9,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { buildPlan, isInterviewerSideExhibit } from '../../supabase/functions/_shared/liveCase';
 import { givenOnRequest, isFullSolution, planFor, readSolution } from '../../supabase/functions/_shared/liveCaseCoach';
 import { LIVE_EXHIBIT_LIMITS, SOLUTION_EXHIBIT_LIMITS, parseBookSolution, parseSolutionExhibit } from '../domain/bookSolution';
+import { exhibitLoss } from '../domain/exhibitFidelity';
 import { audit, auditCase, formatReport, formatSummary, measureCaps, readSolutionFiles, summarise, type AuditRules } from '../../scripts/liveCaseAudit.mjs';
 
 const rules: AuditRules = {
@@ -20,6 +21,7 @@ const rules: AuditRules = {
   planFor,
   parseBookSolution,
   parseSolutionExhibit,
+  exhibitLoss,
   LIVE_EXHIBIT_LIMITS,
 };
 const caps = measureCaps(rules);

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { blankChart, parseBookSolution, parseSolutionExhibit, type ExhibitChart as Chart, type SolutionExhibit } from '../../domain/bookSolution';
 import { ExhibitChart } from './ExhibitChart';
 
-const exhibit = (title: string): SolutionExhibit => ({ title, caption: '', columns: ['A'], rows: [['1']], approx: false, howToRead: '', takeaways: [], chart: null });
+const exhibit = (title: string): SolutionExhibit => ({ title, caption: '', columns: ['A'], rows: [['1']], approx: false, howToRead: '', takeaways: [], chart: null, cut: [], shortened: [] });
 const series = (name: string, values: number[], over: Partial<Chart['series'][number]> = {}) => ({ name, values, labels: [], type: 'bar' as const, color: '', ...over });
 
 function draw(chart: Partial<Chart>) {

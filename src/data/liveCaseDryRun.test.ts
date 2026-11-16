@@ -3,13 +3,14 @@
 // The scripted dry run (scripts/liveCaseDryRun.mjs): it must play a real case through the real engine to the end, drive the clock instead of
 // waiting for it, say honestly where a case stopped, and never carry a word of the book's content out of private-data.
 import { describe, expect, it } from 'vitest';
-import { handleLive, isFullSolution } from '../../supabase/functions/_shared/liveCaseCoach';
-import { PLANNED_MS, nudgeLevel, timeInStages } from '../../supabase/functions/_shared/liveCase';
+import { handleLive, isFullSolution, readSolution } from '../../supabase/functions/_shared/liveCaseCoach';
+import { PLANNED_MS, isInterviewerSideExhibit, nudgeLevel, timeInStages } from '../../supabase/functions/_shared/liveCase';
 import { createMemoryLiveDeps } from '../test/memoryLiveDeps';
 import {
   CANDIDATES,
   CANDIDATE_SPECS,
   MODES,
+  exhibitLeaks,
   failedTheBar,
   failureCause,
   openByDesign,
@@ -23,7 +24,7 @@ import {
   type DryRunEngine,
 } from '../../scripts/liveCaseDryRun.mjs';
 
-const engine: DryRunEngine = { handleLive, isFullSolution, nudgeLevel, timeInStages, PLANNED_MS, createMemoryLiveDeps };
+const engine: DryRunEngine = { handleLive, isFullSolution, readSolution, isInterviewerSideExhibit, nudgeLevel, timeInStages, PLANNED_MS, createMemoryLiveDeps };
 
 const exhibit = (n: number, over: Record<string, unknown> = {}) => ({
   title: `Exhibit ${n}: Revenue by region`,
