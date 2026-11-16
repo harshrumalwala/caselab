@@ -3,13 +3,26 @@ import type { ChartSeries, ExhibitChart as Chart, SolutionExhibit } from '../../
 
 // The book draws its charts in greys with a few coloured lines, so ours do too: they should read as the book's exhibit, not as ours.
 const GREYS = ['#d2d2d2', '#a9a9a9', '#7e7e7e', '#555555', '#3d3d3d', '#2a2a2a'];
-const LINE_COLOURS: Record<string, string> = { red: '#c8202f', blue: '#1f6fa8', yellow: '#e2b93b', green: '#3b8a3e', black: '#222222', gray: '#888888', grey: '#888888', orange: '#e07b21', purple: '#6b4aa8' };
+// The colour names the readers write on a series (lines, bars and stack segments alike): the ones the book's charts in our data use, plus navy and teal.
+const LINE_COLOURS: Record<string, string> = { red: '#c8202f', blue: '#1f6fa8', yellow: '#e2b93b', green: '#3b8a3e', black: '#222222', gray: '#888888', grey: '#888888', orange: '#e07b21', purple: '#6b4aa8', navy: '#0f2a5c', teal: '#0b8a8a' };
 const LINE_CYCLE = ['#1f6fa8', '#c8202f', '#e2b93b', '#3b8a3e', '#6b4aa8'];
 const INK = 'currentColor';
 
-const lineColour = (s: ChartSeries, i: number) => LINE_COLOURS[s.color.toLowerCase()] ?? (s.color.startsWith('#') ? s.color : LINE_CYCLE[i % LINE_CYCLE.length]);
+/** The colour a series name stands for: a known name, or a hex value; null for anything else (the chart then uses its greys). */
+const namedColour = (c: string): string | null => {
+  const k = c.trim().toLowerCase();
+  return LINE_COLOURS[k] ?? (/^#[0-9a-f]{3}([0-9a-f]{3})?$/.test(k) ? k : null);
+};
+const lineColour = (s: ChartSeries, i: number) => namedColour(s.color) ?? LINE_CYCLE[i % LINE_CYCLE.length];
 const greyFor = (i: number) => GREYS[Math.min(i, GREYS.length - 1)];
-const onGrey = (i: number) => (i >= 2 ? '#ffffff' : '#1f1f1f'); // readable text on that grey
+/** What a bar or stack segment is filled with: the colour the book gives the series, else the series' grey. */
+const seriesFill = (s: ChartSeries, i: number) => namedColour(s.color) ?? greyFor(i);
+/** Readable text on a fill: white on dark fills, near-black on light ones. */
+const inkOn = (fill: string): string => {
+  const h = fill.length === 4 ? [...fill.slice(1)].map((c) => c + c).join('') : fill.slice(1);
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.55 ? '#ffffff' : '#1f1f1f';
+};
 
 /** A short axis or value label: 1,200,000 -> 1.2M; small numbers stay as they are. */
 function short(n: number): string {
@@ -90,9 +103,36 @@ function wrapWords(label: string, max: number): string[] {
   return lines.slice(0, 4);
 }
 
-/** Clustered bars (more than one bar series, each named) need a key saying which bar is which. */
-const hasLegend = (c: Chart): boolean => c.kind === 'bar' && c.series.filter((s) => s.type === 'bar' && s.name.trim() !== '').length > 1;
-const LEGEND_H = 18;
+/**
+ * A key (swatch and series name) is drawn for bars or segments that nothing else names: clustered bars with more than one named series, and a
+ * stack whose segments do not carry their own names (`segmentNames`). A stack that prints its names inside the segments needs none.
+ */
+const hasLegend = (c: Chart): boolean => (c.kind === 'bar' || (c.kind === 'stacked' && !c.segmentNames)) && c.series.filter((s) => s.type === 'bar' && s.name.trim() !== '').length > 1;
+const LEGEND_ROW = 16;
+
+/** Where each key entry goes: left to right from `left`, onto a new row when the next entry would run past the panel's edge. Its height is zero when there is no key. */
+function legendLayout(c: Chart, width: number): { items: { x: number; row: number; fill: string; name: string }[]; height: number } {
+  if (!hasLegend(c)) return { items: [], height: 0 };
+  const start = c.kind === 'bar' && c.horizontal ? metrics(c, width).left : 4;
+  let x = start;
+  let row = 0;
+  const items = c.series
+    .filter((s) => s.type === 'bar')
+    .map((s, si) => ({ s, si }))
+    .filter(({ s }) => s.name.trim() !== '')
+    .map(({ s, si }) => {
+      const name = s.name.length > 30 ? `${s.name.slice(0, 29)}…` : s.name;
+      const w = 22 + name.length * 5.6;
+      if (x > start && x + w > width - 4) {
+        x = start;
+        row += 1;
+      }
+      const item = { x, row, fill: seriesFill(s, si), name };
+      x += w;
+      return item;
+    });
+  return { items, height: (row + 1) * LEGEND_ROW + 4 };
+}
 
 function Text({ x, y, children, anchor = 'middle', size = 11, weight = 400, fill = INK, opacity = 1 }: { x: number; y: number; children: ReactNode; anchor?: 'start' | 'middle' | 'end'; size?: number; weight?: number; fill?: string; opacity?: number }) {
   return (
@@ -106,8 +146,10 @@ function Text({ x, y, children, anchor = 'middle', size = 11, weight = 400, fill
 function Panel({ chart, width }: { chart: Chart; width: number }) {
   const lineSeries = chart.series.filter((s) => s.type === 'line' || chart.kind === 'line');
   const { left, right, maxCh, wrapped } = metrics(chart, width);
-  const legendH = hasLegend(chart) ? LEGEND_H : 0;
-  const top = (chart.heading ? 22 : 0) + (chart.axisTitle ? 22 : 8) + (chart.totals.length > 0 ? 14 : 0) + legendH;
+  const legend = legendLayout(chart, width);
+  // from the top: heading, axis title, the key, the totals above the stacks, then the plot
+  const legendTop = (chart.heading ? 22 : 0) + (chart.axisTitle ? 22 : 8);
+  const top = legendTop + legend.height + (chart.totals.length > 0 ? 14 : 0);
   const rowsH = chart.belowRows.length * 16;
   const plotH = chart.kind === 'pie' ? 190 : 170;
   const catH = chart.kind === 'pie' ? 0 : wrapped ? 42 : 30;
@@ -122,7 +164,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
   // bars the book picks out in a colour: those bars take it and the rest go a shade darker, as in the book (one set of bars only)
   const highlighted = new Set(chart.kind === 'bar' && barSeries.length === 1 ? chart.highlight : []);
   const highlightColour = LINE_COLOURS[chart.highlightColor.toLowerCase()] ?? LINE_COLOURS.orange;
-  const barFill = (i: number, si: number) => (highlighted.size === 0 ? greyFor(si) : highlighted.has(i) ? highlightColour : GREYS[1]);
+  const barFill = (i: number, si: number) => (highlighted.size === 0 ? seriesFill(barSeries[si], si) : highlighted.has(i) ? highlightColour : namedColour(barSeries[si].color) ?? GREYS[1]);
   const refColour = (c: string) => LINE_COLOURS[c.toLowerCase()] ?? LINE_COLOURS.orange;
 
   // vertical scale
@@ -284,10 +326,10 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
             const y1 = y(acc + v);
             acc += v;
             const segH = Math.abs(y0 - y1);
-            body.push(<rect key={`g${i}-${si}`} x={x0} y={Math.min(y0, y1)} width={groupW} height={Math.max(segH, 0)} fill={greyFor(si)} stroke="#ffffff" strokeWidth={0.8} />);
+            body.push(<rect key={`g${i}-${si}`} x={x0} y={Math.min(y0, y1)} width={groupW} height={Math.max(segH, 0)} fill={seriesFill(s, si)} stroke="#ffffff" strokeWidth={0.8} />);
             if (segH > 13 && (chart.segmentNames || labelFor(s, i))) {
               body.push(
-                <Text key={`gl${i}-${si}`} x={cx(i)} y={(y0 + y1) / 2 + 4} size={10} fill={onGrey(si)}>
+                <Text key={`gl${i}-${si}`} x={cx(i)} y={(y0 + y1) / 2 + 4} size={10} fill={inkOn(seriesFill(s, si))}>
                   {chart.segmentNames ? s.name : labelFor(s, i)}
                 </Text>,
               );
@@ -424,28 +466,18 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
         </Text>
       )}
       {chart.axisTitle && (
-        <Text x={chart.kind === 'pie' ? width / 2 : 4} y={top - legendH - (chart.totals.length > 0 ? 18 : 8)} anchor={chart.kind === 'pie' ? 'middle' : 'start'} size={11} opacity={0.85}>
+        <Text x={chart.kind === 'pie' ? width / 2 : 4} y={(chart.heading ? 22 : 0) + (chart.totals.length > 0 ? 18 : 14)} anchor={chart.kind === 'pie' ? 'middle' : 'start'} size={11} opacity={0.85}>
           {chart.axisTitle}
         </Text>
       )}
-      {legendH > 0 &&
-        (() => {
-          let lx = chart.kind === 'bar' && chart.horizontal ? plot.x : 4;
-          return chart.series
-            .filter((sr) => sr.type === 'bar')
-            .map((sr, si) => {
-              const x0 = lx;
-              lx += 22 + Math.min(sr.name.length, 30) * 5.6;
-              return (
-                <g key={`lg${si}`}>
-                  <rect x={x0} y={top - legendH - 2} width={10} height={10} fill={greyFor(si)} />
-                  <Text x={x0 + 14} y={top - legendH + 7} anchor="start" size={10}>
-                    {sr.name}
-                  </Text>
-                </g>
-              );
-            });
-        })()}
+      {legend.items.map((it, li) => (
+        <g key={`lg${li}`}>
+          <rect x={it.x} y={legendTop + 2 + it.row * LEGEND_ROW} width={10} height={10} fill={it.fill} />
+          <Text x={it.x + 14} y={legendTop + 11 + it.row * LEGEND_ROW} anchor="start" size={10}>
+            {it.name}
+          </Text>
+        </g>
+      ))}
       {body}
       {footnoteLines(chart, width).map((line, li) => (
         <Text key={`fn${li}`} x={4} y={top + plotH + catH + rowsH + 14 + li * 12} anchor="start" size={10} opacity={0.85}>
@@ -461,7 +493,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
 const footnoteLines = (c: Chart, width: number): string[] => (c.footnote ? wrapWords(c.footnote, Math.max(20, Math.floor((width - 8) / 5.3))) : []);
 
 const panelHeight = (c: Chart, width: number): number => {
-  const top = (c.heading ? 22 : 0) + (c.axisTitle ? 22 : 8) + (c.totals.length > 0 ? 14 : 0) + (hasLegend(c) ? LEGEND_H : 0);
+  const top = (c.heading ? 22 : 0) + (c.axisTitle ? 22 : 8) + (c.totals.length > 0 ? 14 : 0) + legendLayout(c, width).height;
   const { wrapped } = metrics(c, width);
   return top + (c.kind === 'pie' ? 190 : 170) + (c.kind === 'pie' ? 0 : wrapped ? 42 : 30) + c.belowRows.length * 16 + (c.footnote ? 4 + footnoteLines(c, width).length * 12 : 0) + 12;
 };

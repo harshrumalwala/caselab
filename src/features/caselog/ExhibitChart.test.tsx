@@ -102,7 +102,8 @@ describe("the book's charts, redrawn", () => {
       yMax: 100,
       yStep: 20,
     });
-    expect(svg.querySelectorAll('rect')).toHaveLength(4);
+    // four stacked segments, plus a swatch each for the two bar series in the key (the line is not a segment)
+    expect(svg.querySelectorAll('rect')).toHaveLength(6);
     expect(svg.querySelectorAll('polyline')).toHaveLength(1);
   });
 
@@ -156,6 +157,108 @@ describe("the book's charts, redrawn", () => {
     expect(text(sideways)).toEqual(expect.arrayContaining(['Client', 'Competitor']));
     const one = draw({ kind: 'bar', categories: ['2005'], series: [series('Public', [10])] });
     expect(text(one)).not.toContain('Public');
+  });
+
+  const fills = (svg: SVGSVGElement) => [...svg.querySelectorAll('rect')].map((r) => r.getAttribute('fill'));
+  const swatches = (svg: SVGSVGElement) => [...svg.querySelectorAll('rect')].filter((r) => r.getAttribute('width') === '10' && r.getAttribute('height') === '10');
+
+  it('gives a stack whose segments are not named a key, and none to a stack that prints its names inside the segments', () => {
+    const base = { kind: 'stacked' as const, percent: true, categories: ['Need both', 'Buy from Circle'], series: [series('Both', [60, 20]), series('Only air bubble', [24, 33]), series('Only stretch plastics', [16, 47])] };
+    const keyed = draw(base);
+    expect(text(keyed)).toEqual(expect.arrayContaining(['Both', 'Only air bubble', 'Only stretch plastics']));
+    expect(swatches(keyed)).toHaveLength(3);
+    // the names inside the segments already say which is which
+    const named = draw({ ...base, segmentNames: true });
+    expect(swatches(named)).toHaveLength(0);
+    expect(text(named).filter((t) => t === 'Both')).toHaveLength(2); // once per stack, none in a key
+    // one series, or unnamed series, is not worth a key
+    expect(swatches(draw({ kind: 'stacked', categories: ['a'], series: [series('Only', [5])] }))).toHaveLength(0);
+    expect(swatches(draw({ kind: 'stacked', categories: ['a'], series: [series('', [5]), series('', [6])] }))).toHaveLength(0);
+  });
+
+  it('puts the key above the totals and the plot, and starts a second row when the names do not fit across the panel', () => {
+    const svg = draw({
+      kind: 'stacked',
+      percent: true,
+      axisTitle: 'Share of customers',
+      categories: ['One', 'Two'],
+      series: [series('Both products', [60, 20]), series('Only air bubble', [24, 33]), series('Only stretch plastics', [16, 47])],
+      totals: ['25', '15'],
+    });
+    const plotTop = Math.min(...[...svg.querySelectorAll('line')].map((l) => Number(l.getAttribute('y1'))));
+    const keyBottom = Math.max(...swatches(svg).map((r) => Number(r.getAttribute('y')) + 10));
+    const totalTop = Math.min(...[...svg.querySelectorAll('text')].filter((t) => ['25', '15'].includes(t.textContent ?? '')).map((t) => Number(t.getAttribute('y')) - 11));
+    expect(keyBottom).toBeLessThanOrEqual(totalTop);
+    expect(totalTop).toBeLessThan(plotTop);
+    // in a narrow panel (two charts side by side) the three names wrap onto a second row rather than running off the edge
+    const narrow = draw({
+      kind: 'stacked',
+      panels: ['Customer demand', 'Air bubble buyers'].map((heading) => ({
+        ...blankChart,
+        kind: 'stacked' as const,
+        heading,
+        percent: true,
+        categories: ['Q1', 'Q2'],
+        series: [series('Both products', [60, 20]), series('Only air bubble', [24, 33]), series('Only stretch plastics', [16, 47])],
+      })),
+    });
+    const firstPanel = swatches(narrow).filter((r) => Number(r.getAttribute('x')) < 340);
+    expect(new Set(firstPanel.map((r) => r.getAttribute('y'))).size).toBeGreaterThan(1);
+    expect(Math.max(...firstPanel.map((r) => Number(r.getAttribute('x'))))).toBeLessThan(340);
+    // the exhibit is tall enough for the second row: nothing is drawn below the bottom of the svg
+    const h = Number(narrow.getAttribute('viewBox')!.split(' ')[3]);
+    expect(Math.max(...[...narrow.querySelectorAll('text')].map((t) => Number(t.getAttribute('y'))))).toBeLessThan(h);
+  });
+
+  it('gives each panel of a multi-panel exhibit its own key', () => {
+    const panel = (heading: string, names: [string, string]) => ({ ...blankChart, kind: 'stacked' as const, heading, percent: true, categories: ['Q1'], series: [series(names[0], [20]), series(names[1], [80])] });
+    const svg = draw({ kind: 'stacked', panels: [panel('Awareness', ['Yes', 'No']), panel('Willingness', ['Willing', 'Not willing'])] });
+    expect(swatches(svg)).toHaveLength(4);
+    expect(text(svg)).toEqual(expect.arrayContaining(['Yes', 'No', 'Willing', 'Not willing']));
+  });
+
+  it("fills bars and stack segments in the colour the book gives a series, and the key's swatches match", () => {
+    const colours = ['#e07b21', '#0f2a5c', '#0b8a8a'];
+    const stack = draw({ kind: 'stacked', percent: true, categories: ['A'], series: [series('Both', [60], { color: 'orange' }), series('Air', [24], { color: 'navy' }), series('Stretch', [16], { color: 'teal' })] });
+    expect(swatches(stack).map((r) => r.getAttribute('fill'))).toEqual(colours);
+    expect(fills(stack).slice(3)).toEqual(colours); // the segments, after the three swatches
+    const bars = draw({ kind: 'bar', categories: ['a', 'b'], series: [series('Yes', [3, 4], { color: 'Red' }), series('No', [2, 1], { color: ' green ' })] });
+    expect(swatches(bars).map((r) => r.getAttribute('fill'))).toEqual(['#c8202f', '#3b8a3e']);
+    expect(fills(bars).slice(2)).toEqual(['#c8202f', '#3b8a3e', '#c8202f', '#3b8a3e']);
+    // the text inside a dark segment is white, inside a light one dark
+    const labelled = draw({ kind: 'stacked', categories: ['A'], segmentNames: true, series: [series('Dark', [50], { color: 'navy' }), series('Light', [50], { color: 'yellow' })] });
+    const ink = (name: string) => [...labelled.querySelectorAll('text')].find((t) => t.textContent === name)!.getAttribute('fill');
+    expect(ink('Dark')).toBe('#ffffff');
+    expect(ink('Light')).toBe('#1f1f1f');
+  });
+
+  it('falls back to the grey scale for a colour it does not know, for a series with no colour, and for a chart with none set', () => {
+    const none = draw({ kind: 'stacked', categories: ['A'], series: [series('One', [1]), series('Two', [2]), series('Three', [3])] });
+    expect(swatches(none).map((r) => r.getAttribute('fill'))).toEqual(['#d2d2d2', '#a9a9a9', '#7e7e7e']);
+    expect(fills(none).slice(3)).toEqual(['#d2d2d2', '#a9a9a9', '#7e7e7e']);
+    const odd = draw({ kind: 'stacked', categories: ['A'], series: [series('One', [1], { color: 'chartreuse' }), series('Two', [2], { color: 'url(javascript:1)' }), series('Three', [3], { color: 'teal' })] });
+    expect(swatches(odd).map((r) => r.getAttribute('fill'))).toEqual(['#d2d2d2', '#a9a9a9', '#0b8a8a']);
+    const hex = draw({ kind: 'bar', categories: ['A'], series: [series('One', [1], { color: '#123abc' }), series('Two', [2])] });
+    expect(swatches(hex).map((r) => r.getAttribute('fill'))).toEqual(['#123abc', '#a9a9a9']);
+  });
+
+  it('keeps highlighted bars working with and without a colour on the series', () => {
+    const chart = { kind: 'bar' as const, categories: ['1', '2', '3'], yMin: 0, yMax: 10, yStep: 5, highlight: [0, 2], highlightColor: 'orange' };
+    expect(fills(draw({ ...chart, series: [series('x', [3, 5, 8])] }))).toEqual(['#e07b21', '#a9a9a9', '#e07b21']);
+    // with a series colour the bars that are not picked out keep it
+    const coloured = draw({ ...chart, series: [series('x', [3, 5, 8], { color: 'navy' })] });
+    expect(fills(coloured)).toEqual(['#e07b21', '#0f2a5c', '#e07b21']);
+    expect(swatches(coloured)).toHaveLength(0); // one series, no key
+  });
+
+  it('reads a series colour from a write-up and draws it', () => {
+    const e = parseSolutionExhibit({
+      title: 'E',
+      columns: ['A'],
+      rows: [['1']],
+      chart: { kind: 'stacked', categories: ['a'], series: [{ name: 'Yes', values: [20], color: 'teal' }, { name: 'No', values: [80], color: 'orange' }] },
+    });
+    expect(swatches(draw({ ...e.chart! })).map((r) => r.getAttribute('fill'))).toEqual(['#0b8a8a', '#e07b21']);
   });
 
   it('draws the dashed line the book draws across a chart, with its label, and colours the bars the book picks out', () => {
