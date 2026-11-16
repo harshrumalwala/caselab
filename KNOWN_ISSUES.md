@@ -88,6 +88,16 @@ assistant saw a claim (for example a build session's report) but did not check i
   yellow, green, black, gray, orange, purple, navy, teal, or a hex value). The key lists series left to right and is not ordered to match a
   stack from top to bottom. A stack with `segmentNames` gets no key, but a segment under 14 px tall prints no name, so a very thin segment in
   such a stack is unnamed (not checked across the data). The pie slices and scatter points ignore series colours.
+- **Colour audit of stacked charts (2026-11-16; owner approved; loaded to production).** Readers compared 102 exhibits (114 stacked panels) with the
+  book pages and recorded series colours: 97 panels in 69 cases now carry them. What is still not right: (1) where the book uses two or more shades
+  of one hue (26 panels, for example light and dark blue), the repeat got a lighter tint chosen by rule, not matched to the book, so a pair can be
+  the wrong way round; (2) striped, hatched or patterned fills (Salty Sole Shoe, Health Coaches, Kid Country and others) are drawn as plain
+  colours or greys; (3) 15 panels are greyscale in the book and stay grey; Busch's Barber Shop panel 1 (the book colours by bar, not by series) and
+  Green Dreamz Exhibit 1 (five purple shades, low confidence) were skipped; (4) two line series the book draws are not in our data: a teal Capacity
+  line on Run of the Mill and a crimson viewership line on News Co; Soap Co's dashed 10-15% leader line is a band we cannot draw; (5) the colour
+  names are our palette's nearest match (for example a periwinkle recorded as purple). Only the 102 exhibits with uncoloured, unnamed stacked
+  panels were checked: clustered-bar and other charts were not compared with the book. The readers' category counts in their notes compared the
+  book with a job file that listed only the first eight categories, so ignore their "our list stops at ..." remarks.
 - **Exhibit chart kinds we cannot draw** stay as tables: marimekko, bubble size, waterfall, dual axis, maps, flow diagrams, stacked area,
   scatter trend lines, stacked horizontal bars.
 - **No visual regression tests for charts.** The render check (a temporary test that draws every chart to SVG, then a contact sheet) lives in

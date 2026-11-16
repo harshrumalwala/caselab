@@ -101,3 +101,12 @@ Learning mode) is unchanged; the 25 partial write-ups stay excluded.
 | # | Item | Source | Notes |
 |---|---|---|---|
 | R37 | **Phase 2: connect Google and Microsoft calendars** (free/busy, availability, automatic event and Meet/Teams link creation) | Assistant, following the owner's request of 2026-11-16 ("reflect on their calendar"). **Deliberately not an issue yet.** | Needs the phase-1 results first. Open questions, each needing a check of the **current** platform documentation before anyone commits (the statements below are not verified): (1) Google OAuth verification: calendar scopes are, I believe, sensitive and may need app verification and a privacy review, and an unverified app may be limited to test users; (2) Microsoft school tenants often block third-party consent unless an admin approves, and whether Booth's tenant would is not known; (3) secure storage of refresh tokens, a new class of secret the project has none of (encrypted in the database or Supabase Vault, deleted with the account, revocable); (4) the availability UI (showing free/busy to a partner without exposing event details); (5) time zones, daylight-saving boundaries and recurring events; (6) the testing cost: real Google and Microsoft accounts and tenants, no CI coverage possible, and the privacy review. Revisit only if phase 1 proves people actually schedule in the app. |
+
+## Added after the colour audit (2026-11-16; all proposed)
+
+| # | Item | Source | Notes |
+|---|---|---|---|
+| R38 | Draw striped, hatched and dotted fills as the book does (instead of one plain colour) | Assistant, from the colour audit (Salty Sole Shoe, Health Coaches, Kid Country, MedTrans, Small Drug Manufacturer) | Needs an SVG pattern per fill and a spec field for it. |
+| R39 | Add the book's missing line series (a teal Capacity line on Run of the Mill, a crimson viewership line on News Co) and a band for Soap Co's 10-15% leader share | Assistant, from the colour audit | Data additions plus, for the band, a renderer feature. |
+| R40 | Check the clustered-bar, line, pie and scatter charts for colours, highlights and lines against the book, as was done for the stacked charts | Assistant | About 450 further chart panels; same reader pipeline. |
+
