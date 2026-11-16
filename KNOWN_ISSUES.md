@@ -34,6 +34,9 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **The parser silently truncates oversized content.** `src/domain/bookSolution.ts` caps: exhibits 12, columns 16, rows 70, chart
   points/categories 70, structure buckets 8, clarifying questions 5, takeaways 3, panels 4. Empty-string chart categories are dropped, so a
   single unlabelled bar needs a non-empty label or the chart disappears. Content over the caps is cut without an error.
+  The per-exhibit caps are now `SOLUTION_EXHIBIT_LIMITS` in that file, and the live case passes its own (40 columns / 400 rows / 400 chart
+  points, in `src/features/live/liveParts.tsx`) to match `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts`. The two sets are
+  kept in step by hand: change one and the other has to be changed with it, or a live exhibit is cut a second time on its way to the screen.
 - **One case name in the work list had no PDF** (806 of 807 were assigned). Production shows 872 solutions for 872 cases, so it may have
   been a duplicate, but which entry it was has not been checked.
 - **Generic case names can merge different cases** into one library entry (README line 356).
@@ -130,6 +133,11 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   `supabase/functions/_shared/liveCase.ts` and the live-case tests.
 - **Live case hid the only candidate exhibit** (PR #74, "Retire on the House", Fuqua 2018): "Exhibit #1: Current solutions for retirees" was
   hidden because its title contains "solutions". Now "solutions" hides a table only when it is the book's answer. Same files.
+- **No exhibit chart was ever drawn in a live case** (issue #81, found by reading the code and measuring the write-ups: 450 of 1,383
+  candidate-facing exhibits carry a drawable chart). `ExhibitView` asked the whole-solution parser to normalise a one-exhibit stub with no
+  recommendation and no steps, so the parser refused it and the chart silently vanished while the table carried on rendering from the raw
+  fields. The exhibit is now read by `parseSolutionExhibit` in `src/domain/bookSolution.ts`. Risk: any future "normalise this fragment"
+  call to `parseBookSolution` fails the same silent way. Regression tests in `src/features/live/liveParts.test.tsx`.
 - **Hints arrived unprompted** (PR #70) and **Bucket answered "show me the data" with "what do you think?"** (PR #74). Bucket now speaks only
   after the member writes, and on the third stuck message it leads and reads out the data (never the conclusion).
 - **The exhibit scrolled out of reach** (PR #70): it is now sticky beside the conversation. Its own PR said it was not checked at phone
