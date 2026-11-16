@@ -7,7 +7,7 @@ import { makeCase } from './test/builders';
 import { createFakeEnv, type FakeEnv } from './test/fakeBackend';
 
 const member = (userId: string, displayName: string, mbaClass = ''): Profile => ({
-  userId, displayName, mbaClass, listed: true, publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [], sharing: NO_SHARING,
+  userId, displayName, mbaClass, listed: true, publicProfile: false, burnedBooks: [], burnedCases: [], sharing: NO_SHARING,
 });
 const BOB = member('bob', 'Bob Brown', 'Class of 2027');
 const DANA = member('dana', 'Dana Diaz');

@@ -1,22 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowRight, BarChart3, Check, ChevronRight, Compass, EyeOff, FileSpreadsheet, Lock, MessageCircle, Search, ShieldCheck, Timer } from 'lucide-react';
+import { ArrowRight, BarChart3, Check, ChevronRight, Compass, EyeOff, FileSpreadsheet, Lock, MessageCircle, ShieldCheck, Timer } from 'lucide-react';
 import { Logo } from '../../components/layout/Header';
-import { describeError } from '../../data/errors';
-import type { PublicReader, RecentCaser } from '../../data/community';
-import { formatDate } from '../../domain/dates';
+import type { PublicReader } from '../../data/community';
 import { quipOfTheDay } from '../../domain/quips';
-import { chipClass } from '../../components/ui/chips';
 import { HeroScene, Sparkle, Sticky } from '../../components/ui/Doodles';
 import { HeroVideo } from '../../components/ui/HeroVideo';
 import { BucketAvatar } from '../improvement/BucketAvatar';
 import { RevealOnView } from '../../components/ui/RevealOnView';
 import type { Profile } from '../../domain/community';
-import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { useAuth } from '../../state/AuthProvider';
 import { rememberImportIntent } from '../../state/afterSignup';
 import { LoginScreen } from '../auth/LoginScreen';
-import { Directory } from '../people/People';
 import { PersonProfile } from '../people/PersonProfile';
 
 type View = { kind: 'home' } | { kind: 'person'; id: string } | { kind: 'signin' } | { kind: 'signup' };
@@ -94,69 +89,14 @@ function Tile({ icon, title, joke, tone, tilt, children }: { icon: ReactNode; ti
 
 const ASSURANCES: { icon: ReactNode; title: string; text: string; tone: Tone }[] = [
   { icon: <ShieldCheck className="size-5" />, title: 'Members choose', text: 'Everything starts private. Each person switches on only what they’re comfortable showing.', tone: 'teal' },
-  { icon: <EyeOff className="size-5" />, title: 'No email addresses', text: 'Names and class years only. Nobody can look up or contact someone through this page.', tone: 'sun' },
+  {
+    icon: <EyeOff className="size-5" />,
+    title: 'Nothing to browse',
+    text: 'No member list, no search and no email addresses out here. A profile opens only for someone the member gave their link to.',
+    tone: 'sun',
+  },
   { icon: <Lock className="size-5" />, title: 'Detail is opt-in', text: 'Written feedback and notes are shown only if a member chooses to open everything. Otherwise they stay with members.', tone: 'lilac' },
 ];
-
-const RECENT_COUNT = 5;
-
-/** The members who have cased most recently, newest first, so there is something to see before searching. */
-function RecentCasers({ reader, onOpen }: { reader: PublicReader; onOpen: (id: string) => void }) {
-  const [state, setState] = useState<{ status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; people: RecentCaser[] }>({ status: 'loading' });
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    let current = true;
-    reader
-      .recentPeople(RECENT_COUNT)
-      .then((people) => current && setState({ status: 'ready', people }))
-      .catch((e) => current && setState({ status: 'error', message: describeError(e) }));
-    return () => {
-      current = false;
-    };
-  }, [reader, attempt]);
-
-  if (state.status === 'loading') return null;
-  if (state.status === 'error') {
-    return (
-      <div role="alert" className="mt-5 flex flex-wrap items-center gap-3 text-sm text-ink-2">
-        <span>Couldn’t load recent members. {state.message}</span>
-        <Button onClick={() => { setState({ status: 'loading' }); setAttempt((n) => n + 1); }}>Try again</Button>
-      </div>
-    );
-  }
-  if (state.people.length === 0) return null;
-
-  return (
-    <div className="mt-6">
-      <h3 className="eyebrow">Cased recently</h3>
-      <ul className="mt-3 space-y-2.5">
-        {state.people.map(({ person, lastCased }) => (
-          <li key={person.userId}>
-            <button
-              type="button"
-              onClick={() => onOpen(person.userId)}
-              className="sticker flex w-full items-center justify-between gap-4 p-4 text-left transition hover:-translate-y-0.5 hover:bg-sun-soft"
-            >
-              <span className="flex min-w-0 items-center gap-3.5">
-                <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl border-2 border-ink/80 font-display font-bold ${chipClass(person.displayName)}`} aria-hidden>
-                  {person.displayName.trim().charAt(0).toUpperCase()}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate font-semibold text-ink">{person.displayName}</span>
-                  <span className="block truncate text-xs text-muted">
-                    {person.mbaClass ? `${person.mbaClass} · ` : ''}Last cased {formatDate(lastCased)}
-                  </span>
-                </span>
-              </span>
-              <ChevronRight className="size-4 shrink-0 text-muted" />
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 const BUCKET_POINTS = [
   'You lead the case. Bucket answers your questions, shows the exhibits, and nudges you when you are stuck.',
@@ -308,23 +248,9 @@ function ImportCallout() {
   );
 }
 
-interface LandingProps {
-  reader: PublicReader;
-  onOpen: (id: string) => void;
-  /** Whether the member list has been asked for. It isn't loaded or shown until then. */
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
-
-function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
+function Landing() {
   const findRef = useRef<HTMLElement>(null);
-  const cameBackOpen = useRef(open);
   const quip = useMemo(() => quipOfTheDay(), []);
-
-  // Coming back from a profile with the list already open: land on it, not at the top of the page.
-  useEffect(() => {
-    if (cameBackOpen.current) findRef.current?.scrollIntoView?.();
-  }, []);
 
   const scrollToFind = () => findRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   const scrollToBucket = () => document.getElementById('bucket')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
@@ -357,7 +283,7 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
             <p className="mt-4 text-sm text-ink-2">
               Your practice is private by default. Nothing is shown to anyone unless you switch it on.{' '}
               <button type="button" onClick={scrollToFind} className="font-semibold text-accent-text underline-offset-2 hover:underline">
-                See who&rsquo;s casing
+                Casing with other people
               </button>
             </p>
           </div>
@@ -425,21 +351,17 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
               Find someone to case with
             </h2>
             <p className="mt-1.5 text-base leading-relaxed text-ink-2">
-              People who are casing can choose to be listed, and to share as much or as little of their practice as they like. Search
-              by name to see what someone has practiced, and pick a case to run with them.
+              Casing is better with company. Inside CaseLab, members can look each other up by name, ask to case, swap case
+              suggestions and keep it all in one thread.
+            </p>
+            <p className="mt-3 text-base leading-relaxed text-ink-2">
+              Out here there is nobody to browse: no list and no search. Members share their own profile link with whoever they
+              choose, and it opens without an account.
             </p>
           </div>
-          <RecentCasers reader={reader} onOpen={onOpen} />
-          {open ? (
-            <div className="mt-8">
-              <h3 className="eyebrow mb-3">Everyone</h3>
-              <Directory reader={reader} publicView onOpen={onOpen} />
-            </div>
-          ) : (
-            <button type="button" onClick={() => onOpenChange(true)} aria-expanded={false} className={`${SECONDARY} mt-6`}>
-              <Search className="size-4" aria-hidden /> Search all members
-            </button>
-          )}
+          <a href="#/signup" className={`${SECONDARY} mt-6`}>
+            Create an account to find people <ArrowRight className="size-4" aria-hidden />
+          </a>
         </section>
 
         <section aria-labelledby="control-title">
@@ -466,8 +388,8 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
           <Sparkle className="absolute bottom-6 right-24 size-6 text-coral" />
           <h2 className="max-w-lg text-3xl font-extrabold tracking-tight sm:text-4xl">Ready for your first case with Bucket?</h2>
           <p className="mt-3 max-w-xl text-base leading-relaxed text-accent-ink/90">
-            A free account gives you live cases with Bucket, your own case log, dashboard and improvement plan. Appearing in the list of
-            people casing is optional and stays off until you switch it on.
+            A free account gives you live cases with Bucket, your own case log, dashboard and improvement plan. Being found by other
+            members is optional, and nothing about you is public unless you hand out your profile link.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <a href="#/signup" className={`${BUTTON} border-2 border-ink/80 bg-sun text-on-sun hover:brightness-95`}>
@@ -484,16 +406,15 @@ function Landing({ reader, onOpen, open, onOpenChange }: LandingProps) {
 }
 
 /**
- * The front page for people who are not signed in (anyone): what the tool is, and a member
- * list that opens on request, showing only the members who chose to be visible and what they share. Sign-in and
- * sign-up live one click away; creating cases and "find a case for them" need an account.
+ * The front page for people who are not signed in (anyone): what the tool is, and nothing else about anybody. There
+ * is no member list and no search; the only profile a visitor can open is one whose link they were given
+ * (`#/people/<id>`), and even that shows only what that member chose to share. Sign-in and sign-up live one click
+ * away; creating cases and "find a case for them" need an account.
  */
 export function PublicSite({ reader }: { reader: PublicReader }) {
   const { linkProblem } = useAuth();
   // An expired or already-used email link lands here with an error: show the sign-in form, which explains it.
   const [view, go] = useView(linkProblem ? { kind: 'signin' } : parse());
-  // The member list stays closed until someone asks for it, and stays open when they come back from a profile.
-  const [directoryOpen, setDirectoryOpen] = useState(false);
 
   if (view.kind === 'signin' || view.kind === 'signup') {
     return <LoginScreen key={view.kind} initialMode={view.kind} onBack={() => go('/')} />;
@@ -531,11 +452,19 @@ export function PublicSite({ reader }: { reader: PublicReader }) {
 
       {view.kind === 'home' ? (
         <main className="flex-1">
-          <Landing reader={reader} open={directoryOpen} onOpenChange={setDirectoryOpen} onOpen={(id) => go(`/people/${encodeURIComponent(id)}`)} />
+          <Landing />
         </main>
       ) : (
         <main className="mx-auto w-full max-w-4xl flex-1 px-4 pb-16 pt-8 sm:px-6 sm:pt-12">
-          <PersonProfile key={view.id} reader={reader} userId={view.id} mine={null} onBack={() => go('/')} signInPrompt={(p) => <JoinPrompt person={p} />} />
+          <PersonProfile
+            key={view.id}
+            reader={reader}
+            userId={view.id}
+            mine={null}
+            onBack={() => go('/')}
+            backLabel="CaseLab"
+            signInPrompt={(p) => <JoinPrompt person={p} />}
+          />
         </main>
       )}
 

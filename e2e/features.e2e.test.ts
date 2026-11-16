@@ -28,7 +28,6 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: weekly goal, interviewed cases 
     mbaClass: '',
     listed: false,
     publicProfile: false,
-    publicLinkOnly: false,
     burnedBooks: [],
     burnedCases: [],
     sharing: NO_SHARING,

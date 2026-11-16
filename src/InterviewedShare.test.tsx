@@ -12,7 +12,6 @@ const bob = (interviewed: boolean, extra: Partial<Profile> = {}): Profile => ({
   mbaClass: 'Class of 2027',
   listed: true,
   publicProfile: true,
-  publicLinkOnly: false,
   burnedBooks: [],
   burnedCases: [],
   sharing: { ...NO_SHARING, interviewed },

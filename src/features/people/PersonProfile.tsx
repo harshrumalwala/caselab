@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft, Hand, Loader2, MessageCircle, Mic, UserRound } from 'lucide-react';
-import type { CommunityReader } from '../../data/community';
+import type { PublicReader } from '../../data/community';
 import { describeError } from '../../data/errors';
 import { publicSharingSummary, sharedToRecords, sharingSummary, type Profile, type SharedCase } from '../../domain/community';
 import { distinctValues, matchesFilter, NO_FILTER, type CaseFilter } from '../../domain/pairing';
@@ -85,9 +85,12 @@ function SharedPerformance({ shared }: { shared: SharedCase[] }) {
 }
 
 interface Props {
-  reader: CommunityReader;
+  /** Reading one member is all this screen needs, so it works for a signed-in member and for a visitor with a link. */
+  reader: PublicReader;
   userId: string;
   onBack: () => void;
+  /** What the back link says; visitors came from the front page, not from a list of members. */
+  backLabel?: string;
   /**
    * Your own cases, for "Find a case for them". `null` for a visitor without an account: they can read what
    * the member shares, but pairing needs their own history, so they get a prompt to sign in instead.
@@ -99,7 +102,7 @@ interface Props {
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 
-export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Props) {
+export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, backLabel = 'All members' }: Props) {
   const visitor = mine === null;
   const [state, setState] = useState<
     { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; person: Profile | null; shared: SharedCase[]; interviewed: SharedInterviewed[] }
@@ -129,7 +132,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt }: Pr
 
   const back = (
     <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-text hover:underline">
-      <ArrowLeft className="size-4" /> All members
+      <ArrowLeft className="size-4" /> {backLabel}
     </button>
   );
 
