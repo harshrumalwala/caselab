@@ -66,7 +66,8 @@ describe('an exhibit in a live case', () => {
     );
     expect(screen.getByRole('img', { name: /Cumulative sales by customer/ })).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
-    expect(screen.getByText('(values read off a chart, approximate)')).toBeInTheDocument();
+    // the table is hidden, so a note about how its figures were read would refer to figures the member cannot see
+    expect(screen.queryByText(/approximate/)).not.toBeInTheDocument();
   });
 
   it('shows only the charts of a survey drawn as side-by-side panels, not the table of its answers', () => {
@@ -159,11 +160,30 @@ describe('an exhibit in a live case', () => {
     expect(screen.getByRole('table')).toBeInTheDocument();
   });
 
-  it('says so when the values were read off a chart', () => {
-    const { rerender } = render(<ExhibitView exhibit={exhibit({ approx: true, chart: barChart })} />);
+  it('says the values were read off a chart only while the table of those values is shown', () => {
+    // a table with a column the chart does not carry stays, and so does the note that explains its figures
+    const withNotes = exhibit({
+      approx: true,
+      columns: ['Season', 'Occupancy', 'Sample size'],
+      rows: [['Summer', '85%', '120 hotels'], ['Winter', '40%', '95 hotels']],
+      chart: barChart,
+    });
+    const { rerender } = render(<ExhibitView exhibit={withNotes} />);
+    expect(screen.getByRole('table')).toBeInTheDocument();
     expect(screen.getByText('(values read off a chart, approximate)')).toBeInTheDocument();
+    // a table that only repeats the chart is hidden, and the note goes with it
+    rerender(<ExhibitView exhibit={exhibit({ approx: true, chart: barChart })} />);
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryByText('(values read off a chart, approximate)')).not.toBeInTheDocument();
+    // an exhibit that was not read off a chart never carries it
     rerender(<ExhibitView exhibit={exhibit()} />);
     expect(screen.queryByText('(values read off a chart, approximate)')).not.toBeInTheDocument();
+  });
+
+  it('shows the note with an exhibit that has no chart drawn but a table of approximate figures', () => {
+    render(<ExhibitView exhibit={exhibit({ approx: true, chart: { ...barChart, kind: 'waterfall' } })} />);
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByText('(values read off a chart, approximate)')).toBeInTheDocument();
   });
 
   it('keeps a table bigger than the full-solution caps whole, and plots every row of it', () => {

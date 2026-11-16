@@ -35,6 +35,7 @@ export function useAutosave(value: string, save: (text: string) => void, delayMs
  * An exhibit as the member sees it: the chart the book drew, and its table. When a chart is drawn and the table only repeats the figures the
  * chart already prints, the table is left out: it is our own transcription of the chart (the book prints the chart alone), and a real
  * candidate would not have it. A table with anything the chart does not print stays (see `tableRepeatsChart`).
+ * The "values read off a chart, approximate" note describes that table's figures, so it is shown only while the table is.
  */
 export function ExhibitView({ exhibit }: { exhibit: PublicExhibit }) {
   const normalised = useMemo(() => parseSolutionExhibit(exhibit, LIVE_EXHIBIT_LIMITS), [exhibit]);
@@ -43,7 +44,7 @@ export function ExhibitView({ exhibit }: { exhibit: PublicExhibit }) {
     <figure className="space-y-2 rounded-xl border border-line bg-surface p-3.5">
       <figcaption className="text-sm font-semibold text-ink">
         {exhibit.title}
-        {exhibit.approx && <span className="ml-2 text-xs font-normal text-muted">(values read off a chart, approximate)</span>}
+        {exhibit.approx && showTable && <span className="ml-2 text-xs font-normal text-muted">(values read off a chart, approximate)</span>}
       </figcaption>
       {exhibit.caption && <p className="text-xs text-muted">{exhibit.caption}</p>}
       {normalised.chart && <ExhibitChart exhibit={normalised} chart={normalised.chart} />}
