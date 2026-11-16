@@ -76,6 +76,10 @@ const WRITES = {
  * The four candidates, and everything each of them pretends. `exhibit` is what the stub sends back for a turn on a beat, which is the only
  * place the model can end a beat; `beat` is what the candidate does next on the beat it is on, given how many times it has already written
  * there. A candidate with `acts: false` never writes and never presses a button, so only the clock can carry its case.
+ *
+ * `endsBeats` says whether this candidate can end a beat by itself, by completing it or by choosing "move on". One that cannot has no way
+ * out of a beat in an untimed mode, where there is no clock and Bucket never moves a learner on: that is the design, so a run of theirs
+ * that stops there is counted as open by design rather than as a case that broke.
  */
 const OFFTRACK_BEAT_CAP = 12;
 
@@ -87,6 +91,7 @@ export const CANDIDATE_SPECS = {
     clarifyQuestions: 2,
     directionClear: true,
     exhibit: { assessment: 'progress', beatComplete: true },
+    endsBeats: true, // by completing every one of them
     beat: (written) => (written === 0 ? 'write' : 'wait'),
   },
   passive: {
@@ -96,6 +101,7 @@ export const CANDIDATE_SPECS = {
     clarifyQuestions: 0,
     directionClear: false,
     exhibit: { assessment: 'unclear', beatComplete: false },
+    endsBeats: false,
     beat: () => 'nothing',
   },
   offtrack: {
@@ -107,6 +113,7 @@ export const CANDIDATE_SPECS = {
     exhibit: { assessment: 'stuck', beatComplete: false },
     /** The engine has no limit on this; the harness gives up so that a case that cannot end does not run for ever. */
     beatCap: OFFTRACK_BEAT_CAP,
+    endsBeats: false,
     beat: (written) => (written < OFFTRACK_BEAT_CAP ? 'write' : 'nothing'),
   },
   asker: {
@@ -116,6 +123,7 @@ export const CANDIDATE_SPECS = {
     clarifyQuestions: 4,
     directionClear: true,
     exhibit: { assessment: 'unclear', beatComplete: false },
+    endsBeats: true, // by choosing "move on"
     beat: (written) => (written < 2 ? 'write' : 'moveOn'),
   },
 };
@@ -368,6 +376,17 @@ export function failureCause(run) {
 
 export const reachedEnd = (run) => run.stage === 'done' && !run.error && !run.stalled;
 
+/**
+ * A run that stopped where the engine means to stop: an untimed case, waiting on a member who neither completed a beat nor chose to move
+ * on. Learning mode has no clock and Bucket never moves a learner on, so there is nothing left to carry them and nothing is broken. It is
+ * counted and named, never hidden, but it is not a failure and does not fail the command: see the note in the summary.
+ */
+export const openByDesign = (run) =>
+  !reachedEnd(run) && run.mode === 'learning' && run.stalled && !run.threw && !run.cappedOut && !run.error && CANDIDATE_SPECS[run.candidate]?.endsBeats === false;
+
+/** A case that broke: it did not reach the end, and the engine did not mean to leave it there. This is what the command exits non-zero on. */
+export const failedTheBar = (run) => !reachedEnd(run) && !openByDesign(run);
+
 // ---------------------------------------------------------------------------------------------------------------------------
 // Every case
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -420,7 +439,8 @@ const tally = (values) => values.reduce((m, v) => m.set(v, (m.get(v) ?? 0) + 1),
 export function summarise(result) {
   const runs = result.cases.flatMap((c) => c.runs);
   const done = runs.filter(reachedEnd);
-  const failed = runs.filter((r) => !reachedEnd(r));
+  const failed = runs.filter(failedTheBar);
+  const byDesign = runs.filter(openByDesign);
   const beats = runs.flatMap((r) => r.beats);
   const cells = new Map();
   for (const mode of result.modes) {
@@ -437,12 +457,15 @@ export function summarise(result) {
     skipped: result.skipped.length,
     runs: runs.length,
     done: done.length,
+    short: runs.length - done.length,
     failed: failed.length,
+    byDesign: byDesign.length,
     threw: runs.filter((r) => r.error).length,
     stalled: runs.filter((r) => r.stalled).length,
     cells,
     endStates: tally(runs.map((r) => `${r.stage} / ${r.endReason ?? 'still running'}`)),
     causes: tally(failed.map(failureCause)),
+    byDesignCauses: tally(byDesign.map(failureCause)),
     beatsPlanned: sum(runs.map((r) => r.beatsTotal)),
     beatsReached: beats.length,
     outcomes: tally(beats.map((b) => b.outcome)),
@@ -483,18 +506,26 @@ export function formatSummary(s, result) {
     pad('live-eligible, played', s.cases),
     pad('not live-eligible, skipped', s.skipped),
     '',
-    'The bar: every case, in every mode, for every candidate, reaches stage done',
+    'The bar: no case breaks. A run FAILS when it does not reach stage done in a mode that has a',
+    'clock, when it throws, or when it stops anywhere the engine did not mean to leave it. The',
+    'command exits non-zero on failures only.',
     pad('runs', s.runs),
     pad('reached the end', s.done),
-    pad('did not reach the end', s.failed),
-    pad('  of those, threw an exception', s.threw),
-    pad('  of those, stalled with nothing left to do', s.stalled),
+    pad('did not reach the end', s.short),
+    pad('  failed the bar', s.failed),
+    pad('  open by design (see below)', s.byDesign),
+    pad('threw an exception', s.threw),
     '',
     'Reached the end, by mode and candidate',
     ...result.modes.flatMap((m) => result.candidates.map((c) => cell(`${m}/${c}`))),
     '',
-    'Why a run did not reach the end',
-    ...(s.causes.size === 0 ? [pad('  none', 0)] : counted(s.causes, sortedKeys(s.causes))),
+    'Why a run failed the bar',
+    ...(s.causes.size === 0 ? [pad('  nothing failed the bar', 0)] : counted(s.causes, sortedKeys(s.causes))),
+    '',
+    'Open by design: an untimed case waiting on a member who neither completed a beat nor moved on.',
+    'Not a defect, and not counted as one. It is still a product question: a learner who stops',
+    'engaging is never moved on, and only their own "move on" or "end case" gets them out.',
+    ...(s.byDesignCauses.size === 0 ? [pad('  none', 0)] : counted(s.byDesignCauses, sortedKeys(s.byDesignCauses))),
     '',
     'End state (stage / endReason)',
     ...counted(s.endStates, sortedKeys(s.endStates)),
@@ -542,7 +573,12 @@ const runLine = (r) => {
     `rung ${rung}`.padEnd(22, ' '),
     r.mode === 'learning' ? `${r.seconds}s (untimed)` : `${r.seconds}s of ${r.limitSeconds}s`,
   ];
-  const notes = [r.reachedRecommendWrite ? '' : 'no recommendation stage', r.feedback ? '' : 'no feedback', r.error ? `THREW ${r.error}` : '', r.stalled ? 'STALLED' : ''].filter(Boolean);
+  const notes = [
+    r.reachedRecommendWrite ? '' : 'no recommendation stage',
+    r.feedback ? '' : 'no feedback',
+    r.error ? `THREW ${r.error}` : '',
+    r.stalled ? (openByDesign(r) ? 'OPEN BY DESIGN' : 'STALLED') : '',
+  ].filter(Boolean);
   return `  ${parts.join(' ')}${notes.length > 0 ? `  [${notes.join('; ')}]` : ''}`;
 };
 
@@ -550,15 +586,31 @@ function caseBlock(c) {
   return [`### ${c.name}${c.book ? ` — ${c.book}` : ''}`, `beats: ${c.beats}`, ...c.runs.map(runLine)].join('\n');
 }
 
+/** Every run that matches `pick`, as `{ case, run }`, gathered under the sentence that says why it stopped. */
+function groupByCause(result, pick) {
+  const grouped = new Map();
+  for (const c of result.cases) {
+    for (const r of c.runs.filter(pick)) {
+      const cause = failureCause(r);
+      if (!grouped.has(cause)) grouped.set(cause, []);
+      grouped.get(cause).push({ c, r });
+    }
+  }
+  return grouped;
+}
+
+const causeBlocks = (grouped, verb) =>
+  [...grouped.entries()].flatMap(([cause, list]) => [
+    `### ${cause} (${list.length})`,
+    '',
+    ...list.map((f) => `- ${f.c.name}${f.c.book ? ` — ${f.c.book}` : ''}: ${f.r.mode}/${f.r.candidate}, ${verb} ${f.r.stage}`),
+    '',
+  ]);
+
 export function formatReport(result, { dir, files, at, seconds }) {
   const s = summarise(result);
-  const failures = result.cases.flatMap((c) => c.runs.filter((r) => !reachedEnd(r)).map((r) => ({ c, r })));
-  const byCause = new Map();
-  for (const f of failures) {
-    const cause = failureCause(f.r);
-    if (!byCause.has(cause)) byCause.set(cause, []);
-    byCause.get(cause).push(f);
-  }
+  const failures = groupByCause(result, failedTheBar);
+  const byDesign = groupByCause(result, openByDesign);
   const notCompleted = result.cases.flatMap((c) => c.runs.filter((r) => reachedEnd(r) && r.endReason !== 'completed').map((r) => ({ c, r })));
   return [
     '# Live-case dry run',
@@ -579,11 +631,19 @@ export function formatReport(result, { dir, files, at, seconds }) {
     formatSummary(s, result),
     '```',
     '',
-    `## Cases that did not reach the end (${failures.length})`,
+    `## Cases that failed the bar (${s.failed})`,
     '',
-    ...(failures.length === 0
-      ? ['None: every case reached stage done in every mode, for every candidate.', '']
-      : [...byCause.entries()].flatMap(([cause, list]) => [`### ${cause} (${list.length})`, '', ...list.map((f) => `- ${f.c.name}${f.c.book ? ` — ${f.c.book}` : ''}: ${f.r.mode}/${f.r.candidate}, stopped at ${f.r.stage}`), ''])),
+    'A run fails when it does not reach stage done in a mode that has a clock, when it throws, or when it stops anywhere the engine did',
+    'not mean to leave it. The command exits non-zero when this list is not empty.',
+    '',
+    ...(s.failed === 0 ? ['None: every case reached stage done in every timed mode, for every candidate.', ''] : causeBlocks(failures, 'stopped at')),
+    `## Open by design (${s.byDesign})`,
+    '',
+    'An untimed case waiting on a member who neither completed a beat nor chose to move on. Learning mode has no clock and Bucket never',
+    'moves a learner on, so there is nothing to carry them and nothing is broken; these are named, not counted as failures, and they do',
+    'not fail the command. They are still worth a product decision: a learner who stops engaging is never moved on.',
+    '',
+    ...(s.byDesign === 0 ? ['None.', ''] : causeBlocks(byDesign, 'left at')),
     `## Reached the end, but not by completing it (${notCompleted.length})`,
     '',
     ...(notCompleted.length === 0 ? ['None.', ''] : [...notCompleted.map((f) => `- ${f.c.name}${f.c.book ? ` — ${f.c.book}` : ''}: ${f.r.mode}/${f.r.candidate}, ended ${f.r.endReason}`), '']),
@@ -648,7 +708,7 @@ async function main(argv) {
   writeFileSync(target, report);
   const s = summarise(result);
   console.log(formatSummary(s, result));
-  console.log(`\nWrote ${out} (${result.cases.length} cases, ${s.runs} runs, ${s.failed} that did not reach the end).`);
+  console.log(`\nWrote ${out} (${result.cases.length} cases, ${s.runs} runs, ${s.failed} that failed the bar, ${s.byDesign} open by design).`);
   if (broken.length > 0) {
     console.error(`\n${broken.length} write-up(s) could not be read:`);
     for (const b of broken) console.error(`  ${b}`);

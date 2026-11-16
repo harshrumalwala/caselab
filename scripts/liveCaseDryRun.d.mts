@@ -26,6 +26,8 @@ export interface CandidateSpec {
   exhibit: { assessment: 'progress' | 'partial' | 'stuck' | 'unclear'; beatComplete: boolean };
   /** How many messages on one beat the harness allows before it gives up (the engine has no such limit). */
   beatCap?: number;
+  /** Whether this candidate can end a beat by itself, by completing it or by choosing "move on". */
+  endsBeats: boolean;
   /** What the candidate does next on the beat it is on, given how many times it has written there. */
   beat: (written: number) => 'write' | 'moveOn' | 'wait' | 'nothing';
 }
@@ -91,13 +93,18 @@ export interface DryRunSummary {
   skipped: number;
   runs: number;
   done: number;
+  /** Runs that did not reach the end, failures and open-by-design together. */
+  short: number;
+  /** Runs that did not reach the end and that the engine did not mean to leave there: what the command exits non-zero on. */
   failed: number;
+  byDesign: number;
   threw: number;
   stalled: number;
   /** 'mode/candidate' to how many of its runs reached the end. */
   cells: Map<string, { of: number; done: number }>;
   endStates: Map<string, number>;
   causes: Map<string, number>;
+  byDesignCauses: Map<string, number>;
   beatsPlanned: number;
   beatsReached: number;
   outcomes: Map<BeatOutcome, number>;
@@ -137,6 +144,8 @@ export function playCase(raw: unknown, mode: LiveMode, candidate: CandidateName,
 export function playAll(entries: unknown[], engine: DryRunEngine, options?: PlayOptions): Promise<DryRunResult>;
 export function failureCause(run: DryRun): string;
 export function reachedEnd(run: DryRun): boolean;
+export function openByDesign(run: DryRun): boolean;
+export function failedTheBar(run: DryRun): boolean;
 export function summarise(result: DryRunResult): DryRunSummary;
 export function formatSummary(summary: DryRunSummary, result: DryRunResult): string;
 export function formatReport(result: DryRunResult, meta: { dir: string; files: number; at: string; seconds: number }): string;

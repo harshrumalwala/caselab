@@ -199,10 +199,10 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   Two harness numbers also shape its verdicts and are not the engine's: the off-track candidate gives up on a beat after 12 messages,
   and a run gives up after 400 turns.
 - **Learning mode cannot be finished by a member who neither completes a beat nor presses "move on."** Found by the dry run: there is no
-  clock (`isUntimed`) and `nudgeLevel` never reaches `advance` for a learner, so nothing but the member ends a beat. A silent member
-  stalls at the prompt and a stuck one stalls on beat 1; both can still end the case from the screen. It is the design, and the dry run
-  counts it as 1,694 runs that did not reach the end, which is why `npm run dryrun:live` exits non-zero today even though every timed
-  run passes.
+  clock (`isUntimed`) and `nudgeLevel` never reaches `advance` for a learner, so nothing but the member ends a beat. A silent member is
+  left at the prompt and a stuck one on beat 1; both can still end the case from the screen. It is the design, so the dry run counts those
+  1,694 runs as "open by design" and does not fail on them (`npm run dryrun:live` exits 0 today), but it names them, because whether a
+  learner who stops engaging should be moved on is an open product question rather than a settled one.
 - **No test calls a real model.** Prompts and answer schemas for Bucket, Compare and Live case are tested against fakes, which is how the
   first live Bucket run found a rejected format. Run a real call after changing a prompt or schema.
 - **`e2e/deployed.e2e.test.ts` checks the database** (tables, columns, functions with the right arguments) **but not that the Edge Functions

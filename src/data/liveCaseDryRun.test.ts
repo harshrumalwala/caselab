@@ -10,7 +10,9 @@ import {
   CANDIDATES,
   CANDIDATE_SPECS,
   MODES,
+  failedTheBar,
   failureCause,
+  openByDesign,
   formatReport,
   formatSummary,
   playAll,
@@ -91,6 +93,33 @@ describe('the bar: every case reaches the end', () => {
     expect(failureCause(stuck)).toContain('nothing but the member\'s own "move on" ends a beat they never complete');
   });
 
+  it('separates a case that broke from one the engine meant to leave where it is', async () => {
+    // Untimed, and the member neither completed a beat nor chose to move on: the design, not a defect, and not a failure.
+    for (const candidate of ['passive', 'offtrack'] as const) {
+      const run = await play('learning', candidate);
+      expect(CANDIDATE_SPECS[candidate].endsBeats).toBe(false);
+      expect(openByDesign(run)).toBe(true);
+      expect(failedTheBar(run)).toBe(false);
+    }
+    // The same candidates in a mode that has a clock must be carried to the end; stopping there would be a failure.
+    for (const mode of ['practice', 'interview'] as const) {
+      for (const candidate of CANDIDATES) {
+        const run = await play(mode, candidate);
+        expect(openByDesign(run)).toBe(false);
+        expect(failedTheBar(run), `${mode}/${candidate} failed the bar`).toBe(false);
+      }
+    }
+  });
+
+  it('counts a learning run that stops although the candidate could have moved on as a failure, not as the design', async () => {
+    const run = await play('learning', 'brisk');
+    expect(CANDIDATE_SPECS.brisk.endsBeats).toBe(true);
+    expect(reachedEnd(run)).toBe(true);
+    // If a candidate that can end beats were ever left in an untimed case, it would count against the bar.
+    expect(openByDesign({ ...run, stage: 'exhibits', stalled: true })).toBe(false);
+    expect(failedTheBar({ ...run, stage: 'exhibits', stalled: true })).toBe(true);
+  });
+
   it('catches an exception instead of losing the run', async () => {
     const broken: DryRunEngine = {
       ...engine,
@@ -99,11 +128,12 @@ describe('the bar: every case reaches the end', () => {
         return handleLive(userId, action, deps);
       },
     };
-    const run = await playCase(writeUp(), 'practice', 'brisk', broken);
+    const run = await playCase(writeUp(), 'learning', 'offtrack', broken);
     expect(run.threw).toBe(true);
     expect(run.error).toContain('the engine fell over');
     expect(reachedEnd(run)).toBe(false);
     expect(failureCause(run)).toContain('threw an exception');
+    expect(failedTheBar(run)).toBe(true); // an exception is a failure even in a mode that has no clock
   });
 });
 
@@ -208,7 +238,7 @@ describe('the whole run', () => {
 
   it('counts the end states, the beat outcomes and the nudge rungs over everything played', async () => {
     const s = summarise(await result());
-    expect(s).toMatchObject({ read: 4, folded: 1, cases: 2, skipped: 1, runs: 4, done: 4, failed: 0, threw: 0, stalled: 0 });
+    expect(s).toMatchObject({ read: 4, folded: 1, cases: 2, skipped: 1, runs: 4, done: 4, short: 0, failed: 0, byDesign: 0, threw: 0, stalled: 0 });
     expect(s.cells.get('practice/brisk')).toEqual({ of: 2, done: 2 });
     expect(s.endStates.get('done / completed')).toBe(4);
     expect(s.outcomes.get('independent')).toBe(4);
@@ -223,16 +253,18 @@ describe('the whole run', () => {
     const r = await result();
     const text = formatSummary(summarise(r), r);
     expect(text).toBe(formatSummary(summarise(await result()), r));
-    for (const line of ['The bar', 'Reached the end, by mode and candidate', 'practice/brisk', 'Beat outcomes', 'Highest nudge rung reached in a run', 'The engine refused the member']) {
+    for (const line of ['The bar', 'Reached the end, by mode and candidate', 'practice/brisk', 'Beat outcomes', 'Highest nudge rung reached in a run', 'The engine refused the member', 'Open by design']) {
       expect(text).toContain(line);
     }
   });
 
-  it('exits non-zero by counting the runs that did not reach the end', async () => {
-    const r = await playAll(entries, engine, { modes: ['learning'], candidates: ['passive'] });
-    const s = summarise(r);
-    expect(s.failed).toBe(2);
-    expect([...s.causes.values()]).toEqual([2]);
+  it('exits non-zero on failures only, and names the open-by-design runs separately', async () => {
+    const s = summarise(await playAll(entries, engine, { modes: ['learning'], candidates: ['passive'] }));
+    expect(s.short).toBe(2);
+    expect(s.failed).toBe(0); // a gate that is permanently red is a gate nobody reads
+    expect(s.byDesign).toBe(2);
+    expect(s.causes.size).toBe(0);
+    expect([...s.byDesignCauses.values()]).toEqual([2]);
   });
 });
 
@@ -252,13 +284,15 @@ describe('what the report may contain', () => {
     expect(report).not.toMatch(/ZZ(PROMPT|RECOMMENDATION|FACT|STEP|STEPBODY|CALC|QUESTION|ANSWER|EXHIBIT|CAPTION|CELL|HOWTOREAD|TAKEAWAY)/);
     expect(report).toContain('Sample Co.');
     expect(report).toContain('Booth MCG 2026-2027');
-    expect(report).toContain('Cases that did not reach the end (1)');
-    expect(report).toContain('learning/passive, stopped at prompt');
+    expect(report).toContain('Cases that failed the bar (0)');
+    expect(report).toContain('Open by design (1)');
+    expect(report).toContain('learning/passive, left at prompt');
   });
 
   it('says so plainly when every case reached the end', async () => {
     const r = await playAll([writeUp()], engine, { modes: ['interview'], candidates: ['brisk'] });
     const report = formatReport(r, { dir: 'private-data/solutions', files: 1, at: '2026-11-16T00:00:00.000Z', seconds: 1 });
-    expect(report).toContain('None: every case reached stage done in every mode, for every candidate.');
+    expect(report).toContain('None: every case reached stage done in every timed mode, for every candidate.');
+    expect(report).toContain('## Open by design (0)');
   });
 });
