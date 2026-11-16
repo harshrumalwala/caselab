@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { blankChart, parseBookSolution, type ExhibitChart as Chart, type SolutionExhibit } from '../../domain/bookSolution';
+import { blankChart, parseBookSolution, parseSolutionExhibit, type ExhibitChart as Chart, type SolutionExhibit } from '../../domain/bookSolution';
 import { ExhibitChart } from './ExhibitChart';
 
 const exhibit = (title: string): SolutionExhibit => ({ title, caption: '', columns: ['A'], rows: [['1']], approx: false, howToRead: '', takeaways: [], chart: null });
@@ -156,6 +156,62 @@ describe("the book's charts, redrawn", () => {
     expect(text(sideways)).toEqual(expect.arrayContaining(['Client', 'Competitor']));
     const one = draw({ kind: 'bar', categories: ['2005'], series: [series('Public', [10])] });
     expect(text(one)).not.toContain('Public');
+  });
+
+  it('draws the dashed line the book draws across a chart, with its label, and colours the bars the book picks out', () => {
+    const svg = draw({
+      kind: 'bar',
+      categories: ['1', '2', '3', 'Other'],
+      series: [series('Cumulative', [100, 160, 190, 250])],
+      yMin: 0,
+      yMax: 300,
+      yStep: 100,
+      valueLabels: false,
+      referenceLines: [{ value: 200, label: '80%', color: 'orange' }],
+      highlight: [0, 1, 2],
+      highlightColor: 'orange',
+    });
+    const dashed = [...svg.querySelectorAll('line')].filter((l) => l.getAttribute('stroke-dasharray'));
+    expect(dashed).toHaveLength(1);
+    expect(dashed[0].getAttribute('stroke')).toBe('#e07b21');
+    expect(dashed[0].getAttribute('y1')).toBe(dashed[0].getAttribute('y2'));
+    expect(text(svg)).toContain('80%');
+    const fills = [...svg.querySelectorAll('rect')].map((r) => r.getAttribute('fill'));
+    expect(fills).toEqual(['#e07b21', '#e07b21', '#e07b21', '#a9a9a9']);
+    // a chart with no highlight keeps its usual grey and has no dashed line
+    const plain = draw({ kind: 'bar', categories: ['a', 'b'], series: [series('x', [1, 2])] });
+    expect([...plain.querySelectorAll('rect')].map((r) => r.getAttribute('fill'))).toEqual(['#d2d2d2', '#d2d2d2']);
+    expect([...plain.querySelectorAll('line')].filter((l) => l.getAttribute('stroke-dasharray'))).toHaveLength(0);
+  });
+
+  it('stretches the axis to a reference line above the bars, and draws an upright line across sideways bars', () => {
+    const tall = draw({ kind: 'bar', categories: ['a', 'b'], series: [series('x', [10, 20])], referenceLines: [{ value: 90, label: 'Target', color: '' }] });
+    const ticks = text(tall).map((t) => Number(String(t).replace(/[^0-9.]/g, ''))).filter((n) => Number.isFinite(n) && n > 0);
+    expect(Math.max(...ticks)).toBeGreaterThanOrEqual(90);
+    const sideways = draw({ kind: 'bar', horizontal: true, categories: ['Price', 'Quality'], series: [series('Client', [80, 60])], yStep: 20, referenceLines: [{ value: 70, label: 'Par', color: '' }] });
+    const line = [...sideways.querySelectorAll('line')].find((l) => l.getAttribute('stroke-dasharray'));
+    expect(line).toBeTruthy();
+    expect(line!.getAttribute('x1')).toBe(line!.getAttribute('x2'));
+    expect(text(sideways)).toContain('Par');
+  });
+
+  it('reads reference lines and highlighted bars from a write-up, and drops what cannot be drawn', () => {
+    const e = parseSolutionExhibit({
+      title: 'E',
+      columns: ['A'],
+      rows: [['1']],
+      chart: {
+        kind: 'bar',
+        categories: ['1', '2', '3'],
+        series: [{ name: 'x', values: [1, 2, 3] }],
+        referenceLines: [{ value: 2, label: '80%', color: 'orange' }, { value: 'not a number', label: 'bad' }, { label: 'no value' }],
+        highlight: [0, 1, 7, -1, 1.5, 'x'],
+        highlightColor: 'blue',
+      },
+    });
+    expect(e.chart?.referenceLines).toEqual([{ value: 2, label: '80%', color: 'orange' }]);
+    expect(e.chart?.highlight).toEqual([0, 1]);
+    expect(e.chart?.highlightColor).toBe('blue');
   });
 
   it('is only drawn for a chart that can be drawn: a parsed chart always lines up with its categories', () => {

@@ -63,6 +63,12 @@ export interface ExhibitChart {
   footnote: string;
   /** Words the book prints at the two ends of the vertical axis, such as "Extremely important" and "Not at all important". */
   axisEnds: { top: string; bottom: string } | null;
+  /** Dashed lines the book draws across the chart at a value, such as an "80%" line (a horizontal line on upright bars, a vertical one on sideways bars). */
+  referenceLines: { value: number; label: string; color: string }[];
+  /** Bars the book picks out in a colour (positions in `categories`), such as the top 25 customers drawn in orange. Used when the chart has one set of bars. */
+  highlight: number[];
+  /** The colour name for the highlighted bars (as for a line: orange, red, blue...). Orange when empty. */
+  highlightColor: string;
   /** Several charts side by side in one exhibit; each has its own heading. */
   panels: ExhibitChart[];
 }
@@ -89,6 +95,9 @@ export const blankChart: ExhibitChart = {
   pointLabels: true,
   footnote: '',
   axisEnds: null,
+  referenceLines: [],
+  highlight: [],
+  highlightColor: '',
   panels: [],
 };
 
@@ -268,6 +277,12 @@ function parseChart(v: unknown, columns: string[], rows: string[][], limits: Exh
     pointLabels: o.pointLabels !== false,
     footnote: str(o.footnote, 240),
     axisEnds: str(obj(o.axisEnds).top, 40) || str(obj(o.axisEnds).bottom, 40) ? { top: str(obj(o.axisEnds).top, 40), bottom: str(obj(o.axisEnds).bottom, 40) } : null,
+    referenceLines: (Array.isArray(o.referenceLines) ? o.referenceLines : [])
+      .map((r) => ({ value: num(obj(r).value), label: str(obj(r).label, 30), color: str(obj(r).color, 20) }))
+      .filter((r): r is { value: number; label: string; color: string } => r.value !== null)
+      .slice(0, 3),
+    highlight: [...new Set((Array.isArray(o.highlight) ? o.highlight : []).map(Number))].filter((n) => Number.isInteger(n) && n >= 0 && n < categories.length).slice(0, limits.points),
+    highlightColor: str(o.highlightColor, 20),
     panels,
   };
 }

@@ -61,7 +61,8 @@ function metrics(chart: Chart, width: number) {
   const nameRoom = sideways ? Math.min(150, Math.max(52, Math.min(Math.max(0, ...chart.categories.map((c) => c.length)), 26) * 5.4 + 12)) : 52;
   const left = chart.kind === 'pie' ? 10 : nameRoom + (chart.axisEnds ? 62 : 0);
   const endLen = Math.max(0, ...chart.series.filter((s) => s.type === 'line' || chart.kind === 'line').map((s) => s.name.length));
-  const right = hasSide ? 110 : endLabels ? Math.min(150, Math.max(74, Math.min(endLen, 22) * 6 + 14)) : 14;
+  const refRoom = sideways ? 14 : Math.min(90, Math.max(14, Math.max(0, ...chart.referenceLines.map((r) => r.label.length)) * 6.5 + 16));
+  const right = hasSide ? 110 : endLabels ? Math.min(150, Math.max(74, Math.min(endLen, 22) * 6 + 14)) : refRoom;
   const slot = (width - left - right) / Math.max(chart.categories.length, 1);
   const maxCh = Math.max(5, Math.floor(slot / 6));
   const wrapped = chart.kind !== 'pie' && !(chart.kind === 'bar' && chart.horizontal) && chart.categories.some((c) => wrap(c, maxCh).length > 1);
@@ -118,11 +119,17 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
   const labelStep = n > 14 ? Math.max(1, Math.ceil((Math.max(...chart.categories.map((c) => c.length)) * 5.6) / slot)) : 1;
   const barSeries = chart.series.filter((s) => s.type === 'bar' && chart.kind !== 'line');
   const stacked = chart.kind === 'stacked';
+  // bars the book picks out in a colour: those bars take it and the rest go a shade darker, as in the book (one set of bars only)
+  const highlighted = new Set(chart.kind === 'bar' && barSeries.length === 1 ? chart.highlight : []);
+  const highlightColour = LINE_COLOURS[chart.highlightColor.toLowerCase()] ?? LINE_COLOURS.orange;
+  const barFill = (i: number, si: number) => (highlighted.size === 0 ? greyFor(si) : highlighted.has(i) ? highlightColour : GREYS[1]);
+  const refColour = (c: string) => LINE_COLOURS[c.toLowerCase()] ?? LINE_COLOURS.orange;
 
   // vertical scale
   const stackTotals = chart.categories.map((_, i) => chart.series.filter((s) => s.type === 'bar').reduce((t, s) => t + (s.values[i] ?? 0), 0));
   const allVals = chart.series.flatMap((s) => s.values);
-  const dataMax = chart.percent ? 100 : stacked ? Math.max(...stackTotals, 0) : Math.max(...allVals, 0);
+  const refValues = chart.referenceLines.map((r) => r.value);
+  const dataMax = chart.percent ? 100 : Math.max(stacked ? Math.max(...stackTotals, 0) : Math.max(...allVals, 0), ...(chart.kind === 'bar' && chart.horizontal ? [] : refValues));
   const dataMin = Math.min(0, ...allVals);
   const yMin = chart.yMin ?? (chart.kind === 'scatter' || chart.kind === 'line' ? Math.min(...allVals, dataMin) : dataMin);
   const yMax = chart.yMax ?? (chart.percent ? 100 : niceMax(dataMax, chart.yStep));
@@ -244,13 +251,25 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
         barSeries.forEach((s, si) => {
           const bh = barH / barSeries.length;
           const by = cy - barH / 2 + bh * si;
-          body.push(<rect key={`b${i}-${si}`} x={plot.x} y={by} width={Math.max(xScale(s.values[i]) - plot.x, 1)} height={Math.max(bh - 1, 2)} fill={greyFor(si)} />);
+          body.push(<rect key={`b${i}-${si}`} x={plot.x} y={by} width={Math.max(xScale(s.values[i]) - plot.x, 1)} height={Math.max(bh - 1, 2)} fill={barFill(i, si)} />);
           body.push(
             <Text key={`bv${i}-${si}`} x={xScale(s.values[i]) + 4} y={by + bh / 2 + 4} anchor="start" size={10}>
               {labelFor(s, i)}
             </Text>,
           );
         });
+      });
+      chart.referenceLines.forEach((r, ri) => {
+        const col = refColour(r.color);
+        const rx = xScale(r.value);
+        body.push(<line key={`ref${ri}`} x1={rx} x2={rx} y1={plot.y} y2={plot.y + plot.h} stroke={col} strokeWidth={2} strokeDasharray="6 4" />);
+        if (r.label) {
+          body.push(
+            <Text key={`refl${ri}`} x={rx} y={plot.y - 4} size={11} weight={600} fill={col}>
+              {r.label}
+            </Text>,
+          );
+        }
       });
     } else {
       const groupW = Math.min(slot * 0.72, 64);
@@ -286,7 +305,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
             const bw = groupW / barSeries.length;
             const v = s.values[i];
             const top2 = Math.min(y(v), base);
-            body.push(<rect key={`b${i}-${si}`} x={x0 + bw * si} y={top2} width={Math.max(bw - 2, 2)} height={Math.max(Math.abs(y(v) - base), 1)} fill={greyFor(si)} />);
+            body.push(<rect key={`b${i}-${si}`} x={x0 + bw * si} y={top2} width={Math.max(bw - 2, 2)} height={Math.max(Math.abs(y(v) - base), 1)} fill={barFill(i, si)} />);
             body.push(
               <Text key={`bv${i}-${si}`} x={x0 + bw * si + (bw - 2) / 2} y={(v >= 0 ? top2 : top2 + Math.abs(y(v) - base)) + (v >= 0 ? -5 : 12)} size={10}>
                 {labelFor(s, i)}
@@ -334,6 +353,22 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
             </Text>,
           ),
         );
+      });
+    }
+
+    // dashed lines the book draws across the chart at a value (for example an "80%" line)
+    if (!(chart.kind === 'bar' && chart.horizontal)) {
+      chart.referenceLines.forEach((r, ri) => {
+        const col = refColour(r.color);
+        const ry = y(r.value);
+        body.push(<line key={`ref${ri}`} x1={plot.x} x2={plot.x + plot.w} y1={ry} y2={ry} stroke={col} strokeWidth={2} strokeDasharray="6 4" />);
+        if (r.label) {
+          body.push(
+            <Text key={`refl${ri}`} x={plot.x + plot.w + 6} y={ry + 4} anchor="start" size={11} weight={600} fill={col}>
+              {r.label}
+            </Text>,
+          );
+        }
       });
     }
 
