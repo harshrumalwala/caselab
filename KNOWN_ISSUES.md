@@ -41,9 +41,15 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **Two exhibits lose a chart panel to the 4-panel cap** (found by `npm run audit:live` on 2026-11-16): Lactose King (Fuqua 2025-26)
   exhibit 1 has 5 panels and Sueno Mattress (Booth MCG 2026-2027) exhibit 3 has 6, so the last ones are dropped without a word. Either
   raise the cap or split the exhibit. Nothing else in the 872 write-ups is over any cap.
-- **The live-case audit needs Node 22.6 or newer** (`npm run audit:live`): it imports the Edge Function's TypeScript with Node's type
-  stripping and restarts itself with `--experimental-strip-types` when the Node it is started with has none. `package.json` still says
-  Node 20.19 for the app, which is correct for everything else. It also cannot run in CI, because `private-data/` is not in git.
+- **The live-case audit and the dry run need Node 22.6 or newer** (`npm run audit:live`, `npm run dryrun:live`): they import the Edge
+  Function's TypeScript with Node's type stripping and restart themselves with `--experimental-strip-types` when the Node they are
+  started with has none. `package.json` still says Node 20.19 for the app, which is correct for everything else. Neither can run in CI,
+  because `private-data/` is not in git.
+- **Node's type stripping refuses some of the app's TypeScript**, so a script cannot import just anything: `src/data/liveCase.ts` uses
+  constructor parameter properties in `LiveClient`, which strip-only mode rejects outright. That is why the in-memory live-case deps now
+  live in `src/test/memoryLiveDeps.ts` (plain functions, strippable) and `src/test/memoryLive.ts` is only the `LiveClient` wrapper around
+  them. Anything a script has to import must stay free of enums, namespaces and parameter properties, and nothing checks that but the
+  script failing.
 - **One case name in the work list had no PDF** (806 of 807 were assigned). Production shows 872 solutions for 872 cases, so it may have
   been a duplicate, but which entry it was has not been checked.
 - **Generic case names can merge different cases** into one library entry (README line 356).
@@ -199,6 +205,18 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
 - **No end-to-end coverage of Live case** (PR #79 says so: "E2E untouched (no live case coverage there)"). The live-case logic, handler and
   screens are covered by unit tests with a fake model and an in-memory backend, and `live_case_sessions` by PGlite tests, but nothing in
   `e2e/` starts a case against the real function. The Learning-mode screen was not exercised in a browser by its author.
+  `npm run dryrun:live` (issue #91) now plays all 847 eligible write-ups from the prompt to the recommendation through the real
+  `handleLive`, which closes the "does a case break in the middle?" half of this; what is still missing is a run against the **deployed**
+  function with a **real** model, which is the only thing that can say whether Bucket's words nudge or solve.
+- **The dry run's candidates are a model of a member, not a member.** They decide `assessment`, `beat_complete` and `direction_clear`
+  from the turn kind and a count of their own messages, so every conclusion from the run is about the engine, never about the writing.
+  Two harness numbers also shape its verdicts and are not the engine's: the off-track candidate gives up on a beat after 12 messages,
+  and a run gives up after 400 turns.
+- **Learning mode cannot be finished by a member who neither completes a beat nor presses "move on."** Found by the dry run: there is no
+  clock (`isUntimed`) and `nudgeLevel` never reaches `advance` for a learner, so nothing but the member ends a beat. A silent member is
+  left at the prompt and a stuck one on beat 1; both can still end the case from the screen. It is the design, so the dry run counts those
+  1,694 runs as "open by design" and does not fail on them (`npm run dryrun:live` exits 0 today), but it names them, because whether a
+  learner who stops engaging should be moved on is an open product question rather than a settled one.
 - **No test calls a real model.** Prompts and answer schemas for Bucket, Compare and Live case are tested against fakes, which is how the
   first live Bucket run found a rejected format. Run a real call after changing a prompt or schema.
 - **`e2e/deployed.e2e.test.ts` checks the database** (tables, columns, functions with the right arguments) **but not that the Edge Functions
