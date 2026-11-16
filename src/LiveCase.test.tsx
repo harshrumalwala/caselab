@@ -208,7 +208,9 @@ describe('the opening stages', () => {
     await user.type(screen.getByLabelText('Where would you start?'), 'Demand first, by season');
     await user.click(screen.getByRole('button', { name: /Send/ }));
     expect(await screen.findByText('Exhibit 1: Occupancy by season')).toBeInTheDocument();
-    expect(screen.getByRole('table')).toHaveTextContent('Off-peak');
+    // the fake write-up draws this exhibit as a chart whose labels carry every figure, so the screen shows the chart and not our table of it
+    expect(screen.getByRole('img', { name: /Exhibit 1: Occupancy by season/ })).toHaveTextContent('Off-peak');
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.getByText('Exhibit 1 of 1')).toBeInTheDocument();
   });
 

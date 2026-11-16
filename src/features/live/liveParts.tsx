@@ -3,6 +3,7 @@ import { Send } from 'lucide-react';
 import type { DraftKey, LiveView, Message, PublicExhibit } from '../../data/liveCase';
 import { LIVE_EXHIBIT_LIMITS, parseSolutionExhibit } from '../../domain/bookSolution';
 import { formatClock, STAGE_LABEL, STEPS } from '../../domain/liveCase';
+import { tableRepeatsChart } from '../../domain/liveExhibit';
 import { Button } from '../../components/ui/Button';
 import { ExhibitChart } from '../caselog/ExhibitChart';
 import { BucketAvatar } from '../improvement/BucketAvatar';
@@ -30,9 +31,14 @@ export function useAutosave(value: string, save: (text: string) => void, delayMs
   );
 }
 
-/** An exhibit as the member sees it: its figures and the chart the book drew, drawn from what the case has shown so far. */
+/**
+ * An exhibit as the member sees it: the chart the book drew, and its table. When a chart is drawn and the table only repeats the figures the
+ * chart already prints, the table is left out: it is our own transcription of the chart (the book prints the chart alone), and a real
+ * candidate would not have it. A table with anything the chart does not print stays (see `tableRepeatsChart`).
+ */
 export function ExhibitView({ exhibit }: { exhibit: PublicExhibit }) {
   const normalised = useMemo(() => parseSolutionExhibit(exhibit, LIVE_EXHIBIT_LIMITS), [exhibit]);
+  const showTable = exhibit.columns.length > 0 && !tableRepeatsChart(normalised);
   return (
     <figure className="space-y-2 rounded-xl border border-line bg-surface p-3.5">
       <figcaption className="text-sm font-semibold text-ink">
@@ -41,7 +47,7 @@ export function ExhibitView({ exhibit }: { exhibit: PublicExhibit }) {
       </figcaption>
       {exhibit.caption && <p className="text-xs text-muted">{exhibit.caption}</p>}
       {normalised.chart && <ExhibitChart exhibit={normalised} chart={normalised.chart} />}
-      {exhibit.columns.length > 0 && (
+      {showTable && (
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full text-left text-xs">
             <thead className="bg-surface-2 text-muted">

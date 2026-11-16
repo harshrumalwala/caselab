@@ -26,17 +26,121 @@ const barChart = {
 };
 
 describe('an exhibit in a live case', () => {
-  it('draws the chart the book drew above the table', () => {
+  it('draws the chart the book drew, and no table that only repeats the figures printed on it', () => {
     render(<ExhibitView exhibit={exhibit({ chart: barChart })} />);
     const chart = screen.getByRole('img', { name: /Exhibit 1: Occupancy by season/ });
     expect(chart).toBeInTheDocument();
     expect(chart.tagName.toLowerCase()).toBe('svg');
-    // the figures the book plots are drawn, not only listed
+    // the figures the book prints on the chart are on it
     expect([...chart.querySelectorAll('text')].map((t) => t.textContent)).toEqual(expect.arrayContaining(['85%', '40%', 'Summer', 'Winter']));
-    // and the table is still there, unchanged, below the chart
+    // and our transcription of them is not shown beneath it
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByText('Exhibit 1: Occupancy by season')).toBeInTheDocument();
+    expect(screen.getByText('Share of rooms sold')).toBeInTheDocument();
+  });
+
+  it('shows only the chart for a chart read off the page, whose table is our own reading of it', () => {
+    const rows = [
+      ['1', '~45'],
+      ['2', '~65'],
+      ['Other ~ 460', '~250'],
+    ];
+    render(
+      <ExhibitView
+        exhibit={exhibit({
+          title: 'Cumulative sales by customer',
+          columns: ['Customer', 'Cumulative revenue (million USD)'],
+          rows,
+          approx: true,
+          chart: {
+            kind: 'bar',
+            axisTitle: 'Revenue (million USD)',
+            categories: ['1', '2', 'Other ~ 460'],
+            series: [{ name: 'Cumulative revenue', values: [45, 65, 250], labels: ['', '', ''] }],
+            valueLabels: false,
+            footnote: 'Horizontal axis: Customers',
+            referenceLines: [{ value: 205, label: '80%', color: 'orange' }],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByRole('img', { name: /Cumulative sales by customer/ })).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByText('(values read off a chart, approximate)')).toBeInTheDocument();
+  });
+
+  it('shows only the charts of a survey drawn as side-by-side panels, not the table of its answers', () => {
+    const panel = (heading: string) => ({
+      kind: 'stacked',
+      heading,
+      unit: '%',
+      percent: true,
+      categories: ['Do you need both?', 'Would you buy?'],
+      series: [
+        { name: 'Yes', values: [60, 75], labels: ['60%', '75%'] },
+        { name: 'No', values: [40, 25], labels: ['40%', '25%'] },
+      ],
+      totals: ['25', '15'],
+    });
+    render(
+      <ExhibitView
+        exhibit={exhibit({
+          title: 'Survey results of 25 customers',
+          columns: ['Chart', 'Question and answer', 'Share'],
+          rows: [
+            ['Customer demand (25 customers)', 'Do you need both? - Yes', '60%'],
+            ['Customer demand (15 customers)', 'Would you buy? - No', '25%'],
+          ],
+          chart: { kind: 'stacked', panels: [panel('Customer demand'), panel('Buyers')] },
+        })}
+      />,
+    );
+    expect(screen.getByRole('img', { name: /Survey results of 25 customers/ })).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('keeps a table the book prints beside its chart (a population row the chart does not carry)', () => {
+    render(
+      <ExhibitView
+        exhibit={exhibit({
+          title: 'Exhibit A: Market segments',
+          caption: "A table beneath gives each segment's population.",
+          columns: ['Segment', 'Books per year', 'Population'],
+          rows: [
+            ['Super readers', '15', '8M'],
+            ['Occasional readers', '10', '20M'],
+          ],
+          chart: {
+            kind: 'bar',
+            categories: ['Super readers', 'Occasional readers'],
+            series: [{ name: 'Books per year', type: 'bar', values: [15, 10], labels: ['15', '10'] }],
+            belowRows: [{ label: 'Population', values: ['8M', '20M'] }],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByRole('img', { name: /Exhibit A: Market segments/ })).toBeInTheDocument();
     const table = screen.getByRole('table');
-    expect(within(table).getByText('Winter')).toBeInTheDocument();
-    expect(chart.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(table).getByText('Population')).toBeInTheDocument();
+    expect(within(table).getByText('20M')).toBeInTheDocument();
+  });
+
+  it('keeps the exact table when the chart plots figures it does not print, because the book gave that table', () => {
+    render(
+      <ExhibitView
+        exhibit={exhibit({
+          title: 'Exhibit 4: Cost and savings schedule',
+          columns: ['Year', 'Savings'],
+          rows: [
+            ['2019', '1,500'],
+            ['2020', '7,500'],
+          ],
+          chart: { kind: 'line', categories: ['2019', '2020'], series: [{ name: 'Savings', values: [1500, 7500], labels: [] }], valueLabels: false },
+        })}
+      />,
+    );
+    expect(screen.getByRole('img', { name: /Exhibit 4/ })).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('7,500')).toBeInTheDocument();
   });
 
   it('draws no chart for an exhibit that has none, and still shows the table', () => {
@@ -63,12 +167,13 @@ describe('an exhibit in a live case', () => {
   });
 
   it('keeps a table bigger than the full-solution caps whole, and plots every row of it', () => {
-    const rows = Array.from({ length: 90 }, (_, i) => [`M${i + 1}`, String(i + 1)]);
+    // a third column the chart does not plot keeps the table (a table that only repeated the chart would be left out)
+    const rows = Array.from({ length: 90 }, (_, i) => [`M${i + 1}`, String(i + 1), `Reading ${i + 1}`]);
     render(
       <ExhibitView
         exhibit={exhibit({
           title: 'Exhibit 2: Units by month',
-          columns: ['Month', 'Units'],
+          columns: ['Month', 'Units', 'Note'],
           rows,
           // the earlier chart form: plot the exhibit's own columns
           chart: { kind: 'line', labelColumn: 0, seriesColumns: [1] },
