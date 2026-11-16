@@ -68,6 +68,13 @@ assistant saw a claim (for example a build session's report) but did not check i
   lines drawn on the left scale; crowded category labels on the Giant Bank "Rating" bar-and-line chart; an end label ("New York")
   overlapping the 80% value labels on the EasyNAV utilization line chart; FormCo Exhibit 2, whose stack order differs by column in the book
   but is drawn in one order; an orange line drawn yellow because the allowed palette lacks orange.
+- **Book chart features we still do not draw.** Dashed reference lines (`referenceLines`) and highlighted bars (`highlight`) exist since the
+  PR that added them, but they are set by hand per chart: only Circle Bubble (80% line, top 25 customers in orange), Swagger Llamas (average
+  line) and Thrill Park (average line) use them so far. Charts whose notes mention a line we cannot place: Soap Co. (a 10-15% band),
+  Yarmouth Yachts (two dashed vertical lines marking a period), the dotted "performance" line in the Tacotle charts (drawn as a plain line),
+  and the trend line in Bio-Product Growth. **No one has compared all ~480 charted exhibits with the book pages**, so other differences
+  (colours, highlighted bars, lines that our notes never mention) are likely. Those patches are made directly in `private-data/solutions/*.json`
+  and would be undone by re-assembling from the reader outputs.
 - **Exhibit chart kinds we cannot draw** stay as tables: marimekko, bubble size, waterfall, dual axis, maps, flow diagrams, stacked area,
   scatter trend lines, stacked horizontal bars.
 - **No visual regression tests for charts.** The render check (a temporary test that draws every chart to SVG, then a contact sheet) lives in
