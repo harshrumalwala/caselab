@@ -122,11 +122,32 @@ function readExhibits(raw: unknown): LiveExhibit[] {
     })).filter((e) => e.title || e.rows.length).slice(0, 20);
 }
 
-/** A table the book says the interviewer gives out when asked ("Market sizes (given if prompted)"): inputs for the member's calculation, not an answer. */
-const GIVEN_ON_REQUEST = /given if prompted|if prompted|(only )?(if|when) (the )?(candidate|interviewee|student) asks|on request|if asked/i;
-/** ...unless its own title says it is the working or the answer. */
-const IS_ANSWER = /solution|answer|calculation|\bmath\b|expected|guidance|sample|approach|performed by/i;
-export const givenOnRequest = (e: { title: string; caption: string }): boolean => GIVEN_ON_REQUEST.test(`${e.title} ${e.caption}`) && !IS_ANSWER.test(e.title);
+/**
+ * A table the book says the interviewer hands over when the candidate asks for it ("Market sizes (given if prompted)",
+ * "Information the interviewer provides once the candidate asks", "To be provided to the interviewee as background information"):
+ * inputs for the member's own working, not an answer. The write-ups say this in many ways, so the test is the handing-over itself —
+ * who gives what to whom, and when — rather than one phrase. "...provided to the candidate" counts; "not provided to the candidate"
+ * does not.
+ */
+const GIVEN_ON_REQUEST =
+  /given if prompted|if prompted|\bon request\b|upon request|(if|when|once|after) (the )?(candidate|interviewee|student)s? (has |have )?ask|(let|have) (them|the (candidate|interviewee|student)) ask|\bif asked\b|when asked|interviewer (gives|provides|shows|shares|hands|offers|supplies|reads)|(?<!not )(?<!not to be )provided to the (interviewee|candidate|student)|background information|reads? (it |them |the \w+ )?out|read out|called out|verbally|offers? after|gives? after/i;
+/**
+ * ...unless the write-up also says the table is the book's own working or answer. Both are read over the title and the caption: a
+ * handed-over table that also carries the book's arithmetic stays private reference, where the inputs are still read out but a result
+ * never is. ("Guidance" is not in here on purpose: half the write-ups file the data they hand over under the interviewer's guidance.)
+ */
+const IS_ANSWER =
+  /solution|answer|\bworking\b|\bmath\b|calculat|completed|derives?\b|expected|sample|approach|performed by|guidance diagram|break-?even analysis|cheat-?sheet|model answer|good answer|great answer/i;
+/** A cell with the book's arithmetic in it ("=5M/4% = $125M"): the table is a working, whatever its title and caption say. */
+const WORKED_CELL = /=\s*[$€£]?\d/;
+export const givenOnRequest = (e: { title: string; caption: string; columns?: readonly string[]; rows?: readonly (readonly string[])[] }): boolean => {
+  const both = `${e.title} ${e.caption}`;
+  if (!GIVEN_ON_REQUEST.test(both) || IS_ANSWER.test(both)) return false;
+  // The table's own headings and cells have the last word: a sheet that marks itself the interviewer's, or shows the book's working,
+  // is never handed over whole however the caption describes it.
+  if (isInterviewerSideExhibit({ columns: e.columns ?? [], rows: e.rows ?? [] })) return false;
+  return !(e.rows ?? []).some((r) => r.some((c) => WORKED_CELL.test(c)));
+};
 
 export function readSolution(raw: unknown): LiveSolution | null {
   const o = obj(raw);
@@ -355,9 +376,23 @@ const tableText = (e: LiveExhibit): string => {
   return rows.length > 3000 ? `${rows.slice(0, 3000)}\n...` : rows;
 };
 
+/** How much of the interviewer's own tables each kind of turn may carry. The early stages get less: see `earlyDataContext`. */
+const ON_REQUEST_CHARS = 4000;
+const REFERENCE_CHARS = 6000;
+/** Below this there is no room for a table worth sending, so none is sent rather than a line and a half of one. */
+const MIN_TABLE_CHARS = 300;
+
+/** The interviewer's tables as text, inside a character budget (what does not fit is cut, as the prompt cannot grow without limit). */
+const tablesText = (list: readonly LiveExhibit[], max: number): string => {
+  if (list.length === 0 || max < MIN_TABLE_CHARS) return '';
+  const text = list.map((e) => `${e.title}\n${tableText(e)}`).join('\n\n');
+  return text.length > max ? `${text.slice(0, max)}\n...` : text;
+};
+
 /** What the model may know about the exhibit on the table: what the student sees, plus private notes to steer by. */
 function beatContext(sol: LiveSolution, beat: Beat | undefined, learning = false): string {
   if (!beat) return '';
+  const held = `${onRequestNotes(tablesText(sol.onRequest, ON_REQUEST_CHARS))}${referenceNotes(tablesText(sol.reference, REFERENCE_CHARS), learning)}`;
   const notes = learning
     ? "Notes for you, the coach: the book's own reading of this. Use them to teach, in your own words, once the student has tried or asks for help (never paste them word for word):"
     : 'Private notes for you only. Never quote or reveal them, and never state these conclusions for the student:';
@@ -369,7 +404,7 @@ Shown to the student: ${e.title}${e.caption ? ` (${e.caption})` : ''}
 ${tableText(e)}
 ${notes}
 How to read it: ${e.howToRead || '(none)'}
-What a strong answer concludes: ${e.takeaways.join(' / ') || '(none)'}${referenceNotes(sol, learning)}${onRequestNotes(sol)}
+What a strong answer concludes: ${e.takeaways.join(' / ') || '(none)'}${held}
 </exhibit>`;
   }
   const st = sol.steps[beat.index];
@@ -380,38 +415,62 @@ ${notes}
 Topic: ${st.title}
 ${st.body}
 ${st.calc.length ? `Worked lines: ${st.calc.join(' / ')}\n` : ''}What a strong candidate notices: ${st.whatToNotice || '(none)'}
-Common misses: ${st.commonMiss.join(' / ') || '(none)'}${referenceNotes(sol, learning)}${onRequestNotes(sol)}
+Common misses: ${st.commonMiss.join(' / ') || '(none)'}${held}
 </exhibit>`;
 }
 
 /** The data the interviewer gives out when asked: shown to the model so it can answer "what are the market sizes?" with the numbers, instead of asking what the member thinks. */
-function onRequestNotes(sol: LiveSolution): string {
-  if (sol.onRequest.length === 0) return '';
-  const tables = sol.onRequest.map((e) => `${e.title}\n${tableText(e)}`).join('\n\n');
-  return `\nData you hold and read out when the student asks for it or asks for the numbers (inputs for their own calculation, not answers). Read ALL of it out, every row and every figure, in plain spoken sentences exactly as written, the way an interviewer would read a table aloud to a candidate. Then ask what they make of it, or what they would work out from it. Never do the calculation for them and never say what it means:\n${tables.length > 4000 ? `${tables.slice(0, 4000)}\n...` : tables}`;
+function onRequestNotes(tables: string): string {
+  if (!tables) return '';
+  return `\nData you hold and read out when the student asks for it or asks for the numbers (inputs for their own calculation, not answers). Read ALL of it out, every row and every figure, in plain spoken sentences exactly as written, the way an interviewer would read a table aloud to a candidate — except a row that is itself the figure they have been asked to work out right now: however input-shaped that row looks, it is the answer, so leave it out and read the inputs beside it. Then ask what they make of it, or what they would work out from it. Never do the calculation for them and never say what it means:\n${tables}`;
 }
 
 /** The interviewer's own tables, as private reference: the answers a strong candidate reaches, to judge by and never to hand over. */
-function referenceNotes(sol: LiveSolution, learning = false): string {
-  if (sol.reference.length === 0) return '';
-  const tables = sol.reference.map((e) => `${e.title}\n${tableText(e)}`).join('\n\n');
+function referenceNotes(tables: string, learning = false): string {
+  if (!tables) return '';
   if (learning) {
-    return `\nThe book's own working tables, for you to teach from (the student has not seen them). When the student asks for the data, or you are leading them, read out the INPUT figures from them, all of them, in plain spoken sentences, and ask what they would calculate. Once they have tried, you may show how a strong answer reaches its result, in your own words; do not paste the table:\n${tables.length > 6000 ? `${tables.slice(0, 6000)}\n...` : tables}`;
+    return `\nThe book's own working tables, for you to teach from (the student has not seen them). When the student asks for the data, or you are leading them, read out the INPUT figures from them, all of them, in plain spoken sentences, and ask what they would calculate. Once they have tried, you may show how a strong answer reaches its result, in your own words; do not paste the table:\n${tables}`;
   }
-  return `\nInterviewer reference tables (private; they may hold the answers, so never state a result, total, ratio or conclusion from one, and never say a figure that is marked private or is itself the answer. But when the student asks for the data, or you are leading them, read out the INPUT figures from it, all of them, in plain spoken sentences, and ask what they would calculate; do not paste the table):\n${tables.length > 6000 ? `${tables.slice(0, 6000)}\n...` : tables}`;
+  return `\nInterviewer reference tables (private; they may hold the answers, so never state a result, total, ratio or conclusion from one, and never say a figure that is marked private or is itself the answer — including a row that simply prints the figure the student has been asked to work out, which is an answer however input-shaped it looks. But when the student asks for the data, or you are leading them, read out the INPUT figures from it, all of them, in plain spoken sentences, and ask what they would calculate; do not paste the table):\n${tables}`;
+}
+
+/**
+ * What the interviewer holds for the student before any exhibit is on the table (the clarifying questions and the starting direction).
+ * A real interviewer asked for the cost base reads out the cost base at any point in the case, so the same tables are here — but the
+ * budget is smaller, because this rides on every clarifying turn: half the write-ups that have interviewer tables at all hold under 600
+ * characters of them and 99% under 2,000, so 2,500 carries almost every case whole for a few hundred tokens on a cheap model.
+ */
+const EARLY_DATA_CHARS = 2500;
+
+function earlyDataContext(sol: LiveSolution, learning = false): string {
+  const onRequest = tablesText(sol.onRequest, EARLY_DATA_CHARS);
+  const reference = tablesText(sol.reference, EARLY_DATA_CHARS - onRequest.length);
+  const notes = `${onRequestNotes(onRequest)}${referenceNotes(reference, learning)}`;
+  if (!notes) return '';
+  return `<data>
+There is no exhibit in front of the student yet. This is what you hold for them: give it when they ask for it, at this point in the case as at any other. Never show it as a table and never bring it up unasked.${notes}
+</data>`;
 }
 
 export type TurnKind = 'clarify' | 'direction' | 'exhibit' | 'nudge_process' | 'nudge_directional';
 
+/**
+ * The line between data and the answer, in the words the model is given it in (DECISIONS.md, "The interview rubric"): inputs are given
+ * on request, in full, at any stage; anything the student could work out from those inputs is theirs to produce.
+ */
+const NOT_THE_ANSWER =
+  ' One figure is never read out, wherever it is written down: the very thing they have been asked to work out. A table can print it as a row of its own (a "profit per customer" row while they are working out profit per customer); that row is an answer, however input-shaped it looks, so leave it out and read the inputs beside it.';
 /** What to do when the student asks for a number: hand over the inputs, never the result. The same for every mode. */
 const DATA_REQUESTS =
-  ' If the student asks to see data or an exhibit, or for a number they need for their calculation, and it is in the case information, in the exhibit shown to them or in the data you hold for them (listed below), give it instead of answering with a question. Data you hold for them is read out in full, every figure, in plain spoken sentences exactly as written (as an interviewer reads a table aloud), and then you ask what they make of it or what they would calculate. Never say a result, a total, a ratio or what it means. The case must keep moving: if the information is not there, say so briefly and ask them to state an assumption and carry on.';
+  ` If the student asks to see data or an exhibit, or for a number they need for their calculation, and it is in the case information, in the exhibit shown to them or in the data you hold for them (listed below), give it instead of answering with a question. Data you hold for them is read out in full, every figure, in plain spoken sentences exactly as written (as an interviewer reads a table aloud), and then you ask what they make of it or what they would calculate. Never say a result, a total, a ratio or what it means.${NOT_THE_ANSWER} Asking for the right data is part of doing the case well: give it without treating it as being stuck. The case must keep moving: if the information really is not there, say so briefly and ask them to state an assumption and carry on.`;
 
 const DIRECTIVES: Record<TurnKind, string> = {
   clarify:
-    'The student asked a clarifying question. Answer it using only the case information, briefly, giving every figure, name and detail exactly as written there (do not round, summarise, generalise or add anything), and only what the question asks for. If it is too vague, ask them to be specific. If there is no information, say so and let them continue. Do not hint at the framework. After about four questions you may say they can take their framework time when ready. Set assessment to "progress", beat_complete and direction_clear to false.',
+    'The student asked a clarifying question. Answer it using only the case information, briefly, giving every figure, name and detail exactly as written there (do not round, summarise, generalise or add anything), and only what the question asks for. If it is too vague, ask them to be specific. Do not hint at the framework. After about four questions you may say they can take their framework time when ready. Set assessment to "progress", beat_complete and direction_clear to false.' +
+    DATA_REQUESTS,
   direction:
-    'The student has handed in a framework (you will not see it) and has now said where they would start. Reply in one or two sentences: acknowledge their starting point, and say you will show them some data. If their direction is unclear or off-track, instead ask ONE focused follow-up question about where they would start. Do not teach, rewrite or praise at length. Set direction_clear to true when their starting direction is clear enough to move on.',
+    'The student has handed in a framework (you will not see it) and has now said where they would start. Reply in one or two sentences: acknowledge their starting point, and say you will show them some data. If their direction is unclear or off-track, instead ask ONE focused follow-up question about where they would start. Do not teach, rewrite or praise at length. Set direction_clear to true when their starting direction is clear enough to move on.' +
+    DATA_REQUESTS,
   exhibit:
     'The student is working on the exhibit. Judge what they just wrote, then respond in one to three short sentences: if they are on a good track, let them continue or ask for the implication for the client, then the next step they would take. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell). Set beat_complete to true as soon as they have independently stated what the exhibit means for the client (a sensible next step is welcome but not needed), so a student who gets it quickly moves on without being held here. Do not give a hint unless told to below.' + DATA_REQUESTS,
   nudge_process:
@@ -434,14 +493,21 @@ const HELP: Record<NudgeLevel, string> = {
 };
 
 // A learning case teaches as it goes, so its replies are a little longer and say why. Same rules for facts: only what the case holds, and the inputs of a calculation, never the student's own work done for them.
+// Learning is the one mode where a figure they are there to work out may be said at all, and then only once they have tried.
+const LEARNING_DATA_REQUESTS = DATA_REQUESTS.replace(
+  `Never say a result, a total, a ratio or what it means.${NOT_THE_ANSWER}`,
+  'Do not do the calculation for them: what the data means, and any figure they are there to work out, is for after they have tried.',
+);
+
 const LEARNING_DIRECTIVES: Record<TurnKind, string> = {
   ...DIRECTIVES,
-  clarify: `${DIRECTIVES.clarify} If it was a good question to ask, you may add one short sentence on why interviewers like it.`,
+  clarify: `${DIRECTIVES.clarify.replace(DATA_REQUESTS, LEARNING_DATA_REQUESTS)} If it was a good question to ask, you may add one short sentence on why interviewers like it.`,
   direction:
-    'The student has handed in a framework (you will not see it) and has now said where they would start. In two to four short sentences: say what is good about starting there, explain briefly why a starting point like that matters in a real case (a good start tests the biggest driver of the problem first), and say you will show them some data. If their direction is unclear, instead ask ONE focused follow-up question about where they would start. Set direction_clear to true when their starting direction is clear enough to move on.',
+    'The student has handed in a framework (you will not see it) and has now said where they would start. In two to four short sentences: say what is good about starting there, explain briefly why a starting point like that matters in a real case (a good start tests the biggest driver of the problem first), and say you will show them some data. If their direction is unclear, instead ask ONE focused follow-up question about where they would start. Set direction_clear to true when their starting direction is clear enough to move on.' +
+    LEARNING_DATA_REQUESTS,
   exhibit:
     'The student is working on the exhibit. Judge what they just wrote, then respond in two to five short sentences: say what they got right and why it matters; if they missed or misread something, point gently at what to look at and why; if they have stated what the exhibit means for the client, say what a strong answer to this exhibit sounds like (in your own words, from your notes) and why that conclusion is the useful one. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell). Set beat_complete to true as soon as they have stated what the exhibit means for the client; your message is then the short lesson on this exhibit, and the next one comes out. Do not give a hint unless told to below.' +
-    DATA_REQUESTS.replace('Never say a result, a total, a ratio or what it means.', 'Do not do the calculation for them: what the data means is for after they have tried.'),
+    LEARNING_DATA_REQUESTS,
 };
 
 const LEARNING_HELP: Record<NudgeLevel, string> = {
@@ -494,7 +560,10 @@ function history(state: SessionState): { role: 'user' | 'assistant'; content: st
 export function turnRequest(sol: LiveSolution, state: SessionState, kind: TurnKind, help: NudgeLevel = 'none'): TurnRequest {
   const beat = openBeat(state);
   const learning = isUntimed(state);
-  const context = kind === 'exhibit' || kind.startsWith('nudge') ? beatContext(sol, beat ? state.plan.beats[beat.index] : undefined, learning) : '';
+  // The beat on the table carries the data with it; before there is one (clarifying questions, the starting direction) the data still
+  // goes, on its own, so a student who asks for a figure in the first two minutes is given it instead of being told we do not have it.
+  const onTheTable = kind === 'exhibit' || kind.startsWith('nudge') ? beatContext(sol, beat ? state.plan.beats[beat.index] : undefined, learning) : '';
+  const context = onTheTable || earlyDataContext(sol, learning);
   const messages = history(state);
   // The directive rides on the last turn only and is not saved, so the conversation before it stays identical from request to request.
   const directive = `\n\n<directive>\n${(learning ? LEARNING_DIRECTIVES : DIRECTIVES)[kind]}${kind === 'exhibit' ? (learning ? LEARNING_HELP : HELP)[help] : ''}\n</directive>${context ? `\n${context}` : ''}`;

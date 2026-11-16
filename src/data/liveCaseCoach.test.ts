@@ -252,13 +252,16 @@ describe('what the member can see', () => {
 });
 
 describe('what the model is told', () => {
-  it('gets only the prompt, facts and clarifying answers while the student asks questions', async () => {
+  it('gets the prompt, the facts, the clarifying answers and the data the interviewer holds, but no exhibit and no conclusion, while the student asks questions', async () => {
     const v = await begin();
     await call({ type: 'say', sessionId: v.sessionId, text: 'Who pays for the rooms?' });
     const req = w.asked[0];
     const all = JSON.stringify(req);
     expect(all).toContain('The army pays a fixed per diem per soldier.');
-    for (const secret of ['SECRET', 'Exhibit 1', 'Off-peak', 'break-even']) expect(all, secret).not.toContain(secret);
+    expect(all).toContain('SECRET-GUIDE-70,000'); // the interviewer's own table: its input figures can be asked for at this point too
+    for (const secret of ['SECRET-HOW', 'SECRET-TAKE', 'SECRET-REC', 'SECRET-BECAUSE', 'SECRET-HYPOTHESIS', 'SECRET-STEP', 'SECRET-BRAINSTORM', 'SECRET-WHY', 'Exhibit 1', 'Off-peak', 'break-even']) {
+      expect(all, secret).not.toContain(secret);
+    }
     expect(req.system).toContain('Never give the answer');
   });
 
@@ -422,6 +425,14 @@ describe('late replies and replies that leak', () => {
     expect(leaks('As you can see, off-peak occupancy is the number that decides the case.', ['Off-peak occupancy is the number that decides the case.'])).toBe(true);
     expect(leaks('What would you compare first?', ['Off-peak occupancy is the number that decides the case.'])).toBe(false);
     expect(leaks('Short note', ['Short note'])).toBe(false); // too short to be a giveaway
+  });
+
+  it('replaces an answer given away while the student is only asking clarifying questions', async () => {
+    const v = await begin();
+    w.script.reply = () => turn('Open the hotel only if off-peak occupancy clears the break-even SECRET-REC', { assessment: 'progress' });
+    const r = view(await call({ type: 'say', sessionId: v.sessionId, text: 'So what should we do?' }));
+    expect(r.messages.at(-1)?.text).not.toContain('SECRET');
+    expect(r.messages.at(-1)?.text).toContain('stay with your reasoning');
   });
 });
 
@@ -663,10 +674,58 @@ describe("the interviewer's own tables", () => {
     expect(last).toContain('never state a result, total, ratio or conclusion');
   });
 
-  it('are kept from the model while the student is still asking clarifying questions', async () => {
+  it('reach the model while the student is still asking clarifying questions, so a figure the case holds is never refused', async () => {
+    const v = await begin();
+    await call({ type: 'say', sessionId: v.sessionId, text: 'What does a room bring in?' });
+    const sent = w.asked[0].messages.at(-1)!.content;
+    expect(sent).toContain('There is no exhibit in front of the student yet');
+    expect(sent).toContain('Interviewer reference tables (private');
+    expect(sent).toContain('SECRET-GUIDE-70,000'); // the input figure is there to be read out
+    expect(sent).toContain('give it instead of answering with a question');
+    expect(sent).toContain('never state a result, total, ratio or conclusion'); // widening the reach does not widen what may be said
+  });
+
+  it('reach the model when the student says where they would start', async () => {
+    const v = await begin();
+    await call({ type: 'ready', sessionId: v.sessionId });
+    await call({ type: 'ready', sessionId: v.sessionId });
+    await call({ type: 'submit', sessionId: v.sessionId, text: 'Demand, supply, cost' });
+    w.script.reply = () => turn('Let us look at some data.', { direction_clear: false });
+    await call({ type: 'say', sessionId: v.sessionId, text: 'I would start with demand. What is revenue per room?' });
+    const sent = w.asked.at(-1)!.messages.at(-1)!.content;
+    expect(sent).toContain('handed in a framework'); // the direction turn
+    expect(sent).toContain('There is no exhibit in front of the student yet');
+    expect(sent).toContain('SECRET-GUIDE-70,000');
+    expect(sent).toContain('give it instead of answering with a question');
+  });
+
+  it('are left out of the early stages when the case holds none', async () => {
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, exhibits: [EXHIBIT(1), EXHIBIT(2)] } } : real(id));
     const v = await begin();
     await call({ type: 'say', sessionId: v.sessionId, text: 'Who pays for the rooms?' });
-    expect(JSON.stringify(w.asked[0])).not.toContain('SECRET-GUIDE');
+    expect(w.asked[0].messages.at(-1)!.content).not.toContain('<data>');
+  });
+
+  it('are carried into the early stages inside a budget, so a clarifying turn cannot grow without limit', async () => {
+    const huge = {
+      ...EXHIBIT(1),
+      title: 'Interviewer Guidance: every room',
+      columns: ['Room', 'Rate'],
+      rows: Array.from({ length: 400 }, (_, i) => [`Room ${i}`, `$${100 + i} SECRET-ROW${i}`]),
+      howToRead: '',
+      takeaways: [],
+    };
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, exhibits: [EXHIBIT(1), huge] } } : real(id));
+    const v = await begin();
+    await call({ type: 'say', sessionId: v.sessionId, text: 'Who pays for the rooms?' });
+    const sent = w.asked[0].messages.at(-1)!.content;
+    expect(sent).toContain('SECRET-ROW0'); // the start of the table is there
+    expect(sent).not.toContain('SECRET-ROW399'); // the end of it is cut, with an ellipsis, instead of filling the prompt
+    expect(sent).toContain('\n...');
+    const tables = sent.slice(sent.indexOf('Interviewer Guidance: every room'));
+    expect(tables.length).toBeLessThanOrEqual(2600);
   });
 });
 
@@ -818,6 +877,63 @@ describe('data the interviewer gives out when asked', () => {
     const id = await toExhibits();
     await call({ type: 'say', sessionId: id, text: 'What are the market sizes?' });
     expect(w.asked.at(-1)!.messages.at(-1)!.content).not.toContain('Data you hold and read out when the student asks');
+  });
+
+  it('is read out while the student is still asking clarifying questions, before any exhibit is on the table', async () => {
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, exhibits: [EXHIBIT(1), sizes] } } : real(id));
+    const v = await begin();
+    await call({ type: 'say', sessionId: v.sessionId, text: 'What are the market sizes?' });
+    const sent = w.asked[0].messages.at(-1)!.content;
+    expect(sent).toContain('asked a clarifying question'); // the clarify turn
+    expect(sent).toContain('Data you hold and read out when the student asks');
+    expect(sent).toContain('$900B');
+    expect(sent).toContain('$10B');
+    expect(sent).not.toContain('SECRET-HOW1'); // still no notes on an exhibit they have not been shown
+  });
+
+  it('tells the split apart from the wording the write-ups really use', () => {
+    const table = (title: string, caption: string, rows = [['Refinance', '$900B']]) => ({ title, caption, columns: ['Product', 'Market size'], rows });
+    const kinds = (exhibits: unknown[]) => {
+      const s = readSolution({ ...SOLUTION, exhibits })!;
+      return { onRequest: s.onRequest.map((e) => e.title), reference: s.reference.map((e) => e.title) };
+    };
+    // Handed over: the write-up says who gives it, to whom and when.
+    expect(kinds([
+      table('Market sizes (given if prompted)', 'From the interviewer guidance for Exhibit 1.'),
+      table('Santa Monica office data', 'Information the interviewer provides once the candidate asks.'),
+      table('Exhibit #1', 'To be provided to the interviewee as background information.'),
+      table('Exhibit 3: Typical cost figures (offer after brainstorm)', ''),
+      // "Guidance" is where half the write-ups file the data the interviewer hands over, so it is not on its own a sign of an answer.
+      table('Interviewer guidance: spend and revenue', 'Given once the candidate asks for estimated spend.'),
+    ]).onRequest).toHaveLength(5);
+    // The book's own working or answer: private, whatever else the caption says about handing it over.
+    expect(kinds([
+      table('Interviewer Guidance: Revenue calculation', 'Given if prompted.'),
+      table('Costs', 'What the interviewer provides, and what the candidate calculates.'),
+      table('Remotes sold', 'Completed table the interviewer shares before the recommendation.'),
+      table('Pricing Data', 'Not to be provided to the interviewee.'),
+      table('Market size', 'The interviewer provides these.', [['Today', '=5M/4% = $125M']]), // the book's arithmetic, printed in a cell
+      { ...table('Market size', 'The interviewer provides these.'), columns: ['Product', 'Market size (Keep Private)'] },
+    ]).onRequest).toEqual([]);
+  });
+
+  it('never reads out a row that is itself the answer to the open beat, from either kind of table', async () => {
+    // "Profit per customer: $4.20" is an answer when the beat is to work out profit per customer, however input-shaped the row looks.
+    const answerRow = ['Profit per customer', '$4.20'];
+    const handed = { ...sizes, title: 'Cost figures (given if prompted)', columns: ['Line', 'Value'], rows: [['Cost per customer', '$1.80'], answerRow] };
+    const working = { ...sizes, title: 'Interviewer Guidance: profit', caption: '', columns: ['Line', 'Value'], rows: [['Revenue per customer', '$6.00'], answerRow] };
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, exhibits: [EXHIBIT(1), handed, working] } } : real(id));
+    const id = await toExhibits();
+    await call({ type: 'say', sessionId: id, text: 'What is the profit per customer?' });
+    const sent = w.asked.at(-1)!.messages.at(-1)!.content;
+    expect(sent).toContain('$1.80'); // the inputs beside it are still handed over, in full
+    expect(sent).toContain('$6.00');
+    // ...and the rule covers both kinds of table: the one handed over as data and the one kept as reference.
+    expect(sent).toContain('except a row that is itself the figure they have been asked to work out right now');
+    expect(sent).toContain('including a row that simply prints the figure the student has been asked to work out');
+    expect(sent).toContain('that row is an answer, however input-shaped it looks');
   });
 });
 
