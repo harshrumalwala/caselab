@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import { parseBookSolution, parseFigure } from './domain/bookSolution';
 import { makeCase } from './test/builders';
-import { createFakeEnv, SAMPLE_LIBRARY, TEST_USER, type FakeEnv } from './test/fakeBackend';
+import { createFakeEnv, SAMPLE_LIBRARY, SAMPLE_LIBRARY_SOLUTIONS, TEST_USER, type FakeEnv } from './test/fakeBackend';
 
 const HOTEL = SAMPLE_LIBRARY[0];
 const SMOOTHIES = SAMPLE_LIBRARY[1]; // linked, but we have not written up its solution
@@ -86,6 +86,22 @@ describe('the full solution, in a case you did', () => {
     expect(section.getByText("Bucket's tip · How to deliver it")).toBeInTheDocument();
     expect(section.getByText(/I would not open it yet\./)).toBeInTheDocument();
     expect(section.getByText('Leaving out the off-peak months')).toBeInTheDocument();
+  });
+
+  it('keeps the table and the "read off a chart, approximate" note beside a drawn chart (unlike the live case, which hides both)', async () => {
+    const exhibit = SAMPLE_LIBRARY_SOLUTIONS[HOTEL.id].exhibits[0];
+    exhibit.approx = true;
+    try {
+      const env = await envWith({ title: 'Army Hotel', libraryId: HOTEL.id });
+      const { user, drawer } = await openCase('Army Hotel', env);
+      const section = within(await drawer.findByRole('region', { name: 'Full solution' }));
+      await user.click(section.getByRole('button', { name: /Full solution/ }));
+      expect(section.getByRole('img', { name: /Exhibit 1: Occupancy by season/ })).toBeInTheDocument();
+      expect(within(section.getByRole('table')).getByRole('cell', { name: '95%' })).toBeInTheDocument();
+      expect(section.getByText('(values read off a chart, approximate)')).toBeInTheDocument();
+    } finally {
+      exhibit.approx = false;
+    }
   });
 
   it('lets you tick what you did at each step, and lists what you did not as where your attempt differed', async () => {
