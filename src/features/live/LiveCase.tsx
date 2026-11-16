@@ -145,7 +145,7 @@ function Start({ s }: { s: LiveSession }) {
             </p>
           ) : (
             <p className="text-xs text-muted">
-              The clock is 35 minutes (40 for a case with more than four exhibits) and starts when you see the prompt. Time you save early carries over. Bucket is
+              The clock fits the case, 20 to 40 minutes, and starts when you see the prompt. Time you save early carries over. Bucket is
               an AI: it follows the case's own script and does not make up data. The ratings in your log are its draft from what you wrote, so you can review and
               change them.
             </p>

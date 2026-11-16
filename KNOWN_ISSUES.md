@@ -11,7 +11,8 @@ assistant saw a claim (for example a build session's report) but did not check i
   for the Booth MCG casebook and the co-chairs' picks. As of 2026-11-13 production holds 872 cases, 872 analyses and 872 solutions.
 - Line 596: "the 10 of 346 marked partial are left out" and "36 of 336" are old counts; current counts were not recomputed.
 - Line 371: `supabase db push --include-seed` will not work for the current seed (see "Library data pipeline").
-- Lines 9 and 577 describe Live case as a timed 35-minute case; Learning mode (merged later in PR #79) has no clock. Line 579-581 cover it.
+- The Live case lines no longer say "a 35-minute case" (issue #82 sized the clock to how much the case has in it), but Learning mode,
+  which has no clock at all, is still only covered in passing at lines 579-581.
 - The Tests section does not describe tests for Learning mode.
 
 ## Library data pipeline (content lives outside git)
@@ -73,6 +74,10 @@ assistant saw a claim (for example a build session's report) but did not check i
   the assistant's scratch folder, not in the repo. `src/features/caselog/ExhibitChart.test.tsx` covers specific behaviours only.
 - **Live case hides interviewer-only tables by heuristic** (titles and wording in `supabase/functions/_shared/liveCase*.ts`); the README
   accepts that a candidate exhibit might be hidden (the "safer way to be wrong").
+- **A busy case is squeezed by the 25-minute ceiling on the exhibit discussion** (`planTimes`, used by `buildPlan` in `supabase/functions/_shared/liveCase.ts`,
+  issue #82). The ceiling is today's longest case, which the issue asked not to exceed, so from six beats up every extra beat makes the
+  others shorter: 56 of the 847 eligible write-ups have six or more, and at twelve `beatBudget` works out at about two minutes each. If a
+  longer case is ever acceptable, the ceiling is the one number to raise.
 
 ## Tests and CI
 

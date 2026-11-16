@@ -81,7 +81,7 @@ describe('finding the live case', () => {
     const user = userEvent.setup({ advanceTimers: (ms) => void vi.advanceTimersByTime(ms) });
     render(<App backend={env.backend} />);
     const banner = await screen.findByRole('region', { name: 'Practise a whole case with Bucket' });
-    expect(within(banner).getByText('35 minutes, typed')).toBeInTheDocument();
+    expect(within(banner).getByText('20 to 40 minutes, typed')).toBeInTheDocument();
     await user.click(within(banner).getByRole('button', { name: /Start a live case/ }));
     await screen.findByRole('heading', { name: 'Practise a case with Bucket' });
     expect(screen.getAllByRole('link', { name: 'Live Case' }).some((l) => l.getAttribute('aria-current') === 'page')).toBe(true);
@@ -106,7 +106,7 @@ describe('starting a live case', () => {
     render(<App backend={env.backend} />);
     await user.click(await screen.findByRole('button', { name: 'Start a live case' }));
     await screen.findByRole('heading', { name: 'Practise a case with Bucket' });
-    expect(screen.getByText(/The clock is 35 minutes/)).toBeInTheDocument();
+    expect(screen.getByText(/The clock fits the case/)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /Market Entry/ })).toBeInTheDocument(); // the lanes, not a list of every case
     expect(screen.getAllByRole('link', { name: 'Live Case' }).some((l) => l.getAttribute('aria-current') === 'page')).toBe(true); // it has its own tab now
   });
@@ -114,12 +114,12 @@ describe('starting a live case', () => {
   it('starts the clock when the prompt first appears, and keeps the case name secret', async () => {
     const env = createFakeEnv();
     await startCase(env);
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('35:00');
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('23:00'); // this case has one exhibit to work through: 8 minutes of discussion in 23
     expect(screen.getByRole('timer', { name: 'Time left in this part' })).toHaveTextContent('3:00');
     expect(screen.queryByText(/The base houses 20,000 soldiers/)).not.toBeInTheDocument(); // the interviewer's facts come out only when asked
     expect(screen.queryByText('Army Hotel')).not.toBeInTheDocument();
     await pass(61);
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('33:59');
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('21:59');
   });
 });
 
@@ -192,7 +192,7 @@ describe('the opening stages', () => {
     await screen.findByLabelText('Your framework');
     // the time saved on the prompt stage is still in the overall clock, which never reset
     const left = screen.getByRole('timer', { name: 'Time left in the case' }).textContent!;
-    expect(Number(left.split(':')[0])).toBeGreaterThanOrEqual(32);
+    expect(Number(left.split(':')[0])).toBeGreaterThanOrEqual(20);
   });
 
   it('asks where they would start after the framework, then brings out the first exhibit', async () => {
@@ -361,7 +361,7 @@ describe('pausing and ending', () => {
     await startCase(env);
     const user = userEvent.setup({ advanceTimers: (ms) => void vi.advanceTimersByTime(ms) });
     await pass(30);
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('34:30');
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('22:30');
     await user.click(screen.getByRole('button', { name: /Pause/ }));
     await screen.findByText(/Paused\. The clock is stopped/);
     expect(screen.queryByText(/Should a hotel chain open a new property/)).not.toBeInTheDocument(); // no studying during a break
@@ -371,9 +371,9 @@ describe('pausing and ending', () => {
 
     await user.click(screen.getByRole('button', { name: /Continue/ }));
     await screen.findByText(/Should a hotel chain open a new property/);
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('34:30'); // not a second lost to the break
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('22:30'); // not a second lost to the break
     await pass(10);
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('34:20');
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('22:20');
   });
 
   it('is still paused after the page is opened again, and nothing runs out meanwhile', async () => {
@@ -385,7 +385,7 @@ describe('pausing and ending', () => {
     cleanup();
     render(<App backend={env.backend} />);
     expect(await screen.findByText(/Paused\. The clock is stopped/)).toBeInTheDocument();
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('35:00');
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('23:00'); // this case has one exhibit to work through: 8 minutes of discussion in 23
   });
 
   it('ends a case that nothing was written in without asking for feedback or logging it', async () => {
@@ -476,7 +476,7 @@ describe('refreshing and failing', () => {
     await within(again.container).findByText('Two large chains compete.');
     expect(within(again.container).getByLabelText('Ask a clarifying question')).toHaveValue('And what about prices');
     const left = within(again.container).getByRole('timer', { name: 'Time left in the case' }).textContent!;
-    expect(left).toBe('34:20'); // the 40 seconds that passed are gone: the clock kept running instead of starting again
+    expect(left).toBe('22:20'); // the 40 seconds that passed are gone: the clock kept running instead of starting again
   });
 
   it('says so when Bucket cannot reply, and keeps what was written', async () => {
@@ -507,9 +507,9 @@ describe('learning mode', () => {
   it('explains that there is no clock once it is chosen', async () => {
     const env = createFakeEnv();
     const user = await openLive(env);
-    expect(screen.getByText(/The clock is 35 minutes/)).toBeInTheDocument();
+    expect(screen.getByText(/The clock fits the case/)).toBeInTheDocument();
     await pickLearning(user);
-    expect(screen.queryByText(/The clock is 35 minutes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/The clock fits the case/)).not.toBeInTheDocument();
     expect(screen.getByText(/the same steps, with no clock/i)).toBeInTheDocument();
   });
 
