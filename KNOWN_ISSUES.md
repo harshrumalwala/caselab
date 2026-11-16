@@ -75,6 +75,13 @@ assistant saw a claim (for example a build session's report) but did not check i
   and the trend line in Bio-Product Growth. **No one has compared all ~480 charted exhibits with the book pages**, so other differences
   (colours, highlighted bars, lines that our notes never mention) are likely. Those patches are made directly in `private-data/solutions/*.json`
   and would be undone by re-assembling from the reader outputs.
+- **Series colours are drawn but almost none are set** (issue #106). Bars and stack segments now take the `color` on their series, and stacks and
+  clustered bars get a key, but across the 872 write-ups only 9 bar or stack series carry a colour (DrugStop Co. Exhibit 1, Global Health
+  diarrhoeal disease, Polar Bear Pool Float Exhibit 1), so nearly every chart is still in greys. Circle Bubble Exhibit 2 has none yet: it gets
+  its key now, and its orange / navy / teal once the main session patches `private-data/solutions/*.json` (palette names accepted: red, blue,
+  yellow, green, black, gray, orange, purple, navy, teal, or a hex value). The key lists series left to right and is not ordered to match a
+  stack from top to bottom. A stack with `segmentNames` gets no key, but a segment under 14 px tall prints no name, so a very thin segment in
+  such a stack is unnamed (not checked across the data). The pie slices and scatter points ignore series colours.
 - **Exhibit chart kinds we cannot draw** stay as tables: marimekko, bubble size, waterfall, dual axis, maps, flow diagrams, stacked area,
   scatter trend lines, stacked horizontal bars.
 - **No visual regression tests for charts.** The render check (a temporary test that draws every chart to SVG, then a contact sheet) lives in
