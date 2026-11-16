@@ -66,7 +66,7 @@ interface World {
 }
 
 const kindOf = (req: TurnRequest): string => {
-  if (req.system.includes('writing honest, specific feedback')) return 'feedback';
+  if (req.system.includes('writing honest, specific feedback') || req.system.includes('writing learning notes')) return 'feedback';
   const last = req.messages[req.messages.length - 1].content;
   if (last.includes('asked a clarifying question')) return 'clarify';
   if (last.includes('handed in a framework')) return 'direction';
@@ -957,5 +957,88 @@ describe('the member moves on from an exhibit', () => {
     await call({ type: 'end', sessionId: id });
     await call({ type: 'finish', sessionId: id });
     expect(JSON.stringify(w.asked.at(-1))).toContain('the student chose to move on');
+  });
+});
+
+describe('learning mode, in the handler', () => {
+  const startLearning = async () => view(await call({ type: 'start', libraryId: LIB, mode: 'learning' }));
+
+  /** A learning case on its first exhibit. */
+  async function learnToExhibits(): Promise<string> {
+    const id = (await startLearning()).sessionId;
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'submit', sessionId: id, text: 'Demand, supply, cost' });
+    w.script.reply = () => turn('Good start, let us look at the data.', { direction_clear: true, assessment: 'progress' });
+    await call({ type: 'say', sessionId: id, text: 'I would start with demand' });
+    w.asked.length = 0;
+    return id;
+  }
+
+  it('starts when asked for, says so in the view, and never runs out of time', async () => {
+    const v = await startLearning();
+    expect(v.mode).toBe('learning');
+    at(5 * 3600);
+    const later = view(await call({ type: 'resume', sessionId: v.sessionId }));
+    expect(later.stage).toBe('prompt');
+    expect(later.status).toBe('active');
+  });
+
+  it('has no pause, but ends early and still gets feedback', async () => {
+    const v = await startLearning();
+    expect(await call({ type: 'pause', sessionId: v.sessionId })).toMatchObject({ status: 'refused', message: expect.stringContaining('no clock') });
+    w.script.reply = () => turn('Fine.', { assessment: 'progress' });
+    await call({ type: 'say', sessionId: v.sessionId, text: 'Demand, supply, cost' });
+    const ended = view(await call({ type: 'end', sessionId: v.sessionId }));
+    expect(ended.status).toBe('done');
+    w.script.reply = () => GOOD_FEEDBACK;
+    const done = view(await call({ type: 'finish', sessionId: v.sessionId }));
+    expect(done.feedback).not.toBeNull();
+  });
+
+  it('is coached as a teacher: no clock, nothing scored, and the exhibit notes are there to teach from', async () => {
+    const id = await learnToExhibits();
+    w.script.reply = () => turn('x'.repeat(900), { assessment: 'partial' });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'Peak is 95 and off-peak is 31' }));
+    const req = w.asked[0];
+    expect(req.system).toContain('there is no clock');
+    expect(req.system).not.toContain('Never give the answer');
+    expect(JSON.stringify(req)).toContain('SECRET-TAKE1'); // the book's reading, for teaching
+    expect(JSON.stringify(req)).toContain('Use them to teach');
+    expect(JSON.stringify(req)).not.toContain('SECRET-REC'); // the answer to the whole case stays out
+    expect(r.messages.at(-1)!.text).toHaveLength(900); // a teaching reply may be longer than an interviewer's
+  });
+
+  it('keeps an interviewer reply short, as before', async () => {
+    const id = await toExhibits();
+    w.script.reply = () => turn('x'.repeat(900), { assessment: 'partial' });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'Peak is 95 and off-peak is 31' }));
+    expect(r.messages.at(-1)!.text.length).toBeLessThanOrEqual(700);
+  });
+
+  it('never moves a stuck learner on by itself', async () => {
+    const id = await learnToExhibits();
+    w.script.reply = () => turn('Let me show you where to look.', { assessment: 'stuck' });
+    for (let i = 0; i < 6; i++) await call({ type: 'say', sessionId: id, text: `still not sure ${i}` });
+    at(4 * 3600);
+    const r = view(await call({ type: 'resume', sessionId: id }));
+    expect(r.stage).toBe('exhibits');
+    expect(r.beatsShown).toBe(1);
+  });
+
+  it('writes the feedback as a lesson, with no ratings, whatever the model sends', async () => {
+    const v = await startLearning();
+    w.script.reply = () => turn('Fine.', { assessment: 'progress' });
+    await call({ type: 'say', sessionId: v.sessionId, text: 'Demand, supply, cost' });
+    await call({ type: 'end', sessionId: v.sessionId });
+    w.script.reply = () => GOOD_FEEDBACK; // asks for ratings anyway
+    const done = view(await call({ type: 'finish', sessionId: v.sessionId }));
+    const request = w.asked.at(-1)!;
+    expect(request.system).toContain('This is for learning, not for grading');
+    expect(JSON.stringify(request)).toContain('the case had no clock');
+    expect(done.feedback!.overall.rating).toBeNull();
+    for (const s of Object.values(done.feedback!.skills)) expect(s.rating).toBeNull();
+    expect(done.feedback!.skills.framework.feedback).toBe('Clear buckets.'); // the notes stay
+    expect(done.feedback!.wentWell).toBe('Good structure.');
   });
 });

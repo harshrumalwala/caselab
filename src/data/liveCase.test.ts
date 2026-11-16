@@ -537,3 +537,73 @@ describe('moving on from an exhibit', () => {
     expect(moveOn(ok(pause(s, at(215))), at(220)).ok).toBe(false);
   });
 });
+
+describe('learning mode: no clock', () => {
+  const learning = (p = plan(3)) => newSession(p, T0, 'Prompt text', 'learning');
+  const toLearningExhibits = (): SessionState => {
+    let s = learning();
+    s = ok(ready(s, at(5)));
+    s = ok(ready(s, at(6)));
+    s = ok(submit(s, 'My framework', at(7)));
+    s = ok(userSays(s, 'I would start with demand', at(8)));
+    return endFrameworkStage(s, at(9));
+  };
+
+  it('never runs out: a stage waits for the member however long they are away', () => {
+    const s = learning();
+    const much = at(3 * 3600); // three hours on, far past the 35-minute limit
+    expect(settle(s, much)).toBe(s);
+    const onExhibit = toLearningExhibits();
+    expect(settle(onExhibit, much)).toBe(onExhibit);
+    expect(onExhibit.stage).toBe('exhibits');
+    expect(onExhibit.endedAt).toBeNull();
+  });
+
+  it('is moved on only by the member: they get through every stage with no time passing the limit', () => {
+    let s = toLearningExhibits();
+    s = ok(userSays(s, 'Costs first', at(7200)));
+    s = ok(moveOn(s, at(7300)));
+    s = ok(userSays(s, 'Then the second one', at(7400)));
+    s = ok(moveOn(s, at(7500)));
+    s = ok(userSays(s, 'And the last', at(7600)));
+    s = ok(moveOn(s, at(7700)));
+    expect(s.stage).toBe('brainstorm_think');
+    s = ok(ready(s, at(9000)));
+    s = ok(submit(s, 'Ideas', at(9100)));
+    s = ok(ready(s, at(9200)));
+    s = ok(submit(s, 'Recommendation', at(9300)));
+    expect(s.stage).toBe('done');
+    expect(s.endReason).toBe('completed');
+  });
+
+  it('has nothing to pause, and says so, but can be ended early', () => {
+    const s = toLearningExhibits();
+    const r = pause(s, at(100));
+    expect(r).toMatchObject({ ok: false, reason: expect.stringContaining('no clock') });
+    const done = ok(endEarly(s, at(100)));
+    expect(done.stage).toBe('done');
+    expect(done.endReason).toBe('ended_early');
+  });
+
+  it('keeps stopwatch talk out of what Bucket says', () => {
+    let s = toLearningExhibits();
+    for (let i = 0; i < 3; i++) s = ok(moveOn(ok(userSays(s, `thought ${i}`, at(10 + i))), at(20 + i)));
+    s = ok(ready(s, at(30)));
+    s = ok(submit(s, 'Ideas', at(31)));
+    s = ok(ready(s, at(32)));
+    const said = learning().messages.concat(s.messages).filter((m) => m.from === 'coach').map((m) => m.text).join('\n');
+    expect(said).not.toMatch(/\d+ seconds|minute and a half|90 seconds|30 seconds/);
+    expect(said).toContain('no rush');
+  });
+
+  it('never moves a learner on, however long they are stuck: it keeps teaching', () => {
+    let s = toLearningExhibits();
+    const b = openBeat(s)!;
+    s = { ...s, beats: [{ ...b, asked: 6, hints: 3 }] };
+    expect(nudgeLevel(s, at(10_000))).toBe('lead');
+    expect(nudgeLevel(s, at(10_000), 'timer')).toBe('none');
+    // the same stuck student in practice mode is moved on once far behind
+    const p = toExhibits(plan(3), 200);
+    expect(nudgeLevel({ ...p, beats: [{ ...openBeat(p)!, asked: 6 }] }, at(10_000))).toBe('advance');
+  });
+});

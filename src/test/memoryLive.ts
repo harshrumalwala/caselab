@@ -28,7 +28,7 @@ export interface MemoryLiveOptions {
 }
 
 const kindOf = (req: TurnRequest): string => {
-  if (req.system.includes('writing honest, specific feedback')) return 'feedback';
+  if (req.system.includes('writing honest, specific feedback') || req.system.includes('writing learning notes')) return 'feedback';
   const last = req.messages[req.messages.length - 1].content;
   if (last.includes('asked a clarifying question')) return 'clarify';
   if (last.includes('handed in a framework')) return 'direction';

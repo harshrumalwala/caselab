@@ -85,7 +85,7 @@ export function useLiveSession(repo: LiveCaseRepository) {
 
   // Time is up for this stage: the server moves the case on (it would at any request, but the screen should not wait for one).
   useEffect(() => {
-    if (!view || view.status !== 'active' || now < view.stageEndsAt + SETTLE_GRACE_MS) return;
+    if (!view || view.status !== 'active' || view.mode === 'learning' || now < view.stageEndsAt + SETTLE_GRACE_MS) return; // a learning case has no clock to run out
     if (Date.now() - last.current.settle < RETRY_MS) return;
     last.current.settle = Date.now();
     repo

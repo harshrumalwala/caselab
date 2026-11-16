@@ -53,8 +53,11 @@ export function liveCaseToInput(view: Pick<LiveView, 'submissions' | 'endReason'
     skills[key] = { rating: asRating(f.rating), feedback: f.feedback };
   }
   const timedOut = view.submissions.filter((s) => s.timedOut).map((s) => SUBMISSION_LABEL[s.kind] ?? s.kind);
+  const learning = view.mode === 'learning';
   const notes = [
-    'Practised live with Bucket: a typed, timed case. The ratings and notes were drafted by the AI from what you wrote, so please check them and change anything that does not match how it went.',
+    learning
+      ? 'Practised live with Bucket in learning mode: typed, with no clock, and Bucket coaching along the way. Nothing was scored, so the ratings are blank. The notes were drafted by the AI from what you wrote, so change anything that does not match how it went.'
+      : 'Practised live with Bucket: a typed, timed case. The ratings and notes were drafted by the AI from what you wrote, so please check them and change anything that does not match how it went.',
     view.mode === 'interview' ? 'Interview mode: the clock never stopped.' : '',
     view.endReason === 'time_limit' ? 'The time ran out before the end.' : view.endReason === 'ended_early' ? 'Ended early, by choice.' : '',
     timedOut.length ? `Saved as a draft when ${view.endReason === 'ended_early' ? 'the case ended' : 'time ran out'}: ${timedOut.join(', ')}.` : '',
@@ -119,10 +122,10 @@ const LINES: Record<Stage, readonly string[]> = {
 };
 
 /** What Bucket says (and how Bucket looks) right now, from the stage, the time left, and what just happened. */
-export function bucketLine(view: Pick<LiveView, 'stage' | 'sessionId' | 'frameworkPhase' | 'serverNow' | 'endsAt'>, now: number, lastWasHint: boolean): BucketLine {
+export function bucketLine(view: Pick<LiveView, 'stage' | 'sessionId' | 'frameworkPhase' | 'serverNow' | 'endsAt'> & { mode?: LiveView['mode'] }, now: number, lastWasHint: boolean): BucketLine {
   const seed = view.sessionId;
   if (view.stage === 'done') return { mood: 'cheer', text: pick(LINES.done, seed) };
-  if (view.endsAt - now <= 120_000) return { mood: 'worried', text: "Clock is getting low. Wrap up this thought and finish strong!" };
+  if (view.mode !== 'learning' && view.endsAt - now <= 120_000) return { mood: 'worried', text: "Clock is getting low. Wrap up this thought and finish strong!" };
   if (view.stage === 'framework_write' && view.frameworkPhase === 'direction') return { mood: 'happy', text: 'Structure noted. Now, where would you begin?' };
   if (view.stage === 'exhibits' && lastWasHint) return { mood: 'hint', text: "A little nudge for you. Take it or leave it, you are still driving." };
   const thinking = view.stage === 'framework_think' || view.stage === 'brainstorm_think' || view.stage === 'recommend_think';

@@ -78,7 +78,8 @@ export function ExhibitView({ exhibit }: { exhibit: PublicExhibit }) {
 export function ClockBar({ view, now }: { view: LiveView; now: number }) {
   const overall = view.endsAt - now;
   const stage = view.stageEndsAt - now;
-  const closing = overall <= 120_000;
+  const untimed = view.mode === 'learning';
+  const closing = !untimed && overall <= 120_000;
   const stepIndex = STEPS.findIndex((s) => s.stages.includes(view.stage));
   return (
     <div className="sticky top-0 z-30 -mx-4 border-b border-line bg-bg/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
@@ -98,20 +99,24 @@ export function ClockBar({ view, now }: { view: LiveView; now: number }) {
             ))}
           </ol>
         </div>
-        <div className="flex items-end gap-5 text-right">
-          <div>
-            <p className="eyebrow">This part</p>
-            <p className={`num text-xl font-extrabold tabular-nums ${stage <= 30_000 ? 'text-bad-text' : 'text-ink'}`} role="timer" aria-label="Time left in this part">
-              {formatClock(stage)}
-            </p>
+        {untimed ? (
+          <p className="text-right text-xs font-semibold text-muted">Learning mode: no clock, take your time.</p>
+        ) : (
+          <div className="flex items-end gap-5 text-right">
+            <div>
+              <p className="eyebrow">This part</p>
+              <p className={`num text-xl font-extrabold tabular-nums ${stage <= 30_000 ? 'text-bad-text' : 'text-ink'}`} role="timer" aria-label="Time left in this part">
+                {formatClock(stage)}
+              </p>
+            </div>
+            <div>
+              <p className="eyebrow">Time left</p>
+              <p className={`num text-3xl font-extrabold tabular-nums ${closing ? 'text-bad-text' : 'text-ink'}`} role="timer" aria-label="Time left in the case">
+                {formatClock(overall)}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="eyebrow">Time left</p>
-            <p className={`num text-3xl font-extrabold tabular-nums ${closing ? 'text-bad-text' : 'text-ink'}`} role="timer" aria-label="Time left in the case">
-              {formatClock(overall)}
-            </p>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -59,6 +59,14 @@ describe('the case log entry for a finished live case', () => {
     expect(early.otherNotes).not.toContain('ran out');
   });
 
+  it('says in the notes that a learning case had no clock and was not scored', () => {
+    const learned = liveCaseToInput({ ...VIEW, mode: 'learning', endReason: 'completed' }, INFO, { ...FEEDBACK, overall: { rating: null, feedback: 'Notes.' }, skills: blank() });
+    expect(learned.otherNotes).toContain('learning mode');
+    expect(learned.otherNotes).toContain('Nothing was scored');
+    expect(learned.otherNotes).not.toContain('timed case');
+    expect(learned.overall).toBeNull();
+  });
+
   it('keeps the notes short when nothing went wrong, and falls back to "Other" for a type it does not know', () => {
     const calm = liveCaseToInput({ ...VIEW, submissions: [], endReason: 'completed' }, { ...INFO, caseType: 'Something New' }, { ...FEEDBACK, unfinished: [] });
     expect(calm.caseType).toBe('Other');
@@ -107,6 +115,7 @@ describe('what Bucket says, and how Bucket looks', () => {
     expect(at('exhibits', {}, 0, true).mood).toBe('hint');
     expect(at('exhibits', {}, 35 * 60_000 - 100_000).mood).toBe('worried');
     expect(at('done', {}, 35 * 60_000 - 100_000).mood).toBe('cheer'); // the end is a party, not a worry
+    expect(at('exhibits', { mode: 'learning' }, 35 * 60_000 - 100_000).mood).toBe('happy'); // a learning case has no clock to worry about
     expect(at('framework_write', { frameworkPhase: 'direction' }).text).toContain('where would you begin');
   });
 

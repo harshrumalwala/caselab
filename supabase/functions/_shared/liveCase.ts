@@ -58,8 +58,11 @@ export const ORDER: Stage[] = [
 export type DraftKey = 'clarify' | 'framework' | 'direction' | 'exhibit' | 'brainstorm' | 'recommendation';
 export type SubmissionKind = 'framework' | 'direction' | 'brainstorm' | 'recommendation';
 export type BeatOutcome = 'open' | 'independent' | 'hinted' | 'coach_moved' | 'member_moved' | 'timed_out';
-/** Practice mode can be paused and ended early; interview mode is the real thing, with the clock running from start to finish. */
-export type LiveMode = 'practice' | 'interview';
+/**
+ * Practice mode can be paused and ended early; interview mode is the real thing, with the clock running from start to finish; learning mode has no
+ * clock at all: nothing runs out, Bucket teaches as the case goes, and the member can stop whenever they like.
+ */
+export type LiveMode = 'practice' | 'interview' | 'learning';
 export type NudgeLevel = 'none' | 'process_hint' | 'directional_hint' | 'lead' | 'advance';
 
 /** One thing to work through in the main section: an exhibit, or (for a case without exhibits) a step of the book's analysis. */
@@ -218,9 +221,12 @@ export interface SessionState {
   pausedAt?: number | null;
   /** How many times the case has been paused. */
   pauses?: number;
-  /** Missing (a case from before there were two modes) counts as practice. */
+  /** Missing (a case from before there were modes) counts as practice. */
   mode?: LiveMode;
 }
+
+/** A learning case has no clock: no stage, and not the case, ever runs out. */
+export const isUntimed = (s: Pick<SessionState, 'mode'>): boolean => s.mode === 'learning';
 
 export const hardEnd = (s: SessionState): number => s.startedAt + (s.plan.limitMs ?? LIMIT_MS);
 const exhibitPlanned = (s: SessionState): number => s.plan.exhibitMs ?? PLANNED_MS.exhibits;
@@ -356,6 +362,17 @@ const LINES = {
   to_brainstorm: 'Let us move on to brainstorming.',
 };
 
+/** The same lines without a stopwatch in them: a learning case has no time to give. */
+const LEARNING_LINES: Partial<typeof LINES> = {
+  prompt_ready: 'Framework time. Take as long as you like to think about your structure, and use your scratchpad. Choose "Ready to write" when you want to put it down.',
+  brainstorm_think: (topic: string) => `Brainstorm${topic ? `: ${topic}` : ''}. Take a moment to think before you write, as long as you like.`,
+  brainstorm_write: 'Write your ideas now. There is no rush.',
+  recommend_think: 'Time to bring it together. Take as long as you like to think about your recommendation, using what you have worked through.',
+  recommend_write: 'Write your recommendation now. There is no rush.',
+};
+
+const line = <K extends keyof typeof LINES>(s: SessionState, key: K): (typeof LINES)[K] => ((isUntimed(s) ? LEARNING_LINES[key] : undefined) ?? LINES[key]) as (typeof LINES)[K];
+
 function logEnd(s: SessionState, at: number, by: StageLogEntry['endedBy']): void {
   const last = s.stageLog[s.stageLog.length - 1];
   if (last && last.endedAt === null) {
@@ -368,12 +385,12 @@ function startStage(s: SessionState, stage: Stage, at: number): void {
   s.stage = stage;
   s.stageStartedAt = at;
   s.stageLog.push({ stage, startedAt: at, endedAt: null, endedBy: null });
-  if (stage === 'framework_think') say(s, at, LINES.prompt_ready, 'notice');
+  if (stage === 'framework_think') say(s, at, line(s, 'prompt_ready'), 'notice');
   else if (stage === 'framework_write') say(s, at, LINES.framework_write, 'notice');
-  else if (stage === 'brainstorm_think') say(s, at, LINES.brainstorm_think(s.plan.brainstormTopic), 'notice');
-  else if (stage === 'brainstorm_write') say(s, at, LINES.brainstorm_write, 'notice');
-  else if (stage === 'recommend_think') say(s, at, LINES.recommend_think, 'notice');
-  else if (stage === 'recommend_write') say(s, at, LINES.recommend_write, 'notice');
+  else if (stage === 'brainstorm_think') say(s, at, line(s, 'brainstorm_think')(s.plan.brainstormTopic), 'notice');
+  else if (stage === 'brainstorm_write') say(s, at, line(s, 'brainstorm_write'), 'notice');
+  else if (stage === 'recommend_think') say(s, at, line(s, 'recommend_think'), 'notice');
+  else if (stage === 'recommend_write') say(s, at, line(s, 'recommend_write'), 'notice');
   else if (stage === 'exhibits') revealBeat(s, at);
 }
 
@@ -424,6 +441,7 @@ function endStage(s: SessionState, at: number, by: StageLogEntry['endedBy']): vo
  */
 export function settle(input: SessionState, now: number): SessionState {
   if (input.pausedAt != null) return input; // the clock is stopped: nothing runs out while the case is paused
+  if (isUntimed(input)) return input; // learning mode has no clock: a stage ends only when the member (or Bucket, on the member's work) moves the case on
   const s = structuredClone(input);
   let guard = 0;
   while (s.stage !== 'done' && guard++ < 16) {
@@ -460,6 +478,7 @@ export type ActionResult = { ok: true; state: SessionState } | { ok: false; reas
 const refuse = (reason: string): ActionResult => ({ ok: false, reason });
 const PAUSED = 'The case is paused. Continue when you are ready.';
 const INTERVIEW = 'Interview mode has no pause and no early end. The clock runs until the case is over.';
+const NO_CLOCK = 'Learning mode has no clock to pause. Take as long as you like, or end the case when you want feedback.';
 
 function bump(s: SessionState): SessionState {
   s.rev += 1;
@@ -469,6 +488,7 @@ function bump(s: SessionState): SessionState {
 /** Stops the clock. Nothing runs out, nothing can be written or asked, until the member continues (or ends the case). */
 export function pause(settled: SessionState, now: number): ActionResult {
   if (settled.mode === 'interview') return refuse(INTERVIEW);
+  if (isUntimed(settled)) return refuse(NO_CLOCK);
   if (settled.stage === 'done') return refuse('The case is over.');
   if (settled.pausedAt != null) return refuse('The case is already paused.');
   const s = structuredClone(settled);
@@ -710,6 +730,8 @@ export function nudgeLevel(s: SessionState, now: number, via: 'message' | 'timer
   const rung = Math.max(b.hints, b.asked ?? 0);
   if (rung === 0) return 'process_hint';
   if (rung === 1) return 'directional_hint';
+  // With no clock there is no "behind schedule", and Bucket never moves a learner on: it keeps teaching, and the member says when they are done.
+  if (isUntimed(s)) return rung === 1 ? 'directional_hint' : 'lead';
   if (rung === 2) return behindSchedule(b, now) ? 'advance' : 'lead';
   return 'advance';
 }
