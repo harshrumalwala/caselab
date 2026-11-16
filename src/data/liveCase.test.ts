@@ -162,6 +162,7 @@ describe("a soft word in the title of an exhibit the book numbers for the candid
     ['Vibrants (Stern 2018), hidden by "sample" and "answer"', { title: 'Exhibit #2 - Sample Focus Group Answers', caption: 'Would you purchase a store-brand version of Vibrants over the brand name?' }],
     ['Refinery in the Country of Georgia (Fuqua 2017), hidden by "expected"', { title: 'Exhibit 2: Expected Output from Georgian Crude Oil' }],
     ['Athelas Insurance (Ross 2016), hidden by "approach"', { title: 'Exhibit 1: Apollo Hospital – Valuation analysis (Approach 1 – Cash Flows)', caption: 'Apollo Hospital Inc. – Free Cash flows (2015). Discount Rate 10%, Growth Rate 0%.' }],
+    ['Athelas Insurance (Ross 2016), its second table, hidden by "approach"', { title: 'Exhibit 1: Apollo Hospital – Valuation analysis (Approach 2 – Multiples)', caption: 'Recent hospital acquisitions.' }],
   ];
   for (const [name, exhibit] of shown) {
     it(`shows ${name}`, () => {
