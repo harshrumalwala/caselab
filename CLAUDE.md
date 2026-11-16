@@ -6,10 +6,14 @@ database rule, and is the best place to look before changing behaviour.
 
 ## Operating rules (the owner's, non-negotiable)
 
-- **Production actions need the owner's explicit approval, each time:** merging to `main`, applying migrations (`supabase db push`),
-  loading the library seed, deploying edge functions, changing Supabase secrets. Approval for one does not carry to the next. Ask once
-  per finished group ("merge PR X, apply migration Y, deploy function Z") rather than step by step.
-- Never claim the owner approved something they did not. Never merge, force-push, or delete tests to make them pass.
+- **Production actions need the owner's explicit approval, each time:** applying migrations (`supabase db push`), loading the library
+  seed, changing Supabase secrets. Approval for one does not carry to the next. Ask once per finished group ("apply migration Y, then
+  load the seed") rather than step by step.
+- **Standing exception, granted by the owner on 2026-11-15:** the **pm agent** may merge a pull request to `main` and deploy an edge
+  function (`npx supabase functions deploy <name>`) on its own judgment, without asking — CI green and the acceptance criteria met.
+  This is the pm agent's authority alone; everyone else still asks. The three actions above are still the owner's call every time.
+- Never claim the owner approved something they did not. Never force-push or delete tests to make them pass, and never merge with a
+  failing or unfinished CI run.
 - Never put a secret, `service_role` key, database password or Anthropic key in a `VITE_` variable, in git, or in a PR. `VITE_*`
   values ship in the browser.
 - Do not read other members' private data. Use throwaway test accounts for live checks.
