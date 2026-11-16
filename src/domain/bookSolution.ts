@@ -192,6 +192,13 @@ export interface ExhibitLimits {
 export const SOLUTION_EXHIBIT_LIMITS: ExhibitLimits = { columns: 16, rows: 70, points: 70 };
 
 /**
+ * What a live case may hold: the caps `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts` has already applied by the time an
+ * exhibit reaches the screen. Reading it with these rather than the write-up's own (smaller) caps means a table the Edge Function sent
+ * whole is never cut a second time. Kept here, beside the write-up's caps, so the screen and the live-case audit read the same numbers.
+ */
+export const LIVE_EXHIBIT_LIMITS: ExhibitLimits = { columns: 40, rows: 400, points: 400 };
+
+/**
  * Reads a chart. A chart either names the table columns it plots (the earlier form: `labelColumn` and `seriesColumns`), or carries the figures
  * the book plots (`categories` and `series`). Anything that cannot be drawn is dropped, so the screen shows the table alone rather than a
  * half-drawn chart.

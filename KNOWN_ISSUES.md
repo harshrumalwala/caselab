@@ -22,8 +22,8 @@ assistant saw a claim (for example a build session's report) but did not check i
   the seed.
 - **The tooling that produced the solutions is not in the repo.** The wave builder, assembler/format checker, overlap checker, seed
   splitter, render test and the instruction files for the reader agents sit in the assistant's temporary scratch folder
-  (campaign notes in `CAMPAIGN.md` there). They may disappear when that folder is cleaned. Only `scripts/buildLibrarySeed.mjs` and
-  `scripts/librarySeed.mjs` are in the repo.
+  (campaign notes in `CAMPAIGN.md` there). They may disappear when that folder is cleaned. Only `scripts/buildLibrarySeed.mjs`,
+  `scripts/librarySeed.mjs` and `scripts/liveCaseAudit.mjs` (the live-case suitability report, issue #84) are in the repo.
 - **The seed is too large for one request.** The database API rejects requests above about 1 MB (HTTP 413). The seed has to be split and
   loaded part by part; the README does not say so. Ordering matters: non-solution statements first, solution inserts after.
 - **Manual data patches exist only in the assembled files.** For example `pointLabels: false` was set by hand on the Copier Co. scatter and
@@ -34,9 +34,15 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **The parser silently truncates oversized content.** `src/domain/bookSolution.ts` caps: exhibits 12, columns 16, rows 70, chart
   points/categories 70, structure buckets 8, clarifying questions 5, takeaways 3, panels 4. Empty-string chart categories are dropped, so a
   single unlabelled bar needs a non-empty label or the chart disappears. Content over the caps is cut without an error.
-  The per-exhibit caps are now `SOLUTION_EXHIBIT_LIMITS` in that file, and the live case passes its own (40 columns / 400 rows / 400 chart
-  points, in `src/features/live/liveParts.tsx`) to match `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts`. The two sets are
+  The per-exhibit caps are now `SOLUTION_EXHIBIT_LIMITS` and `LIVE_EXHIBIT_LIMITS` (40 columns / 400 rows / 400 chart points), both in that
+  file; the live case passes the second to match `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts`. The two sets are
   kept in step by hand: change one and the other has to be changed with it, or a live exhibit is cut a second time on its way to the screen.
+- **Two exhibits lose a chart panel to the 4-panel cap** (found by `npm run audit:live` on 2026-11-16): Lactose King (Fuqua 2025-26)
+  exhibit 1 has 5 panels and Sueno Mattress (Booth MCG 2026-2027) exhibit 3 has 6, so the last ones are dropped without a word. Either
+  raise the cap or split the exhibit. Nothing else in the 872 write-ups is over any cap.
+- **The live-case audit needs Node 22.6 or newer** (`npm run audit:live`): it imports the Edge Function's TypeScript with Node's type
+  stripping and restarts itself with `--experimental-strip-types` when the Node it is started with has none. `package.json` still says
+  Node 20.19 for the app, which is correct for everything else. It also cannot run in CI, because `private-data/` is not in git.
 - **One case name in the work list had no PDF** (806 of 807 were assigned). Production shows 872 solutions for 872 cases, so it may have
   been a duplicate, but which entry it was has not been checked.
 - **Generic case names can merge different cases** into one library entry (README line 356).
