@@ -14,9 +14,14 @@ survive only as a summary plus the owner's message log, so a few early technical
   combines Behavioral 1 and 2 (the template reads only 1); "past week" is the calendar week Mon-Sun (template: rolling 7.5 days).
   (README "How it maps to the MCG template".)
 - **Under two minutes to log a case; only title, case type and industry required.** Owner's "biggest requirement" in the first spec.
-- **Started local-only, then moved to Supabase.** The first spec said browser storage with JSON import/export and no backend or auth.
-  PR #2 moved storage to Supabase with email/password sign-in, and the multi-user expansion followed. Reason for the first switch is
-  not recorded in the conversation the assistant could see; the owner's next message was the multi-user spec.
+- **Started local-only, then moved to Supabase on the owner's instruction.** The first spec said browser storage with JSON
+  import/export and no backend or auth. Once the frontend existed, the owner created a Supabase project named `caselab`, and asked for
+  persistent storage and authentication "before we merge the application into `main` and deploy it to Vercel" (PR #2). The owner did not
+  prescribe a schema: "don't add unnecessary tables or fields just because they might be useful someday". The assistant's schema
+  choices: one `cases` row per case mirroring the form with only title, case type and date required; the eight skill ratings and
+  feedback in a single `skills` jsonb column (so adding a skill later needs no migration); an `opportunities` table for the hand-edited
+  lists; no other tables, with averages, coverage and trends computed in the browser so a personal dashboard cannot include other
+  members' rows; row-level security on `user_id = auth.uid()` with no anonymous access.
 - **From personal tracker to community platform, without rebuilding.** The owner asked that everyone keeps their own history and
   dashboard but can discover other students, with control over what is shared ("not restrict everyone to sharing case history alone").
   Existing functionality was to stay largely unchanged.
@@ -122,10 +127,26 @@ survive only as a summary plus the owner's message log, so a few early technical
   quiet on screen and specific in the function's reply.
 - **Model: Sonnet by default.** The owner asked about cost for 100 users once a day and whether Haiku was much worse; decided "sonnet
   for now and we will figure out the rest later". Estimate in README: about 3 cents per read.
-- **Owner asked to use their Claude Enterprise access instead of paying API fees.** The assistant explained options (including
-  identity federation, which the owner pasted from Anthropic's docs); the outcome was an `ANTHROPIC_API_KEY` secret on the Supabase
-  project, set by the owner. The exact reason the Enterprise-account route was not used is not recorded in what the assistant could
-  see.
+- **Members' requests are NOT routed through the owner's Claude Enterprise login (2026-11-09).** The owner asked to "mimic as if I
+  am using my Claude Enterprise account through my app" so they would not pay for the API. The assistant declined to build it: Anthropic's
+  terms do not let a personal or Enterprise seat power a product other people use (risking the account the owner's day-to-day work
+  depends on); it only works while a seat session is signed in and would hit the seat's limits; and it would send members' private
+  feedback through the Enterprise account, where workplace admins have visibility. The owner accepted ("ok let's do sonnet for now").
+  Result: `ANTHROPIC_API_KEY` is a Supabase secret created and set by the owner from the Anthropic Console, and Bucket is metered
+  there. Suggested safeguards (a monthly spend limit in the Console, optional per-member monthly read limits, checking whether the
+  Enterprise deal includes API credits) were offered; whether the owner set a spend limit is not known. The assistant also considered
+  **identity federation** (short-lived tokens instead of an API key; the owner pasted Anthropic's docs) and judged it a poor fit: it
+  replaces the key, not the bill, and Supabase Edge Functions cannot obtain an identity token to exchange; it might be possible if the
+  server code moved to Vercel (not verified). It is worth revisiting only if the server code moves or static keys become a concern.
+- **The Enterprise seat is used legitimately for one-off preparation work, not at runtime.** Reading casebooks and writing the analyses
+  and full solutions was done by the assistant in the owner's own sessions (with sub-agents), so it costs seat usage rather than API
+  fees. That is why the library campaign was paced around the 5-hour usage window. The assistant also cautioned that only our own
+  words and tags are stored, never case text, and that the owner should read their school's terms on sharing casebooks; whether the owner
+  did is not known.
+- **Haiku versus Sonnet for Bucket.** The assistant's cost estimates (its own, not measured): per typical read about 5.6 cents on Opus,
+  2.8 on Sonnet, 0.14 on Haiku; for 100 members reading daily roughly $28-42 a month on Sonnet and $1.50-2 on Haiku. It suggested
+  starting on Haiku and comparing real reads, but the owner chose Sonnet "for now" because specific advice is the whole value of
+  Bucket. The side-by-side comparison with Haiku was deferred until there are real reads and has not been run.
 - **Rules are deterministic code; the model only writes words.** Which stage a live case is in, clocks, hints, next exhibit, and what
   each reply may see are plain tested functions; a rating is kept only if the feedback quotes the member's own writing; behavioural
   skills are never rated from text.
@@ -169,13 +190,18 @@ survive only as a summary plus the owner's message log, so a few early technical
 
 (Built mostly in separate assistant sessions; the reasons below come from the README and PR titles, not from owner quotes the
 assistant saw. Treat as inferred.)
-- **Typed, timed, one continuous clock (35 min; 40 with more than four exhibits)**, with stages and protected thinking time that mimic
-  a real interview; the member drives, Bucket never speaks unprompted; hints answer what you write; Bucket leads after three stuck
-  messages; interviewer-only tables are hidden. (PR #69-#74.)
+- **Typed, timed, one continuous clock**, with stages and protected thinking time that mimic a real interview. The first version
+  (PR #69) was 30 minutes; after the first real run the owner asked for more time, giving 35 minutes (40 with more than four exhibits,
+  25 minutes for exhibits in that case) in PR #70. The member drives and Bucket never speaks unprompted; hints answer what you write;
+  Bucket leads after three stuck messages; interviewer-only tables are hidden. (PR #69-#74.) Each of PR #70, #74 came from a real play-through
+  (Phighting Phillies, Retire on the House) that exposed a defect; see KNOWN_ISSUES.md "Bugs fixed that could come back".
 - **Practice, Interview and Learning modes.** Practice can pause and end early; Interview cannot (server refuses both); Learning has no
   clock and Bucket coaches. The owner's last request was for an untimed learning option "along with the 2 options we already have, or
-  modify the one we have for pause so it looks like a practice version"; the building session chose a third mode (PR #79).
-  Reason for choosing a third mode over reworking pause: not recorded beyond the PR.
+  modify the one we have for pause so it looks like a practice version"; the building session chose a third mode (PR #79). Reason (from
+  the PR): reworking Practice would not make it untimed, because the whole case is clock-driven (stages end by themselves, hints and
+  moving on depend on the clock) and pause only freezes that clock; Practice members who want a timed run with breaks would lose it. A
+  separate mode keeps Practice and Interview exactly as they were. Learning forces ratings blank on the server whatever the model sends,
+  and Bucket never moves a stuck learner on by itself.
 - **Cost control.** Short replies on Haiku 5.5, one longer feedback call on Sonnet 5.5; usage kept per case; limits of 4 cases/day,
   12/week, 90 replies and 3 feedback attempts per case. (PR #71.)
 - **Only complete write-ups are offered** (confidence high with a prompt, a recommendation and exhibits or steps); partial ones are
@@ -197,3 +223,23 @@ assistant saw. Treat as inferred.)
   `approved` labels, boundaries, `claude/issue-<n>-<slug>` branches). The converted files are in `.claude/agents/pm.md` and
   `.claude/agents/developer.md`. The PM writes issues and PR verdicts; the developer works only on issues the owner has labelled
   `approved`; the PM may only edit PRODUCT.md, ROADMAP.md and DECISIONS.md.
+
+## Decisions whose reasons live only in the README (collected here so a new agent finds them)
+
+- **The library never shows a made-up "Other".** Cases listed only from a casebook's contents page carry `details_known = false`; picking one
+  fills only title, book and link, and the member chooses type and industry. The review screen never suggests changing a type or industry
+  to an unknown one.
+- **Matching a logged case to a library case is conservative.** The backfill links only when the name matches and the source names the book
+  (or another book the case is in); it changes nothing else about the case. Same name with a different or no book is only a "maybe"
+  because generic names are reused across books; maybes start unticked in the review screen.
+- **Unpracticed industries are shown in neutral grey on purpose**, since not having seen one yet is not a weakness; "Other" is never listed as
+  a coverage gap; exposure measures practice, not mastery.
+- **Advice stays silent without enough data**: suggestions, trends and skill rankings need minimum counts (for example a trend arrow needs
+  8 ratings, progress over time needs 10) so the app never claims what the data cannot support.
+- **Restore and replace write the new data first and remove leftovers second**, so a failure cannot leave a member with less than they
+  started with. Saving is honest: nothing shows as saved until Supabase confirms.
+- **Weeks start on Monday** (weekly goal, streak and quests), and a week still in progress never breaks a streak.
+- **Levels and quests are computed from the log, never stored**, so they cannot drift or be cheated; the one stored value is the optional
+  shared level badge, which a database check forces empty when sharing is off.
+- **Messages are polled, not pushed**, and tables are never added to a Realtime publication, because Realtime does not apply column-level
+  privileges.

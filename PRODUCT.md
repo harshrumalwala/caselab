@@ -72,7 +72,7 @@ assistant has no evidence it was checked by hand in production.
 | Public front page with visitor directory, recent casers, hero loop, Meet Bucket section | done | Headline currently "Case with Bucket. Track your progress." |
 | Community: Members, Find a case, Inbox | done | Five top-level tabs after merging People and Messages into Community. |
 | Practice requests; private messages; block/report/mute/archive | done | Messages poll every 5 s (not live push); not end-to-end encrypted; reports have no in-app admin. |
-| Email notifications for "asked you to case" and "said yes" | done / partly not verified | Resend sender; a one-time marker per request. The owner verified sign-up emails; the "said yes" email path was noted as a user-side check still open. |
+| Email notifications for "asked you to case" and "said yes" | done / partly not verified | Resend sender; a one-time marker per request. The owner verified the sign-up emails; the "said yes" email path was left as a user-side check, and whether the "asked you" email was checked is not known. |
 | Burned books and burned cases (solo practice that does not count) | done | Advice only (changes what "find a case" suggests). Optional visibility to visitors. |
 | Interviewed cases (cases you ran as interviewer) | done | Separate table; never counted; optional sharing to members of the case list only. |
 | Excel import, Excel export (real MCG workbook), JSON backup, CSV | done | |

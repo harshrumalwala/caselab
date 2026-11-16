@@ -130,3 +130,61 @@ assistant's scratch folder, not in the repo (see KNOWN_ISSUES). Afterwards verif
    and cascades the rest.
 10. The weekly goal, levels and quests are computed from the log, not stored (the only stored level is the optional `profiles.level`
     badge, which is cleared when the share switch is off).
+
+## The owner's "never" list (collected from the conversation)
+
+Each of these came from something the owner said or a mistake that happened.
+- Never reproduce, host or ship a casebook's text, pages or images; the solution is our own words, our own tables, our own charts. Part A
+  stays exactly the book's meaning, order and numbers (rewording is fine), with nothing of ours added to it ("stick to what's in the
+  book and don't add too much fluff").
+- Never add notes about slips or inconsistencies in the book. Printed numbers that do not reconcile are reproduced as printed.
+- Never add a derived exhibit or extra column to a book exhibit; only the book's own exhibits, laid out as printed.
+- Never ask more than 4-5 clarifying questions in a solution; frameworks are the book's first-level buckets with second-level points.
+- Never let anything we add look like the book: it is purple, labelled as Bucket's tips (not "Ours"), with a separate "top 3 takeaways".
+- Never invent a verdict. If the book gives no recommendation, the recommendation field says so plainly (the loader refuses an empty one).
+- Never count burned cases (solo practice) or interviewed cases in totals, ratings, coverage, XP or the weekly goal.
+- Never show another member's email, and never add security options or layers to name suggestions ("let's be simple").
+- Never name Claude or Anthropic on screen; Bucket is the coach and the screens only say "AI".
+- Never send a case title, practice partner, source, other notes or anything about another member to the model for Bucket reads.
+- Never route members' requests through the owner's personal or Enterprise Claude login (against Anthropic's terms, fragile, and exposes
+  members' feedback to workplace admins). The Anthropic key is a server-side secret only.
+- Never enable CAPTCHA in Supabase before the app sends the token (sign-up would fail), and never add tables to a Realtime publication
+  (Realtime ignores column-level privileges).
+- Never apply SQL by pasting it into the Supabase editor as well as `db push` (the migration history would disagree and the GitHub
+  integration would try to re-run it). Never edit an applied migration.
+- Never stop mid-task to ask whether to continue, and never make the owner ask for status. But **never report something as launched or
+  done without checking it**: once a sub-agent launch silently failed at the concurrency cap and the assistant said it was running; the
+  owner had to ask "isn't this done yet". Check the launch result and the output files, then report.
+- Never present a guess as fact. Say "not verified" or "I'm not sure".
+
+## Setup that is not obvious
+
+- **Supabase** (project named `caselab`, linked to the owner's GitHub): `npx supabase login`, then `npx supabase link --project-ref <ref>`
+  (asks for the database password). Auth needs Confirm email ON, Site URL and Redirect URLs set to the Vercel address and
+  `http://localhost:5173/**`, and a **custom SMTP sender** (Resend, with the sending domain's DNS records verified): without it
+  classmates never get the verification email because Supabase's built-in sender only reaches the project team. The owner checked the sign-up email flow end to
+  end ("perfect the flow works"); the status of the request-notification emails is in KNOWN_ISSUES.md.
+- **Secrets live in Supabase, not in Vercel or `.env`**: `ANTHROPIC_API_KEY` (created by the owner in the Anthropic Console),
+  optionally `ANTHROPIC_MODEL`, `ANTHROPIC_COACH_MODEL`, `ANTHROPIC_FEEDBACK_MODEL`, and `RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL` for
+  notify-request. Vercel only gets the two public `VITE_` values. The README's order for a new project is: set the secrets, then deploy
+  the function.
+- **Edge Function code does not ship with the web app.** Merging a PR deploys the website (Vercel) but not the functions. Any change
+  to `supabase/functions/**` (live-case prompts, validation, modes) takes effect only after `npx supabase functions deploy <name>`,
+  which needs owner approval. Live-case sessions already started keep their old plan, so test with a new case. The PRs for live-case
+  changes (#74, #76, #79) each said this; for #79 the deployed function rejects `learning` until redeployed.
+- **Vercel**: import the GitHub repo, framework Vite, defaults for build and output, two public env vars for Production and Preview.
+  The owner had trouble at first seeing their repos in Vercel (not recorded how it was fixed) and renamed the auto-generated address to
+  `caselab-booth.vercel.app` (the first attempt said "can't find domain"; it works now).
+- **Live checks need throwaway accounts**: create two users in Supabase dashboard → Authentication → Users → Add user with Auto Confirm
+  ticked, then put `CASELAB_E2E_EMAIL_A`, `CASELAB_E2E_PASSWORD_A`, `CASELAB_E2E_EMAIL_B`, `CASELAB_E2E_PASSWORD_B` (and optionally
+  `CASELAB_E2E_EMAIL` / `CASELAB_E2E_PASSWORD` for the owner's own account) in git-ignored `.env.e2e.local`. If anyone signs in to the real
+  app with them, untick "Let other members find me by name".
+- **Windows quirks**: PowerShell blocks `npm.ps1` by default (use `cmd.exe` or relax the policy); Python on this machine defaults to a
+  legacy console encoding, so always pass `encoding="utf-8"` when reading or writing files and set `PYTHONIOENCODING=utf8` when printing
+  non-ASCII (a `UnicodeEncodeError` on `→` happened more than once). Git warns "LF will be replaced by CRLF" on new files; harmless.
+- **The casebook PDFs** the solutions were written from came from the owner's Google Drive zips (`drive-download-*.zip` in their
+  Downloads folder, extracted into the assistant's scratch folder; a few books are scans with no text layer and some are
+  password-protected). They are not in the repo. The overlap checker needs `pdftotext` (poppler) and the page renders use PyMuPDF.
+- **When fanning out sub-agents** (as the library campaign did): no more than 20 run at once, and a launch beyond the cap fails silently;
+  a reader that "stalled" or died on an API error may still have written all its files, or may have left a partial file without the
+  `analysis` block, so inspect the outputs before relaunching and always check every job has outputs before assembling.

@@ -53,3 +53,14 @@ or **Assistant** (a logical next step the assistant noticed; the owner has not a
 | R28 | Read back real live-case costs and compare with the README estimate (under 10 cents a case; about 3 cents per Bucket read) | Assistant | Usage is stored per case but no one has reported reading it. |
 | R29 | Review the sticker icons and symbols | Owner asked on 2026-11-02 "did we use correct symbols/icons for all the stickers or is there something we could do better?" | The assistant's answer and any change are not recorded in what it could see; unsure whether anything changed. |
 | R30 | Untracked `tsconfig.tsbuildinfo` is showing in `git status` | Assistant | Either ignore or stop generating it. |
+
+## Added after re-reading the docs (all proposed; none requested unless the source says so)
+
+| # | Item | Source | Notes |
+|---|---|---|---|
+| R31 | Compare Bucket reads on Haiku 5.5 and Sonnet 5.5 side by side using real feedback, then decide the default | Owner discussion 2026-11-09 (the assistant offered to write the script; the owner chose Sonnet "for now") | Estimated cost on Haiku is about 20 times lower. Not run. |
+| R32 | An optional per-member monthly limit on Bucket reads, shown on the card ("3 coaching reads left this month") | Assistant, offered to the owner 2026-11-09; no decision recorded | A cost cap that does not depend on the Console spend limit. |
+| R33 | Confirm a monthly spend limit is set in the Anthropic Console | Assistant, recommended 2026-11-09 | Owner action; whether it was done is not known. |
+| R34 | Check the Live case screens at phone width and add an end-to-end test that starts a case | Assistant (PR #70, #72, #79 each say phone width or the live path was not checked) | |
+| R35 | Read the school's terms on sharing casebooks | Assistant caution to the owner 2026-11-09 | Owner action; the library stores only our own write-ups. Outcome not known. |
+| R36 | Add an automated check that the deployed Edge Functions match the repo | Assistant | See KNOWN_ISSUES.md "Missing tests". |

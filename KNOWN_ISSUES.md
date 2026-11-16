@@ -104,7 +104,7 @@ assistant saw a claim (for example a build session's report) but did not check i
 
 ## Unverified user-side checks left open
 
-- Whether the "someone said yes" notification email arrives (the "asked you" email path and sign-up email were checked by the owner).
+- Whether the "someone said yes" notification email arrives (the owner confirmed the sign-up email flow; whether the "asked you" request email was checked is not known).
 - The first real Bucket read on the owner's own feedback (needs written feedback on at least three of their cases).
 - Whether Learning mode works end to end on the live site (see above).
 
@@ -119,3 +119,57 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **The developer file tells the developer to run "the lint command from CLAUDE.md"**, but there is no lint command (see Tests and CI).
 - **Where the agents would find these documents**: `PRODUCT.md`, `ROADMAP.md`, `DECISIONS.md`, `KNOWN_ISSUES.md` and `CLAUDE.md` were
   created at the repo root on 2026-11-15 and are not yet committed.
+
+## Bugs fixed that could come back
+
+Each was found by a real play-through or a visual check and fixed; the risk is that a later change reintroduces it.
+- **Live case showed the interviewer's sheet as an exhibit** (PR #70, first real run, "Phighting Phillies"): a table titled
+  "Current Revenues and Costs (1 of 2): Revenues" was the interviewer's private sheet. Detection now also reads captions, headings and cells
+  ("Keep Private", "interviewee", "the book's solution page", "(Answer ...)"). Risk: a new write-up whose interviewer sheet uses other
+  wording will leak to the screen; the opposite error (hiding a candidate exhibit) was judged the safer way to be wrong. Files:
+  `supabase/functions/_shared/liveCase.ts` and the live-case tests.
+- **Live case hid the only candidate exhibit** (PR #74, "Retire on the House", Fuqua 2018): "Exhibit #1: Current solutions for retirees" was
+  hidden because its title contains "solutions". Now "solutions" hides a table only when it is the book's answer. Same files.
+- **Hints arrived unprompted** (PR #70) and **Bucket answered "show me the data" with "what do you think?"** (PR #74). Bucket now speaks only
+  after the member writes, and on the third stuck message it leads and reads out the data (never the conclusion).
+- **The exhibit scrolled out of reach** (PR #70): it is now sticky beside the conversation. Its own PR said it was not checked at phone
+  width; the Bucket/lane screens of PR #72 also say phone width was not checked. Not verified since.
+- **Haiku replies in Live case may be weaker than Sonnet's** at judging whether a member is stuck and staying in character (PR #71 asks
+  to watch for it). If replies degrade, set the `ANTHROPIC_COACH_MODEL` secret to `claude-sonnet-5-5` (no code change) and compare.
+- **Bucket's first live run was rejected by the API because of the structured-output format** (README: "this is how a rejected answer format
+  was found on the first live run"). Fixed. A change to the answer schema or prompt in `supabase/functions/_shared/feedbackInsights.ts` or
+  `caseComparison.ts` should be run once against the real API (the unit tests use a fake model).
+- **Parser truncation** cut Copier Co. (48 points), Sunshine Power (61 months) and Circle Bubble (40 rows) until the caps rose to 70 (PR #68).
+  Regression tests are in `src/BookSolution.test.tsx` and `src/features/caselog/ExhibitChart.test.tsx`.
+- **Chart renderer defects** fixed in PR #68 and PR #77: a line over a stack was stacked as a segment; monthly axis labels overlapped;
+  scatter points were labelled "Contract N" and cluttered; long end-of-line labels and footnotes were clipped; sideways-bar category names
+  were clipped on the left; clustered bars had no key; a crowded scatter x axis overlapped. All have unit tests in `ExhibitChart.test.tsx`.
+- **A chart with a single unlabelled bar disappeared** (Burns Exhibits 2-4, LabCo Exhibit 3): the parser drops empty-string categories,
+  so the whole chart was discarded. Give each such bar a short non-empty label.
+- **Over-copied write-ups**: three cases (Mobilizing Your World and Mission Eternity at about 11% and 9%, and Digital Expansion / Prescott
+  Publishing, whose figure was not recorded) first shared too many seven-word runs with the book; the checker flagged them and the readers
+  reworded them to about 1% or less. Anything above about 8% should
+  be sent back to be reworded.
+- **A stalled or filtered sub-agent run** (stream watchdog, or "output blocked by content filtering policy") several times left complete
+  files and once left a partial one (HVAC Service Provider had no `analysis` block and was missing two exhibits). Always validate files, not reports.
+- **The library seed returned HTTP 413** when loaded whole; it must be split (see above).
+- **The level was invisible to other members** because the share switch started off; it is now on by default (PR #54, #55), and a migration
+  switched existing profiles on.
+- **The first-login tour's highlight box overlapped the buttons** and the Warm-up and weekly-goal cards were visually broken after a
+  restyle (owner reports, 2026-10-31); fixes followed in later PRs (not individually traced here). The tour ring is tested to follow a button that
+  moves.
+- **The Excel import call to action was shown twice back to back on the front page** ("now we are doing track with excel twice"); fixed
+  by giving it one section (PR #9). Watch for repeated calls to action when editing `src/features/public/PublicSite.tsx`.
+
+## Missing tests
+
+- **No end-to-end coverage of Live case** (PR #79 says so: "E2E untouched (no live case coverage there)"). The live-case logic, handler and
+  screens are covered by unit tests with a fake model and an in-memory backend, and `live_case_sessions` by PGlite tests, but nothing in
+  `e2e/` starts a case against the real function. The Learning-mode screen was not exercised in a browser by its author.
+- **No test calls a real model.** Prompts and answer schemas for Bucket, Compare and Live case are tested against fakes, which is how the
+  first live Bucket run found a rejected format. Run a real call after changing a prompt or schema.
+- **`e2e/deployed.e2e.test.ts` checks the database** (tables, columns, functions with the right arguments) **but not that the Edge Functions
+  are deployed at the current version**; a merged function change that was never deployed (see CLAUDE.md) would not be caught.
+- **No visual or snapshot tests** for charts or screens; charts were checked by eye from rendered SVGs.
+- **Content is validated by scripts outside the repo**, not by tests: the solution parser (`src/domain/bookSolution.ts`) is tested, but
+  whether a write-up is faithful to its book is not.
