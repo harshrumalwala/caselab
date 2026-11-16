@@ -106,7 +106,7 @@ function Start({ s }: { s: LiveSession }) {
             [
               ['learning', 'Learning', 'No clock at all. Bucket coaches as you go: hints, why each step matters, what a strong answer looks like. Nothing is scored.'],
               ['practice', 'Practice', 'Timed, but you can pause and pick up again, or end the case early and still get feedback.'],
-              ['interview', 'Interview', 'The clock never stops and there is no pause and no early end. As close to the real thing as it gets.'],
+              ['interview', 'Interview', 'The clock never stops, there is no pause and no early end, and Bucket nudges but never leads: if you are stuck, the case moves on. As close to the real thing as it gets.'],
             ] as const
           ).map(([id, title, text]) => (
             <button

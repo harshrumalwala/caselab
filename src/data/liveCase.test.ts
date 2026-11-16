@@ -19,6 +19,7 @@ import {
   PLANNED_MS,
   ready,
   recordAssessment,
+  recordDataRequest,
   recordHint,
   saveDraft,
   saveScratchpad,
@@ -29,6 +30,8 @@ import {
   WRITING_GRACE_MS,
   type ActionResult,
   type CasePlan,
+  type LiveMode,
+  type NudgeLevel,
   type SessionState,
 } from '../../supabase/functions/_shared/liveCase';
 
@@ -402,6 +405,22 @@ describe('the exhibit discussion', () => {
     expect(nudgeLevel(s, t + sec(30))).toBe('directional_hint'); // the count started again
   });
 
+  it('does not count a message that asked for data: asking well is part of the case and costs no rung', () => {
+    let s = inExhibits(3);
+    const t = openBeat(s)!.revealedAt;
+    s = ok(userSays(s, 'Can I see the cost base?', t + sec(5)));
+    s = recordAssessment(s, 'unclear', t + sec(5));
+    s = recordDataRequest(s); // the model says that message asked for data, so it is taken back off the count
+    expect(openBeat(s)!.asked).toBe(0);
+    expect(nudgeLevel(s, t + sec(10))).toBe('process_hint'); // still the first rung: the same as if they had not asked
+    s = ok(userSays(s, 'And the volumes?', t + sec(15)));
+    s = recordDataRequest(s);
+    expect(nudgeLevel(s, t + sec(20))).toBe('process_hint');
+    s = ok(userSays(s, 'I am not sure what to do with that', t + sec(25)));
+    expect(nudgeLevel(s, t + sec(30))).toBe('directional_hint'); // only the message that did not ask for anything moved them up
+    expect(recordDataRequest(inExhibits(3)).beats[0].asked).toBe(0); // never below zero
+  });
+
   it('sizes the case by how much there is to work through: four minutes a beat on top of four to settle in, never past 25 in 40', () => {
     expect(minutes(1)).toEqual([8, 23]);
     expect(minutes(2)).toEqual([12, 27]);
@@ -670,5 +689,74 @@ describe('learning mode: no clock', () => {
     // the same stuck student in practice mode is moved on once far behind
     const p = toExhibits(plan(3), 200);
     expect(nudgeLevel({ ...p, beats: [{ ...openBeat(p)!, asked: 6 }] }, at(10_000))).toBe('advance');
+  });
+});
+
+describe('the help ladder, mode by mode', () => {
+  /** A session on its first exhibit in the given mode, got there the quick way. */
+  const onExhibit = (mode: LiveMode): SessionState => {
+    let s = newSession(plan(3), T0, 'Prompt text', mode);
+    s = ok(ready(s, at(100)));
+    s = ok(ready(s, at(100)));
+    s = ok(submit(s, 'My framework', at(100)));
+    s = ok(userSays(s, 'I would start with demand', at(100)));
+    return endFrameworkStage(s, at(100));
+  };
+
+  /** What the member's 1st, 2nd, 3rd ... message on a beat that is going nowhere is answered with, while the beat is still inside its time. */
+  const rungs = (mode: LiveMode, count = 6): NudgeLevel[] => {
+    const s = onExhibit(mode);
+    const b = openBeat(s)!;
+    return Array.from({ length: count }, (_, asked) => nudgeLevel({ ...s, beats: [{ ...b, asked }] }, b.revealedAt + sec(30)));
+  };
+
+  it('teaches in practice: a process hint from the first message, then a sharper one, then Bucket leads, then it moves on', () => {
+    expect(rungs('practice')).toEqual(['process_hint', 'directional_hint', 'lead', 'advance', 'advance', 'advance']);
+  });
+
+  it('starts one rung later in an interview, and never leads: the first message gets nothing and being stuck costs the beat', () => {
+    expect(rungs('interview')).toEqual(['none', 'process_hint', 'directional_hint', 'advance', 'advance', 'advance']);
+    expect(rungs('interview', 12)).not.toContain('lead');
+  });
+
+  it('keeps teaching in learning mode and never moves the member on', () => {
+    expect(rungs('learning')).toEqual(['process_hint', 'directional_hint', 'lead', 'lead', 'lead', 'lead']);
+  });
+
+  it('counts the hints given as well as the messages that got nowhere, in every mode', () => {
+    for (const [mode, expected] of [['practice', 'lead'], ['interview', 'directional_hint'], ['learning', 'lead']] as const) {
+      const s = onExhibit(mode);
+      const b = openBeat(s)!;
+      expect(nudgeLevel({ ...s, beats: [{ ...b, hints: 2, asked: 0 }] }, b.revealedAt + sec(30)), mode).toBe(expected);
+    }
+  });
+
+  it('skips the last rung of help once a timed exhibit has run past what it is worth, in practice and in an interview alike', () => {
+    for (const mode of ['practice', 'interview'] as const) {
+      const s = onExhibit(mode);
+      const b = openBeat(s)!;
+      const late = b.revealedAt + b.budgetMs + sec(1);
+      expect(nudgeLevel({ ...s, beats: [{ ...b, asked: 2 }] }, late), mode).toBe('advance');
+      expect(nudgeLevel({ ...s, beats: [{ ...b, asked: 1 }] }, late), mode).toBe(mode === 'practice' ? 'directional_hint' : 'process_hint');
+    }
+    // learning has no clock, so there is no such thing as behind schedule and nothing ever moves the learner on
+    const l = onExhibit('learning');
+    const lb = openBeat(l)!;
+    expect(nudgeLevel({ ...l, beats: [{ ...lb, asked: 5 }] }, lb.revealedAt + lb.budgetMs + sec(10_000))).toBe('lead');
+  });
+
+  it('says nothing to the clock, in any mode: help only ever answers something the member wrote', () => {
+    for (const mode of ['practice', 'interview', 'learning'] as const) {
+      const s = onExhibit(mode);
+      const b = openBeat(s)!;
+      for (const asked of [0, 1, 2, 5]) expect(nudgeLevel({ ...s, beats: [{ ...b, asked }] }, b.revealedAt + sec(600), 'timer'), mode).toBe('none');
+    }
+  });
+
+  it('treats a case saved before there were modes as practice', () => {
+    const s = onExhibit('practice');
+    const b = openBeat(s)!;
+    const old: SessionState = { ...s, mode: undefined, beats: [{ ...b, asked: 2 }] };
+    expect(nudgeLevel(old, b.revealedAt + sec(30))).toBe('lead');
   });
 });

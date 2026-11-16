@@ -791,6 +791,79 @@ describe('the member drives', () => {
   });
 });
 
+describe('interview mode: nudged, never rescued', () => {
+  /** The opening stages done quickly in the chosen mode: the id of a session on its first exhibit. */
+  async function toExhibitsIn(mode: 'practice' | 'interview', userId = ME): Promise<string> {
+    const id = view(await call({ type: 'start', libraryId: LIB, mode }, userId)).sessionId;
+    await call({ type: 'ready', sessionId: id }, userId);
+    await call({ type: 'ready', sessionId: id }, userId);
+    await call({ type: 'submit', sessionId: id, text: 'Demand, supply, cost' }, userId);
+    w.script.reply = () => turn('Good start, let us look at the data.', { direction_clear: true, assessment: 'progress' });
+    expect(view(await call({ type: 'say', sessionId: id, text: 'I would start with demand' }, userId)).stage).toBe('exhibits');
+    w.asked.length = 0;
+    return id;
+  }
+  /** What the model was last told to do. */
+  const told = () => JSON.stringify(w.asked.at(-1));
+  const everTold = () => w.asked.map((a) => JSON.stringify(a)).join('\n');
+  const beat = (id: string) => w.db.get(id)!.state.beats[0];
+
+  it('leaves a candidate who is getting on with it alone: the first message on an exhibit carries no hint directive, where practice offers one', async () => {
+    const interview = await toExhibitsIn('interview');
+    w.script.reply = () => turn('Noted. What would you do with that?', { assessment: 'progress' });
+    await call({ type: 'say', sessionId: interview, text: 'Off-peak is 31 percent against 95 at peak' });
+    expect(told()).not.toContain('has been stuck for a while');
+    expect(told()).toContain('is working on the exhibit'); // the ordinary reply, and nothing more
+
+    const practice = await toExhibitsIn('practice', 'user-two');
+    await call({ type: 'say', sessionId: practice, text: 'Off-peak is 31 percent against 95 at peak' }, 'user-two');
+    expect(told()).toContain('ONE brief process-oriented hint'); // unchanged: practice offers it from the first message
+  });
+
+  it('gives a stuck candidate nothing, then a process nudge, then a directional one, then the next exhibit, and never leads them', async () => {
+    const id = await toExhibitsIn('interview');
+    w.script.reply = () => turn('Keep going.', { assessment: 'stuck' });
+
+    let r = view(await call({ type: 'say', sessionId: id, text: 'I am not sure' }));
+    expect(told()).not.toContain('has been stuck for a while'); // a real interviewer lets them sit with it
+    expect(r.messages.at(-1)!.kind).not.toBe('hint');
+    expect(beat(id).hints).toBe(0);
+
+    r = view(await call({ type: 'say', sessionId: id, text: 'Still not sure' }));
+    expect(told()).toContain('ONE brief process-oriented hint');
+    expect(r.messages.at(-1)!.kind).toBe('hint');
+
+    r = view(await call({ type: 'say', sessionId: id, text: 'Hmm' }));
+    expect(told()).toContain('more specific directional hint about where to look');
+
+    r = view(await call({ type: 'say', sessionId: id, text: 'I really do not know' }));
+    expect(told()).toContain('do NOT explain, solve or summarise'); // one neutral sentence, and on to the next piece
+    expect(r.exhibits).toHaveLength(2);
+    expect(beat(id).outcome).toBe('coach_moved');
+    expect(everTold()).not.toContain('stop asking open questions'); // the rung that rescues is not in an interview at all
+  });
+
+  it('does not count a request for data against the member, in an interview or in practice', async () => {
+    const id = await toExhibitsIn('interview');
+    w.script.reply = () => turn('The army pays a fixed per diem per soldier.', { assessment: 'unclear', data_request: true });
+    for (const text of ['What is the cost base?', 'And how many rooms?', 'What does the army pay?']) await call({ type: 'say', sessionId: id, text });
+    expect(beat(id).asked).toBe(0); // three asks, and they are still on the first rung
+    expect(beat(id).hints).toBe(0);
+    expect(told()).not.toContain('has been stuck for a while');
+
+    const practice = await toExhibitsIn('practice', 'user-two');
+    for (const text of ['What is the cost base?', 'And how many rooms?']) await call({ type: 'say', sessionId: practice, text }, 'user-two');
+    expect(w.db.get(practice)!.state.beats[0].asked).toBe(0);
+    expect(told()).not.toContain('stop asking open questions');
+    expect(told()).toContain('ONE brief process-oriented hint'); // practice still starts at the first rung, where it always did
+  });
+
+  it('reads the flag from the model, and treats a reply that does not send one as an ordinary message', () => {
+    expect(parseTurn(JSON.stringify(turn('Here are the figures.', { data_request: true })), [])!.dataRequest).toBe(true);
+    expect(parseTurn(JSON.stringify(turn('Keep going.')), [])!.dataRequest).toBe(false);
+  });
+});
+
 describe('hints that nobody asked for', () => {
   it('never come while the member is still reading or typing', async () => {
     const id = await toExhibits();
