@@ -64,3 +64,24 @@ or **Assistant** (a logical next step the assistant noticed; the owner has not a
 | R34 | Check the Live case screens at phone width and add an end-to-end test that starts a case | Assistant (PR #70, #72, #79 each say phone width or the live path was not checked) | |
 | R35 | Read the school's terms on sharing casebooks | Assistant caution to the owner 2026-11-09 | Owner action; the library stores only our own write-ups. Outcome not known. |
 | R36 | Add an automated check that the deployed Edge Functions match the repo | Assistant | See KNOWN_ISSUES.md "Missing tests". |
+
+## Live-case exhibit audit (2026-11-15): now tracked as GitHub issues
+
+The owner asked for a review of every exhibit for live-case suitability. The PM agent measured all 872 write-ups against the
+production rules; the findings and the reasoning are in DECISIONS.md under "Live-case exhibit audit". These replace vague roadmap
+entries with issues, in the order they should be done.
+
+| Issue | Item | Status | Needs |
+|---|---|---|---|
+| #81 | Live case never draws a chart (`ExhibitView` calls `parseBookSolution` without a recommendation or steps, so it always returns `null`); 450 candidate exhibits carry a drawable chart | `approved` | App only; Vercel deploys on merge |
+| #82 | Time the case to how much it has in it; 172 of 847 cases have one beat but a 20-minute exhibit stage | `approved` | `functions deploy live-case` |
+| #83 | The interviewer's data is unreachable outside an open exhibit beat, and only 2 of 369 hidden tables are classed as data to hand over | `approved` | `functions deploy live-case` |
+| #84 | A repeatable live-case suitability report that imports the real production rules (partly covers R21) | `approved` | Script only |
+| #85 | Numbered book exhibits hidden by a single soft word (`expected`, `calculation`, `math`, `sample`, `approach`, `answer`); 103 exhibits affected | `approved` | `functions deploy live-case` |
+| #86 | A switch to take one case out of live practice | `proposed` — **waiting on the owner** | A migration; deliberately sequenced last, and may prove unnecessary |
+| #87 | Say which cases have no exhibits before the member picks one; 285 of 847 are conversation-only | `proposed` | May need a migration; sequence after #85 |
+
+Related existing entries: **R15** (chart kinds we cannot draw) is unaffected — chart coverage measured good, and the live-case
+problem was rendering, not coverage. **R34** (check live case at phone width, add an end-to-end test that starts a case) is still
+open and still unverified; #81 adds unit coverage but nothing in `e2e/` starts a live case. **R20** (offer partial write-ups in
+Learning mode) is unchanged; the 25 partial write-ups stay excluded.

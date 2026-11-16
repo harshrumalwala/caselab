@@ -209,6 +209,87 @@ assistant saw. Treat as inferred.)
 - **Pick a lane** (case type or industry) instead of one long list (PR #72). **Own tab**, Dashboard banner, tour stop, front-page
   "Meet Bucket" (PR #73).
 
+## Live-case exhibit audit (2026-11-15)
+
+The owner asked for a review of every exhibit chart for live-case suitability, saying live case "seems to work on very limited cases",
+that the hinting "might not work out best", that the case "might not end as we expect", and asking whether an interviewer-only table is
+explained in words while a candidate exhibit is shown in full. The PM agent measured all 872 write-ups in `private-data/solutions/`
+against the production rules (`isInterviewerSideExhibit` and `buildPlan` in `supabase/functions/_shared/liveCase.ts`, `readSolution`
+and `isFullSolution` in `liveCaseCoach.ts`, `parseBookSolution` in `src/domain/bookSolution.ts`). Issues #81-#87 came out of it.
+
+- **The catalogue is not the constraint; quality within it is.** 847 of 872 cases are already live-eligible (25 are `partial` and
+  correctly excluded). So the owner's "works on very limited cases" is not about how many cases are offered. Recorded because it
+  reverses the obvious fix: **hiding cases makes an adequate catalogue smaller without making any case better.** Hiding is the last
+  lever, not the first. The order agreed: fix the defects (#81, #82, #83, #85), re-run the audit (#84), and build the hide switch (#86)
+  only for whatever genuinely remains — possibly nothing.
+- **Charts were never the problem; rendering them was.** 450 of the 1,383 candidate-facing exhibits carry a chart of a kind we draw,
+  and only about 10 of the book's bar, line and pie exhibits lack one, so chart coverage is good. But `ExhibitView` in
+  `src/features/live/liveParts.tsx` calls `parseBookSolution` with no `recommendation` and no `steps`, and that parser's final guard
+  returns `null` without them — so in a live case **no chart has ever been drawn** and every exhibit appears as a bare table (#81).
+  Recorded because the owner's premise was that some charts are unsuitable for live case; the measurement says the opposite.
+- **An interviewer-only table is not described in words today, and that is only half wrong.** Such a table is dropped from the plan
+  and never mentioned. The right split is not "describe them all": many are literally the answer key and must stay invisible and
+  undescribed. The rule is **the book's working and answers stay private; data the interviewer hands over when asked must be readable
+  out in full, in words, at any point in the case.** That split exists in code (`reference` vs `onRequest`) but catches only 2 of 369
+  tables, and neither kind is reachable outside an open exhibit beat, so a member asking for a number during clarifying questions is
+  told we do not have it (#83).
+- **"Hidden from live case" means invisible, not explained.** A hidden case simply does not appear in the live catalogue and is never
+  picked by "Surprise me". No greyed-out row, no badge, no reason on screen: the reason is our own data quality, not something the
+  member needs, and explaining it case by case would invite a question we do not want. Hiding is live-case-only — the case keeps its
+  library entry, Full solution, "cases to try next" and weekly-plan slots — a member already in a session finishes it, and every hidden
+  case stores a written reason so the list does not become a graveyard (#86).
+- **Conversation-only cases are labelled, not removed.** 285 of the 847 eligible cases (34%) have no candidate-facing exhibit and run
+  entirely on the book's steps with nothing on screen. That is a legitimate case (market sizing and judgement cases really do run that
+  way), and several are the library's best quant practice, so removing them would be wrong. The member should be told before they pick,
+  rather than discovering it (#87).
+- **"Safer to hide" stays the default, with one exemption.** The recorded trade from PR #70 — hiding a candidate exhibit is the safer
+  way to be wrong than leaking the interviewer's sheet — stands. But six soft words (`expected`, `calculation`, `math`, `sample`,
+  `approach`, `answer`) hide 103 exhibits on their own, including titles the book numbers for the candidate, which costs a whole beat
+  each and is a direct cause of the one-beat cases. A numbered book exhibit should not be hidden by a soft word alone, only by a hard
+  marker (#85).
+- **Time should match how much the case has in it.** Every case is planned at 20 minutes of exhibits in 35 (25 in 40 above four beats),
+  but 172 of 847 cases (20%) have exactly one thing to work through. Nothing prompts a silent member (hints only answer what they
+  write, by design), so a one-beat case either ends far early or leaves the member alone with one exhibit for 20 minutes (#82).
+- **The audit must be a command, not a one-off.** The checkers that built the library live outside the repo and are already at risk
+  (KNOWN_ISSUES, ROADMAP R21). A suitability report that imports the real production rules rather than copying them is what makes
+  "flag the bad ones" repeatable and keeps the report from drifting from what the case will actually do (#84).
+
+### Decided 2026-11-15, after the audit: no hide switch (#86 closed), label the conversation-only cases (#87 approved)
+
+The audit's own recommendation was to hold #86 and #87 until #84 had been re-run after the defect fixes, so the owner would be asked
+for a migration only if the data still justified one. The owner was asked and chose **"decide now"** instead: make the call on the
+evidence in hand. Both were therefore settled on 2026-11-15 without waiting for the re-run. The owner's answer was about *when to
+decide*, not about migrations: `npx supabase db push` remains their call every time.
+
+- **#86, a switch to take one case out of live practice: closed, not planned.** The owner's original words were "flag those cases and
+  **maybe** we can just **temporarily** hide them". The flagging half is #84 and is being built; the hiding half was always conditional
+  on there being cases that cannot run, and there are none. 847 of 872 cases are live-eligible and the 25 that are not are `partial`
+  write-ups the existing rule already excludes. The audit found no unrunnable case — it found four defects in how every case runs.
+  Against an empty list, the cost is the largest in the batch: a migration the owner must apply, a `live-case` redeploy, a PGlite test
+  attacking the new rule from three directions, a test proving the SQL rule and `isFullSolution` cannot disagree, and a change to
+  `e2e/deployed.e2e.test.ts`. Asking the owner for a migration for a hypothetical is the wrong thing to ask them for.
+  **There is already an emergency exit**, recorded here so nobody rediscovers it under pressure: live eligibility is
+  `library_solution_is_full(jsonb)` reading the stored solution, so setting one row's `confidence` to `partial` removes that case from
+  the live catalogue at once — no code, no migration, no reseed — and leaves its Full solution, search, matching, cases-to-try and
+  weekly plan untouched, which is exactly the blast radius #86 specified. Its two flaws: it conflates "the book prints too little" with
+  "we chose to pull this one", so no reason is written down; and a seed reload puts the case back. Good enough for one case in an
+  emergency, which is all the evidence supports. **Reopen #86 if** the re-run of #84 flags more than one or two genuinely unrunnable
+  cases, or the owner wants a case pulled *with a recorded reason*, or several must be pulled at once. The product decisions inside the
+  issue (invisible to the member, live-case-only, a running session finishes, every hidden case carries a reason) are settled and stay
+  right; it is only the need that is missing.
+- **#87, say which cases have no exhibits before the member picks one: approved, queued after #85.** The two issues looked alike and
+  are not. #86 removes cases from a catalogue measurement says is fine; #87 tells the member something true about a third of it. 285 of
+  847 eligible cases run with nothing on screen, "Surprise me" picks one at random, and the picker says nothing, so a member who wanted
+  exhibit practice reads a conversation case as the product being broken. Labelling is the fix; removing is not (several of these are
+  the library's best market-sizing practice). The evidence does not depend on any defect fix landing.
+  **One constraint added to the issue:** prefer the path that needs no migration. Serving the signal from the `live-case` Edge Function
+  is first choice — it already runs `buildPlan` with the service role, so the signal comes from the real rule by construction and costs
+  a deploy rather than a migration. A stored value refreshed at library load is worse (a migration *and* freshness tied to a 13 MB
+  reseed). **Computing the beats in SQL is rejected on product grounds even though it is easiest**: it duplicates `buildPlan` in a
+  second language, which is the exact drift #84 exists to prevent. If the only good path turns out to need a migration, the developer
+  stops before applying it and writes the request up as one thing the owner can answer in a single read. Sequenced after #85 because
+  #85 moves some of the 39 all-interviewer-side cases back to the candidate, so the 285 will drop before this ships.
+
 ## Process decisions
 
 - **The owner approves every production action.** Migrations, library loads, function deploys and merges wait for an explicit "yes" or
@@ -223,6 +304,14 @@ assistant saw. Treat as inferred.)
   `approved` labels, boundaries, `claude/issue-<n>-<slug>` branches). The converted files are in `.claude/agents/pm.md` and
   `.claude/agents/developer.md`. The PM writes issues and PR verdicts; the developer works only on issues the owner has labelled
   `approved`; the PM may only edit PRODUCT.md, ROADMAP.md and DECISIONS.md.
+- **The PM's remit widened (2026-11-15), keeping three actions with the owner.** Owner: "give PM agent to spawn other agents, and let
+  PM merge it when it feels appropriate, don't need my permission for everything". The PM may now spawn the developer agent, label
+  issues `approved`, `gh pr merge` to `main`, and `npx supabase functions deploy <name>` — on conditions that CI is green, every
+  acceptance criterion is met and README is updated when behaviour changed; never merging on a failing or unfinished run, never
+  force-pushing, never deleting tests to get green. **Still the owner's call every time, ask and wait: applying migrations
+  (`supabase db push`), loading the library seed, changing Supabase secrets.** Why the split: merges and function deploys are
+  reversible and visible in the PR; a migration changes production data shape and the seed load is a 13 MB hand process, so both stay
+  with the person who owns the database. Note for anyone reading a PR from around this date: a merge no longer implies the owner saw it.
 
 ## Decisions whose reasons live only in the README (collected here so a new agent finds them)
 
