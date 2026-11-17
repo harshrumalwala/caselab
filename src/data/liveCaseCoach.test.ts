@@ -11,6 +11,7 @@ import {
   leaks,
   movingOnOnly,
   openingText,
+  saysMovingOn,
   sharesSubstance,
   statesHeldResult,
   withoutSourceNarration,
@@ -1054,6 +1055,54 @@ describe("Bucket's voice: the three tells the pilot found (issue #131)", () => {
   });
 });
 
+// Issue #156: the write-ups name the member too, because that is how an interviewer's note puts a condition on a fact — "given once
+// the candidate asks for it: ...". Measured over the 872 write-ups by putting every fact and clarifying answer through the real
+// filter: 286 of its sentences in 201 write-ups were dropped, 198 of them the whole of a fact or an answer, so a member who asked for
+// one of those figures was handed the stand-in line instead. The sentences below are those measured shapes, in this fixture's own case.
+describe('a fact that happens to mention the member still reaches them (issue #156)', () => {
+  const CONDITION_FIRST = 'Only if the candidate asks: the base houses 20,000 soldiers, and 400 of them travel each week.';
+  const HANDED_OVER = 'Running costs, given only once the candidate asks for them: $40,000 a month of fixed cost and $25 a room night.';
+  const IN_BRACKETS = 'The nightly rate is $120 (given when the candidate asks about pricing).';
+  const said = (r: LiveView): string => r.messages.at(-1)!.text;
+
+  it('tells a fact that names them apart from Bucket talking about them', () => {
+    // The member is in the condition on the fact, and the figures are the point of the sentence: it is read out as written.
+    for (const fact of [CONDITION_FIRST, HANDED_OVER, IN_BRACKETS]) {
+      expect(hasTell(fact), fact).toBe(false);
+      expect(interviewerVoice(fact), fact).toBe(fact);
+    }
+    // Bucket's own talk about them is still dropped, whether or not there is a figure in it: its own voice in the same breath, an
+    // instruction aimed at them, or nothing of the case in the sentence at all.
+    for (const tell of [
+      'The candidate has asked me for the per diem, so I will hold it back.',
+      'The candidate should start with the revenue side.',
+      'The candidate should see that off-peak occupancy of 31% is what decides this one.',
+      'The candidate needs to work out the cost per room night of $25 first.',
+      'The candidate is doing well on the cost side.',
+      'Exhibit 1 is handed over once the candidate asks about occupancy.', // a pointer to the page is not a figure of the case
+    ]) {
+      expect(hasTell(tell), tell).toBe(true);
+    }
+  });
+
+  it('reads the fact out to the member who asked for it, instead of the stand-in line', async () => {
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, facts: [...SOLUTION.facts, HANDED_OVER] } } : real(id));
+    const v = await begin();
+    w.script.reply = () => turn(HANDED_OVER, { assessment: 'progress', data_request: true });
+    const r = view(await call({ type: 'say', sessionId: v.sessionId, text: 'What are the running costs?' }));
+    expect(said(r)).not.toBe(FALLBACK);
+    expect(said(r)).toBe(HANDED_OVER); // the figures they asked for, word for word
+  });
+
+  it('still answers with the stand-in when the reply is only about the member', async () => {
+    const v = await begin();
+    w.script.reply = () => turn('The candidate should work this one out for themselves.', { assessment: 'unclear', data_request: true });
+    const r = view(await call({ type: 'say', sessionId: v.sessionId, text: 'What are the running costs?' }));
+    expect(said(r)).toBe(FALLBACK);
+  });
+});
+
 describe('an interview does not tell them whether they are right (issue #130)', () => {
   // The replies are the real-model pilot's own, quoted in the issue, so what these guard against is the register it really had.
   const CONFIRMS = "You're right that profit is flat while revenue and store count climb, which is the core signal. What do you think is driving that?";
@@ -1968,5 +2017,104 @@ describe('the model declines the turn itself (issue #142)', () => {
     expect(refusedTurn({ mode: 'practice' }).message).toBe(WORK_IS_YOURS);
     expect(refusedTurn({ mode: 'learning' }).message).toBe(WORK_IT_TOGETHER);
     expect(refusedTurn({}).message).toBe(WORK_IS_YOURS); // a session saved before modes existed is a timed one
+  });
+});
+
+// Issue #165: the interaction between #145's interview register and #136's move-on rule. At rung `advance` the move-on rule kept the
+// model's first sentence whatever it said; the interview branch then stripped it as a verdict, the reply went empty, and the guard
+// that stands in for an empty reply — which was not rung-aware — handed the member `OVER_TO_YOU` while `applyTurn` moved the case on.
+// The three inputs below are the reproductions recorded in the issue, run through the real `parseTurn`.
+describe('a move-on says the case is moving on, in every mode (issue #165)', () => {
+  const VERDICT_THEN_MOVE = "You're right that the margin is the issue. Let us move on to the next piece.";
+  const VERDICT_THEN_LATER = 'Good instinct. We will come back to that; let us move on.';
+  const JUST_THE_MOVE = 'Let us move on to the next piece.';
+  /** A turn the engine reads as the move-on: the rung that advances, no question answered and no beat finished. */
+  const movingTurn = (text: string) => JSON.stringify(turn(text, { assessment: 'stuck' }));
+  const atAdvance = (text: string, mode: 'practice' | 'interview' | 'learning', kind: 'exhibit' | 'direction' = 'exhibit') =>
+    parseTurn(movingTurn(text), [], FALLBACK, 700, 'advance', [], { mode, kind })!.message;
+
+  /** The opening stages done quickly in the chosen mode: the id of a session on its first exhibit. */
+  async function toExhibitsIn(mode: 'practice' | 'interview' | 'learning'): Promise<string> {
+    const id = view(await call({ type: 'start', libraryId: LIB, mode })).sessionId;
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'submit', sessionId: id, text: 'Demand, supply, cost' });
+    w.script.reply = () => turn('Good start, let us look at the data.', { direction_clear: true, assessment: 'progress' });
+    expect(view(await call({ type: 'say', sessionId: id, text: 'I would start with demand' })).stage).toBe('exhibits');
+    w.asked.length = 0;
+    return id;
+  }
+
+  it('turns the three reproductions into a line that moves the case on', () => {
+    // Was `OVER_TO_YOU` — "stay with it" on the very turn the part is taken away.
+    expect(atAdvance(VERDICT_THEN_MOVE, 'interview')).toBe(MOVING_ON);
+    expect(atAdvance(VERDICT_THEN_LATER, 'interview')).toBe(MOVING_ON);
+    // ...and the reply that was already right is untouched.
+    expect(atAdvance(JUST_THE_MOVE, 'interview')).toBe(JUST_THE_MOVE);
+    for (const text of [VERDICT_THEN_MOVE, VERDICT_THEN_LATER, JUST_THE_MOVE]) {
+      expect(atAdvance(text, 'interview'), text).not.toBe(OVER_TO_YOU);
+      expect(atAdvance(text, 'interview'), text).not.toBe('');
+      expect(saysMovingOn(atAdvance(text, 'interview')), text).toBe(true);
+    }
+  });
+
+  it('never leaves the member with a bare verdict in practice', () => {
+    // #136 as written kept the first sentence whatever it said, so this reached the member with no move-on in it at all.
+    expect(atAdvance(VERDICT_THEN_MOVE, 'practice')).toBe(MOVING_ON);
+    expect(atAdvance(VERDICT_THEN_LATER, 'practice')).toBe(MOVING_ON);
+    expect(atAdvance(JUST_THE_MOVE, 'practice')).toBe(JUST_THE_MOVE);
+    // Learning mode goes the same way, and so does the turn that hands the direction over (which never reaches this rung in
+    // production — `nudgeLevel` is `none` outside the exhibits stage — but the rule is the rule wherever it is asked).
+    expect(atAdvance(VERDICT_THEN_MOVE, 'learning')).toBe(MOVING_ON);
+    expect(atAdvance(VERDICT_THEN_MOVE, 'interview', 'direction')).toBe(MOVING_ON);
+  });
+
+  it('knows a sentence that moves the case on from one that does not', () => {
+    for (const sentence of [
+      'Let us move on to the next piece.',
+      "That's fine, we can move on.",
+      'Good — on to the next exhibit.',
+      'Let us park that and keep moving.',
+      'We will come back to that later.',
+      'Let us leave that there.',
+      'Time to take the next part.',
+    ]) {
+      expect(saysMovingOn(sentence), sentence).toBe(true);
+    }
+    for (const sentence of [
+      "You're right that the margin is the issue.",
+      'Good instinct.',
+      'What would you do with that?',
+      'Off-peak occupancy is 31% and peak is 95%.',
+      OVER_TO_YOU,
+      FALLBACK,
+    ]) {
+      expect(saysMovingOn(sentence), sentence).toBe(false);
+    }
+    expect(saysMovingOn(MOVING_ON)).toBe(true); // our own line is one, so the substitution satisfies the rule it enforces
+  });
+
+  it('still says nothing about the part it is leaving (issue #131)', () => {
+    const notes = ['Off-peak occupancy is the number that decides the case.'];
+    const message = (text: string, mode: 'practice' | 'interview') =>
+      parseTurn(movingTurn(text), notes, FALLBACK, 700, 'advance', [], { mode, kind: 'exhibit' })!.message;
+    // A move-on carrying the beat's substance is still replaced, exactly as #136 left it.
+    expect(message('Off-peak occupancy decides this one, so let us move on.', 'practice')).toBe(MOVING_ON);
+    expect(message('Off-peak occupancy decides this one, so let us move on.', 'interview')).toBe(MOVING_ON);
+    expect(movingOnOnly('Off-peak occupancy decides this one, so let us move on.', notes)).toBe(MOVING_ON);
+    for (const mode of ['practice', 'interview'] as const) expect(message(VERDICT_THEN_MOVE, mode)).not.toMatch(/margin|occupancy/i);
+  });
+
+  it('tells the member the case is moving on, and then moves it on', async () => {
+    const id = await toExhibitsIn('interview');
+    w.script.reply = () => turn(VERDICT_THEN_MOVE, { assessment: 'stuck' });
+    let r: LiveView | null = null;
+    for (const text of ['I am not sure', 'Still not sure', 'Hmm', 'I really do not know']) r = view(await call({ type: 'say', sessionId: id, text }));
+    const movedOn = r!.messages.filter((m) => m.from !== 'user' && m.kind !== 'exhibit').at(-1)!;
+    expect(movedOn.text).toBe(MOVING_ON);
+    expect(movedOn.text).not.toBe(OVER_TO_YOU); // the member is not asked to stay with the part being taken away
+    expect(movedOn.text).not.toMatch(/margin/i);
+    expect(r!.exhibits).toHaveLength(2); // ...and the next part is on the table
+    expect(w.db.get(id)!.state.beats[0].outcome).toBe('coach_moved');
   });
 });

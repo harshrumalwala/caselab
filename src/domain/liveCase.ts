@@ -38,8 +38,14 @@ export const STEPS: { id: string; label: string; stages: Stage[] }[] = [
 /** What the parts of a case that hands over no exhibit are called: the book's steps, put to the member in conversation. */
 const DISCUSSION = 'Discussion';
 
-/** A step of the case as the strip draws it: the one the member is in, the ones behind them, and the ones still to come. */
-export type CaseStep = { id: string; label: string; state: 'done' | 'current' | 'ahead' };
+/**
+ * A step of the case as the strip draws it: the one the member is in (`current`), the ones they have finished (`done`), a part that
+ * stands open while another part is at hand and the case will come back to it (`open`), and the ones still to come (`ahead`).
+ */
+export type CaseStep = { id: string; label: string; state: 'done' | 'current' | 'open' | 'ahead' };
+
+/** The stages a brainstorm is answered in. The discussion stands still while they run. */
+const BRAINSTORM_STAGES: readonly Stage[] = ['brainstorm_think', 'brainstorm_write'];
 
 /**
  * The steps of this case, in order, with the one the member is in marked.
@@ -48,20 +54,40 @@ export type CaseStep = { id: string; label: string; state: 'done' | 'current' | 
  * belongs to: a case whose book asks for no brainstorm has four steps, and its recommendation is the fourth of the four.
  *
  * A case works through its parts in the order the book puts them, and a brainstorm in the middle is followed by more of the discussion.
- * The marker sits on the part at hand, so it comes back to the discussion with the case; a step the member has already handed in keeps
- * its finished look while they are away from it, because handing it in is what finishes it. The strip counts nothing and scores
- * nothing: it says where the member is.
+ * A part is filled in once the member has finished it and not before: while a brainstorm runs with parts of the case still to work, the
+ * discussion stands **open**, and is drawn as the part it is rather than as a part behind the member. A step the member has
+ * handed in keeps its finished look while they are away from it, because handing it in is what finishes it. So a part only ever goes
+ * from still to come, to underway, to finished, and the mini Bucket says which of the underway parts is at hand.
+ *
+ * The strip counts nothing and scores nothing: it says where the member is.
+ *
+ * `beatsShown` and `beatsTotal` are how it knows whether the case has parts left to work. A caller that cannot say takes the careful
+ * reading, where a part is not finished unless the strip can see that it is.
  */
-export function caseSteps(view: Pick<LiveView, 'stage' | 'hasBrainstorm' | 'exhibitsTotal' | 'submissions'>): CaseStep[] {
+export function caseSteps(
+  view: Pick<LiveView, 'stage' | 'hasBrainstorm' | 'exhibitsTotal' | 'submissions'> & Partial<Pick<LiveView, 'beatsShown' | 'beatsTotal'>>,
+): CaseStep[] {
   // The brainstorm is drawn for a case whose book asks for one, and for a case standing in one whatever its plan says.
   const steps = STEPS.filter((s) => s.id !== 'brainstorm' || view.hasBrainstorm || s.stages.includes(view.stage));
   const at = steps.findIndex((s) => s.stages.includes(view.stage));
   const brainstormed = view.submissions.some((s) => s.kind === 'brainstorm');
+  // Parts of the plan the case has not reached yet: the discussion is picked up again for them when the brainstorm is handed in.
+  const partsLeft = view.beatsShown === undefined || view.beatsTotal === undefined || view.beatsShown < view.beatsTotal;
+  const standingInBrainstorm = BRAINSTORM_STAGES.includes(view.stage);
   return steps.map((s, i) => ({
     id: s.id,
     label: s.id === 'exhibits' && view.exhibitsTotal === 0 ? DISCUSSION : s.label,
     // Nothing is at hand once the case is over, and all of it is behind the member.
-    state: at < 0 ? 'done' : i === at ? 'current' : i < at || (s.id === 'brainstorm' && brainstormed) ? 'done' : 'ahead',
+    state:
+      at < 0
+        ? 'done'
+        : i === at
+          ? 'current'
+          : s.id === 'exhibits' && standingInBrainstorm && partsLeft
+            ? 'open'
+            : i < at || (s.id === 'brainstorm' && brainstormed)
+              ? 'done'
+              : 'ahead',
   }));
 }
 

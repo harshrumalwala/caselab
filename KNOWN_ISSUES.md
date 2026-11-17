@@ -99,6 +99,22 @@ assistant saw a claim (for example a build session's report) but did not check i
   (**50 write-ups have a fact that mentions it**, plus 18 clarifying answers; steps and recommendations mention it in hundreds, which is right for the Full solution
   screen but not for something a coach may read out mid-case). Neither was in scope for #132; the interviewer's side was measured and
   fixed by #149, the bullet below.
+- **Five prompts read from outside the case, and no audit rule matches them** (issue #159, 2026-11-17). Both leftovers of #157, flagged
+  there by the developer rather than acted on, and fixed together because one seed reload carries both. One prompt (MIT Sloan 2011) had
+  its ask put back in the middle by #157 and two sentences after it still narrating the arc of the case — what gets discussed next and
+  what the candidate then has to do. Four others (Ross 2010, Kellogg 2018, Columbia 2017, Ross 2009) carried the ask itself in the third
+  person, speaking of "the candidate" as someone watched from outside. **The rule applied, which is the one worth keeping: does this
+  sentence tell the member about the business, or about the case?** A role play stays, because it *is* the business situation; a sentence
+  describing what the candidate will be asked to do, or how the case unfolds, goes. All five were rewritten on 2026-11-17 in
+  `private-data/solutions/*.json`: two trailing sentences dropped from the first, and the ask turned to the second person in the other
+  four with every fact and the question itself kept. Each dropped or reworded sentence was checked against `facts`, the clarifying
+  answers and the step notes first, and all of it was already held there (the costs, growth and partnership arc of the first prompt is in
+  its own `facts` entry and in four step notes), so nothing had to be moved. **No audit count moved, which is the point**: the whole
+  report was byte-identical apart from its timestamp, because none of the five matched a rule before the change either. Widening
+  `scripts/liveCaseAudit.mjs` to catch "the candidate" as the subject of the sentence carrying the ask is the obvious follow-up and was
+  deliberately **not** done here (#156 was open in that file); nobody has measured how many of the 872 such a rule would flag, or how
+  many of those would be role plays. **The write-ups are fixed; production only changes when the regenerated
+  `supabase/seeds/library.sql` is loaded** (the owner's call; not done — 13,223,152 bytes, 297 smaller, 872 / 872 / 872 rows).
 - **The interviewer's own facts named the book, and 44 sentences of them would have reached a member** (issue #149, 2026-11-17). A fact
   and a clarifying answer are never shown to the member, but the coach reads one out, in full, when they ask for it (#83), so they take
   the path the prompt took. Measured with the engine's own reply filter rather than with real model runs (which the issue did not
@@ -111,9 +127,11 @@ assistant saw a claim (for example a build session's report) but did not check i
   because the filter genuinely handles the narrated shape. **The write-ups are fixed; production only changes when the regenerated
   `supabase/seeds/library.sql` is loaded** (the owner's call; not done — 13,225,109 bytes, 575 smaller). Two things left: the voice
   filter's new source words (`casebook`, `case book`, `authors`) are in `supabase/functions/_shared/liveCaseCoach.ts` and only take
-  effect after `npx supabase functions deploy live-case`; and **16 of the 28 sentences left are dropped whole** by the reply filter
-  rather than cleaned, because the same sentence also talks about "the candidate" — so a reply that was only that sentence becomes the
-  stand-in line, and the member does not get the fact they asked for. That is the #132 pattern one layer in again, it is not about the book, and it has not been raised as an issue.
+  effect after `npx supabase functions deploy live-case`; and **16 of the 28 sentences left were dropped whole** by the reply filter
+  rather than cleaned, because the same sentence also talks about "the candidate" — so a reply that was only that sentence became the
+  stand-in line, and the member did not get the fact they asked for. That is the #132 pattern one layer in again, it is not about the book,
+  and it became issue #156, which measured it over every fact rather than only the book-naming ones (286 sentences, not 16) and fixed it
+  in the filter: see "A fact that mentions the candidate" below.
 - **A chart kind we do not draw is not counted as a loss.** `exhibitLoss` ignores a chart whose kind is outside `DRAWN_KINDS` (marimekko,
   waterfall, bubble, dual axis, maps): the exhibit stays the book's own table, which is the settled trade (ROADMAP R15). No write-up
   carries such a chart today (measured: 0 of 1,792 exhibits on 2026-11-16), so the rule costs nothing; if one is ever added, the member
@@ -239,11 +257,11 @@ assistant saw a claim (for example a build session's report) but did not check i
   load-related timeouts are suspected, not confirmed. Heavy work running at the same time (a render test, other test runs) may have
   contributed. Use `npx vitest run <file>` for single files.
 - **No linter** exists (`package.json` has no `lint` script); CI (`.github/workflows/ci.yml`) runs typecheck, tests and build only.
-- **One live check fails until the #121 migration is applied** (again the check doing its job, not a bug):
-  "has every column the migrations add" in `e2e/deployed.e2e.test.ts` reads the `add column` statements straight out of
-  `supabase/migrations/`, so it reports `profiles.share_sharpening` as missing from the live database until
-  `npx supabase db push` runs. `public_profiles.share_sharpening` is not reported, because that table is closed to every API role
-  and the read fails on permission before it fails on the column. `npm run test:e2e` is not part of CI.
+- **The #121 column is in production, so the live check that watched for it passes again.** "has every column the migrations add"
+  in `e2e/deployed.e2e.test.ts` reads the `add column` statements straight out of `supabase/migrations/`, so it expected
+  `profiles.share_sharpening` from the moment the migration file was committed and reported it missing until the owner applied it on
+  2026-11-17. (`public_profiles.share_sharpening` is never reported either way: that table is closed to every API role, so the read
+  fails on permission before it can fail on the column.) `npm run test:e2e` is not part of CI, so this was never a CI failure.
 - **Two live checks fail until the #96 migration is applied** (they are the check that the live database matches the code, so this is
   the intended failure, not a bug): "cannot list, search, count or page through members at all" in `e2e/community.e2e.test.ts` and
   "are closed to visitors and to members, however the read is shaped" in `e2e/deployed.e2e.test.ts`. Both have a NOTE saying so.
@@ -266,12 +284,13 @@ assistant saw a claim (for example a build session's report) but did not check i
   said it had not started a Learning case on the live site and had not confirmed that Vercel deployed the merge. This documentation
   pass did not see the owner's approval for that merge and deploy (the report did not mention it). Not verified.
 - **CAPTCHA is not wired in** for public sign-up; abuse protection is Supabase's built-in rate limits (README step 2 and Limitations).
-- **The "What I'm sharpening" switch (issue #121) is built but its migration is not applied.**
-  `supabase/migrations/20261125120000_share_sharpening.sql` adds `profiles.share_sharpening`, carries it into
-  `public_profiles` and returns it from `public_person(id)`. Until the owner runs `npx supabase db push`, **the app half must not be
-  deployed**: `rowToProfile` would read a column that does not exist and `public_person` would return no such field, so saving a
-  profile and opening a link would both fail. The PR is held open for that reason. Nothing becomes visible when it is applied — the
-  switch is off for everyone, and the re-projection at the end of the file only copies the new `false` into each public row.
+- **The "What I'm sharpening" migration (issue #121) was applied on 2026-11-17, before its app half shipped**, which is the order
+  CLAUDE.md asks for and the reason the PR was held open. `supabase/migrations/20261125120000_share_sharpening.sql` adds
+  `profiles.share_sharpening`, carries it into `public_profiles` and returns it from `public_person(id)`. Checked on production
+  afterwards (by the session that applied it): the column is on both tables, **0 members have it on and 9 have it off**, so nothing
+  became visible on apply; `public_person(p_id uuid)` returns it; and its grantees are `anon`, `service_role` and `postgres`, with
+  `authenticated` correctly absent. Had the app shipped first, `rowToProfile` would have read a column that did not exist and every
+  profile save would have failed.
 - **Whether a summary is shown is decided in the browser, not in the database**, and it has to be: the figures it is built from
   (`skill_scores`) are released by `share_skills`, which is a separate consent the member may have given long ago. So a determined
   link holder can still average those per-case scores by hand — that was the PM's original argument against the switch. What the
@@ -315,6 +334,75 @@ assistant saw a claim (for example a build session's report) but did not check i
   refuses in that shape while really withholding an answer is not caught. Narrowing it would start dropping the honest reply.
 - **An `advance` reply is cut to its first sentence.** If a model ever answered a question and moved on in the same breath at that rung
   (with `data_request` unset), the answer would be lost. The flag and `beat_complete` are both excluded from the cut for that reason.
+  Since issue #165 that first sentence is also *kept* only when it says the case is moving on; see the section below.
+
+## The move-on at the advance rung (issue #165, 2026-11-17)
+
+- **What it was.** `movingOnOnly` (#136) kept the model's first sentence whatever it said. In an interview `withoutVerdicts` (#145)
+  then dropped it as a verdict, the reply went empty, and the `!said` guard — which was not rung-aware — substituted `OVER_TO_YOU`
+  ("Okay, stay with it ...") while `applyTurn` moved the case on regardless: the member was told to stay with the part at the moment
+  it was taken away. In practice the same first sentence reached them as a bare verdict with no move-on in it. Both are fixed: the
+  opening sentence is kept only when `saysMovingOn` matches it, and the `!said` guard and the whole-reply stand-in both hand back
+  `MOVING_ON` at that rung instead of `OVER_TO_YOU` or `FALLBACK`.
+- **Unverified against a real model**, like every other change under `supabase/functions/**`, and it does nothing until
+  `npx supabase functions deploy live-case`. The unit tests put the issue's three reproductions through the real `parseTurn`.
+- **The dry run cannot see it at all.** `npm run dryrun:live` stubs the model with one fixed sentence, so no content filter in
+  `parseTurn` executes in any of its 12,705 runs. Run before and after (847 cases, 12,705 runs, 0 that failed the bar, 2,541 open by
+  design, both times): the two reports are **byte-identical apart from their timestamp line**, which is the expected null result and
+  is not evidence for this fix. The unit tests over the real `parseTurn` are.
+- **`saysMovingOn` is string-level, like the rest of the filter.** It matches the usual wordings (move on / move to / on to the next /
+  next piece / leave that there / park that / come back to that / keep moving / press on). A genuine move-on worded some other way
+  ("that is enough on this one") is replaced by `MOVING_ON`, which says the same thing — the cost is the model's own wording, not the
+  member's understanding, which is why the rule errs this way.
+- **An acknowledgement in front of the move-on is lost.** "Good. Let us move on." becomes `MOVING_ON`, because only the *first*
+  sentence is examined and a later one is never promoted in its place (promoting one would reopen #131's risk of carrying the
+  abandoned beat's substance). A model that puts the move-on second therefore reads a little flatter than it wrote.
+- **Nothing ties the filter's test to the engine's.** `moving` in `parseTurn` re-derives `applyTurn`'s advance test (rung `advance`,
+  no `beat_complete`, no `data_request`, assessment `stuck` or `unclear`) and is a second copy of it that has to be changed with it.
+  It is also one condition looser, as it was before #165: `applyTurn` only advances on an `exhibit` turn, while `moving` is true on a
+  `direction` turn at that rung too. Nothing reaches that combination today — `nudgeLevel` returns `none` outside the `exhibits`
+  stage, so a direction turn is always at the bottom rung — but if that ever changed, a direction reply would be replaced by
+  `MOVING_ON` without the case moving anywhere. Which rung fires when was out of scope here (#164).
+
+## A fact that mentions the candidate (issue #156, 2026-11-17)
+
+- **The defect was 18 times bigger than the issue said, and that is what chose the route.** #149 had counted only the sentences that
+  *also* name the book (16 of 28). Measured here over every fact and clarifying answer of the 872 write-ups, with the engine's own
+  `hasTell` imported rather than copied: **286 sentences in 201 write-ups were dropped by the reply filter, 198 of them the whole of a
+  fact or a clarifying answer**, so the member who asked for one of those got the stand-in line (`FALLBACK`) and none of the figures.
+  285 of the 286 were the third-person rule; 270 of those matched on the words "the candidate" alone. A content rewrite would have been
+  ~198 sentences in ~200 cases and would reach members only at the next seed reload, which is not scheduled; the rule change ships with
+  `npx supabase functions deploy live-case`. Hence the engine route.
+- **What the rule now does.** `talksAboutThem` in `supabase/functions/_shared/liveCaseCoach.ts`: a sentence that names the member in the
+  third person is a tell when it carries the model's own voice in the same breath (`I`, `me`, `my`), when it instructs them
+  (`should`, `must`, `needs to`, `has to`, `is expected to`, ...), or when it holds no figure of the case — a pointer such as "Exhibit 1"
+  does not count as a figure. Otherwise it is a fact and is read out **as written**. After the change the filter drops 246 sentences and
+  165 whole facts or answers: **40 sentences in 35 cases reach the member who asks, 33 of them the whole of a fact or an answer.**
+  Nothing that used to pass is dropped now (measured, 0 newly dropped).
+- **Unverified against a real model**, like every other change under `supabase/functions/**`, and it does nothing until the function is
+  deployed. The unit tests put the measured sentence shapes through the real `handleLive`; no model has been asked since.
+- **The fact is read out in the write-up's words, stage direction and all.** A kept sentence is not rewritten into the second person, so
+  a member can read the condition the write-up puts on a fact ("given only once the candidate asks for them") before the figures.
+  Rewriting "the candidate" to "you" was tried on paper and dropped: a case about schools says "a student" and means a pupil (A-Plus
+  School District, Quahog Public Schools), and an instruction to hand an exhibit over does not survive the substitution. The directives already ask the model for the second person; this
+  filter is the net, not the author.
+- **A sentence that both instructs the member and carries figures is still dropped**, and four of those are data rather than an
+  inference: To Automate or Not, Bolsen Pharma, Fitness Startup Kiosks and Maldovian Coffins each hold one. The other seven of the
+  eleven are the book's own conclusion told to the candidate with the figure that proves it, which is right to drop.
+  Whether the four figures are reachable elsewhere in those write-ups was not checked.
+- **150 of the sentences still dropped carry no figure**, and a few of them are facts rather than stage directions (a list of target
+  regions, a brainstorm's named answers). Keeping them would mean a rule that cannot tell a qualitative fact from a stage direction;
+  the figure test was chosen because it is the thing a member asks for and the thing #83 is about.
+- **One book-naming sentence now reaches a member**: Chateau (Tuck Case Book 2009) has a clarifying answer that names the member, holds
+  a figure and mentions "the book's estimate", so `npm run audit:live` reports `still naming it after the reply filter` as **1** where
+  it was 0. It is a content fix of the #149 kind (reword the answer) for the next batch, not a filter fix: no filter can unsay a book
+  the sentence is built around.
+- **The neighbouring rule has a false positive nobody has fixed.** `INSTRUCTIONS` matches "the directive", so Donatella Co.'s one-sentence
+  fact about an EU reporting directive is dropped whole and its two revenue thresholds never reach a member. Found while measuring #156;
+  out of scope there (a different rule), and still open.
+- **The rule is string-level, like the rest of the voice filter.** A model that talks about the member some other way ("one would
+  usually start with ...") still goes through, and a model that writes a genuine tell with a figure in it and no instruction word
+  ("the candidate is at $4M already") is now kept. The audit's two new counts are what would show drift.
 
 ## The interview's register, and the ladder's entry condition (issue #130, 2026-11-17)
 
@@ -381,6 +469,20 @@ assistant saw a claim (for example a build session's report) but did not check i
   272 of the 847 eligible cases now plan the full 25-in-40 ceiling, against 57 before. Nothing runs longer than the ceiling, but a
   14-beat case shares 25 minutes between 14 parts (about 1:45 each before the budget is reshared). Whether a 39-minute case is one a
   member will sit through is a product question the pilot and real use will answer.
+- **What the clock does to the help ladder, not only to the length** (issue #164, found by the interaction pass of 2026-11-17 over the
+  nine live-case PRs of that day, with the pre-#141 engine as the control, and fixed the same day). The entry above records the 1:45-a-beat
+  arithmetic but not what a beat's budget is actually *for*: it is the only thing `behindSchedule` measures a beat against, and that
+  decides whether the ladder skips its second-to-last rung — `lead` in practice (the one rung where Bucket stops asking open questions
+  and says plainly where to look) and `directional_hint` in interview. `beatBudget` shared out the time to the discussion's **planned**
+  end (`d.soft`), so once cases were long enough to reach it with beats still to come, every beat brought out in the flexible time was
+  born with the 30-second floor and was behind schedule 30 seconds in. Measured the same way on both engines (844 live-eligible
+  write-ups, practice and interview, 1,688 runs, a member message every 75 s, never completing a beat and never pressing "move on"):
+  `advance` reached by the skip went from **412 of 4,894 `advance` decisions (8.4%)** before #141 to **2,354 of 7,358 (32.0%)** after it,
+  548 of 1,688 runs and 274 of 844 cases. The fix shares out the time to the discussion's **latest** end (`d.hard`) instead, which is
+  the time it really has: **354 of 7,080 (5.0%)**, 96 runs, 48 cases, 6 beats under a 2:00 budget (was 352) and none at the floor (was
+  20, in 10 cases). The budget moves no stage end, so the 25-in-40 ceiling and the closing reserve are untouched; a stuck member now
+  covers slightly fewer parts in the same time (7,614 beats revealed against 7,908), which is the rung being given back to them.
+  **It takes effect only after `npx supabase functions deploy live-case`.**
 - **The order between an exhibit and a step is a guess wherever no step names an exhibit.** 230 of the 847 write-ups have at least one
   step that names its exhibit; in the rest the exhibits are handed over first and the steps follow, which is the order those cases
   already had. Nothing in the data says where the book meant a step to sit, so a case can work through an exhibit before the sizing step
@@ -446,6 +548,19 @@ assistant saw a claim (for example a build session's report) but did not check i
   left: that "already handed in" test reads `view.submissions`, and a brainstorm the clock took with **nothing written** leaves no
   submission (`captureTimedOut` saves only non-empty text), so in that one case the Brainstorm pill shows as still to come while the
   discussion carries on. Telling it apart needs something the Edge Function does not send today.
+- **The strip no longer calls the discussion finished while a mid-case brainstorm runs (issue #166, 2026-11-17).** An interaction
+  between #148 and #152, not a bug in either: `caseSteps` filled a pill in when it was earlier in the list than the stage, which was
+  the same as "finished" only while the brainstorm ran last. Since #148 it does not (100 of 844 live-eligible cases have a brainstorm
+  that is not the last beat, 20 of them before any part of the discussion). The discussion now has a fourth look, `open` (outlined in
+  the accent colour, no mini Bucket), used while the case stands in a brainstorm with `beatsShown < beatsTotal`. What is left:
+  - the view says how many parts of the plan the case has reached, not **which** ones. When the clock ends the discussion early the
+    parts it did not reach are let go and the case goes to the brainstorm and then to the recommendation, so during that brainstorm
+    the discussion is drawn as open although the case will not come back to it. The careful reading (open, not finished) was chosen
+    over guessing; the pill is filled in as soon as the recommendation starts. The same happens in a session whose plan has no
+    brainstorm beat of its own (a write-up whose brainstorm is only a table of ideas, or a case saved before #148), because entering
+    the brainstorm pushes no `BeatRecord` there.
+  - a case with two brainstorms still fills the Brainstorm pill in after the first one is handed in, which is #152's decision and
+    unchanged: the view carries no count of the brainstorms a plan has left.
 
 ## Asking outright for the answer (issue #142, 2026-11-17)
 
@@ -549,9 +664,10 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   most three skills a side with no way to see the rest (the point is a short answer, not a table), and the two lines that explain an
   empty preview (too few rated cases, or every skill in the middle band) are shown to the member only, so they have never been seen
   outside a test either.
-- **The live case's progress strip has been read by tests, not by eyes** (issue #150, 2026-11-17). Screen tests assert which pill is
-  marked in each shape of case, but nobody has opened a live case in a browser since the change, and phone width — where five pills
-  wrap onto two rows — is unchecked, the same gap the rest of the live-case screens have.
+- **The live case's progress strip has been read by tests, not by eyes** (issues #150 and #166, 2026-11-17). Screen tests assert which
+  pill is marked, and in which state, in each shape of case, but nobody has opened a live case in a browser since either change, and
+  phone width — where five pills wrap onto two rows — is unchecked, the same gap the rest of the live-case screens have. The `open`
+  look #166 added (an accent outline with no fill) has never been seen on a screen either.
 - **No end-to-end coverage of Live case** (PR #79 says so: "E2E untouched (no live case coverage there)"). The live-case logic, handler and
   screens are covered by unit tests with a fake model and an in-memory backend, and `live_case_sessions` by PGlite tests, but nothing in
   `e2e/` starts a case against the real function. The Learning-mode screen was not exercised in a browser by its author.

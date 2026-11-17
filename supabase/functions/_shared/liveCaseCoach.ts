@@ -887,8 +887,38 @@ const sentencesOf = (t: string): string[] => t.split(/(?<=[.!?])\s+/).map((s) =>
 // Three tells the real-model pilot found (issue #131). The directives above ask for none of them; these checks are what happens
 // when the model does it anyway. They catch the obvious wording, not every paraphrase: see README.
 
-/** Talking about the member rather than to them. */
-const THIRD_PERSON = /\b(?:the|this|our|a)\s+(?:student|candidate|interviewee)\b|\bthey\s+(?:have\s+)?asked me\b/i;
+/**
+ * The member, named in the third person: "the candidate", "this student", "our interviewee". Singular, as issue #131 wrote it: a case
+ * about schools talks about "the students" and means the people in the case, not the member.
+ */
+const THE_MEMBER = /\b(?:the|this|our|a)\s+(?:student|candidate|interviewee)\b/i;
+/** Them, as the one who is talking to the model: the pilot's own shape. */
+const THEY_ASKED_ME = /\bthey\s+(?:have\s+)?asked me\b/i;
+/** The model's own voice in the same breath as them: "the student has asked me to ...", "I would give the candidate that". */
+const ITS_OWN_VOICE = /\b(?:I|me|my|myself)\b/;
+/** Telling them what to do, about them rather than to them: "the candidate should start with the revenue side". */
+const INSTRUCTS_THEM = /\b(?:should|must|ought to|needs? to|has to|have to|(?:is|are)\s+(?:expected|supposed|meant|asked)\s+to|will need to)\b/i;
+/** A pointer to something on the page, which is not a figure of the case: "Exhibit 1", "question 2", "Figure #3". */
+const A_POINTER = /\b(?:exhibits?|figures?|tables?|charts?|questions?|parts?|appendix|annex|slides?|pages?)\s*#?\s*\d+[a-z]?\b/gi;
+/** A figure of the case: the kind of thing the member asks for, and the thing it costs them when a sentence is dropped. */
+const carriesAFigure = (sentence: string): boolean => /\d/.test(sentence.replace(A_POINTER, ' '));
+
+/**
+ * Bucket talking about the member rather than to them (issue #131), told apart from a fact that happens to mention them (issue #156).
+ * The interviewer's own facts name the member too, because that is how the write-ups put a condition — "given once the candidate asks
+ * for it: ..." — and the coach reads a fact out in full when the member asks for it (issue #83). Measured over the 872 write-ups: the
+ * filter used to drop 286 sentences of the interviewer's side in 201 of them, all but one by this rule, and 198 of those were the whole
+ * of a fact or a clarifying answer, so the member who asked for one got the stand-in line and none of the figures.
+ *
+ * So the member's name in the third person is a tell when the sentence is Bucket's own talk — its own voice in the same breath, or an
+ * instruction aimed at them — and otherwise only when the sentence has no figure of the case in it to lose.
+ */
+function talksAboutThem(sentence: string): boolean {
+  if (THEY_ASKED_ME.test(sentence)) return true;
+  if (!THE_MEMBER.test(sentence)) return false;
+  return ITS_OWN_VOICE.test(sentence) || INSTRUCTS_THEM.test(sentence) || !carriesAFigure(sentence);
+}
+
 /** Narrating its own instructions. */
 const INSTRUCTIONS = /\b(?:my|the|these|those)\s+(?:instructions?|directive|guidelines?|system prompt|rules)\b|\bI\s+(?:am|'m)\s+(?:not\s+)?(?:allowed|supposed|instructed|meant|told)\s+to\b/i;
 /** Saying no. */
@@ -899,7 +929,7 @@ const NOT_HELD = /\b(?:do(?:es)?\s*n['’]?t have|do not have|have no|not (?:in|
 
 /** A sentence that talks about the member, narrates the instructions, or announces a withheld answer. */
 export function hasTell(sentence: string): boolean {
-  if (THIRD_PERSON.test(sentence) || INSTRUCTIONS.test(sentence)) return true;
+  if (talksAboutThem(sentence) || INSTRUCTIONS.test(sentence)) return true;
   return REFUSES.test(sentence) && AN_ANSWER.test(sentence) && !NOT_HELD.test(sentence);
 }
 
@@ -961,10 +991,45 @@ export function sharesSubstance(message: string, notes: readonly string[], their
 /** The longest an "we are moving on" sentence can honestly be before it is doing something else. */
 const MOVING_ON_CHARS = 160;
 
-/** A reply that moves the case on says that and nothing else: the opening sentence, or our own line if that sentence is still saying something. */
+/**
+ * A sentence that tells the member the case is moving on. String-level, like the rest of the filter: it matches the ways a move-on
+ * is usually worded, not every one of them, and a move-on worded some other way simply becomes our own line, which says the same.
+ */
+const MOVES_ON = new RegExp(
+  [
+    // "let us move on", "we can move on", "shall we move on", "moving along", "let us move to the next piece"
+    '\\bmov(?:e|ing)\\s+(?:on\\b|to\\b|along\\b)',
+    // "let us turn to the next piece", "on to the next one", "take the next piece", "here is the next exhibit"
+    '\\b(?:turn|turning|go|going|on|onto|take|taking|look|looking)\\s+(?:to\\s+|at\\s+)?(?:the\\s+)?next\\b',
+    '\\bnext\\s+(?:piece|part|exhibit|question|section|step|stage|one|thing|chunk)\\b',
+    // "let us leave that there", "park that for now", "set that aside", "we will come back to that"
+    '\\bleav(?:e|ing)\\s+(?:that|this|it)\\b',
+    '\\bpark\\s+(?:that|this|it)\\b',
+    '\\b(?:set|put)\\s+(?:that|this|it)\\s+(?:aside|down)\\b',
+    '\\bcome\\s+back\\s+to\\s+(?:that|this|it)\\b',
+    '\\bkeep\\s+(?:us\\s+)?moving\\b',
+    '\\bpress\\s+on\\b',
+  ].join('|'),
+  'i',
+);
+/** True when the sentence tells the member the case is moving on. */
+export function saysMovingOn(sentence: string): boolean {
+  return MOVES_ON.test(sentence);
+}
+
+/**
+ * A reply that moves the case on says that and nothing else: the opening sentence, or our own line.
+ *
+ * The opening sentence is kept only when it really is the move-on (issue #165). It used to be kept whatever it said, so a reply
+ * that opened with a verdict reached the member in practice as a bare verdict with no move-on in it, and in an interview was
+ * emptied by `withoutVerdicts` and replaced by the line asking them to stay with the part the engine was about to take away.
+ * Anything that is not a move-on now becomes `MOVING_ON`, which says the same thing in one sentence and, by #131's rule, nothing
+ * about the part being left behind. A later sentence of the reply is never promoted in its place: that would reopen the risk of
+ * carrying the abandoned beat's substance, and `MOVING_ON` already says everything an advance reply is allowed to say.
+ */
 export function movingOnOnly(message: string, notes: readonly string[]): string {
   const first = sentencesOf(message)[0] ?? '';
-  return !first || first.length > MOVING_ON_CHARS || sharesSubstance(first, notes) ? MOVING_ON : first;
+  return !first || first.length > MOVING_ON_CHARS || !saysMovingOn(first) || sharesSubstance(first, notes) ? MOVING_ON : first;
 }
 
 // --- The interviewer's register (issue #130) ---------------------------------------------------------------------------------
@@ -1071,11 +1136,17 @@ export function parseTurn(
     // member has to read something, so they read the acknowledgement and the question instead.
     const givesNothing = opts.kind === 'exhibit' && rung === 'none' && !beatComplete && !dataRequest;
     if (!said || (givesNothing && sharesSubstance(said, privateText, opts.memberText ?? '')))
-      said = opts.kind === 'exhibit' ? OVER_TO_YOU : directionClear ? SHOW_DATA : '';
+      // The stand-in is the one for the moment (issue #165). A reply that moves the case on is replaced by the move-on line: the
+      // part is being taken away, so "stay with it" would contradict the exhibit arriving on the next line. This guard used to run
+      // at every rung, so a move-on whose only sentence was a verdict came out as `OVER_TO_YOU` and the beat advanced anyway.
+      said = moving ? MOVING_ON : opts.kind === 'exhibit' ? OVER_TO_YOU : directionClear ? SHOW_DATA : '';
   }
+  // A reply thrown away whole is replaced by the line for the moment: at the rung that moves the case on that is the move-on, not
+  // the line asking them to stay with the part they are losing (issue #165).
+  const standIn = moving ? MOVING_ON : fallback;
   return {
     // A reply that states a figure the book worked out goes the way a reply that quotes a private note goes: it is replaced whole.
-    message: !said || leaks(said, privateText) || statesHeldResult(said, held) ? fallback : said,
+    message: !said || leaks(said, privateText) || statesHeldResult(said, held) ? standIn : said,
     assessment,
     beatComplete,
     directionClear,

@@ -7,10 +7,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { buildPlan, isInterviewerSideExhibit } from '../../supabase/functions/_shared/liveCase';
-import { givenOnRequest, interviewerVoice, isFullSolution, planFor, readSolution } from '../../supabase/functions/_shared/liveCaseCoach';
+import { givenOnRequest, hasTell, interviewerVoice, isFullSolution, planFor, readSolution } from '../../supabase/functions/_shared/liveCaseCoach';
 import { LIVE_EXHIBIT_LIMITS, SOLUTION_EXHIBIT_LIMITS, parseBookSolution, parseSolutionExhibit } from '../domain/bookSolution';
 import { exhibitLoss } from '../domain/exhibitFidelity';
-import { FLAGS, INTERVIEWER_RULES, PROMPT_BREACH, PROMPT_RULES, audit, auditCase, formatReport, formatSummary, lossKind, measureCaps, promptAsides, readSolutionFiles, summarise, type AuditRules } from '../../scripts/liveCaseAudit.mjs';
+import { DROPPED_RULES, FLAGS, INTERVIEWER_RULES, PROMPT_BREACH, PROMPT_RULES, audit, auditCase, formatReport, formatSummary, lossKind, measureCaps, promptAsides, readSolutionFiles, summarise, type AuditRules } from '../../scripts/liveCaseAudit.mjs';
 
 const rules: AuditRules = {
   isInterviewerSideExhibit,
@@ -20,6 +20,7 @@ const rules: AuditRules = {
   givenOnRequest,
   planFor,
   interviewerVoice,
+  hasTell,
   parseBookSolution,
   parseSolutionExhibit,
   exhibitLoss,
@@ -387,6 +388,43 @@ describe('what the interviewer holds', () => {
     expect(text).toContain('cases whose facts or answers name the book');
     expect(text).toContain('still naming it after the reply filter');
     for (const rule of INTERVIEWER_RULES) expect(text).toContain(rule.label);
+  });
+
+  // Issue #156: the same path, counted for what the filter takes away rather than for what it says. A fact is only ever read out
+  // whole, so a fact whose every sentence is dropped is a fact the member asked for and did not get.
+  it('counts what the reply filter drops of what the interviewer holds, and which of it is a whole fact', () => {
+    expect(held({ facts: ['Rent is $4,000 a month, given once the candidate asks for it.'] })).toMatchObject({ dropped: 0, droppedWhole: 0, dropLabels: [] });
+    expect(held({ facts: ['The candidate should start with the rent.'] })).toMatchObject({
+      dropped: 1,
+      droppedWhole: 1,
+      dropLabels: ['a fact the reply filter drops whole'],
+    });
+    // One sentence of two: what is left still reaches the member, so it is counted but it is not the whole fact.
+    expect(held({ facts: ['Rent is $4,000 a month. The candidate should start there.'] })).toMatchObject({ dropped: 1, droppedWhole: 0, dropLabels: [] });
+    expect(held({ clarifyingQuestions: [{ question: 'Which rent?', answer: 'The candidate should start with the rent.' }] })).toMatchObject({
+      dropped: 1,
+      droppedWhole: 1,
+      dropLabels: ['a clarifying answer the reply filter drops whole'],
+    });
+  });
+
+  it('counts the drops in the summary, by rule', () => {
+    const result = audit(
+      [
+        writeUp({ name: 'Dropped Case', facts: ['The candidate should start with the rent.'] }),
+        writeUp({ name: 'Kept Case', facts: ['Rent is $4,000 a month, given once the candidate asks for it.'] }),
+      ],
+      rules,
+      caps,
+    );
+    const s = summarise(result);
+    expect(s).toMatchObject({ interviewerDropped: 1, interviewerDroppedWhole: 1, interviewerCasesDropped: 1 });
+    expect(s.interviewerDropRules.get('a fact the reply filter drops whole')).toBe(1);
+    expect(s.interviewerDropRules.get('a clarifying answer the reply filter drops whole')).toBeUndefined();
+    const text = formatSummary(s);
+    expect(text).toContain('sentences the reply filter drops');
+    expect(text).toContain('facts or answers dropped whole');
+    for (const rule of DROPPED_RULES) expect(text).toContain(rule.label);
   });
 
   it('names the case and the rule in the report, and never the fact', () => {

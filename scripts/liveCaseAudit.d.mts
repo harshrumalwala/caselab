@@ -1,5 +1,5 @@
 import type { buildPlan, isInterviewerSideExhibit } from '../supabase/functions/_shared/liveCase';
-import type { givenOnRequest, interviewerVoice, isFullSolution, planFor, readSolution } from '../supabase/functions/_shared/liveCaseCoach';
+import type { givenOnRequest, hasTell, interviewerVoice, isFullSolution, planFor, readSolution } from '../supabase/functions/_shared/liveCaseCoach';
 import type { ExhibitLimits, parseBookSolution, parseSolutionExhibit } from '../src/domain/bookSolution';
 import type { ExhibitLoss, exhibitLoss } from '../src/domain/exhibitFidelity';
 
@@ -12,6 +12,7 @@ export interface AuditRules {
   givenOnRequest: typeof givenOnRequest;
   planFor: typeof planFor;
   interviewerVoice: typeof interviewerVoice;
+  hasTell: typeof hasTell;
   parseBookSolution: typeof parseBookSolution;
   parseSolutionExhibit: typeof parseSolutionExhibit;
   exhibitLoss: typeof exhibitLoss;
@@ -142,6 +143,11 @@ export interface AuditSummary {
   interviewerSentences: number;
   interviewerAfterVoice: number;
   interviewerCasesAfterVoice: number;
+  /** What the reply filter drops of the interviewer's own side, and how much of it is a whole fact or answer (issue #156). */
+  interviewerDropped: number;
+  interviewerDroppedWhole: number;
+  interviewerCasesDropped: number;
+  interviewerDropRules: Map<string, number>;
   caps: Caps;
 }
 
@@ -171,6 +177,9 @@ export interface InterviewerRule {
 
 export const INTERVIEWER_RULES: InterviewerRule[];
 
+/** One kind of loss on the same path: a fact or a clarifying answer the reply filter drops whole. Reported, never failed. */
+export const DROPPED_RULES: { label: string }[];
+
 /** The interviewer's side of one write-up, in labels and counts: never the sentence that matched. */
 export interface InterviewerAsides {
   labels: string[];
@@ -180,9 +189,14 @@ export interface InterviewerAsides {
   /** Sentences of those that name it, and how many of them still do after `interviewerVoice` has had them. */
   sentences: number;
   afterVoice: number;
+  /** Which `DROPPED_RULES` this write-up matches, by label. */
+  dropLabels: string[];
+  /** Sentences of the interviewer's side the reply filter drops, and how many facts or answers it drops whole. */
+  dropped: number;
+  droppedWhole: number;
 }
 
-export function interviewerAsides(live: ReturnType<typeof readSolution>, voice: typeof interviewerVoice): InterviewerAsides;
+export function interviewerAsides(live: ReturnType<typeof readSolution>, voice: typeof interviewerVoice, tell: typeof hasTell): InterviewerAsides;
 /** Which rules this prompt matches, by label; never the words that matched. */
 export function promptAsides(prompt: unknown): string[];
 export function namesTheBook(labels: string[]): boolean;

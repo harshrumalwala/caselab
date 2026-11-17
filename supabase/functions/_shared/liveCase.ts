@@ -968,12 +968,22 @@ export function saveScratchpad(settled: SessionState, text: string): SessionStat
 // The exhibit discussion
 // ---------------------------------------------------------------------------------------------------------------------------
 
-/** The time the next beat is worth: what is left of the planned discussion, shared out by how many of its beats remain (a brainstorm has its own time). */
+/**
+ * The time the next beat is worth: what the discussion has left, shared out by how many of its beats remain (a brainstorm has its own
+ * time, and the closing stages are never in it).
+ *
+ * **What it has left runs to `d.hard`, the discussion's latest end, not to `d.soft`, the end the plan drew** (issue #164). The flexible
+ * time is the discussion's own: a case keeps talking past its planned end while the member is getting somewhere, so a beat brought out
+ * in that time has real time of its own. Measured against the planned end it had none — the numerator was already spent, every such beat
+ * got `MIN_BEAT_MS`, and the one thing a budget decides, the skip in `nudgeLevel`, fired 30 seconds in and took away the rung that says
+ * where to look. The budget is only ever what `behindSchedule` measures a beat against: it moves no stage end and no deadline, so the
+ * case is exactly as long as it was, and the skip still fires on a beat that has really run past its share.
+ */
 function beatBudget(s: SessionState, at: number): number {
   const d = deadlines(s, 'exhibits', s.stageStartedAt);
   const from = beatPointer(s);
   const left = Math.max(1, s.plan.beats.filter((b, i) => i >= from && b.kind !== 'brainstorm').length);
-  return Math.max(MIN_BEAT_MS, Math.floor((d.soft - at) / left));
+  return Math.max(MIN_BEAT_MS, Math.floor((d.hard - at) / left));
 }
 
 /** Brings out the next part of the discussion. A brainstorm is not one of them: it is answered in its own two stages. */
@@ -1102,6 +1112,7 @@ export function recordDataRequest(settled: SessionState): SessionState {
   return bump(s);
 }
 
+/** The beat has had longer than it was worth. What it was worth is `beatBudget`: its share of the time the discussion really has. */
 const behindSchedule = (b: BeatRecord, at: number): boolean => at > b.revealedAt + b.budgetMs;
 
 /**

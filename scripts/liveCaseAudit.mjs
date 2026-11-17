@@ -34,6 +34,7 @@ export async function loadRules() {
     readSolution: coach.readSolution,
     isFullSolution: coach.isFullSolution,
     interviewerVoice: coach.interviewerVoice,
+    hasTell: coach.hasTell,
     givenOnRequest: coach.givenOnRequest,
     planFor: coach.planFor,
     parseBookSolution: book.parseBookSolution,
@@ -269,13 +270,33 @@ export const INTERVIEWER_RULES = [
   { label: 'a clarifying answer names the book, the casebook or the authors', test: NAMES_THE_BOOK },
 ];
 
+/**
+ * The same path, read for what it costs rather than for what it says (issue #156). The reply filter drops a sentence that talks about
+ * the member, and the interviewer's own facts name them too, because that is how a write-up puts a condition ("given once the
+ * candidate asks for it: ..."). A dropped sentence does not reach the member; when **every** sentence of the fact is dropped, the
+ * reply is the stand-in line and the member who asked for the fact gets none of it. Reported, never failed: part of what is dropped
+ * is a stage direction, which is right to drop, and only a person reading the case can tell which is which.
+ */
+export const DROPPED_RULES = [
+  { label: 'a fact the reply filter drops whole' },
+  { label: 'a clarifying answer the reply filter drops whole' },
+];
+
 const sentencesOf = (text) => String(text ?? '').split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
 
+/** One fact or clarifying answer against the reply filter: how many of its sentences are dropped, and whether that is all of them. */
+const dropsOf = (text, hasTell) => {
+  const all = sentencesOf(text);
+  const gone = all.filter((s) => hasTell(s)).length;
+  return { gone, whole: all.length > 0 && gone === all.length };
+};
+
 /**
- * The interviewer's side of one write-up, measured: which rules it matches, how many of its sentences name the book, and how many
- * still name it after the reply filter production runs has had them. Labels and counts only, never the sentence.
+ * The interviewer's side of one write-up, measured: which rules it matches, how many of its sentences name the book, how many
+ * still name it after the reply filter production runs has had them, and how much of it that filter drops. Labels and counts only,
+ * never the sentence.
  */
-export function interviewerAsides(live, interviewerVoice) {
+export function interviewerAsides(live, interviewerVoice, hasTell) {
   const facts = (live?.facts ?? []).filter((t) => NAMES_THE_BOOK.test(t));
   const answers = (live?.clarifying ?? []).map((q) => q?.answer ?? '').filter((t) => NAMES_THE_BOOK.test(t));
   const labels = [];
@@ -287,7 +308,21 @@ export function interviewerAsides(live, interviewerVoice) {
     const said = interviewerVoice(s);
     return said && NAMES_THE_BOOK.test(said);
   });
-  return { labels, facts: facts.length, answers: answers.length, sentences: named.length, afterVoice: afterVoice.length };
+  const factDrops = (live?.facts ?? []).map((t) => dropsOf(t, hasTell));
+  const answerDrops = (live?.clarifying ?? []).map((q) => dropsOf(q?.answer ?? '', hasTell));
+  const dropLabels = [];
+  if (factDrops.some((d) => d.whole)) dropLabels.push(DROPPED_RULES[0].label);
+  if (answerDrops.some((d) => d.whole)) dropLabels.push(DROPPED_RULES[1].label);
+  return {
+    labels,
+    facts: facts.length,
+    answers: answers.length,
+    sentences: named.length,
+    afterVoice: afterVoice.length,
+    dropLabels,
+    dropped: [...factDrops, ...answerDrops].reduce((n, d) => n + d.gone, 0),
+    droppedWhole: [...factDrops, ...answerDrops].filter((d) => d.whole).length,
+  };
 }
 
 /** Why a write-up is not offered for live practice. Descriptive only: `isFullSolution` is what decides. */
@@ -302,7 +337,7 @@ function whyNotEligible(raw, live) {
 
 /** One write-up, measured against the live case's own rules. */
 export function auditCase(raw, rules, caps) {
-  const { isInterviewerSideExhibit, readSolution, isFullSolution, givenOnRequest, planFor, parseBookSolution, parseSolutionExhibit, interviewerVoice, LIVE_EXHIBIT_LIMITS } =
+  const { isInterviewerSideExhibit, readSolution, isFullSolution, givenOnRequest, planFor, parseBookSolution, parseSolutionExhibit, interviewerVoice, hasTell, LIVE_EXHIBIT_LIMITS } =
     rules;
   const live = readSolution(raw);
   const eligible = isFullSolution(raw);
@@ -341,7 +376,7 @@ export function auditCase(raw, rules, caps) {
   const cuts = capCuts(raw, caps);
   if (readCount > exhibits.length && live) cuts.push(`exhibits read by the live case: ${readCount} of ${exhibits.length} kept`);
   const asides = promptAsides(raw.prompt);
-  const interviewer = interviewerAsides(live, interviewerVoice);
+  const interviewer = interviewerAsides(live, interviewerVoice, hasTell);
 
   const notWhole = fidelity.filter((f) => f.live.cut.length + f.full.cut.length > 0);
   const flags = [];
@@ -490,6 +525,11 @@ export function summarise({ cases, folded, caps, read }) {
     interviewerSentences: sum(cases.map((c) => c.interviewer?.sentences ?? 0)),
     interviewerAfterVoice: sum(cases.map((c) => c.interviewer?.afterVoice ?? 0)),
     interviewerCasesAfterVoice: cases.filter((c) => (c.interviewer?.afterVoice ?? 0) > 0).length,
+    // What the reply filter drops of that same side (issue #156): a fact dropped whole is a fact the member asked for and did not get.
+    interviewerDropped: sum(cases.map((c) => c.interviewer?.dropped ?? 0)),
+    interviewerDroppedWhole: sum(cases.map((c) => c.interviewer?.droppedWhole ?? 0)),
+    interviewerCasesDropped: cases.filter((c) => (c.interviewer?.dropLabels ?? []).length > 0).length,
+    interviewerDropRules: tally(cases.flatMap((c) => c.interviewer?.dropLabels ?? [])),
     flags: tally(cases.flatMap((c) => c.flags)),
     flagged: cases.filter((c) => c.flags.length > 0).length,
     caps,
@@ -571,6 +611,11 @@ export function formatSummary(s) {
     pad('sentences that name the book', s.interviewerSentences),
     pad('  still naming it after the reply filter', s.interviewerAfterVoice),
     pad('  cases with one of those', s.interviewerCasesAfterVoice),
+    pad('sentences the reply filter drops', s.interviewerDropped),
+    pad('  facts or answers dropped whole', s.interviewerDroppedWhole),
+    pad('  cases with one of those', s.interviewerCasesDropped),
+    'By rule',
+    ...counted(s.interviewerDropRules, DROPPED_RULES.map((rule) => rule.label)),
     '',
     'Parser caps (measured from parseBookSolution)',
     ...Object.entries(CAP_LABEL).map(([key, label]) => pad(`  ${label}`, s.caps[key])),
