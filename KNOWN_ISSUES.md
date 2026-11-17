@@ -530,6 +530,19 @@ assistant saw a claim (for example a build session's report) but did not check i
   left: that "already handed in" test reads `view.submissions`, and a brainstorm the clock took with **nothing written** leaves no
   submission (`captureTimedOut` saves only non-empty text), so in that one case the Brainstorm pill shows as still to come while the
   discussion carries on. Telling it apart needs something the Edge Function does not send today.
+- **The strip no longer calls the discussion finished while a mid-case brainstorm runs (issue #166, 2026-11-17).** An interaction
+  between #148 and #152, not a bug in either: `caseSteps` filled a pill in when it was earlier in the list than the stage, which was
+  the same as "finished" only while the brainstorm ran last. Since #148 it does not (100 of 844 live-eligible cases have a brainstorm
+  that is not the last beat, 20 of them before any part of the discussion). The discussion now has a fourth look, `open` (outlined in
+  the accent colour, no mini Bucket), used while the case stands in a brainstorm with `beatsShown < beatsTotal`. What is left:
+  - the view says how many parts of the plan the case has reached, not **which** ones. When the clock ends the discussion early the
+    parts it did not reach are let go and the case goes to the brainstorm and then to the recommendation, so during that brainstorm
+    the discussion is drawn as open although the case will not come back to it. The careful reading (open, not finished) was chosen
+    over guessing; the pill is filled in as soon as the recommendation starts. The same happens in a session whose plan has no
+    brainstorm beat of its own (a write-up whose brainstorm is only a table of ideas, or a case saved before #148), because entering
+    the brainstorm pushes no `BeatRecord` there.
+  - a case with two brainstorms still fills the Brainstorm pill in after the first one is handed in, which is #152's decision and
+    unchanged: the view carries no count of the brainstorms a plan has left.
 
 ## Asking outright for the answer (issue #142, 2026-11-17)
 
@@ -627,9 +640,10 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   own **What others see** preview in Profile & privacy does not include the section, so a member can only see what a link holder is
   told by opening their own link; and the card names at most three case types and three industries before "+ n more", with no way to
   see the rest.
-- **The live case's progress strip has been read by tests, not by eyes** (issue #150, 2026-11-17). Screen tests assert which pill is
-  marked in each shape of case, but nobody has opened a live case in a browser since the change, and phone width — where five pills
-  wrap onto two rows — is unchecked, the same gap the rest of the live-case screens have.
+- **The live case's progress strip has been read by tests, not by eyes** (issues #150 and #166, 2026-11-17). Screen tests assert which
+  pill is marked, and in which state, in each shape of case, but nobody has opened a live case in a browser since either change, and
+  phone width — where five pills wrap onto two rows — is unchecked, the same gap the rest of the live-case screens have. The `open`
+  look #166 added (an accent outline with no fill) has never been seen on a screen either.
 - **No end-to-end coverage of Live case** (PR #79 says so: "E2E untouched (no live case coverage there)"). The live-case logic, handler and
   screens are covered by unit tests with a fake model and an in-memory backend, and `live_case_sessions` by PGlite tests, but nothing in
   `e2e/` starts a case against the real function. The Learning-mode screen was not exercised in a browser by its author.

@@ -100,7 +100,7 @@ export function ClockBar({ view, now }: { view: LiveView; now: number }) {
                 key={s.id}
                 data-state={s.state}
                 aria-current={s.state === 'current' ? 'step' : undefined}
-                className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${s.state === 'current' ? 'border-accent bg-accent text-accent-ink' : s.state === 'done' ? 'border-line bg-surface-2 text-ink-2' : 'border-line text-muted'}`}
+                className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${s.state === 'current' ? 'border-accent bg-accent text-accent-ink' : s.state === 'open' ? 'border-accent text-ink' : s.state === 'done' ? 'border-line bg-surface-2 text-ink-2' : 'border-line text-muted'}`}
               >
                 {s.state === 'current' && <BucketAvatar className="mr-1 inline size-4 -translate-y-px" />}
                 {s.label}
