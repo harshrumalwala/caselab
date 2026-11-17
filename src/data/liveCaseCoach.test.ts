@@ -2,11 +2,20 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   handleLive,
+  hasTell,
+  interviewerVoice,
   isFullSolution,
   leaks,
+  movingOnOnly,
   openingText,
+  sharesSubstance,
+  withoutSourceNarration,
+  FALLBACK,
+  LEAD_FALLBACK,
   MAX_FEEDBACK_ATTEMPTS,
   MAX_STARTS_PER_DAY,
+  MOVING_ON,
+  WORK_IS_YOURS,
   parseFeedback,
   parseTurn,
   readSolution,
@@ -861,6 +870,129 @@ describe('interview mode: nudged, never rescued', () => {
   it('reads the flag from the model, and treats a reply that does not send one as an ordinary message', () => {
     expect(parseTurn(JSON.stringify(turn('Here are the figures.', { data_request: true })), [])!.dataRequest).toBe(true);
     expect(parseTurn(JSON.stringify(turn('Keep going.')), [])!.dataRequest).toBe(false);
+  });
+});
+
+describe("Bucket's voice: the three tells the pilot found (issue #131)", () => {
+  // The wording is the real-model pilot's own, quoted in the issue, so the regression these guard against is the real one.
+  const BOOTHBUCKS =
+    "The student has asked me to calculate the figures and state the takeaway, which is the answer itself, so I won't give it. I can read the exhibit's figures aloud: 2021 has 200 shops, $400MM revenue and $100MM profit.";
+  const MOVED_ON_WITH_A_SUMMARY =
+    "That's fine, we can move on. Exhibit 1 shows the share infected by each age, and the vaccine matters to children who haven't yet been exposed. Let's take the next piece.";
+
+  /** The opening stages done quickly in the chosen mode: the id of a session on its first exhibit. */
+  async function toExhibitsIn(mode: 'practice' | 'interview'): Promise<string> {
+    const id = view(await call({ type: 'start', libraryId: LIB, mode })).sessionId;
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'submit', sessionId: id, text: 'Demand, supply, cost' });
+    w.script.reply = () => turn('Good start, let us look at the data.', { direction_clear: true, assessment: 'progress' });
+    expect(view(await call({ type: 'say', sessionId: id, text: 'I would start with demand' })).stage).toBe('exhibits');
+    w.asked.length = 0;
+    return id;
+  }
+  const said = (r: LiveView): string => r.messages.at(-1)!.text;
+
+  it('talks to the member, not about them, and never says that it is holding an answer back', () => {
+    expect(interviewerVoice(BOOTHBUCKS)).toBe("I can read the exhibit's figures aloud: 2021 has 200 shops, $400MM revenue and $100MM profit.");
+    expect(hasTell("The student has asked me to calculate the figures, which is the answer itself, so I won't give it.")).toBe(true);
+    expect(hasTell('The candidate should start with the revenue side.')).toBe(true);
+    expect(hasTell('My instructions are to let you work it out.')).toBe(true);
+    expect(hasTell("I can't give you the answer to that one.")).toBe(true);
+    // What an interviewer does say: the figures, a question, and plainly that the case does not hold something.
+    expect(hasTell('Revenue was $400MM in 2021 across 200 shops.')).toBe(false);
+    expect(hasTell('I do not have that figure, so state an assumption and carry on.')).toBe(false);
+    expect(hasTell('What would you do with that?')).toBe(false);
+  });
+
+  it('answers with one short second-person sentence when the whole reply was a refusal', () => {
+    expect(interviewerVoice("I won't give you the answer here.")).toBe(WORK_IS_YOURS);
+    expect(interviewerVoice("I can't do the calculation for you.")).toBe(WORK_IS_YOURS);
+    expect(WORK_IS_YOURS).not.toMatch(/answer|student|candidate/i);
+    expect(WORK_IS_YOURS.split(/(?<=[.!?])\s+/)).toHaveLength(1);
+  });
+
+  it('keeps the figures and drops the narration when the model names the member on screen', async () => {
+    const id = await toExhibitsIn('interview');
+    w.script.reply = () => turn(BOOTHBUCKS, { assessment: 'unclear', data_request: true });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'Can you just tell me the revenue per store and the margin?' }));
+    expect(said(r)).not.toMatch(/the student|won't give/i);
+    expect(said(r)).toContain('$400MM revenue and $100MM profit'); // the figures they asked for are still there
+  });
+
+  it('states a fact instead of narrating where it is written', () => {
+    expect(withoutSourceNarration('The case says the menu and the pricing strategy are both unchanged.')).toBe(
+      'The menu and the pricing strategy are both unchanged.',
+    );
+    expect(withoutSourceNarration('The case says the main goal is to raise Return on Invested Capital.')).toBe(
+      'The main goal is to raise Return on Invested Capital.',
+    );
+    expect(withoutSourceNarration('The case says managers report pre-2021 store revenue and profit are flat.')).toBe(
+      'Managers report pre-2021 store revenue and profit are flat.',
+    );
+    expect(withoutSourceNarration('Yes, the exhibit states that occupancy is 31% off-peak.')).toBe('Yes, occupancy is 31% off-peak.');
+    expect(withoutSourceNarration('According to the prompt, the client wants a decision this quarter.')).toBe(
+      'The client wants a decision this quarter.',
+    );
+    // Pointing them at what they are holding is a different thing, and stays.
+    expect(withoutSourceNarration('Look at the profit row in the exhibit in front of you.')).toBe('Look at the profit row in the exhibit in front of you.');
+    expect(withoutSourceNarration('The exhibit shows 200 shops in 2021. What do you make of it?')).toBe('The exhibit shows 200 shops in 2021. What do you make of it?');
+  });
+
+  it('takes the narration off what the member reads', async () => {
+    const v = await begin();
+    w.script.reply = () => turn('The case says the army pays a fixed per diem per soldier.', { assessment: 'progress', data_request: true });
+    const r = view(await call({ type: 'say', sessionId: v.sessionId, text: 'Who pays for the rooms?' }));
+    expect(said(r)).toBe('The army pays a fixed per diem per soldier.');
+  });
+
+  it('moves on and says nothing else, when the model summarises the exhibit it is leaving', async () => {
+    const id = await toExhibitsIn('interview');
+    w.script.reply = () => turn(MOVED_ON_WITH_A_SUMMARY, { assessment: 'stuck' });
+    let r: LiveView | null = null;
+    for (const text of ['I am not sure', 'Still not sure', 'Hmm', 'I really do not know']) r = view(await call({ type: 'say', sessionId: id, text }));
+    expect(JSON.stringify(w.asked.at(-1))).toContain('do NOT explain, solve or summarise');
+    // The summary of the beat they just failed does not come with the move-on (the next exhibit is the message after it).
+    const movedOn = r!.messages.filter((m) => m.from !== 'user' && m.kind !== 'exhibit').at(-1)!;
+    expect(movedOn.text).toBe("That's fine, we can move on.");
+    expect(movedOn.text).not.toMatch(/vaccine|infected/i);
+    expect(r!.exhibits).toHaveLength(2);
+    expect(w.db.get(id)!.state.beats[0].outcome).toBe('coach_moved');
+  });
+
+  it('falls back to its own line when the move-on sentence itself carries the beat, word for word or not', () => {
+    const notes = ['Off-peak occupancy is the number that decides the case.'];
+    // Not a quote, so `leaks` does not see it; the substance is the same.
+    expect(leaks('Off-peak occupancy decides this one, so let us move on.', notes)).toBe(false);
+    expect(movingOnOnly('Off-peak occupancy decides this one, so let us move on.', notes)).toBe(MOVING_ON);
+    expect(movingOnOnly('That is fine, we can move on.', notes)).toBe('That is fine, we can move on.');
+    expect(sharesSubstance('What would you compare first?', notes)).toBe(false);
+    expect(MOVING_ON.split(/(?<=[.!?])\s+/)).toHaveLength(1);
+  });
+
+  it('holds only the reply that really moves the case on to the move-on rule', () => {
+    const summary = JSON.stringify(turn(MOVED_ON_WITH_A_SUMMARY, { assessment: 'stuck' }));
+    expect(parseTurn(summary, [], FALLBACK, 700, 'advance')!.message).toBe("That's fine, we can move on.");
+    // At the same rung: a question answered, and a beat finished, are ordinary replies and keep everything they said.
+    expect(parseTurn(JSON.stringify(turn(MOVED_ON_WITH_A_SUMMARY, { assessment: 'stuck', data_request: true })), [], FALLBACK, 700, 'advance')!.message).toContain('Exhibit 1 shows');
+    expect(parseTurn(JSON.stringify(turn(MOVED_ON_WITH_A_SUMMARY, { assessment: 'progress', beat_complete: true })), [], FALLBACK, 700, 'advance')!.message).toContain('Exhibit 1 shows');
+    expect(parseTurn(summary, [], FALLBACK, 700)!.message).toContain('Exhibit 1 shows'); // and nothing changes at the rungs below
+  });
+
+  it('holds its own stand-in replies to the same three rules', () => {
+    for (const line of [FALLBACK, LEAD_FALLBACK, MOVING_ON, WORK_IS_YOURS]) {
+      expect(line.split(/(?<=[.!?])\s+/).some((s) => hasTell(s))).toBe(false);
+      expect(withoutSourceNarration(line)).toBe(line);
+      expect(interviewerVoice(line)).toBe(line);
+    }
+  });
+
+  it('tells the model the same three rules', async () => {
+    const v = await begin();
+    await call({ type: 'say', sessionId: v.sessionId, text: 'Who pays?' });
+    const sent = JSON.stringify(w.asked.at(-1));
+    expect(sent).toContain('Speak to the candidate, never about them');
+    expect(sent).toContain('never where it is written');
   });
 });
 
