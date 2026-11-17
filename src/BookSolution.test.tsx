@@ -331,6 +331,15 @@ describe('a write-up read from the database', () => {
     expect(many?.exhibits[0].cut).toContain('chart panels: 10 in the write-up, 8 on screen');
   });
 
+  it('records a label under a chart axis that was cut to length, as it does a panel heading (issue #143)', () => {
+    const label = 'Operating margin after the new distribution centre opens';
+    const chart = { kind: 'bar', categories: ['North'], series: [{ name: 'Revenue', values: [10] }], belowRows: [{ label, values: ['4%'] }] };
+    const s = parseBookSolution({ ...good, exhibits: [{ title: 'Margins', columns: ['A'], rows: [['1']], chart }] });
+    expect(s?.exhibits[0].chart?.belowRows[0].label).toBe(label.slice(0, 40));
+    expect(s?.exhibits[0].shortened).toEqual(['chart row 1 under the axis label shortened: 1']);
+    expect(s?.exhibits[0].cut).toEqual([]);
+  });
+
   it('tolerates missing lists and an odd confidence, and cuts rows to the columns', () => {
     const s = parseBookSolution({ prompt: 'q', recommendation: 'r', steps: [{ title: 't', body: 'b' }], confidence: 'weird', exhibits: [{ title: 'E', columns: ['A'], rows: [['1', '2', '3']] }] });
     expect(s).toMatchObject({ facts: [], structure: [], risks: [], nextSteps: [], ourTakeaways: [], confidence: 'high' });

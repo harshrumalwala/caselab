@@ -127,6 +127,58 @@ describe('text cut to length is told apart from content that is gone', () => {
     expect(loss.cut).toEqual([]);
   });
 
+  it('a label under the axis too long for its row is shortened, not cut (issue #143)', () => {
+    const label = 'Operating margin after the new distribution centre opens';
+    const loss = lossOf({ chart: { kind: 'bar', categories: ['a'], series: [{ name: 's', values: [1] }], belowRows: [{ label, values: ['4%'] }] } });
+    expect(loss.shortened).toEqual(['chart row 1 under the axis label shortened: 1']);
+    expect(loss.cut).toEqual([]);
+  });
+
+  it('a label under the axis that fits is not reported', () => {
+    const loss = lossOf({ chart: { kind: 'bar', categories: ['a'], series: [{ name: 's', values: [1] }], belowRows: [{ label: 'Operating margin', values: ['4%'] }] } });
+    expect(loss).toEqual({ cut: [], shortened: [] });
+  });
+
+  it('names the row, so a report says which of the rows under the axis was cut', () => {
+    const long = 'A row label that runs on well past the forty characters a row under the axis can hold';
+    const loss = lossOf({
+      chart: {
+        kind: 'bar',
+        categories: ['a'],
+        series: [{ name: 's', values: [1] }],
+        belowRows: [
+          { label: 'Revenue', values: ['10'] },
+          { label: long, values: ['20'] },
+        ],
+      },
+    });
+    expect(loss.shortened).toEqual(['chart row 2 under the axis label shortened: 1']);
+  });
+
+  it('measures each label against the row it is drawn as, not against the row it was written as', () => {
+    // The parser drops a row with no values, so the second row written is the first row drawn: comparing by written position would
+    // hold a short label against a long one and call it lost.
+    const loss = lossOf({
+      chart: {
+        kind: 'bar',
+        categories: ['a'],
+        series: [{ name: 's', values: [1] }],
+        belowRows: [
+          { label: 'Nothing under this one', values: [] },
+          { label: 'Operating margin', values: ['4%'] },
+        ],
+      },
+    });
+    expect(loss).toEqual({ cut: [], shortened: [] });
+  });
+
+  it('a label under the axis replaced by another is content gone, not text cut to length', () => {
+    const written = raw({ chart: { kind: 'bar', categories: ['a'], series: [{ name: 's', values: [1] }], belowRows: [{ label: 'Operating margin', values: ['4%'] }] } });
+    const drawn = parseSolutionExhibit(written);
+    const swapped = { ...drawn.chart!, belowRows: [{ label: 'Something else', values: ['4%'] }] };
+    expect(exhibitLoss(written, { ...drawn, chart: swapped }).cut).toContain('chart row 1 under the axis label not as written: 1');
+  });
+
   it('counts the cells of the whole table in one line, not one line per cell', () => {
     const long = 'x'.repeat(900);
     const loss = lossOf({ rows: [['North', long], ['South', long]] });
@@ -151,10 +203,17 @@ describe('what it may say', () => {
       caption: `ZZCAPTION ${'c'.repeat(4000)}`,
       columns: Array.from({ length: 30 }, (_, i) => `ZZCOLUMN${i}`),
       rows: [['ZZCELL', `ZZLONGCELL${'x'.repeat(900)}`]],
-      chart: { kind: 'bar', heading: `ZZHEADING${'h'.repeat(200)}`, categories: ['ZZCATEGORY'], series: [{ name: 'ZZSERIES', values: [1] }], panels: Array.from({ length: 12 }, () => panel('ZZPANEL')) },
+      chart: {
+        kind: 'bar',
+        heading: `ZZHEADING${'h'.repeat(200)}`,
+        categories: ['ZZCATEGORY'],
+        series: [{ name: 'ZZSERIES', values: [1] }],
+        belowRows: [{ label: `ZZBELOWLABEL${'b'.repeat(100)}`, values: ['1'] }],
+        panels: Array.from({ length: 12 }, () => panel('ZZPANEL')),
+      },
     });
     const text = [...loss.cut, ...loss.shortened].join(' ');
-    expect(text).not.toMatch(/ZZ(TITLE|CAPTION|COLUMN|CELL|LONGCELL|HEADING|CATEGORY|SERIES|PANEL)/);
+    expect(text).not.toMatch(/ZZ(TITLE|CAPTION|COLUMN|CELL|LONGCELL|HEADING|CATEGORY|SERIES|PANEL|BELOWLABEL)/);
     expect(loss.cut.length + loss.shortened.length).toBeGreaterThan(0);
   });
 });

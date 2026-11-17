@@ -10,7 +10,7 @@ import { buildPlan, isInterviewerSideExhibit } from '../../supabase/functions/_s
 import { givenOnRequest, isFullSolution, planFor, readSolution } from '../../supabase/functions/_shared/liveCaseCoach';
 import { LIVE_EXHIBIT_LIMITS, SOLUTION_EXHIBIT_LIMITS, parseBookSolution, parseSolutionExhibit } from '../domain/bookSolution';
 import { exhibitLoss } from '../domain/exhibitFidelity';
-import { PROMPT_BREACH, PROMPT_RULES, audit, auditCase, formatReport, formatSummary, measureCaps, promptAsides, readSolutionFiles, summarise, type AuditRules } from '../../scripts/liveCaseAudit.mjs';
+import { PROMPT_BREACH, PROMPT_RULES, audit, auditCase, formatReport, formatSummary, lossKind, measureCaps, promptAsides, readSolutionFiles, summarise, type AuditRules } from '../../scripts/liveCaseAudit.mjs';
 
 const rules: AuditRules = {
   isInterviewerSideExhibit,
@@ -180,6 +180,23 @@ describe('the flags', () => {
     // Nothing to report for an exhibit that reaches the screen whole, on either path.
     expect(one().fidelity).toEqual([]);
     expect(one().flags).not.toContain('exhibit_not_whole');
+  });
+
+  // Issue #143: the label of a row under the axis is a line of the exhibit like the panel heading above it, and was the one piece of
+  // text the comparison never read, so a cut one reached the member with nothing saying so and nothing in this report.
+  it('flags a label under a chart axis that was cut to length, and names the row', () => {
+    const label = 'Operating margin after the new distribution centre opens';
+    const chart = { kind: 'bar', categories: ['North'], series: [{ name: 'Revenue', values: [10] }], belowRows: [{ label, values: ['4%'] }] };
+    const long = one({ exhibits: [exhibit({ chart })] });
+    expect(long.flags).toContain('exhibit_text_shortened');
+    expect(long.flags).not.toContain('exhibit_not_whole');
+    expect(long.fidelity[0].live.shortened).toContain('chart row 1 under the axis label shortened: 1');
+    // The summary groups it by its own name, so the report says which kind of text was cut.
+    expect(lossKind('chart row 1 under the axis label shortened: 1')).toBe('chart row under the axis label shortened');
+
+    const short = one({ exhibits: [exhibit({ chart: { ...chart, belowRows: [{ label: 'Operating margin', values: ['4%'] }] } })] });
+    expect(short.fidelity).toEqual([]);
+    expect(short.flags).not.toContain('exhibit_text_shortened');
   });
 
   it('compares the interviewer\'s own exhibits on the Full solution screen only: a live case never draws them', () => {

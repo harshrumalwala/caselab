@@ -12,8 +12,8 @@ import type { ExhibitChart, SolutionExhibit } from './bookSolution.ts';
  * Two kinds of loss, kept apart because they are worth different things:
  * - `cut`: something is **gone** — a column, a row, a cell, a chart point, a series, a panel. The member is looking at less of the book's
  *   exhibit than the write-up holds, so the screen says so and the audit fails on it.
- * - `shortened`: a piece of text is **cut to length** — a panel heading, an axis title, a footnote. The exhibit is whole; one label does not
- *   fit the drawing. Reported to us, not to the member.
+ * - `shortened`: a piece of text is **cut to length** — a panel heading, an axis title, a footnote, a row label under the axis. The
+ *   exhibit is whole; one label does not fit the drawing. Reported to us, not to the member.
  *
  * Every entry is a count, a position or a chart kind. Never a heading, a label, a cell or any other word of the content, so the report it
  * feeds stays safe to paste into an issue.
@@ -115,10 +115,17 @@ function chartLoss(raw: unknown, onScreen: ExhibitChart | null, where: string, l
 
   loss.count(`${where} totals`, slots(o.totals).length, onScreen.totals.length);
   loss.text(`${where} totals`, slots(o.totals), onScreen.totals);
-  loss.count(`${where} rows under the axis`, list(o.belowRows).filter((r) => slots(obj(r).values).length > 0).length, onScreen.belowRows.length);
-  list(o.belowRows).forEach((r, i) => {
+  // A row the write-up gives no value is never drawn (`parseChart` drops it), so the drawn rows line up with the rows that have one and
+  // not with every row written down. Comparing in the written order would hold one row's label against another's.
+  const belowRows = list(o.belowRows).filter((r) => slots(obj(r).values).length > 0);
+  loss.count(`${where} rows under the axis`, belowRows.length, onScreen.belowRows.length);
+  belowRows.forEach((r, i) => {
     const drawn = onScreen.belowRows[i];
-    if (drawn) loss.count(`${where} row ${i + 1} under the axis`, slots(obj(r).values).length, drawn.values.length);
+    if (!drawn) return;
+    loss.count(`${where} row ${i + 1} under the axis`, slots(obj(r).values).length, drawn.values.length);
+    // Its label is a line of the book's exhibit like the panel heading and the axis title, and is cut to length the same way (40
+    // characters). Comparing only the values left a cut label invisible to the member and to the report (issue #143).
+    loss.one(`${where} row ${i + 1} under the axis label`, obj(r).label, drawn.label);
   });
   const sideItems = slots(obj(o.sideNotes).items);
   if (sideItems.length > 0) {
