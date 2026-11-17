@@ -516,6 +516,150 @@ describe('what to give this member next (a visitor has no log of their own)', ()
   });
 });
 
+describe('what this member is sharpening (their own switch, off until they ask)', () => {
+  /** Bob, with skill scores shared and the summary switched on. */
+  const SHARPENER: Profile = { ...BOB, sharing: { ...BOB.sharing, skills: true, sharpening: true } };
+  /** Four rated cases: Quant is weak, Framework is strong, Exhibits sits in the middle. */
+  const RATED: SharedCase[] = Array.from({ length: 4 }, (_, i) =>
+    row({ caseId: `r${i}`, title: `Rated case ${i}`, skillScores: { quant: 2, framework: 5, exhibits: 3 } }),
+  );
+  const section = async () => within(await screen.findByRole('region', { name: /What Bob is sharpening/ }));
+  const skills = (where: ReturnType<typeof within>, label: string) =>
+    within(where.getByRole('list', { name: label }))
+      .getAllByRole('listitem')
+      .map((li) => li.textContent);
+
+  it('names what they are sharpening and what they are strong at, in the product\'s own words', async () => {
+    const env = visitor({ members: [SHARPENER], shared: RATED });
+    await openLink(env, 'bob');
+    const card = await section();
+    expect(skills(card, 'Sharpening now')).toEqual(['Quant / Math', 'Exhibits & Charts']);
+    expect(skills(card, 'Strong already')).toEqual(['Framework']);
+    expect(card.getByText(/worked out from the skill scores on the 4 cases they share/)).toBeInTheDocument();
+  });
+
+  it('presents no number as a grade, ranks nothing and never calls anything a weakness', async () => {
+    const env = visitor({ members: [SHARPENER], shared: RATED });
+    await openLink(env, 'bob');
+    const card = await section();
+    expect(card.queryByText(/weakest|worst|weakness|poor|behind/i)).not.toBeInTheDocument();
+    for (const label of ['Sharpening now', 'Strong already']) {
+      for (const name of skills(card, label)) expect(name).not.toMatch(/\d/); // no average, no position
+    }
+    // At most three a side, out of eight skills: never a table of them all.
+    expect(skills(card, 'Sharpening now').length + skills(card, 'Strong already').length).toBeLessThanOrEqual(6);
+  });
+
+  it('is not on the page at all until the member switches it on, however much else they share', async () => {
+    const env = visitor({ members: [{ ...SHARPENER, sharing: { ...SHARPENER.sharing, sharpening: false } }], shared: RATED });
+    await openLink(env, 'bob');
+    await screen.findByText('Rated case 0'); // the rest of the profile is there, scores and all
+    expect(screen.queryByRole('region', { name: /sharpening/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: /What to give Bob next/ })).toBeInTheDocument();
+  });
+
+  it('has nothing to say when the member shares no skill scores', async () => {
+    const env = visitor({ members: [SHARPENER], shared: RATED.map((c) => ({ ...c, skillScores: null })) });
+    await openLink(env, 'bob');
+    await screen.findByText('Rated case 0');
+    expect(screen.queryByRole('region', { name: /What Bob is sharpening/ })).not.toBeInTheDocument();
+  });
+
+  it('stays silent below the minimum, with no placeholder and no explanation', async () => {
+    const env = visitor({ members: [SHARPENER], shared: RATED.slice(0, 2) });
+    await openLink(env, 'bob');
+    await screen.findByText('Rated case 0');
+    expect(screen.queryByRole('region', { name: /What Bob is sharpening/ })).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/not enough data|too few rated|once they have rated/i);
+  });
+
+  it('counts only shared practice cases, and asks for nothing a visitor did not already ask for', async () => {
+    const fetched = vi.spyOn(globalThis, 'fetch');
+    const burned = { burnedBooks: ['Cosentino'], burnedCases: [{ title: 'Piano tuners', book: '' }] };
+    const env = visitor({ members: [{ ...SHARPENER, ...burned, sharing: { ...SHARPENER.sharing, burned: true } }], shared: RATED });
+    await openLink(env, 'bob');
+    const card = await section();
+    expect(card.getByText(/on the 4 cases they share/)).toBeInTheDocument(); // the burned case is not one of them
+    expect([...new Set(env.publicReader.calls)].sort()).toEqual(['getPerson', 'getSharedCases']);
+    expect(env.calls).toEqual([]);
+    expect(env.community.calls).toEqual([]);
+    expect(fetched).not.toHaveBeenCalled();
+    fetched.mockRestore();
+  });
+});
+
+describe('deciding whether to be summarised on your link', () => {
+  const openProfile = async (env: FakeEnv) => {
+    const { user } = await open(env);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await user.click(screen.getByRole('button', { name: 'Profile and privacy' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Profile & privacy' });
+    return { user, dialog };
+  };
+  const mine = (env: FakeEnv) => env.community.profiles.find((p) => p.userId === TEST_USER.userId)!;
+  const ME: Profile = { ...MY_PROFILE, publicProfile: true, sharing: { ...NO_SHARING, cases: true, skills: true } };
+  const MY_CASES: SharedCase[] = Array.from({ length: 4 }, (_, i) =>
+    row({ caseId: `m${i}`, ownerId: TEST_USER.userId, title: `My case ${i}`, skillScores: { quant: 2, framework: 5 } }),
+  );
+
+  it('has a switch of its own, off by default, that saves like the others', async () => {
+    const env = createFakeEnv({ profile: ME, shared: MY_CASES });
+    const { user, dialog } = await openProfile(env);
+    const toggle = within(dialog).getByRole('switch', { name: "What I'm sharpening" });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await user.click(toggle);
+    await waitFor(() => expect(mine(env).sharing.sharpening).toBe(true));
+    await user.click(within(dialog).getByRole('switch', { name: "What I'm sharpening" }));
+    await waitFor(() => expect(mine(env).sharing.sharpening).toBe(false));
+  });
+
+  it('shows the member the card a link holder would read before they decide, and says where it stands', async () => {
+    const env = createFakeEnv({ profile: ME, shared: MY_CASES });
+    const { user, dialog } = await openProfile(env);
+    const preview = within(within(dialog).getByRole('region', { name: /What others see/ }));
+    await user.click(within(dialog).getByRole('tab', { name: 'Visitors without an account' }));
+
+    const card = within(await preview.findByRole('region', { name: /What Test is sharpening/ }));
+    expect(within(card.getByRole('list', { name: 'Sharpening now' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Quant / Math']);
+    expect(within(card.getByRole('list', { name: 'Strong already' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Framework']);
+    expect(card.getByText(/joins your link when you turn on What I'm sharpening/)).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('switch', { name: "What I'm sharpening" }));
+    await waitFor(() => expect(preview.getByText(/on your link now, word for word/)).toBeInTheDocument());
+  });
+
+  /** The switch on, and whatever rows the member shares: only they are told why the card is empty. */
+  const emptyPreview = async (shared: SharedCase[]) => {
+    const env = createFakeEnv({ profile: { ...ME, sharing: { ...ME.sharing, sharpening: true } }, shared });
+    const { user, dialog } = await openProfile(env);
+    const preview = within(within(dialog).getByRole('region', { name: /What others see/ }));
+    await user.click(within(dialog).getByRole('tab', { name: 'Visitors without an account' }));
+    return preview;
+  };
+
+  it('tells the member their link is waiting on a third rated case, which the link itself never says', async () => {
+    const preview = await emptyPreview(MY_CASES.slice(0, 2));
+    expect(await preview.findByText(/joins your link once you share skill scores on 3 cases/)).toBeInTheDocument();
+    expect(preview.queryByRole('region', { name: /is sharpening/ })).not.toBeInTheDocument();
+  });
+
+  it('tells the member when every shared score sits in the middle, so nothing stands out to name', async () => {
+    // Framework alternates 3 and 4: above the sharpening threshold, below the strong band, so neither list has it.
+    const middling = [3, 4, 3, 4].map((rating, i) => row({ caseId: `mid${i}`, ownerId: TEST_USER.userId, title: `Middle case ${i}`, skillScores: { framework: rating as 3 | 4 } }));
+    const preview = await emptyPreview(middling);
+    expect(await preview.findByText(/sit in the middle so far, so there is nothing to name yet/)).toBeInTheDocument();
+    expect(preview.queryByRole('region', { name: /is sharpening/ })).not.toBeInTheDocument();
+  });
+
+  it('is kept to the visitors the link reaches: the members preview does not show it', async () => {
+    const env = createFakeEnv({ profile: { ...ME, sharing: { ...ME.sharing, sharpening: true } }, shared: MY_CASES });
+    const { dialog } = await openProfile(env);
+    const preview = within(within(dialog).getByRole('region', { name: /What others see/ }));
+    await preview.findByText(/My case 0/);
+    expect(preview.queryByRole('region', { name: /is sharpening/ })).not.toBeInTheDocument();
+  });
+});
+
 describe('the link is the only way in', () => {
   const LENA: Profile = { ...BOB, userId: 'lena', displayName: 'Lena Link' };
   const lenaCase = { ...row({ caseId: 'l1', title: 'Lena only-by-link case' }), ownerId: 'lena' };

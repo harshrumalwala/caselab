@@ -2,11 +2,12 @@ import type { CaseType, Rating, SkillGroupKey, SkillKey } from './constants';
 import { emptySkills } from './factory';
 import type { CaseRecord } from './types';
 
-/** The six profile-wide sharing switches. All off until a member opts in. */
+/** The profile-wide sharing switches. All off until a member opts in, except the level badge on a new profile. */
 export interface SharingPrefs {
   cases: boolean; // case name, source, industry, type, date
   overall: boolean; // overall score of each shared case
   skills: boolean; // per-skill scores of each shared case
+  sharpening: boolean; // the short "what I'm sharpening, what I'm strong at" summary on my profile link
   feedback: boolean; // written feedback received
   improvement: boolean; // improvement-focus tag of each shared case
   notes: boolean; // went well / struggled / concepts / next focus
@@ -77,6 +78,7 @@ export const NO_SHARING: SharingPrefs = {
   cases: false,
   overall: false,
   skills: false,
+  sharpening: false,
   feedback: false,
   improvement: false,
   notes: false,
@@ -164,6 +166,13 @@ export const SHARING_OPTIONS: {
     needsCases: true,
   },
   {
+    key: 'sharpening',
+    label: "What I'm sharpening",
+    short: "what they're sharpening",
+    hint: 'A short summary of up to three skills you are sharpening and up to three you are strong at, worked out from the skill scores you share. Names the skills only: no numbers, no ranking. Needs Skill scores to have anything to work from.',
+    needsCases: true,
+  },
+  {
     key: 'feedback',
     label: 'Written feedback',
     short: 'written feedback',
@@ -228,7 +237,7 @@ export const INCLUDED_IN_DETAILS: (keyof SharingPrefs)[] = ['overall', 'skills',
  * What a visitor without an account can see. Written feedback, learning notes and other notes are theirs to see
  * only when the member has opened everything.
  */
-export const PUBLIC_SHARING_KEYS: (keyof SharingPrefs)[] = ['cases', 'overall', 'skills', 'improvement', 'partner', 'details', 'burned'];
+export const PUBLIC_SHARING_KEYS: (keyof SharingPrefs)[] = ['cases', 'overall', 'skills', 'sharpening', 'improvement', 'partner', 'details', 'burned'];
 
 /** Like sharingSummary, but only the parts visitors without an account can actually see. */
 export function publicSharingSummary(sharing: SharingPrefs): string {

@@ -257,6 +257,11 @@ assistant saw a claim (for example a build session's report) but did not check i
   load-related timeouts are suspected, not confirmed. Heavy work running at the same time (a render test, other test runs) may have
   contributed. Use `npx vitest run <file>` for single files.
 - **No linter** exists (`package.json` has no `lint` script); CI (`.github/workflows/ci.yml`) runs typecheck, tests and build only.
+- **The #121 column is in production, so the live check that watched for it passes again.** "has every column the migrations add"
+  in `e2e/deployed.e2e.test.ts` reads the `add column` statements straight out of `supabase/migrations/`, so it expected
+  `profiles.share_sharpening` from the moment the migration file was committed and reported it missing until the owner applied it on
+  2026-11-17. (`public_profiles.share_sharpening` is never reported either way: that table is closed to every API role, so the read
+  fails on permission before it can fail on the column.) `npm run test:e2e` is not part of CI, so this was never a CI failure.
 - **Two live checks fail until the #96 migration is applied** (they are the check that the live database matches the code, so this is
   the intended failure, not a bug): "cannot list, search, count or page through members at all" in `e2e/community.e2e.test.ts` and
   "are closed to visitors and to members, however the read is shaped" in `e2e/deployed.e2e.test.ts`. Both have a NOTE saying so.
@@ -279,6 +284,19 @@ assistant saw a claim (for example a build session's report) but did not check i
   said it had not started a Learning case on the live site and had not confirmed that Vercel deployed the merge. This documentation
   pass did not see the owner's approval for that merge and deploy (the report did not mention it). Not verified.
 - **CAPTCHA is not wired in** for public sign-up; abuse protection is Supabase's built-in rate limits (README step 2 and Limitations).
+- **The "What I'm sharpening" migration (issue #121) was applied on 2026-11-17, before its app half shipped**, which is the order
+  CLAUDE.md asks for and the reason the PR was held open. `supabase/migrations/20261125120000_share_sharpening.sql` adds
+  `profiles.share_sharpening`, carries it into `public_profiles` and returns it from `public_person(id)`. Checked on production
+  afterwards (by the session that applied it): the column is on both tables, **0 members have it on and 9 have it off**, so nothing
+  became visible on apply; `public_person(p_id uuid)` returns it; and its grantees are `anon`, `service_role` and `postgres`, with
+  `authenticated` correctly absent. Had the app shipped first, `rowToProfile` would have read a column that did not exist and every
+  profile save would have failed.
+- **Whether a summary is shown is decided in the browser, not in the database**, and it has to be: the figures it is built from
+  (`skill_scores`) are released by `share_skills`, which is a separate consent the member may have given long ago. So a determined
+  link holder can still average those per-case scores by hand — that was the PM's original argument against the switch. What the
+  switch buys is that *CaseLab* does not do it for them or put the result at the top of the page, which is the framing the owner
+  chose to protect. If that ever needs enforcing in the database, the only way is to stop releasing per-case skill scores to
+  visitors, which is a different (and larger) decision.
 - **The public directory is gone (issue #96), but the migration that enforces it is not applied yet.** The app shipped in that PR has no
   front-page list or search, and `src/data/supabaseCommunity.ts` no longer reads the public tables. Until the owner runs
   `npx supabase db push` for `supabase/migrations/20261124120000_link_only_profiles.sql`, **production `anon` still holds `SELECT` on
@@ -640,6 +658,12 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   own **What others see** preview in Profile & privacy does not include the section, so a member can only see what a link holder is
   told by opening their own link; and the card names at most three case types and three industries before "+ n more", with no way to
   see the rest.
+- **The "What I'm sharpening" card has been read by tests, not by eyes** (issue #121, 2026-11-17). `src/domain/sharpening.ts`, the
+  visitor's card and the member's preview are covered by unit, screen and PGlite tests, but nobody has opened either in a browser, and
+  phone width — where the two lists stack — is unchecked, the same gap #120's card has. Two edges left deliberately: the card names at
+  most three skills a side with no way to see the rest (the point is a short answer, not a table), and the two lines that explain an
+  empty preview (too few rated cases, or every skill in the middle band) are shown to the member only, so they have never been seen
+  outside a test either.
 - **The live case's progress strip has been read by tests, not by eyes** (issues #150 and #166, 2026-11-17). Screen tests assert which
   pill is marked, and in which state, in each shape of case, but nobody has opened a live case in a browser since either change, and
   phone width — where five pills wrap onto two rows — is unchecked, the same gap the rest of the live-case screens have. The `open`
