@@ -225,6 +225,31 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **An `advance` reply is cut to its first sentence.** If a model ever answered a question and moved on in the same breath at that rung
   (with `data_request` unset), the answer would be lost. The flag and `beat_complete` are both excluded from the cut for that reason.
 
+## A result the book worked out, handed over as data (issue #129, 2026-11-17)
+
+- **The wording half is unverified against a real model.** `NOT_THE_ANSWER` and the notes on the interviewer's tables in
+  `supabase/functions/_shared/liveCaseCoach.ts` now state the rubric's derivation test and forbid volunteering a derived figure; the unit
+  tests only exercise the code-side check. Like every other change under `supabase/functions/**` it does nothing until
+  `npx supabase functions deploy live-case`.
+- **The code-side check is numbers only, and only for figures it can be sure of.** `heldResults` holds back a figure in an
+  interviewer-side table when the cell shows its own arithmetic or when the figure is the product or sum of others in the same row or
+  column (same scale, within 0.5%). It cannot see a figure restated in words ("about eight billion"), a rounded version of one, a figure
+  the model derives for itself from inputs it has just read out, or a result nowhere written down as a cell. The marks in the prompt are
+  the first line; this is the net.
+- **The two thresholds are judgement, not measurement.** Nothing under 100 is called a result by the arithmetic check (3 x 4 = 12 happens
+  by accident) and nothing under 10 at all; a year (1900-2100) is never one. Across the 872 write-ups the check holds back 556 figures in
+  146 cases, 20 of them under 100 (all from cells that print their own working). A real per-unit answer below those thresholds is missed.
+- **A false mark would withhold an input, which is the worse defect (#83).** The guard is that a figure the member can see anywhere else
+  — the prompt, the facts, the clarifying answers, their own exhibits, the unmarked cells of the same hidden tables, or anything already
+  said in the conversation — is never held back; measured over the library, no figure the member can see is ever held. What is not
+  guarded: an input that appears *only* as an operand inside one of the book's worked cells is treated as part of the working.
+- **A caught reply is replaced whole**, as a reply that quotes a private note is. A member who asked for data and got a reply mixing the
+  inputs with the result therefore gets the fallback line instead of the inputs. Dropping only the offending sentence (the shape issue
+  #131 used for its tells) would keep more of the reply; the issue asked for the `leaks` behaviour and that is what is in.
+- **Learning mode is exempt by design**: `heldResults` returns nothing there, because the mode exists to teach the answer once the
+  student has tried.
+- The durable fix the issue names is still open: an `audience` field per exhibit in `private-data/`, which needs a seed reload.
+
 ## Unverified user-side checks left open
 
 - Whether the "someone said yes" notification email arrives (the owner confirmed the sign-up email flow; whether the "asked you" request email was checked is not known).

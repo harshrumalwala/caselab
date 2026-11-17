@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  computedCells,
+  figuresIn,
   handleLive,
   hasTell,
   interviewerVoice,
@@ -9,6 +11,7 @@ import {
   movingOnOnly,
   openingText,
   sharesSubstance,
+  statesHeldResult,
   withoutSourceNarration,
   FALLBACK,
   LEAD_FALLBACK,
@@ -1364,5 +1367,178 @@ describe('learning mode, in the handler', () => {
     for (const s of Object.values(done.feedback!.skills)) expect(s.rating).toBeNull();
     expect(done.feedback!.skills.framework.feedback).toBe('Clear buckets.'); // the notes stay
     expect(done.feedback!.wentWell).toBe('Good structure.');
+  });
+});
+
+describe('a figure the book has already worked out (issue #129)', () => {
+  // Both tables below are the shapes the real-model pilot leaked from, with our own numbers in them: a hidden guidance sheet whose last
+  // column is the product of the two beside it, and a hidden working sheet that prints its own arithmetic in the cell.
+  const table = (over: Record<string, unknown>) => ({ title: '', caption: '', columns: [], rows: [], approx: false, howToRead: '', takeaways: [], chart: null, ...over });
+
+  const ATTENDANCE = table({
+    title: 'Exhibit 1: Attendance and ticket price',
+    columns: ['Year', 'Attendance (millions)', 'Average ticket price'],
+    rows: [['2024', '60', '$70'], ['2025', '65', '$75']],
+    howToRead: 'Compare the two years SECRET-HOW-TAM',
+    takeaways: ['The market is growing SECRET-TAKE-TAM'],
+  });
+  const TAM = table({
+    title: 'Interviewer guidance for Exhibit 1: market size',
+    columns: ['Year', 'Attendance', 'Ticket price', 'Market revenue'],
+    rows: [['2024', '60,000,000', '$70', '$4.2B'], ['2025', '65,000,000', '$75', '$4.875B'], ['Total', '', '', '$9.075B']],
+  });
+  const UNITS = table({
+    title: 'Exhibit 2: Units sold',
+    columns: ['Product', '2016', '2017'],
+    rows: [['Televisions', '24,000', '36,000'], ['Radios', '54,000', '66,000']],
+    howToRead: 'Totals across the chain SECRET-HOW-UNITS',
+    takeaways: ['Radios carry the volume SECRET-TAKE-UNITS'],
+  });
+  const WORKING = table({
+    title: 'Exhibit 2: Solution, quantity per store',
+    columns: ['Product', '2016', '2017'],
+    rows: [['Televisions', '24,000/120 = 200', '36,000/120 = 300'], ['Radios', '54,000/120 = 450', '66,000/120 = 550']],
+  });
+  /** The cost base of issue #83: three input rows, none of them worked out from anything. */
+  const COSTS = table({
+    title: 'Interviewer guidance: the cost base',
+    columns: ['Line', 'Amount'],
+    rows: [['Capex', '$200M'], ['Fixed costs', '$150M'], ['Variable costs', '$130M']],
+  });
+
+  const caseOf = (exhibits: unknown[], facts: string[] = SOLUTION.facts) => {
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, facts, exhibits } } : null);
+  };
+  const said = (r: LiveView): string => r.messages.at(-1)!.text;
+
+  it('tells the model the test to apply, and that a worked-out figure is never volunteered', async () => {
+    caseOf([ATTENDANCE, TAM]);
+    const v = await begin();
+    await call({ type: 'say', sessionId: v.sessionId, text: 'Do we have attendance and ticket price over time?' });
+    const sent = w.asked[0].messages.at(-1)!.content;
+    expect(sent).toContain('could they have produced this figure themselves from what they already hold');
+    expect(sent).toContain('it is theirs to produce, whoever wrote it down');
+    expect(sent).toContain('a figure is not data just because it is printed on your sheet');
+    expect(sent).toContain('Never volunteer one either: not unasked, not before any exhibit is on the table');
+    expect(sent).toContain('not inside a refusal');
+  });
+
+  it('marks the figures the book worked out and leaves every input unmarked', async () => {
+    caseOf([ATTENDANCE, TAM]);
+    const id = await toExhibits();
+    await call({ type: 'say', sessionId: id, text: 'What is the market worth?' });
+    const sent = w.asked.at(-1)!.messages.at(-1)!.content;
+    // The product of the two columns beside it is marked; the two figures it is made of are not.
+    expect(sent).toContain('2024 | 60,000,000 | $70 | $4.2B [computed]');
+    expect(sent).toContain('2025 | 65,000,000 | $75 | $4.875B [computed]');
+    expect(sent).toContain('Total |  |  | $9.075B [computed]'); // the column's own sum, too
+    expect(sent).toContain('A figure marked [computed] is one the book worked out from other figures in the case');
+    expect(sent).toContain('it is never read out, never stated, never confirmed and never slipped into the end of a sentence');
+  });
+
+  it("marks a cell that shows its own arithmetic, and says when a whole table is the book's working", async () => {
+    caseOf([UNITS, WORKING], ['The chain has 120 stores.']);
+    const id = await toExhibits();
+    await call({ type: 'say', sessionId: id, text: 'What is the quantity per store?' });
+    const sent = w.asked.at(-1)!.messages.at(-1)!.content;
+    expect(sent).toContain('24,000/120 = 200 [computed]');
+    expect(sent).toContain('66,000/120 = 550 [computed]');
+    expect(sent).toContain("all of it is the book's own working: there is no input in this one to read out");
+  });
+
+  it('leaves the cost base alone and still reads it out in full (#83)', async () => {
+    caseOf([ATTENDANCE, COSTS]);
+    const id = await toExhibits();
+    w.script.reply = () => turn('Capex is $200M, fixed costs are $150M and variable costs are $130M. What would you do with those?', { data_request: true });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'What is the cost base?' }));
+    const sent = w.asked.at(-1)!.messages.at(-1)!.content;
+    expect(sent).not.toContain('[computed]'); // nothing in it was worked out from anything
+    expect(said(r)).toContain('$200M'); // ...so the reply reaches the member whole
+    expect(said(r)).toContain('$150M');
+    expect(said(r)).toContain('$130M');
+  });
+
+  it('replaces a reply that volunteers a figure the book worked out, however it is written', async () => {
+    caseOf([ATTENDANCE, TAM]);
+    const id = await toExhibits();
+    w.script.reply = () =>
+      turn('In 2024 attendance is 60 million with an average ticket price of $70, which gives a market revenue of $4.2 billion.', { data_request: true });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'Do we have attendance and ticket price?' }));
+    expect(said(r)).toBe(FALLBACK);
+    expect(said(r)).not.toContain('4.2');
+  });
+
+  it('lets the same reply through when it stops at the inputs', async () => {
+    caseOf([ATTENDANCE, TAM]);
+    const id = await toExhibits();
+    w.script.reply = () => turn('In 2024 attendance is 60 million and the average ticket price is $70. What would you take from that?', { data_request: true });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'Do we have attendance and ticket price?' }));
+    expect(said(r)).toContain('60 million');
+    expect(said(r)).toContain('$70');
+  });
+
+  it('catches the figure handed over inside an otherwise correct refusal', async () => {
+    caseOf([UNITS, WORKING], ['The chain has 120 stores.']);
+    const id = await toExhibits();
+    w.script.reply = () =>
+      turn('I cannot hand over the totals, since that is the step you need to take. The quantities per store are 200 televisions and 450 radios.', {
+        data_request: true,
+      });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'What is the quantity per store?' }));
+    expect(said(r)).toBe(FALLBACK);
+    expect(said(r)).not.toContain('200');
+  });
+
+  it('never holds back a fact in the case or a figure in the exhibit in front of them', async () => {
+    caseOf([ATTENDANCE, TAM]);
+    const id = await toExhibits();
+    w.script.reply = () => turn('The base houses 20,000 soldiers, and attendance in 2025 is 65 million at $75 a ticket.', { data_request: true });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'How many soldiers, and what is attendance in 2025?' }));
+    expect(said(r)).toContain('20,000 soldiers');
+    expect(said(r)).toContain('65 million');
+    expect(said(r)).toContain('$75');
+  });
+
+  it('teaches the same figure in learning mode, where the answer is the lesson', async () => {
+    caseOf([ATTENDANCE, TAM]);
+    const id = view(await call({ type: 'start', libraryId: LIB, mode: 'learning' })).sessionId;
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'submit', sessionId: id, text: 'Demand, supply, cost' });
+    w.script.reply = () => turn('Good start, let us look at the data.', { direction_clear: true, assessment: 'progress' });
+    await call({ type: 'say', sessionId: id, text: 'I would start with demand' });
+    w.script.reply = () => turn('You multiply the two: 60 million tickets at $70 comes to $4.2 billion. Try 2025 the same way.', { assessment: 'partial' });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'I think I multiply them. Is that right?' }));
+    expect(said(r)).toContain('$4.2 billion');
+  });
+
+  it('reads a figure however it is written, and never calls a year or a small number a result', () => {
+    expect(figuresIn('$8 billion').map((f) => f.value)).toEqual([8e9]);
+    expect(figuresIn('$8B')[0].value).toBe(8e9);
+    expect(figuresIn('8,000,000,000')[0].value).toBe(8e9);
+    expect(figuresIn('$7.2 M')[0].value).toBe(7.2e6);
+    expect(figuresIn('15% of 24,000')).toEqual([{ value: 15, percent: true }, { value: 24000, percent: false }]);
+    expect(figuresIn('5 months and 3 metres').map((f) => f.value)).toEqual([5, 3]); // "m" is a million only when it is the whole word
+    expect(statesHeldResult('that comes to $8 billion', [String(8e9)])).toBe(true);
+    expect(statesHeldResult('that comes to $9 billion', [String(8e9)])).toBe(false);
+    expect(statesHeldResult('anything at all', [])).toBe(false);
+  });
+
+  it('marks what follows from the table and nothing else', () => {
+    const marks = (rows: string[][]) => computedCells({ rows }).map((r) => r.map((f) => (f ? 'C' : '.')).join(''));
+    // The product of the two figures beside it, and the sum down the column: both are results.
+    expect(marks([['2024', '60,000,000', '$70', '$4.2B'], ['2025', '65,000,000', '$75', '$4.875B'], ['Total', '', '', '$9.075B']])).toEqual([
+      '...C',
+      '...C',
+      '...C',
+    ]);
+    // A year is never a result, and nor is a figure small enough to meet another by accident.
+    expect(marks([['Stores', '3', '4', '12'], ['Opened', '2016', '2017', '2024']])).toEqual(['....', '....']);
+    // Three input rows that do not add up to each other stay inputs.
+    expect(marks([['Capex', '$200M'], ['Fixed costs', '$150M'], ['Variable costs', '$130M']])).toEqual(['..', '..', '..']);
+    // ...and the same three with their total written under them: the total is the result.
+    expect(marks([['Capex', '$200M'], ['Fixed costs', '$150M'], ['Variable costs', '$130M'], ['Total', '$480M']])).toEqual(['..', '..', '..', '.C']);
+    // A figure the member can see elsewhere is data, whatever the arithmetic says.
+    expect(computedCells({ rows: [['Revenue', '$50M', '$4M', '$200M']] }, new Set(['200000000']))[0]).toEqual([false, false, false, false]);
   });
 });
