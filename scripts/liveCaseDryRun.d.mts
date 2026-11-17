@@ -14,7 +14,7 @@ export interface DryRunEngine {
   createMemoryLiveDeps: typeof createMemoryLiveDeps;
 }
 
-export type CandidateName = 'brisk' | 'passive' | 'offtrack' | 'asker';
+export type CandidateName = 'brisk' | 'passive' | 'offtrack' | 'asker' | 'plausible';
 
 /** What a scripted candidate pretends. This is the harness's only piece of pretending; everything else is the engine's. */
 export interface CandidateSpec {
@@ -28,6 +28,8 @@ export interface CandidateSpec {
   exhibit: { assessment: 'progress' | 'partial' | 'stuck' | 'unclear'; beatComplete: boolean };
   /** How many messages on one beat the harness allows before it gives up (the engine has no such limit). */
   beatCap?: number;
+  /** Which of `WRITES` this candidate sends on a beat, when it is not the shared one. */
+  writes?: 'exhibit' | 'plausible';
   /** Whether this candidate can end a beat by itself, by completing it or by choosing "move on". */
   endsBeats: boolean;
   /** What the candidate does next on the beat it is on, given how many times it has written there. */

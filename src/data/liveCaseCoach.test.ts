@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   computedCells,
   figuresIn,
+  gradesTheirReading,
   handleLive,
   hasTell,
   interviewerVoice,
@@ -18,7 +19,10 @@ import {
   MAX_FEEDBACK_ATTEMPTS,
   MAX_STARTS_PER_DAY,
   MOVING_ON,
+  OVER_TO_YOU,
+  SHOW_DATA,
   WORK_IS_YOURS,
+  withoutVerdicts,
   parseFeedback,
   parseTurn,
   readSolution,
@@ -866,6 +870,7 @@ describe('interview mode: nudged, never rescued', () => {
     expect(told()).not.toContain('has been stuck for a while');
 
     const practice = await toExhibitsIn('practice', 'user-two');
+    w.script.reply = () => turn('The army pays a fixed per diem per soldier.', { assessment: 'unclear', data_request: true });
     for (const text of ['What is the cost base?', 'And how many rooms?']) await call({ type: 'say', sessionId: practice, text }, 'user-two');
     expect(w.db.get(practice)!.state.beats[0].asked).toBe(0);
     expect(told()).not.toContain('stop asking open questions');
@@ -985,10 +990,11 @@ describe("Bucket's voice: the three tells the pilot found (issue #131)", () => {
   });
 
   it('holds its own stand-in replies to the same three rules', () => {
-    for (const line of [FALLBACK, LEAD_FALLBACK, MOVING_ON, WORK_IS_YOURS]) {
+    for (const line of [FALLBACK, LEAD_FALLBACK, MOVING_ON, WORK_IS_YOURS, OVER_TO_YOU, SHOW_DATA]) {
       expect(line.split(/(?<=[.!?])\s+/).some((s) => hasTell(s))).toBe(false);
       expect(withoutSourceNarration(line)).toBe(line);
       expect(interviewerVoice(line)).toBe(line);
+      expect(withoutVerdicts(line), line).toBe(line); // and none of them is a verdict either (issue #130)
     }
   });
 
@@ -998,6 +1004,199 @@ describe("Bucket's voice: the three tells the pilot found (issue #131)", () => {
     const sent = JSON.stringify(w.asked.at(-1));
     expect(sent).toContain('Speak to the candidate, never about them');
     expect(sent).toContain('never where it is written');
+  });
+});
+
+describe('an interview does not tell them whether they are right (issue #130)', () => {
+  // The replies are the real-model pilot's own, quoted in the issue, so what these guard against is the register it really had.
+  const CONFIRMS = "You're right that profit is flat while revenue and store count climb, which is the core signal. What do you think is driving that?";
+  const GOOD_TRACK = "You're on a good track by isolating the suburban group, and the per-shop split is exactly the right lens.";
+  const INSTINCT = "Good instinct: you've linked the new stores to capital tied up without profit, which is the heart of the ROIC drop.";
+
+  /** The opening stages done quickly in the chosen mode: the id of a session on its first exhibit. */
+  async function toExhibitsIn(mode: 'practice' | 'interview' | 'learning', userId = ME): Promise<string> {
+    const id = view(await call({ type: 'start', libraryId: LIB, mode }, userId)).sessionId;
+    await call({ type: 'ready', sessionId: id }, userId);
+    await call({ type: 'ready', sessionId: id }, userId);
+    await call({ type: 'submit', sessionId: id, text: 'Demand, supply, cost' }, userId);
+    w.script.reply = () => turn('Good start, let us look at the data.', { direction_clear: true, assessment: 'progress' });
+    expect(view(await call({ type: 'say', sessionId: id, text: 'I would start with demand' }, userId)).stage).toBe('exhibits');
+    w.asked.length = 0;
+    return id;
+  }
+  const said = (r: LiveView): string => r.messages.at(-1)!.text;
+  const told = () => JSON.stringify(w.asked.at(-1));
+
+  it('knows a verdict on their reading from a fact, a question and an instruction', () => {
+    for (const sentence of [
+      "You're right that profit is flat while revenue and store count climb, which is the core signal.",
+      "You're on a good track by isolating the suburban group.",
+      "Good instinct: you've linked the new stores to capital tied up.",
+      'The per-shop split is exactly the right lens.',
+      'That is the key insight here.',
+      "That's right.",
+      'Not quite right — look again at the cost side.',
+      "You've spotted the core pattern.",
+    ]) {
+      expect(gradesTheirReading(sentence), sentence).toBe(true);
+    }
+    // What an interviewer does say: facts, questions, where to look, and the app's own stand-in lines.
+    for (const sentence of [
+      'Off-peak occupancy is 31% and peak is 95%.',
+      'What would you do with that?',
+      'Okay, go on.',
+      'Look at the profit row in the exhibit in front of you.',
+      "That's the figure you asked for.",
+      'The army pays a fixed per diem per soldier.',
+      OVER_TO_YOU,
+      FALLBACK,
+      MOVING_ON,
+      WORK_IS_YOURS,
+    ]) {
+      expect(gradesTheirReading(sentence), sentence).toBe(false);
+    }
+  });
+
+  it('drops the verdict and keeps the question, even when they share a sentence', () => {
+    expect(withoutVerdicts(CONFIRMS)).toBe('What do you think is driving that?');
+    expect(withoutVerdicts(`${GOOD_TRACK} Which group would you look at first?`)).toBe('Which group would you look at first?');
+    expect(withoutVerdicts("You're right — so what does that imply for the margin on each new dollar of sales?")).toBe(
+      'So what does that imply for the margin on each new dollar of sales?',
+    );
+    expect(withoutVerdicts('Off-peak occupancy is 31%. What would you do with that?')).toBe('Off-peak occupancy is 31%. What would you do with that?');
+    expect(withoutVerdicts(INSTINCT)).toBe('');
+  });
+
+  it('gives nothing at the rung that gives nothing, and the member still reads something', () => {
+    expect(OVER_TO_YOU).not.toBe('');
+    expect(OVER_TO_YOU).toMatch(/\?$/); // an acknowledgement and the question handed back
+    for (const line of [OVER_TO_YOU]) {
+      expect(line.split(/(?<=[.!?])\s+/).some((s) => hasTell(s))).toBe(false);
+      expect(withoutSourceNarration(line)).toBe(line);
+      expect(interviewerVoice(line)).toBe(line);
+      expect(withoutVerdicts(line)).toBe(line);
+    }
+    const whole = JSON.stringify(turn(INSTINCT, { assessment: 'progress' }));
+    expect(parseTurn(whole, [], FALLBACK, 700, 'none', [], { mode: 'interview', kind: 'exhibit' })!.message).toBe(OVER_TO_YOU);
+    expect(parseTurn(whole, [], FALLBACK, 700, 'none', [], { mode: 'practice', kind: 'exhibit' })!.message).toBe(INSTINCT);
+  });
+
+  it('does not hand them a driver they have not raised, at the rung that gives nothing', () => {
+    const notes = ['Off-peak occupancy is the number that decides the case.'];
+    const reply = (text: string, memberText: string) =>
+      parseTurn(JSON.stringify(turn(text, { assessment: 'unclear' })), notes, FALLBACK, 700, 'none', [], { mode: 'interview', kind: 'exhibit', memberText })!.message;
+    // Three content words of the note's one sentence, none of them the member's: it is the interviewer's reading, not theirs.
+    expect(reply('The occupancy number decides this one.', 'I am not sure where to start')).toBe(OVER_TO_YOU);
+    // The same sentence once they have raised it themselves: it is their own ground, and the reply stands.
+    expect(reply('The occupancy number decides this one.', 'I think the occupancy number is what decides it')).toBe('The occupancy number decides this one.');
+    // ...and a plain question is never caught by this.
+    expect(reply('What would you compare first?', 'I am not sure where to start')).toBe('What would you compare first?');
+  });
+
+  it('strips the verdict from what the member reads in an interview, and leaves practice alone', async () => {
+    const interview = await toExhibitsIn('interview');
+    w.script.reply = () => turn(CONFIRMS, { assessment: 'progress' });
+    const r = view(await call({ type: 'say', sessionId: interview, text: 'Off-peak looks weak against peak' }));
+    expect(said(r)).toBe('What do you think is driving that?');
+    expect(said(r)).not.toMatch(/you're right|core signal/i);
+
+    const practice = await toExhibitsIn('practice', 'user-two');
+    w.script.reply = () => turn(CONFIRMS, { assessment: 'progress' });
+    const p = view(await call({ type: 'say', sessionId: practice, text: 'Off-peak looks weak against peak' }, 'user-two'));
+    expect(said(p)).toBe(CONFIRMS); // practice keeps its encouraging register, word for word
+  });
+
+  it('acknowledges the starting direction without a verdict on it, and still moves to the data', async () => {
+    const id = view(await call({ type: 'start', libraryId: LIB, mode: 'interview' })).sessionId;
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'submit', sessionId: id, text: 'Demand, supply, cost' });
+    w.script.reply = () => turn('Good instinct, that is exactly where I would start. Let us look at some data.', { direction_clear: true, assessment: 'progress' });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'I would start with demand' }));
+    expect(r.stage).toBe('exhibits');
+    const reply = r.messages.filter((m) => m.from !== 'user' && m.kind !== 'exhibit').at(-1)!.text;
+    expect(reply).toBe('Let us look at some data.');
+    expect(reply).not.toMatch(/instinct|exactly/i);
+    // ...and when the verdict was the whole of it, the member still reads a line that takes the case on.
+    expect(
+      parseTurn(JSON.stringify(turn('Good instinct, that is exactly the right place to start.', { direction_clear: true })), [], FALLBACK, 700, 'none', [], {
+        mode: 'interview',
+        kind: 'direction',
+      })!.message,
+    ).toBe(SHOW_DATA);
+  });
+
+  it('still answers a question about a fact in an interview', async () => {
+    const id = await toExhibitsIn('interview');
+    w.script.reply = () => turn('The army pays a fixed per diem per soldier. Off-peak occupancy is 31%.', { assessment: 'unclear', data_request: true });
+    const r = view(await call({ type: 'say', sessionId: id, text: 'Who pays for the rooms, and what is off-peak occupancy?' }));
+    expect(said(r)).toBe('The army pays a fixed per diem per soldier. Off-peak occupancy is 31%.');
+  });
+
+  it('tells each mode what register it is in', async () => {
+    const interview = await toExhibitsIn('interview');
+    await call({ type: 'say', sessionId: interview, text: 'Off-peak looks weak' });
+    expect(told()).toContain('never a verdict');
+    expect(told()).toContain('tell them nothing about whether their reading is right');
+    expect(told()).toContain('There is no help at this point in an interview'); // the first message on the beat
+    expect(told()).not.toContain('you coach as you go');
+
+    const practice = await toExhibitsIn('practice', 'user-two');
+    await call({ type: 'say', sessionId: practice, text: 'Off-peak looks weak' }, 'user-two');
+    expect(told()).toContain('you coach as you go');
+    expect(told()).toContain('if they are on a good track');
+    expect(told()).not.toContain('never a verdict');
+
+    const learning = await toExhibitsIn('learning', 'user-three');
+    await call({ type: 'say', sessionId: learning, text: 'Off-peak looks weak' }, 'user-three');
+    expect(told()).toContain('say what they got right and why it matters');
+    expect(told()).not.toContain('never a verdict');
+  });
+
+  it('tells every mode the same test for what a step forward is', async () => {
+    for (const [mode, userId] of [['interview', ME], ['practice', 'user-two'], ['learning', 'user-three']] as const) {
+      const id = await toExhibitsIn(mode, userId);
+      await call({ type: 'say', sessionId: id, text: 'Off-peak looks weak' }, userId);
+      expect(told(), mode).toContain('it names a comparison or a driver');
+    }
+  });
+
+  it('climbs the ladder for a member who sounds plausible and is stuck, where it used to stand still', async () => {
+    const id = await toExhibitsIn('interview');
+    // The pilot's own failure: every message scored a clear step forward, so the rung counter never left zero.
+    w.script.reply = () => turn('Okay, go on. What do you make of it?', { assessment: 'progress' });
+    const beat = () => w.db.get(id)!.state.beats[0];
+
+    let r = view(await call({ type: 'say', sessionId: id, text: 'There is definitely something interesting happening here' }));
+    expect(told()).toContain('There is no help at this point in an interview'); // the first message still gets nothing
+    expect(beat().asked).toBe(1); // ...but it counts
+
+    r = view(await call({ type: 'say', sessionId: id, text: 'I feel like this matters a lot' }));
+    expect(told()).toContain('ONE brief process-oriented hint');
+    expect(r.messages.at(-1)!.kind).toBe('hint');
+
+    r = view(await call({ type: 'say', sessionId: id, text: 'Yes, something is going on with this' }));
+    expect(told()).toContain('more specific directional hint about where to look');
+
+    r = view(await call({ type: 'say', sessionId: id, text: 'It still seems like the interesting bit' }));
+    expect(told()).toContain('do NOT explain, solve or summarise');
+    expect(r.exhibits).toHaveLength(2);
+    expect(beat().outcome).toBe('coach_moved');
+  });
+
+  it('leaves a member who is working alone, whatever the ladder would otherwise do', async () => {
+    const id = await toExhibitsIn('interview');
+    w.script.reply = () => turn('Okay, go on.', { assessment: 'progress' });
+    for (const text of [
+      'Off-peak occupancy is 31% against 95% at peak',
+      'So the gap is the whole of the problem',
+      'I would work out the revenue per room in each season',
+    ]) {
+      await call({ type: 'say', sessionId: id, text });
+      expect(told(), text).toContain('There is no help at this point in an interview');
+    }
+    expect(w.db.get(id)!.state.beats[0].asked).toBe(0);
+    expect(w.db.get(id)!.state.beats[0].hints).toBe(0);
   });
 });
 
@@ -1338,7 +1537,8 @@ describe('a part of the case that hands over no exhibit', () => {
     const id = await toTheStep();
     for (const note of [STEP.body, STEP.calc[0], STEP.whatToNotice, STEP.commonMiss[0], STEP.checkYourself[0]]) {
       w.script.reply = () => turn(`Here is the thing. ${note}`, { assessment: 'progress' });
-      const r = view(await call({ type: 'say', sessionId: id, text: 'What should I be looking at?' }));
+      // A step forward every time, so the member stays on this part and at the rung where nothing is being handed to them.
+      const r = view(await call({ type: 'say', sessionId: id, text: 'I would compare the two options on margin per unit' }));
       expect(r.messages.at(-1)?.text, note).not.toContain('SECRET');
       expect(r.messages.at(-1)?.text).toContain('stay with your reasoning');
     }
