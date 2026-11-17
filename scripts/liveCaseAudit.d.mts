@@ -38,7 +38,9 @@ export type AuditFlag =
   | 'cut_by_parser_cap'
   | 'all_exhibits_hidden'
   | 'exhibit_not_whole'
-  | 'exhibit_text_shortened';
+  | 'exhibit_text_shortened'
+  | 'prompt_names_the_book'
+  | 'prompt_talks_about_the_case';
 
 export interface ShownExhibit {
   /** Its place in the write-up's own list of exhibits, from 1. */
@@ -82,6 +84,8 @@ export interface CaseAudit {
   fidelity: ExhibitFidelity[];
   /** What a parser cap cuts, as counts only. */
   cuts: string[];
+  /** Which `PROMPT_RULES` the prompt matches, by label. Never the sentence that matched. */
+  asides: string[];
   flags: AuditFlag[];
 }
 
@@ -125,14 +129,32 @@ export interface AuditSummary {
   bothKinds: number;
   flags: Map<AuditFlag, number>;
   flagged: number;
+  promptsNamingTheBook: number;
+  promptsAboutTheCase: number;
+  promptRules: Map<string, number>;
   caps: Caps;
 }
 
 export const FLAGS: AuditFlag[];
-/** The one flag `npm run audit:live` exits non-zero on. */
+/** The flag `npm run audit:live` exits non-zero on for an exhibit. */
 export const BREACH: 'exhibit_not_whole';
+/** The flag `npm run audit:live` exits non-zero on for a prompt. */
+export const PROMPT_BREACH: 'prompt_names_the_book';
 export const CAP_LABEL: Record<keyof Caps, string>;
 export function lossKind(line: string): string;
+
+/** One kind of sentence a prompt must not hold. `fails` marks the ones `npm run audit:live` exits non-zero on. */
+export interface PromptRule {
+  label: string;
+  fails: boolean;
+  test: RegExp;
+}
+
+export const PROMPT_RULES: PromptRule[];
+/** Which rules this prompt matches, by label; never the words that matched. */
+export function promptAsides(prompt: unknown): string[];
+export function namesTheBook(labels: string[]): boolean;
+export function talksAboutTheCase(labels: string[]): boolean;
 
 export function loadRules(): Promise<AuditRules>;
 export function measureCaps(rules: Pick<AuditRules, 'parseBookSolution'>): Caps;

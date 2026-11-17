@@ -57,6 +57,18 @@ assistant saw a claim (for example a build session's report) but did not check i
   see them, so they were left alone (issue #139 covered the seven cases the audit flags). Either shorten those three labels in
   `private-data/solutions/*.json` at the next reload, or compare `belowRows` labels in `exhibitFidelity.ts` first so the audit finds any
   others.
+- **17 prompts talked about the book instead of to the candidate, and the rest of a write-up still does** (issue #132). The prompt is
+  read to the member word for word as the opening of a live case, and 17 of the 872 ended with a sentence about the case rather than
+  about the business: how hard or open-ended it is, what method to use, how the interviewer should behave, and two notes about a name
+  the book misspells. All 17 were rewritten on 2026-11-17 in `private-data/solutions/*.json` (business situation and question
+  untouched, the meta sentence dropped; every piece of it that matters to running the case was already held in `facts` or in the step
+  notes, so nothing had to be moved). `npm run audit:live` now fails on a prompt that names the book or notes a printing oddity, so the
+  next batch cannot reintroduce one. **The write-ups are fixed; production only changes when the regenerated `supabase/seeds/library.sql`
+  is loaded** (the owner's call; not done). Two things are left: the audit also reports, without failing, **13 prompts that describe the
+  case as a case** (how it is run, how the interviewer behaves, what kind it is) — each needs a person to judge, because an interviewer
+  can be a character in the story; and the interviewer's side of a write-up still speaks of the book (**50 write-ups have a fact that
+  mentions it**, plus 18 clarifying answers; steps and recommendations mention it in hundreds, which is right for the Full solution
+  screen but not for something a coach may read out mid-case). Neither was in scope for #132.
 - **A chart kind we do not draw is not counted as a loss.** `exhibitLoss` ignores a chart whose kind is outside `DRAWN_KINDS` (marimekko,
   waterfall, bubble, dual axis, maps): the exhibit stays the book's own table, which is the settled trade (ROADMAP R15). No write-up
   carries such a chart today (measured: 0 of 1,792 exhibits on 2026-11-16), so the rule costs nothing; if one is ever added, the member

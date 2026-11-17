@@ -185,6 +185,71 @@ function renderLoss(rawExhibit, liveExhibit, rules) {
   return { live, full };
 }
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// What the prompt says
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/**
+ * The prompt opens a live case word for word (`openingText`), so it holds the business situation and the question put to the
+ * candidate, and nothing else. Each rule below names one kind of sentence that is something else. Only the label travels into the
+ * report: the words that matched stay in private-data.
+ *
+ * The first two are settled and **fail the command**: a prompt never says where the case came from, and a printing oddity is
+ * reproduced as printed with no commentary (the owner's rule). The rest describe the case as a case and are reported for a person to
+ * judge, because a prompt can fairly mention an interviewer who is a character in the story or a role play the member is part of.
+ */
+export const PROMPT_RULES = [
+  {
+    label: 'names the book, the casebook or the authors',
+    fails: true,
+    test: /\b(?:the|this)\s+(?:book|casebook|case book)\b|\bthe\s+authors?\b|\bbook[’']s\b/i,
+  },
+  {
+    label: 'notes how the page prints something',
+    fails: true,
+    test: /\bprinted\s+(?:in|as)\b|\bas\s+printed\b|\bthe\s+spelling\b|\bspelt\b|\bspelled\b|\[sic\]|\(sic\)/i,
+  },
+  {
+    label: 'says how hard or open the case is',
+    fails: false,
+    test: /\b(?:this|the)\s+(?:case|prompt|question|exercise)\s+(?:is|reads)\s+(?:an?\s+)?(?:very\s+|quite\s+|fairly\s+|rather\s+|somewhat\s+|deliberately\s+|intentionally\s+)?(?:hard|difficult|easy|tough|challenging|complex|open-ended|straightforward|simple|vague|broad)\b|\b(?:hard|difficult|easy|tough|challenging|complex|open-ended|straightforward)\s+case\b/i,
+  },
+  {
+    label: 'says what kind of case it is',
+    fails: false,
+    test: /\b(?:estimation|market[- ]sizing|sizing|profitability|market[- ]entry|M&A|brainteaser|brainstorming|guesstimate|conversational|interviewer[- ]led|candidate[- ]led|command[- ]and[- ]control|role[- ]play)\s+case\b|\bcase\s+interview|\bfirst[- ]round\b|\bsecond[- ]round\b|\bphone\s+interview\b/i,
+  },
+  {
+    label: 'says how the case is run',
+    fails: false,
+    test: /\bthe\s+case\s+(?:is|has|runs|opens|tests|turns|combines|proceeds|moves|can\s+be)\b/i,
+  },
+  {
+    label: 'says how the interviewer behaves',
+    fails: false,
+    test: /\bthe\s+interviewer\b(?!,)/i,
+  },
+  {
+    label: 'tells the candidate how to answer',
+    fails: false,
+    test: /\bthe\s+candidate\s+should\b/i,
+  },
+];
+
+const PROMPT_FAILS = new Set(PROMPT_RULES.filter((rule) => rule.fails).map((rule) => rule.label));
+
+/** Which rules a prompt matches, by label. Never the words that matched. */
+export function promptAsides(prompt) {
+  const text = String(prompt ?? '');
+  return PROMPT_RULES.filter((rule) => rule.test.test(text)).map((rule) => rule.label);
+}
+
+/** One of these labels is a prompt telling the member where the case came from: the command fails on it. */
+export const namesTheBook = (labels) => labels.some((label) => PROMPT_FAILS.has(label));
+
+/** The rest: the prompt describing the case as a case. Reported, for a person to judge. */
+export const talksAboutTheCase = (labels) => labels.some((label) => !PROMPT_FAILS.has(label));
+
 /** Why a write-up is not offered for live practice. Descriptive only: `isFullSolution` is what decides. */
 function whyNotEligible(raw, live) {
   const reasons = [];
@@ -234,6 +299,7 @@ export function auditCase(raw, rules, caps) {
 
   const cuts = capCuts(raw, caps);
   if (readCount > exhibits.length && live) cuts.push(`exhibits read by the live case: ${readCount} of ${exhibits.length} kept`);
+  const asides = promptAsides(raw.prompt);
 
   const notWhole = fidelity.filter((f) => f.live.cut.length + f.full.cut.length > 0);
   const flags = [];
@@ -245,6 +311,8 @@ export function auditCase(raw, rules, caps) {
   if (eligible && hidden.length > 0 && shown.length === 0 && plan.beats.length < 2) flags.push('all_exhibits_hidden');
   if (notWhole.length > 0) flags.push('exhibit_not_whole');
   if (fidelity.some((f) => f.live.shortened.length + f.full.shortened.length > 0)) flags.push('exhibit_text_shortened');
+  if (namesTheBook(asides)) flags.push('prompt_names_the_book');
+  if (talksAboutTheCase(asides)) flags.push('prompt_talks_about_the_case');
 
   return {
     name: String(raw.name ?? ''),
@@ -262,6 +330,7 @@ export function auditCase(raw, rules, caps) {
     hidden,
     fidelity,
     cuts,
+    asides,
     flags,
   };
 }
@@ -300,10 +369,15 @@ export const FLAGS = [
   'all_exhibits_hidden',
   'exhibit_not_whole',
   'exhibit_text_shortened',
+  'prompt_names_the_book',
+  'prompt_talks_about_the_case',
 ];
 
 /** The one flag the command fails on: an exhibit a member can be shown is not the whole of what the write-up holds. */
 export const BREACH = 'exhibit_not_whole';
+
+/** The other flag the command fails on: the opening the member reads tells them the case came out of a book. */
+export const PROMPT_BREACH = 'prompt_names_the_book';
 
 const tally = (values) => values.reduce((m, v) => m.set(v, (m.get(v) ?? 0) + 1), new Map());
 const sum = (values) => values.reduce((t, v) => t + v, 0);
@@ -353,6 +427,9 @@ export function summarise({ cases, folded, caps, read }) {
     beatsExhibit: sum(eligible.map((c) => c.beats.exhibits)),
     beatsStep: sum(eligible.map((c) => c.beats.steps)),
     bothKinds: eligible.filter((c) => c.beats.exhibits > 0 && c.beats.steps > 0).length,
+    promptsNamingTheBook: cases.filter((c) => c.flags.includes(PROMPT_BREACH)).length,
+    promptsAboutTheCase: cases.filter((c) => c.flags.includes('prompt_talks_about_the_case')).length,
+    promptRules: tally(cases.flatMap((c) => c.asides ?? [])),
     flags: tally(cases.flatMap((c) => c.flags)),
     flagged: cases.filter((c) => c.flags.length > 0).length,
     caps,
@@ -416,6 +493,12 @@ export function formatSummary(s) {
     'Beats per case',
     ...[1, 2, 3, 4, 5, 6, 7, 8].map(beat),
     '',
+    'What the prompt says (the member reads it word for word)',
+    pad('prompts that name the book or how it prints something', s.promptsNamingTheBook),
+    pad('prompts that describe the case as a case', s.promptsAboutTheCase),
+    'By rule',
+    ...counted(s.promptRules, PROMPT_RULES.map((rule) => rule.label)),
+    '',
     'Parser caps (measured from parseBookSolution)',
     ...Object.entries(CAP_LABEL).map(([key, label]) => pad(`  ${label}`, s.caps[key])),
     '',
@@ -451,6 +534,7 @@ function caseLines(c) {
   }
   for (const f of c.fidelity ?? []) lines.push(...fidelityLines(f));
   for (const cut of c.cuts) lines.push(`  cut    ${cut}`);
+  if ((c.asides ?? []).length > 0) lines.push(`  prompt ${c.asides.join('; ')}`);
   lines.push(`flags: ${c.flags.join(', ') || 'none'}`);
   return lines.join('\n');
 }
@@ -460,6 +544,7 @@ export function formatReport(result, { dir, files, at }) {
   const flagged = result.cases.filter((c) => c.flags.length > 0);
   const notWhole = result.cases.filter((c) => c.flags.includes(BREACH));
   const shortened = result.cases.filter((c) => c.flags.includes('exhibit_text_shortened'));
+  const prompts = result.cases.filter((c) => (c.asides ?? []).length > 0);
   return [
     '# Live-case suitability report',
     '',
@@ -492,6 +577,11 @@ export function formatReport(result, { dir, files, at }) {
     '- `exhibit_text_shortened`: a label was cut to length (a panel heading, an axis title, a footnote, a side note). Every figure is on',
     '  screen; one piece of text does not fit the drawing. Reported, not failed: the fix is a shorter line in the write-up, which is a',
     '  content change and the owner\'s call.',
+    '- `prompt_names_the_book`: the prompt tells the member the case came out of a book, or notes how the page prints something. The',
+    '  member reads the prompt word for word as the opening of a live case. **This one also fails the command.**',
+    '- `prompt_talks_about_the_case`: the prompt describes the case as a case — how hard it is, what kind it is, how it is run, how the',
+    '  interviewer behaves, how the candidate should answer. Reported, not failed: a prompt can fairly name an interviewer who is a',
+    '  character in the story, so a person decides.',
     '',
     `## Exhibits that do not reach the member whole (${notWhole.length})`,
     '',
@@ -509,6 +599,16 @@ export function formatReport(result, { dir, files, at }) {
     ...(shortened.length > 0
       ? shortened.flatMap((c) => [`### ${c.name}${c.book ? ` — ${c.book}` : ''}`, ...(c.fidelity ?? []).flatMap(shortenedLines), ''])
       : ['None.', '']),
+    `## Prompts that are not only the case (${prompts.length})`,
+    '',
+    'The prompt is the opening of a live case, read to the member word for word, so it holds the business situation and the question put',
+    'to the candidate and nothing else. A prompt that names the book, or notes how the page prints something, fails the command; the rest',
+    'are listed for a person to read, because an interviewer can be a character in the story. Rule labels only, never the sentence.',
+    '',
+    ...(prompts.length > 0
+      ? prompts.map((c) => `- ${c.name}${c.book ? ` — ${c.book}` : ''}: ${c.asides.join('; ')}`)
+      : ['None: every prompt is the case and nothing else.']),
+    '',
     ...(result.folded.length > 0
       ? ['## Folded duplicate names', '', ...result.folded.map((f) => `- ${f.name} (kept: ${f.keptName})`), '']
       : []),
@@ -579,16 +679,22 @@ async function main(argv) {
     for (const b of broken) console.error(`  ${b}`);
     return 1;
   }
-  // The one thing this command fails on: a member can be shown less of a book exhibit than the write-up holds. Nothing should ever be
-  // loaded in that state, so this is loud rather than a line in a list. Raise the cap, or shorten the exhibit in the write-up.
+  // The two things this command fails on. Both are loud rather than a line in a list, because nothing should ever be loaded in either
+  // state. First: a member can be shown less of a book exhibit than the write-up holds. Raise the cap, or shorten it in the write-up.
   const notWhole = result.cases.filter((c) => c.flags.includes(BREACH));
   if (notWhole.length > 0) {
     console.error(`\n${notWhole.length} case(s) hold an exhibit that does not reach the member whole:`);
     for (const c of notWhole) console.error(`  ${c.name}${c.book ? ` — ${c.book}` : ''}: ${(c.fidelity ?? []).flatMap(cutLines).length} line(s) in the report`);
     console.error('See "Exhibits that do not reach the member whole" in the report.');
-    return 1;
   }
-  return 0;
+  // Second: the prompt opens the case word for word, so a prompt that says where the case came from is the first thing a member reads.
+  const named = result.cases.filter((c) => c.flags.includes(PROMPT_BREACH));
+  if (named.length > 0) {
+    console.error(`\n${named.length} prompt(s) talk about the book instead of to the candidate:`);
+    for (const c of named) console.error(`  ${c.name}${c.book ? ` — ${c.book}` : ''}: ${c.asides.join('; ')}`);
+    console.error('See "Prompts that are not only the case" in the report.');
+  }
+  return notWhole.length + named.length > 0 ? 1 : 0;
 }
 
 // Run only when this file is the command. The rules are TypeScript, so an older Node is restarted with type stripping switched on.

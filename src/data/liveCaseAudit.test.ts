@@ -10,7 +10,7 @@ import { buildPlan, isInterviewerSideExhibit } from '../../supabase/functions/_s
 import { givenOnRequest, isFullSolution, planFor, readSolution } from '../../supabase/functions/_shared/liveCaseCoach';
 import { LIVE_EXHIBIT_LIMITS, SOLUTION_EXHIBIT_LIMITS, parseBookSolution, parseSolutionExhibit } from '../domain/bookSolution';
 import { exhibitLoss } from '../domain/exhibitFidelity';
-import { audit, auditCase, formatReport, formatSummary, measureCaps, readSolutionFiles, summarise, type AuditRules } from '../../scripts/liveCaseAudit.mjs';
+import { PROMPT_BREACH, PROMPT_RULES, audit, auditCase, formatReport, formatSummary, measureCaps, promptAsides, readSolutionFiles, summarise, type AuditRules } from '../../scripts/liveCaseAudit.mjs';
 
 const rules: AuditRules = {
   isInterviewerSideExhibit,
@@ -193,6 +193,86 @@ describe('the flags', () => {
     expect(one({ confidence: 'partial' }).flags).toContain('not_live_eligible');
     expect(one({ steps: [] }).flags).toContain('full_solution_refused');
     expect(one().flags).not.toContain('not_live_eligible');
+  });
+});
+
+// Issue #132: the prompt is read to the member word for word as the opening of a live case, so it is the business situation and the
+// question put to the candidate, and nothing else.
+describe('what the prompt says', () => {
+  it('flags a prompt that names the book, the casebook or the authors, and fails the command on it', () => {
+    expect(PROMPT_BREACH).toBe('prompt_names_the_book');
+    for (const prompt of [
+      'The client sells widgets. The book flags this as a hard case.',
+      'The client sells widgets. The casebook says to use net present value.',
+      'The client sells widgets. The authors run this as five questions.',
+      'The client sells widgets, and the book’s own answer is to close the plant.',
+    ]) {
+      expect(one({ prompt }).flags).toContain('prompt_names_the_book');
+    }
+  });
+
+  it('flags a prompt that notes how the page prints something, which is a slip note', () => {
+    expect(one({ prompt: 'The client is Widgets Inc. (printed in the book as Widgts Inc.), a maker of widgets.' }).flags).toContain('prompt_names_the_book');
+    expect(one({ prompt: 'The client is Widgts Inc., the spelling used throughout.' }).flags).toContain('prompt_names_the_book');
+    expect(one({ prompt: 'The client is Widgts Inc. [sic], a maker of widgets.' }).flags).toContain('prompt_names_the_book');
+  });
+
+  it('reports, without failing, a prompt that describes the case as a case', () => {
+    const asides: [string, string][] = [
+      ['The client sells widgets. The case is deliberately open-ended.', 'says how hard or open the case is'],
+      ['The client sells widgets. This is a role-play case.', 'says what kind of case it is'],
+      ['The client sells widgets. The case runs in three phases.', 'says how the case is run'],
+      ['The client sells widgets. The interviewer should stay vague.', 'says how the interviewer behaves'],
+      ['The client sells widgets. The candidate should answer in order.', 'tells the candidate how to answer'],
+    ];
+    for (const [prompt, label] of asides) {
+      const c = one({ prompt });
+      expect(c.asides).toContain(label);
+      expect(c.flags).toContain('prompt_talks_about_the_case');
+      expect(c.flags).not.toContain('prompt_names_the_book');
+    }
+  });
+
+  it('leaves a prompt that is only the business situation and the question alone', () => {
+    expect(one().asides).toEqual([]);
+    expect(one().flags).not.toContain('prompt_names_the_book');
+    expect(one().flags).not.toContain('prompt_talks_about_the_case');
+    // The house phrasing of the ask, and an interviewer who is a character in the story, are the case itself.
+    expect(promptAsides('The candidate must say whether the client should buy the plant.')).toEqual([]);
+    expect(promptAsides('The interviewer, a manager who travels a lot, walked into a packed bar.')).toEqual([]);
+  });
+
+  it('counts the prompts in the summary, by rule', () => {
+    const result = audit(
+      [
+        writeUp({ name: 'Book Case', prompt: 'The client sells widgets. The book calls this hard.' }),
+        writeUp({ name: 'Meta Case', prompt: 'The client sells widgets. The case is interviewer-led.' }),
+        writeUp({ name: 'Clean Case' }),
+      ],
+      rules,
+      caps,
+    );
+    const s = summarise(result);
+    expect(s).toMatchObject({ promptsNamingTheBook: 1, promptsAboutTheCase: 1 });
+    expect(s.promptRules.get('names the book, the casebook or the authors')).toBe(1);
+    expect(s.promptRules.get('says how the case is run')).toBe(1);
+    const text = formatSummary(s);
+    expect(text).toContain('prompts that name the book or how it prints something');
+    expect(text).toContain('prompts that describe the case as a case');
+    for (const rule of PROMPT_RULES) expect(text).toContain(rule.label);
+  });
+
+  it('names the case and the rule in the report, and never the prompt', () => {
+    const report = formatReport(
+      audit([writeUp({ prompt: 'ZZPROMPT the client sells widgets. The book calls this hard.' })], rules, caps),
+      { dir: 'private-data/solutions', files: 1, at: 'now' },
+    );
+    expect(report).toContain('## Prompts that are not only the case (1)');
+    expect(report).toContain('- Sample Co. — Booth MCG 2026-2027: names the book, the casebook or the authors');
+    expect(report).not.toContain('ZZPROMPT');
+    const clean = formatReport(audit([writeUp()], rules, caps), { dir: 'private-data/solutions', files: 1, at: 'now' });
+    expect(clean).toContain('## Prompts that are not only the case (0)');
+    expect(clean).toContain('None: every prompt is the case and nothing else.');
   });
 });
 
