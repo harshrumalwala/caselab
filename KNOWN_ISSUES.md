@@ -103,10 +103,26 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **No visual regression tests for charts.** The render check (a temporary test that draws every chart to SVG, then a contact sheet) lives in
   the assistant's scratch folder, not in the repo. `src/features/caselog/ExhibitChart.test.tsx` covers specific behaviours only.
 - **Live case hides interviewer-only tables by heuristic** (titles and wording in `supabase/functions/_shared/liveCase*.ts`); the README
-  accepts that a candidate exhibit might be hidden (the "safer way to be wrong").
+  accepts that a candidate exhibit might be hidden (the "safer way to be wrong"). Issue #85 narrowed the title half of it (a soft word
+  such as "calculation" no longer hides the book's own numbered exhibit on its own), which left three kinds of leftover, all measured on
+  2026-11-16 over the 847 live-eligible write-ups:
+  - **99 tables are still hidden by a soft word alone** and were read by hand: the titles are the book's working or answers
+    ("Calculations", "Math working for Part 2", "Answer: Profit per Customer"). One is a false positive we chose not to chase —
+    National Park Service "Question 2 - Math: figures", whose caption says the figures are given to the candidate but whose title is not
+    the book's numbering of an exhibit. A title that starts "Question 2" cannot be exempted without exempting the many workings filed
+    under the same wording.
+  - **Two cases need a content change, not a rule change** (`private-data/solutions/*.json`, so a seed reload and the owner's approval):
+    Contagion Containment (Darden 2020) "Exhibit 1: IOC Revenues for Upcoming Olympics", a candidate exhibit whose caption mentions the
+    book's "guidance for Question 1" and so trips the solution-caption rule; and Bumpers R Us (Fuqua 2025-26) "Exhibit #2: Strategic
+    initiatives", whose caption says the interviewer reads the initiatives out without handing the exhibit over — real data the member
+    should get, but as read-out data (issue #83), not as an exhibit. Bumpers R Us is one of the one-beat cases because of it.
+  - **The durable fix is still an explicit `audience` field on each exhibit** in `private-data/` (same ask as the `givenOnRequest`
+    entry below), with the regexes as the fallback for older content.
 - **Whether a Live case table is "our transcription" is judged by reading the table** (`tableRepeatsChart`, `src/domain/liveExhibit.ts`, issue #105), because no exhibit in the data is flagged as a transcription or a book table. Measured on 2026-11-16 over the 450 charted exhibits a candidate sees: 354 lose their table, 96 keep it. The rule errs toward keeping, so some of the 96 are our own transcription left on screen (about 20 approximate exhibits with a cell the chart does not print, such as a derived total, and 4 that differ by a word) and 35 are kept only because the chart's rows of text under its axis (`belowRows`) do not count as the chart showing a figure. Hiding those 35 as well is one line (count `belowRows` in `collect`), but it would hide DigiBooks "Exhibit A: Market segments", which the owner asked to protect. The reverse error (a book table hidden) was looked for in the hidden set and not found, but the check is by reading figures, not against the books. Run it again after new write-ups are loaded.
 - **Whether a hidden table is data or the book's working is also decided by a heuristic** (`givenOnRequest` in
-  `liveCaseCoach.ts`, widened in issue #83: 18 of the 369 hidden tables in live-eligible cases are classed `onRequest`, up from 2).
+  `liveCaseCoach.ts`, widened in issue #83: 17 of the 358 hidden tables in live-eligible cases are classed `onRequest`, up from 2 — it
+  was 18 of 369 until issue #85 made one of them, Pur and Kleen "Exhibit 3: Typical Canterbury cost figures", an exhibit the member is
+  shown instead).
   It reads the title and the caption for who hands what over and when, and refuses anything that also calls itself a solution, a
   working, a calculation or a completed table, or that shows the book's arithmetic in a cell. **The middle it cannot settle** is the
   table that is plainly input data but is described as "printed on the book's solution page" (measured example: the "Market Size
@@ -190,6 +206,13 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   `supabase/functions/_shared/liveCase.ts` and the live-case tests.
 - **Live case hid the only candidate exhibit** (PR #74, "Retire on the House", Fuqua 2018): "Exhibit #1: Current solutions for retirees" was
   hidden because its title contains "solutions". Now "solutions" hides a table only when it is the book's answer. Same files.
+- **Live case hid a numbered book exhibit over one soft word** (issue #85, found by measuring the write-ups: 108 of the hidden tables in
+  live-eligible cases were hidden by `sample|approach|answer|brainstorm|expected|calculation|math` in the title with no other marker, and
+  9 of those were exhibits the book numbers for the candidate, such as "Exhibit D – Expected Claims Per Years of Warranty"). A soft word
+  now hides a table only when the title is not the book's own name for an exhibit. Risk both ways: a book working titled like an exhibit
+  ("Exhibit 3: Annual cost calculation" is a candidate exhibit, "Exhibit 1: Answers" is not) is told apart by whether the title says what
+  the table is about beyond the soft word, which is a judgement the data does not carry. Named regression tests for all of them are in
+  `src/data/liveCase.test.ts` ("a soft word in the title of an exhibit the book numbers for the candidate").
 - **No exhibit chart was ever drawn in a live case** (issue #81, found by reading the code and measuring the write-ups: 450 of 1,383
   candidate-facing exhibits carry a drawable chart). `ExhibitView` asked the whole-solution parser to normalise a one-exhibit stub with no
   recommendation and no steps, so the parser refused it and the chart silently vanished while the table carried on rendering from the raw

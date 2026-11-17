@@ -96,12 +96,42 @@ const FRAMEWORK_STEP = /^\s*(framework|structure|structuring|clarifying question
 /**
  * Some of a write-up's tables are the interviewer's own: guidance, solutions, a sample approach, "calculation to be performed by the candidate",
  * a list of brainstorm ideas. They are never shown to the member (they would give the case away); they are reference for Bucket only.
+ *
+ * A title says so in one of two ways. A **hard** marker belongs to the interviewer's sheet wherever it turns up, so it hides a table on its
+ * own. A **soft** marker is a word the books also put in the titles of exhibits they hand the candidate ("Exhibit D – Expected Claims Per
+ * Years of Warranty", "Exhibit 3: Annual Cost Calculation"), so on its own it hides a table only when the title is not the book's own name
+ * for an exhibit (see `namesABookExhibit`). Hiding a candidate exhibit is still the safer way to be wrong (PR #70): a title that is not the
+ * book's own name for an exhibit is hidden exactly as before, and one that is stays hidden by a hard marker, or by what its caption,
+ * column headings or cells say.
  */
-const INTERVIEWER_SIDE = /interviewer|guidance|\bguide\b|\bsolution\b|sample|approach|performed by|answer|brainstorm|expected|calculation|\bmath\b/i;
+// ("Interviewee" is deliberately not here, though it is a caption and column marker: in a title it means the opposite — "Interviewee
+// Handout", "Data for interviewee" is the sheet the candidate is given.)
+const HARD_INTERVIEWER_SIDE = /interviewer|guidance|\bguide\b|\bsolution\b|performed by|answer key|keep private|not for (the )?candidate/i;
+/** Matches every soft marker in a title, so that one list both spots them and takes them out. */
+const SOFT_INTERVIEWER_SIDE = /sample|approach|answer|brainstorm|expected|calculation|\bmath\b/gi;
+/**
+ * The book's own numbering of an exhibit ("Exhibit 1:", "Exhibit #3 -", "Exhibit D – ...", "Figure 2", "Appendix A"). The number has to end
+ * the title or be followed by a separator: "Exhibit 1 calculation" names the book's working *for* Exhibit 1, not the exhibit itself.
+ */
+const BOOK_EXHIBIT_LABEL = /^\s*(?:case\s+)?(?:exhibit|exh\.|figure|fig\.|appendix|attachment|chart|table)\s*#?\s*(?:\d+\s*[a-z]?|[a-z])\s*(?:[:.)\]|,\-–—]|$)/i;
+/** Words that say nothing about what is in a table, so they do not count as naming its subject. */
+const TITLE_FILLER = /\b(?:the|a|an|and|or|of|for|to|in|on|at|by|with|per|its|only|detail|details|exercise|table|tables|sheet|sheets|page|pages|part|step|steps|question|questions|notes?|summary|workings?|work)\b/gi;
+/**
+ * Is this title the book's own name for an exhibit the candidate is given? It has to start with the book's numbering **and** go on to say
+ * what the table is about: "Exhibit 1: Answers" and "Exhibit 3: Calculations" name the book's working for an exhibit rather than an
+ * exhibit, so they keep no exemption, while "Exhibit 3: Annual Cost Calculation" is a table of annual costs.
+ */
+const namesABookExhibit = (title: string, withoutSoftMarkers: string): boolean =>
+  BOOK_EXHIBIT_LABEL.test(title) && /[a-z]{2,}/i.test(withoutSoftMarkers.replace(BOOK_EXHIBIT_LABEL, ' ').replace(TITLE_FILLER, ' '));
 /** "Solutions" is the interviewer's when it is the book's answer ("Solutions to Exhibit 2"), but not when it is what the case is about ("Exhibit 1: Current solutions for retirees"). */
 const SOLUTIONS_OF_THE_CASE = /\b(current|existing|possible|potential|alternative|competing|available|other|rival|today'?s)\s+solutions\b/i;
-export const isInterviewerSide = (title: string): boolean =>
-  INTERVIEWER_SIDE.test(title) || (/\bsolutions\b/i.test(title) && !SOLUTIONS_OF_THE_CASE.test(title));
+export const isInterviewerSide = (title: string): boolean => {
+  if (HARD_INTERVIEWER_SIDE.test(title)) return true;
+  if (/\bsolutions\b/i.test(title) && !SOLUTIONS_OF_THE_CASE.test(title)) return true;
+  const withoutSoftMarkers = title.replace(SOFT_INTERVIEWER_SIDE, ' ');
+  if (withoutSoftMarkers === title) return false;
+  return !namesABookExhibit(title, withoutSoftMarkers);
+};
 
 /** Words in a table's caption, column headings or cells that mark it as the interviewer's sheet ("Information for Interviewee", "Keep Private", "interviewer's math page"). */
 const INTERVIEWER_WORDS = /keep private|interviewee|interviewer|not for (the )?candidate|only when the candidate asks|given if prompted/i;

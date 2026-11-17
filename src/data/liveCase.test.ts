@@ -8,6 +8,7 @@ import {
   endEarly,
   endFrameworkStage,
   hardEnd,
+  isInterviewerSideExhibit,
   LIMIT_MS,
   moveOn,
   newSession,
@@ -144,6 +145,65 @@ describe('the plan from a case', () => {
 
   it('has no brainstorm when the case has none', () => {
     expect(buildPlan({ exhibits: [{}], steps: [{ title: 'Size demand' }] }).hasBrainstorm).toBe(false);
+  });
+});
+
+/**
+ * Real titles and captions from the library (issue #85). A word like "calculation" or "expected" is one the books use on both sides of the
+ * table, so on its own it must not take a numbered book exhibit away from the member; everything else is hidden as before.
+ */
+describe("a soft word in the title of an exhibit the book numbers for the candidate", () => {
+  const shown: [string, Parameters<typeof isInterviewerSideExhibit>[0]][] = [
+    ['Born for Beauty (Fuqua 2025-26), hidden by "math"', { title: 'Exhibit #3: Product options / math exercise', caption: 'Read aloud to the candidate without showing the figures.' }],
+    ['Kellogg Klogs (Kellogg 2024), hidden by "expected"', { title: 'Exhibit D – Expected Claims Per Years of Warranty' }],
+    ['Pur and Kleen Water Company (Fuqua 2018), hidden by "brainstorm"', { title: 'Exhibit 3: Typical Canterbury cost figures (offer after brainstorm)' }],
+    ['Toto Foundation (Stern 2023-24), hidden by "calculation"', { title: 'Exhibit 3: Annual Cost Calculation' }],
+    ['Fringe Science (Fuqua 2019), hidden by "expected"', { title: 'Exhibit #3: Expected market share by formulary status', caption: 'Small table printed beside the Exhibit #3 chart.' }],
+    ['Vibrants (Stern 2018), hidden by "sample" and "answer"', { title: 'Exhibit #2 - Sample Focus Group Answers', caption: 'Would you purchase a store-brand version of Vibrants over the brand name?' }],
+    ['Refinery in the Country of Georgia (Fuqua 2017), hidden by "expected"', { title: 'Exhibit 2: Expected Output from Georgian Crude Oil' }],
+    ['Athelas Insurance (Ross 2016), hidden by "approach"', { title: 'Exhibit 1: Apollo Hospital – Valuation analysis (Approach 1 – Cash Flows)', caption: 'Apollo Hospital Inc. – Free Cash flows (2015). Discount Rate 10%, Growth Rate 0%.' }],
+    ['Athelas Insurance (Ross 2016), its second table, hidden by "approach"', { title: 'Exhibit 1: Apollo Hospital – Valuation analysis (Approach 2 – Multiples)', caption: 'Recent hospital acquisitions.' }],
+  ];
+  for (const [name, exhibit] of shown) {
+    it(`shows ${name}`, () => {
+      expect(isInterviewerSideExhibit(exhibit)).toBe(false);
+    });
+  }
+
+  const hidden: [string, Parameters<typeof isInterviewerSideExhibit>[0]][] = [
+    // The book's working for a numbered exhibit, not the exhibit: the number runs straight into the word, or the word is all the title says.
+    ['WolverineHomes (Ross 2024): the book\'s working for Exhibit 1, answer and all', { title: 'Exhibit 1 calculation (Baseline and High Impact)', rows: [['Total Loss in 5 Years (960K * 5)', '$4,800,000']] }],
+    ['Donatella Co. (Ross 2024): the book\'s working for Exhibit 1', { title: 'Exhibit 1 Math' }],
+    ['MBS Co. (Darden 2019): the book\'s two ways of doing Exhibit 3', { title: 'Exhibit 3 (math detail): Method 2' }],
+    ['Cheesy Situation (Ross 2019): the answers to Exhibit 1', { title: 'Exhibit 1: Answers' }],
+    ['eNP & Co (Ross 2013): an answer key', { title: 'Exhibit 1: Answer key to question 2' }],
+    ['After School Programming (Kellogg 2018): an answer to a question', { title: 'ANSWER: Question 3/ Exhibit 2', caption: 'Math Solutions (2).' }],
+    // A numbered exhibit with a hard marker as well, or with a caption, heading or cell that gives it away.
+    ["Entertainment Co. (Darden 2023-24): an answer table on the book's solution page", { title: "Exhibit 2 answer table (interviewer's solution page)" }],
+    ['Hybrid Work Model (Stern 2023-24): a calculation guide marked for the interviewer', { title: 'Exhibit 2: Calculation Guide (INTERVIEWER ONLY) - Square Footage' }],
+    ["Elena's Electronics (Booth MCG 2026-27): the book's solution to Exhibit 2", { title: 'Exhibit 2: Solution, Option 1 (quantity per store)' }],
+    ['North-South Pharma Co. (Darden 2018): a caption that says not to show it', { title: 'Exhibit 1', caption: 'Interviewer should not show this to the student; let them ask for the cost information, then provide it verbally.' }],
+    ['Malaria Remedy (Ross 2024): the interviewer\'s own conversion of Exhibit 1', { title: 'Exhibit 1 converted to USD', caption: "Interviewer's conversion: 1 USD = 20 Ghanaian cedi." }],
+    ['a numbered exhibit whose cells carry the answer', { title: 'Exhibit 4: Expected margin', rows: [['Margin', '(Answer $14M)']] }],
+    ['a numbered exhibit whose columns are the interviewer\'s', { title: 'Exhibit 5: Expected revenue', columns: ['Revenues', 'Revenue Size (Keep Private)'] }],
+  ];
+  for (const [name, exhibit] of hidden) {
+    it(`still hides ${name}`, () => {
+      expect(isInterviewerSideExhibit(exhibit)).toBe(true);
+    });
+  }
+
+  it("leaves a title that is not the book's numbering of an exhibit hidden, as before", () => {
+    const titles = ['Sample Approach: Costs', 'Calculation to be performed by candidate', 'Answer: Profit per Customer, Step 1', 'Math working for Part 2', 'Calculations', 'Brainstorm #1: costs along the value chain', 'Expected profit per customer over ten years'];
+    expect(titles.filter((title) => !isInterviewerSideExhibit({ title }))).toEqual([]);
+  });
+
+  it('gives the member the beat back: a case whose second exhibit was hidden by a soft word now has two', () => {
+    const p = buildPlan({
+      exhibits: [{ title: 'Exhibit #1 - Pricing Considerations' }, { title: 'Exhibit #2 - Sample Focus Group Answers' }],
+      steps: [{ title: 'Framework' }, { title: 'Exhibit 1: pricing and margins' }, { title: 'Exhibit 2: focus group' }],
+    });
+    expect(p.beats).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'exhibit', index: 1 }]);
   });
 });
 

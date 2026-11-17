@@ -976,7 +976,7 @@ describe('data the interviewer gives out when asked', () => {
       table('Market sizes (given if prompted)', 'From the interviewer guidance for Exhibit 1.'),
       table('Santa Monica office data', 'Information the interviewer provides once the candidate asks.'),
       table('Exhibit #1', 'To be provided to the interviewee as background information.'),
-      table('Exhibit 3: Typical cost figures (offer after brainstorm)', ''),
+      table('Typical cost figures (offer after brainstorm)', ''),
       // "Guidance" is where half the write-ups file the data the interviewer hands over, so it is not on its own a sign of an answer.
       table('Interviewer guidance: spend and revenue', 'Given once the candidate asks for estimated spend.'),
     ]).onRequest).toHaveLength(5);
@@ -989,6 +989,9 @@ describe('data the interviewer gives out when asked', () => {
       table('Market size', 'The interviewer provides these.', [['Today', '=5M/4% = $125M']]), // the book's arithmetic, printed in a cell
       { ...table('Market size', 'The interviewer provides these.'), columns: ['Product', 'Market size (Keep Private)'] },
     ]).onRequest).toEqual([]);
+    // The same cost figures under the book's own numbering are not classed at all any more: the member is shown the exhibit (issue #85).
+    const numbered = kinds([table('Exhibit 3: Typical cost figures (offer after brainstorm)', '')]);
+    expect(numbered).toEqual({ onRequest: [], reference: [] });
   });
 
   it('never reads out a row that is itself the answer to the open beat, from either kind of table', async () => {
