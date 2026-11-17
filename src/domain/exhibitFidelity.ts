@@ -12,8 +12,8 @@ import type { ExhibitChart, SolutionExhibit } from './bookSolution.ts';
  * Two kinds of loss, kept apart because they are worth different things:
  * - `cut`: something is **gone** — a column, a row, a cell, a chart point, a series, a panel. The member is looking at less of the book's
  *   exhibit than the write-up holds, so the screen says so and the audit fails on it.
- * - `shortened`: a piece of text is **cut to length** — a panel heading, an axis title, a footnote, a row label under the axis. The
- *   exhibit is whole; one label does not fit the drawing. Reported to us, not to the member.
+ * - `shortened`: a piece of text is **cut to length** — a panel heading, an axis title, a footnote, a row label under the axis, a
+ *   reference line's label. The exhibit is whole; one label does not fit the drawing. Reported to us, not to the member.
  *
  * Every entry is a count, a position or a chart kind. Never a heading, a label, a cell or any other word of the content, so the report it
  * feeds stays safe to paste into an issue.
@@ -133,6 +133,16 @@ function chartLoss(raw: unknown, onScreen: ExhibitChart | null, where: string, l
     loss.text(`${where} side notes`, sideItems, onScreen.sideNotes?.items ?? []);
   }
   loss.count(`${where} reference lines`, list(o.referenceLines).length, onScreen.referenceLines.length);
+  // A line the write-up gives no number is never drawn (`parseChart` drops it, and the count above says so), so the drawn lines line up
+  // with the lines that have a number and not with every line written down — the same trap the rows under the axis have.
+  const referenceLines = list(o.referenceLines).filter((r) => typeof obj(r).value === 'number' && Number.isFinite(obj(r).value as number));
+  referenceLines.forEach((r, i) => {
+    const drawn = onScreen.referenceLines[i];
+    if (!drawn) return;
+    // Its label is a line drawn on the chart like the panel heading and the axis title, and is cut to length the same way (30
+    // characters). Comparing only how many lines there are left a cut label invisible to the member and to the report (issue #151).
+    loss.one(`${where} reference line ${i + 1} label`, obj(r).label, drawn.label);
+  });
 
   const panels = list(o.panels);
   loss.count(`${where} panels`, panels.length, onScreen.panels.length);

@@ -211,6 +211,22 @@ describe('the flags', () => {
     expect(short.flags).not.toContain('exhibit_text_shortened');
   });
 
+  // Issue #151: a reference line's label is one more line drawn on the chart, and was the field #143's walk found still uncompared.
+  it('flags a reference line label that was cut to length, and names the line', () => {
+    const label = 'Industry average over the last five years';
+    const chart = { kind: 'bar', categories: ['North'], series: [{ name: 'Revenue', values: [10] }], referenceLines: [{ value: 80, label }] };
+    const long = one({ exhibits: [exhibit({ chart })] });
+    expect(long.flags).toContain('exhibit_text_shortened');
+    expect(long.flags).not.toContain('exhibit_not_whole');
+    expect(long.fidelity[0].live.shortened).toContain('chart reference line 1 label shortened: 1');
+    // The summary groups it by its own name, so the report says which kind of text was cut.
+    expect(lossKind('chart reference line 1 label shortened: 1')).toBe('chart reference line label shortened');
+
+    const short = one({ exhibits: [exhibit({ chart: { ...chart, referenceLines: [{ value: 80, label: 'Industry average' }] } })] });
+    expect(short.fidelity).toEqual([]);
+    expect(short.flags).not.toContain('exhibit_text_shortened');
+  });
+
   it('compares the interviewer\'s own exhibits on the Full solution screen only: a live case never draws them', () => {
     const wide = Array.from({ length: caps.columns + 4 }, (_, i) => `Product ${i + 1}`);
     const hidden = one({ exhibits: [exhibit({ title: 'Interviewer guidance', columns: wide, rows: [wide.map((_, i) => String(i))] })] });

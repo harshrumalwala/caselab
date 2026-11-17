@@ -340,6 +340,15 @@ describe('a write-up read from the database', () => {
     expect(s?.exhibits[0].cut).toEqual([]);
   });
 
+  it('records a reference line label that was cut to length, as it does a label under the axis (issue #151)', () => {
+    const label = 'Industry average over the last five years';
+    const chart = { kind: 'bar', categories: ['North'], series: [{ name: 'Revenue', values: [10] }], referenceLines: [{ value: 80, label }] };
+    const s = parseBookSolution({ ...good, exhibits: [{ title: 'Margins', columns: ['A'], rows: [['1']], chart }] });
+    expect(s?.exhibits[0].chart?.referenceLines[0].label).toBe(label.slice(0, 30));
+    expect(s?.exhibits[0].shortened).toEqual(['chart reference line 1 label shortened: 1']);
+    expect(s?.exhibits[0].cut).toEqual([]);
+  });
+
   it('tolerates missing lists and an odd confidence, and cuts rows to the columns', () => {
     const s = parseBookSolution({ prompt: 'q', recommendation: 'r', steps: [{ title: 't', body: 'b' }], confidence: 'weird', exhibits: [{ title: 'E', columns: ['A'], rows: [['1', '2', '3']] }] });
     expect(s).toMatchObject({ facts: [], structure: [], risks: [], nextSteps: [], ourTakeaways: [], confidence: 'high' });

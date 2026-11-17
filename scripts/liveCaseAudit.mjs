@@ -590,8 +590,8 @@ export function formatReport(result, { dir, files, at }) {
     '- `exhibit_not_whole`: an exhibit a member can be shown has lost something between the write-up and the screen — a column, a row, a',
     '  cell, a chart point, a series, a panel. **This is the one that fails the command.**',
     '- `exhibit_text_shortened`: a label was cut to length (a panel heading, an axis title, a footnote, a side note, a row label under',
-    '  the axis). Every figure is on screen; one piece of text does not fit the drawing. Reported, not failed: the fix is a shorter line',
-    '  in the write-up, which is a content change and the owner\'s call.',
+    '  the axis, a reference line\'s label). Every figure is on screen; one piece of text does not fit the drawing. Reported, not failed:',
+    '  the fix is a shorter line in the write-up, which is a content change and the owner\'s call.',
     '- `prompt_names_the_book`: the prompt tells the member the case came out of a book, or notes how the page prints something. The',
     '  member reads the prompt word for word as the opening of a live case. **This one also fails the command.**',
     '- `prompt_talks_about_the_case`: the prompt describes the case as a case — how hard it is, what kind it is, how it is run, how the',
@@ -608,9 +608,9 @@ export function formatReport(result, { dir, files, at }) {
       : ['None: every exhibit reaches the member with everything the write-up holds for it.', '']),
     `## Text cut to length (${shortened.length} case(s))`,
     '',
-    'The exhibit is whole; a label is too long for where it is drawn. A chart heading, an axis title and a row label under the axis are',
-    'single lines inside a panel, so a longer one would run outside it: raising those caps would break the drawing rather than fix',
-    'anything.',
+    'The exhibit is whole; a label is too long for where it is drawn. A chart heading, an axis title, a row label under the axis and the',
+    'label on a reference line are single lines inside a panel, so a longer one would run outside it: raising those caps would break the',
+    'drawing rather than fix anything.',
     '',
     ...(shortened.length > 0
       ? shortened.flatMap((c) => [`### ${c.name}${c.book ? ` — ${c.book}` : ''}`, ...(c.fidelity ?? []).flatMap(shortenedLines), ''])

@@ -179,6 +179,60 @@ describe('text cut to length is told apart from content that is gone', () => {
     expect(exhibitLoss(written, { ...drawn, chart: swapped }).cut).toContain('chart row 1 under the axis label not as written: 1');
   });
 
+  it('a reference line label too long for the chart is shortened, not cut (issue #151)', () => {
+    const label = 'Industry average over the last five years';
+    const loss = lossOf({ chart: { kind: 'bar', categories: ['a'], series: [{ name: 's', values: [1] }], referenceLines: [{ value: 80, label }] } });
+    expect(loss.shortened).toEqual(['chart reference line 1 label shortened: 1']);
+    expect(loss.cut).toEqual([]);
+  });
+
+  it('a reference line label that fits is not reported, and nor is a chart that draws no line at all', () => {
+    const fits = lossOf({ chart: { kind: 'bar', categories: ['a'], series: [{ name: 's', values: [1] }], referenceLines: [{ value: 80, label: 'Industry average' }] } });
+    expect(fits).toEqual({ cut: [], shortened: [] });
+    expect(lossOf()).toEqual({ cut: [], shortened: [] });
+  });
+
+  it('names the line, so a report says which of the reference lines was cut', () => {
+    const long = 'A reference line label that runs on past the thirty characters a chart can hold';
+    const loss = lossOf({
+      chart: {
+        kind: 'bar',
+        categories: ['a'],
+        series: [{ name: 's', values: [1] }],
+        referenceLines: [
+          { value: 50, label: 'Break-even' },
+          { value: 80, label: long },
+        ],
+      },
+    });
+    expect(loss.shortened).toEqual(['chart reference line 2 label shortened: 1']);
+  });
+
+  it('measures each label against the line it is drawn as, not against the line it was written as', () => {
+    // The parser drops a reference line the write-up gives no number for, so the second line written is the first line drawn:
+    // comparing by written position would hold one line's label against another's. The dropped line itself is already a cut.
+    const loss = lossOf({
+      chart: {
+        kind: 'bar',
+        categories: ['a'],
+        series: [{ name: 's', values: [1] }],
+        referenceLines: [
+          { value: 'eighty', label: 'A line with no number to draw it at' },
+          { value: 80, label: 'Industry average' },
+        ],
+      },
+    });
+    expect(loss.shortened).toEqual([]);
+    expect(loss.cut).toEqual(['chart reference lines: 2 in the write-up, 1 on screen']);
+  });
+
+  it('a reference line label replaced by another is content gone, not text cut to length', () => {
+    const written = raw({ chart: { kind: 'bar', categories: ['a'], series: [{ name: 's', values: [1] }], referenceLines: [{ value: 80, label: 'Industry average' }] } });
+    const drawn = parseSolutionExhibit(written);
+    const swapped = { ...drawn.chart!, referenceLines: [{ ...drawn.chart!.referenceLines[0], label: 'Something else' }] };
+    expect(exhibitLoss(written, { ...drawn, chart: swapped }).cut).toContain('chart reference line 1 label not as written: 1');
+  });
+
   it('counts the cells of the whole table in one line, not one line per cell', () => {
     const long = 'x'.repeat(900);
     const loss = lossOf({ rows: [['North', long], ['South', long]] });
@@ -209,11 +263,12 @@ describe('what it may say', () => {
         categories: ['ZZCATEGORY'],
         series: [{ name: 'ZZSERIES', values: [1] }],
         belowRows: [{ label: `ZZBELOWLABEL${'b'.repeat(100)}`, values: ['1'] }],
+        referenceLines: [{ value: 80, label: `ZZREFLABEL${'r'.repeat(100)}` }],
         panels: Array.from({ length: 12 }, () => panel('ZZPANEL')),
       },
     });
     const text = [...loss.cut, ...loss.shortened].join(' ');
-    expect(text).not.toMatch(/ZZ(TITLE|CAPTION|COLUMN|CELL|LONGCELL|HEADING|CATEGORY|SERIES|PANEL|BELOWLABEL)/);
+    expect(text).not.toMatch(/ZZ(TITLE|CAPTION|COLUMN|CELL|LONGCELL|HEADING|CATEGORY|SERIES|PANEL|BELOWLABEL|REFLABEL)/);
     expect(loss.cut.length + loss.shortened.length).toBeGreaterThan(0);
   });
 });
