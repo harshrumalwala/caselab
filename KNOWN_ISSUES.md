@@ -5,15 +5,13 @@ assistant saw a claim (for example a build session's report) but did not check i
 
 ## Documentation that has gone stale
 
-`README.md` is detailed and mostly current, but these statements no longer match reality:
-- Line 702: "about 170 tests". On 2026-11-13 the unit suite had 89 files and 1,226 tests.
-- Line 358 (and the "Full solution" paragraph near line 363): says about 250 cases carry an analysis and that full solutions exist only
+`README.md` is detailed and mostly current, but these statements no longer match reality (line numbers rechecked on 2026-11-17; they
+move whenever the file does, so the quoted words are the reliable part):
+- Line 790: "about 170 tests". On 2026-11-13 the unit suite had 89 files and 1,226 tests.
+- Line 412 (and the "Full solution" paragraph at line 417): says about 250 cases carry an analysis and that full solutions exist only
   for the Booth MCG casebook and the co-chairs' picks. As of 2026-11-13 production holds 872 cases, 872 analyses and 872 solutions.
-- Line 596: "the 10 of 346 marked partial are left out" and "36 of 336" are old counts; current counts were not recomputed.
-- Line 371: `supabase db push --include-seed` will not work for the current seed (see "Library data pipeline").
-- The Live case lines no longer say "a 35-minute case" (issue #82 sized the clock to how much the case has in it), but Learning mode,
-  which has no clock at all, is still only covered in passing at lines 579-581.
-- The Tests section does not describe tests for Learning mode.
+- Line 667: "the 10 of 346 marked partial are left out" is an old count; the current one was not recomputed.
+- Line 425: `supabase db push --include-seed` will not work for the current seed (see "Library data pipeline").
 
 ## Library data pipeline (content lives outside git)
 
@@ -49,8 +47,8 @@ assistant saw a claim (for example a build session's report) but did not check i
   #151 the reference-line labels; it went to 4; issue #157 rewrote those four write-ups on 2026-11-17 and it is 0 again (the next two
   bullets). One side-note line that could not hold its two
   figures in 60 characters was split into further list items rather than shortened, which is why that chart now carries more side notes
-  than before. The write-ups are fixed; **production only changes when the regenerated `supabase/seeds/library.sql` is loaded**. The
-  per-exhibit caps are `SOLUTION_EXHIBIT_LIMITS` and `LIVE_EXHIBIT_LIMITS` (40 columns / 400 rows / 400 chart points), both in that file;
+  than before. The write-ups are fixed and **are in production**: the seed was reloaded on 2026-11-17 (see "What production holds" at
+  the end of this section). The per-exhibit caps are `SOLUTION_EXHIBIT_LIMITS` and `LIVE_EXHIBIT_LIMITS` (40 columns / 400 rows / 400 chart points), both in that file;
   the live case passes the second to match `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts`. **They are no longer kept in
   step by hand**: `src/data/liveExhibitCaps.test.ts` sends an oversized exhibit through the real `readExhibits` and then through the
   screen's parser and fails if the screen cuts anything the Edge Function let through.
@@ -63,8 +61,8 @@ assistant saw a claim (for example a build session's report) but did not check i
   row, every figure was still on screen, and the command still exited 0 on them. **The three labels were rewritten on 2026-11-17**
   (issue #157, in `private-data/solutions/*.json`): each is inside the 40-character cap with every figure and the meaning kept, and the
   wording that had to go is still on screen in the same exhibit's caption, footnote or column heading, none of which is near a cap.
-  Production only changes when the regenerated seed is loaded, so they are in the next reload batch with the #132, #139, #149 and #151
-  rewrites.
+  They reached production in the reload of 2026-11-17, with the #132, #139, #149, #151 and #157 rewrites (see "What production holds"
+  at the end of this section).
 - **One reference line's label is cut to length, and the audit now says so** (issue #151, 2026-11-17). `chartLoss` compared how many
   reference lines a chart has and never read their labels, so a label over the parser's 30-character cap was shortened with nothing
   recorded anywhere — the same defect #143 fixed for the row label, one field along. It compares the label now, matching the lines as the
@@ -73,8 +71,8 @@ assistant saw a claim (for example a build session's report) but did not check i
   field walk had named, and no others. `npm run audit:live` reported 4 `exhibit_text_shortened` as a result and still exited 0: every
   figure was on screen, one label did not fit the chart. **The label was rewritten on 2026-11-17** (issue #157, in
   `private-data/solutions/*.json`): it is inside the 30-character cap, keeps the band the book prints, and the whole sentence is still
-  on screen in the exhibit's caption. Production only changes when the regenerated seed is loaded, so it is in the next reload batch
-  with the #132, #139, #143 and #149 rewrites. `exhibit_text_shortened` is 0 again.
+  on screen in the exhibit's caption. It reached production in the reload of 2026-11-17, with the #132, #139, #143, #149 and #157
+  rewrites (see "What production holds" at the end of this section). `exhibit_text_shortened` is 0 again.
 - **Fields of an exhibit that `exhibitLoss` still does not compare** (walked field by field for issue #143; the full list with a yes or
   no on each is in that PR). The one of them that bit — a reference line's label — is compared since issue #151 and is the bullet above.
   The rest have nothing over a cap today: the chart's unit (12), a point label on a series (40), a series or reference-line colour (20),
@@ -89,8 +87,8 @@ assistant saw a claim (for example a build session's report) but did not check i
   the book misspells. All 17 were rewritten on 2026-11-17 in `private-data/solutions/*.json` (business situation and question
   untouched, the meta sentence dropped; every piece of it that matters to running the case was already held in `facts` or in the step
   notes, so nothing had to be moved). `npm run audit:live` now fails on a prompt that names the book or notes a printing oddity, so the
-  next batch cannot reintroduce one. **The write-ups are fixed; production only changes when the regenerated `supabase/seeds/library.sql`
-  is loaded** (the owner's call; not done). Two things were left. The first is closed: the audit also reported, without failing,
+  next batch cannot reintroduce one. **The write-ups are fixed and are in production**: the seed was reloaded on 2026-11-17 (see "What
+  production holds" at the end of this section). Two things were left. The first is closed: the audit also reported, without failing,
   **13 prompts that describe the case as a case** (how it is run, how the interviewer behaves, what kind it is), each needing a person
   to judge because an interviewer can be a character in the story. The PM judged all 13 for issue #157 on 2026-11-17 — 11 sentences
   dropped and 2 reworded, the two role plays being the ones kept, because a role play is the business situation the member is in while
@@ -114,7 +112,10 @@ assistant saw a claim (for example a build session's report) but did not check i
   `scripts/liveCaseAudit.mjs` to catch "the candidate" as the subject of the sentence carrying the ask is the obvious follow-up and was
   deliberately **not** done here (#156 was open in that file); nobody has measured how many of the 872 such a rule would flag, or how
   many of those would be role plays. **The write-ups are fixed; production only changes when the regenerated
-  `supabase/seeds/library.sql` is loaded** (the owner's call; not done — 13,223,152 bytes, 297 smaller, 872 / 872 / 872 rows).
+  `supabase/seeds/library.sql` is loaded** (the owner's call; still not done — 13,223,152 bytes, 297 smaller, 872 / 872 / 872 rows).
+  **This is the one library change the reload of 2026-11-17 did not carry**, because the seed was regenerated after that load had run:
+  production still holds the five pre-#159 prompts (checked on 2026-11-17 by comparing the md5 of every prompt in production with the
+  write-ups — 5 of 872 differ, and they are these five).
 - **The interviewer's own facts named the book, and 44 sentences of them would have reached a member** (issue #149, 2026-11-17). A fact
   and a clarifying answer are never shown to the member, but the coach reads one out, in full, when they ask for it (#83), so they take
   the path the prompt took. Measured with the engine's own reply filter rather than with real model runs (which the issue did not
@@ -124,10 +125,10 @@ assistant saw a claim (for example a build session's report) but did not check i
   book is taken out, so no filter can save them. Those 44, in 41 cases across 9 files, were rewritten on 2026-11-17 in
   `private-data/solutions/*.json`, keeping the meaning, the figures and the order. `npm run audit:live` now reports
   `interviewer_names_the_book` with both counts, so the second one cannot drift back above zero unnoticed; it is reported, never failed,
-  because the filter genuinely handles the narrated shape. **The write-ups are fixed; production only changes when the regenerated
-  `supabase/seeds/library.sql` is loaded** (the owner's call; not done — 13,225,109 bytes, 575 smaller). Two things left: the voice
-  filter's new source words (`casebook`, `case book`, `authors`) are in `supabase/functions/_shared/liveCaseCoach.ts` and only take
-  effect after `npx supabase functions deploy live-case`; and **16 of the 28 sentences left were dropped whole** by the reply filter
+  because the filter genuinely handles the narrated shape. **The write-ups are fixed and are in production**: the seed was reloaded on
+  2026-11-17 (see "What production holds" at the end of this section). Two things were left, and the first is closed: the voice
+  filter's new source words (`casebook`, `case book`, `authors`) are in `supabase/functions/_shared/liveCaseCoach.ts` and are deployed
+  (live-case version 23, 2026-11-17). The second is open — **16 of the 28 sentences left were dropped whole** by the reply filter
   rather than cleaned, because the same sentence also talks about "the candidate" — so a reply that was only that sentence became the
   stand-in line, and the member did not get the fact they asked for. That is the #132 pattern one layer in again, it is not about the book,
   and it became issue #156, which measured it over every fact rather than only the book-naming ones (286 sentences, not 16) and fixed it
@@ -152,7 +153,13 @@ assistant saw a claim (for example a build session's report) but did not check i
   script failing.
 - **One case name in the work list had no PDF** (806 of 807 were assigned). Production shows 872 solutions for 872 cases, so it may have
   been a duplicate, but which entry it was has not been checked.
-- **Generic case names can merge different cases** into one library entry (README line 356).
+- **Generic case names can merge different cases** into one library entry (README line 410).
+- **What production holds (checked on 2026-11-17).** 872 library cases, 872 analyses, 872 solutions. Every solution row was written
+  between 13:36:49 and 13:38:02 UTC that day, so the whole library was last loaded in one pass then, after issue #157 merged. The
+  content it carries was compared with `private-data/solutions/*.json` field by field: the md5 of every prompt matches except **5 of
+  872**, which are #159's; and the counts of write-ups whose facts (30), clarifying answers (22), exhibits (166) or steps (680) name
+  the book match exactly. So the #132, #139, #143, #149, #151 and #157 rewrites are live and **#159's five prompts are the only
+  library change waiting on a reload**. Re-run that comparison after the next load rather than trusting this paragraph.
 
 ## Content quality and policy risks
 
@@ -215,7 +222,7 @@ assistant saw a claim (for example a build session's report) but did not check i
     the book's numbering of an exhibit. A title that starts "Question 2" cannot be exempted without exempting the many workings filed
     under the same wording.
   - **Two cases needed a content change, not a rule change, and both captions were rewritten on 2026-11-17** (issue #139, in
-    `private-data/solutions/*.json`, so it reaches members only when the regenerated seed is loaded): Contagion Containment (Darden 2020)
+    `private-data/solutions/*.json`, and in production since the reload of 2026-11-17): Contagion Containment (Darden 2020)
     "Exhibit 1: IOC Revenues for Upcoming Olympics", whose caption tripped the solution-caption rule while saying where the amounts came
     from; and Bumpers R Us (Fuqua 2025-26) "Exhibit #2: Strategic initiatives", whose caption described what the interviewer does with the
     exhibit rather than what is in it. Both exhibits now reach the candidate and Bumpers R Us plans two beats. **Contagion Containment is
@@ -262,10 +269,12 @@ assistant saw a claim (for example a build session's report) but did not check i
   `profiles.share_sharpening` from the moment the migration file was committed and reported it missing until the owner applied it on
   2026-11-17. (`public_profiles.share_sharpening` is never reported either way: that table is closed to every API role, so the read
   fails on permission before it can fail on the column.) `npm run test:e2e` is not part of CI, so this was never a CI failure.
-- **Two live checks fail until the #96 migration is applied** (they are the check that the live database matches the code, so this is
-  the intended failure, not a bug): "cannot list, search, count or page through members at all" in `e2e/community.e2e.test.ts` and
-  "are closed to visitors and to members, however the read is shaped" in `e2e/deployed.e2e.test.ts`. Both have a NOTE saying so.
-  `npm run test:e2e` is not part of CI, so CI stays green either way.
+- **The #96 migration is applied, so the two live checks that waited on it have what they expect.** "cannot list, search, count or
+  page through members at all" in `e2e/community.e2e.test.ts` and "are closed to visitors and to members, however the read is shaped"
+  in `e2e/deployed.e2e.test.ts` both failed by design until `20261124120000_link_only_profiles.sql` was applied on 2026-11-17; each
+  still carries a NOTE written for that wait. Production was queried on 2026-11-17 and holds exactly what they assert (no table or
+  column `SELECT` for `anon` or `authenticated` on `public_profiles` / `public_shared_cases`, RLS on with zero policies); the suite
+  itself was not re-run by this pass, and it is not part of CI either way.
 - **`npm run test:e2e` talks to the real (production) Supabase project** in `.env.local` using accounts in the git-ignored
   `.env.e2e.local`. It creates and removes rows titled `ZZ CaseLab e2e ...`. It is not part of CI. It broke once because
   `e2e/app.e2e.test.tsx` looked for the old front-page headline ("Case smarter"); fixed in PR #78 to look for "Case with Bucket".
@@ -277,9 +286,16 @@ assistant saw a claim (for example a build session's report) but did not check i
 ## Production, security and operations
 
 - **`live-case` and `notify-request` run with `verify_jwt = false`** (`supabase/config.toml`) and check the sign-in inside the function.
-  If that check were removed, the functions would be open. `live-case` was reported (by the session that built the "move on" change) as
-  deployed as version 6 with the check still off; later versions were deployed too. The deployed state versus the repo was not
-  checked by this documentation pass.
+  If that check were removed, the functions would be open. Read back from production on 2026-11-17: `live-case` is version 23
+  (deployed 19:06 UTC) and `notify-request` version 4, both still with `verify_jwt` off.
+- **The deployed `live-case` is the code on `main`** (checked on 2026-11-17 with `npx supabase functions download live-case`, into a
+  scratch folder rather than over the repo): `live-case/index.ts`, `_shared/liveCase.ts` and `_shared/liveCaseCoach.ts` came back
+  byte-identical to the repository at `b2f40c4`, which carries every live-case change up to and including issue #163 (PR #170). So
+  the "it does nothing until `npx supabase functions deploy live-case`" note that each live-case section below was written under no
+  longer applies to any of them: they are live. What is still true of every one of them is that **no real model has been asked since**
+  — the unit tests use a fake one and `npm run dryrun:live` stubs it — and that a session already running keeps the plan it started
+  with, so a check needs a new case. Repeat the download after the next merge; nothing automated compares the two (see "Missing
+  tests").
 - **The Learning-mode change (PR #79) was merged and its Edge Function deployed by the session that built it.** That session's report
   said it had not started a Learning case on the live site and had not confirmed that Vercel deployed the merge. This documentation
   pass did not see the owner's approval for that merge and deploy (the report did not mention it). Not verified.
@@ -297,12 +313,14 @@ assistant saw a claim (for example a build session's report) but did not check i
   switch buys is that *CaseLab* does not do it for them or put the result at the top of the page, which is the framing the owner
   chose to protect. If that ever needs enforcing in the database, the only way is to stop releasing per-case skill scores to
   visitors, which is a different (and larger) decision.
-- **The public directory is gone (issue #96), but the migration that enforces it is not applied yet.** The app shipped in that PR has no
-  front-page list or search, and `src/data/supabaseCommunity.ts` no longer reads the public tables. Until the owner runs
-  `npx supabase db push` for `supabase/migrations/20261124120000_link_only_profiles.sql`, **production `anon` still holds `SELECT` on
-  `public_profiles` and `public_shared_cases`**, so every member who switched visibility on is still listable and scrapeable straight
-  through the API. Two e2e tests are written for the post-migration world and fail until then (see Tests and CI). Once applied, a
-  member's own link is still passable to anyone and the member ID in it is permanent: "reset my link" is issue #97.
+- **The public directory is gone (issue #96) and the migration that enforces it is applied.** The app shipped in that PR has no
+  front-page list or search, and `src/data/supabaseCommunity.ts` no longer reads the public tables;
+  `supabase/migrations/20261124120000_link_only_profiles.sql` was applied with the owner's approval on 2026-11-17. Checked against
+  production on 2026-11-17: `npx supabase migration list --linked` shows all 32 migrations `local == remote`, and a query of the
+  catalogue shows **no table or column `SELECT` for `anon` or `authenticated`** on `public_profiles` or `public_shared_cases`, RLS on
+  with zero policies, and `public_person` / `public_person_cases` still executable by `anon`. So a visitor can no longer list or
+  scrape the members who switched visibility on; only an exact member id gets anything. What is left: a member's own link is still
+  passable to anyone and the member ID in it is permanent, so "reset my link" (issue #97) is still worth doing.
 - **Two historical columns stay in the schema with nothing reading them**: `profiles.public_link_only` (and its
   `profiles_link_only_requires_public` check) and `public_profiles.in_directory`. The migration leaves them, and the app keeps writing
   `public_link_only = public_profile` so the old check still holds for a browser running either version. Dropping them is a separate
@@ -310,11 +328,25 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **Messages are not end-to-end encrypted**; reports sit in a table that only the Supabase dashboard can read, with no in-app admin.
 - **Display names are not verified.**
 - **Edits on two devices at once**: last save wins. The tour is remembered per browser. No offline mode.
-- **Live-case and Bucket costs are estimates** (README: under 10 cents a live case, about 3 cents per Bucket read). Real usage is
-  stored per live case but no one has reported reading it back.
+- **The live-case cost has been read back; the Bucket read's has not.** The README's estimates are under 10 cents a live case and
+  about 3 cents per Bucket read. `npm run pilot:live` read `live_case_sessions.state -> 'usage'` during the $2 pilot of 2026-11-17 and
+  put a whole interview case at about 3 cents, roughly 80% of it the one Sonnet feedback call. Nobody has measured a Bucket read, and
+  what limits live-case use is the function's own 4 starts per member per day rather than money.
 - **Supabase CLI deprecation warnings**: `--linked` is deprecated (use `--remote`), and `supabase/config.toml` still uses
   `auth.email.enable_signup` and `auth.sms.enable_signup`, which the CLI says will be removed in v4.
 - **Windows PowerShell blocks `npm`/`npx` scripts** by default execution policy (the owner hit this); use `cmd.exe` or change the policy.
+- **A git worktree is not linked to Supabase, and the error does not say so.** Any Supabase CLI command that talks to the project
+  (`npx supabase db push`, `migration list`, `db query`, `functions deploy`, `functions download`) fails from a worktree with
+  `{"code":"ProjectRefNotLinkedError","message":"Cannot find project ref. Have you run supabase link?"}`, even though the primary
+  checkout is linked and nothing is wrong with the login. The cause is that the CLI keeps its link state in `supabase/.temp/`
+  (`project-ref`, `linked-project.json`, the pooler URL), which is git-ignored (`supabase/.gitignore` line 3), so a worktree is
+  created without it. The error points at `supabase link`, which is the wrong fix: re-linking asks for the database password and
+  writes the state again per checkout. **Workaround:** copy `supabase/.temp/` from the primary checkout into the worktree, or run the command from the
+  primary checkout. It cost real time on 2026-11-17 while applying the #121 migration.
+- **The same root cause stops a worktree running the live checks.** `.env.local` (the Supabase URL and publishable key) and
+  `.env.e2e.local` (the throwaway accounts) are git-ignored too (`.gitignore` lines 10-12), so `npm run dev`, `npm run test:e2e` and
+  `npm run pilot:live` all fail or skip in a fresh worktree until those two files are copied across as well. The three commands CI
+  runs — `npm run typecheck`, `npm test`, `npm run build` — need none of them and work anywhere.
 - **Migration order matters**: the app expects the newest tables, so a migration must be applied before the app version that needs it
   is deployed. `e2e/deployed.e2e.test.ts` checks that the live database matches the code.
 
@@ -322,8 +354,8 @@ assistant saw a claim (for example a build session's report) but did not check i
 
 - **The wording change is unverified against a real model.** The directives in `supabase/functions/_shared/liveCaseCoach.ts` were rewritten
   to stop three tells the $2 pilot found (third person, "the case says ...", an `advance` reply that summarises the beat it leaves). Unit
-  tests prove the code-side checks on the pilot's own replies; no real model has been asked since. It also only takes effect after
-  `npx supabase functions deploy live-case`.
+  tests prove the code-side checks on the pilot's own replies; no real model has been asked since. It is deployed (live-case
+  version 23, 2026-11-17).
 - **The checks are string-level, so they catch wording and not meaning.** `hasTell` matches the phrasings the pilot produced and the
   obvious variants ("the student", "the candidate", "my instructions", a refusal that names an answer); a model that talks about the member
   some other way ("one would usually start with ...") goes through. `withoutSourceNarration` strips a listed source plus a listed verb of
@@ -344,8 +376,8 @@ assistant saw a claim (for example a build session's report) but did not check i
   it was taken away. In practice the same first sentence reached them as a bare verdict with no move-on in it. Both are fixed: the
   opening sentence is kept only when `saysMovingOn` matches it, and the `!said` guard and the whole-reply stand-in both hand back
   `MOVING_ON` at that rung instead of `OVER_TO_YOU` or `FALLBACK`.
-- **Unverified against a real model**, like every other change under `supabase/functions/**`, and it does nothing until
-  `npx supabase functions deploy live-case`. The unit tests put the issue's three reproductions through the real `parseTurn`.
+- **Unverified against a real model**, like every other change under `supabase/functions/**`. It is deployed (live-case version 23,
+  2026-11-17). The unit tests put the issue's three reproductions through the real `parseTurn`.
 - **The dry run cannot see it at all.** `npm run dryrun:live` stubs the model with one fixed sentence, so no content filter in
   `parseTurn` executes in any of its 12,705 runs. Run before and after (847 cases, 12,705 runs, 0 that failed the bar, 2,541 open by
   design, both times): the two reports are **byte-identical apart from their timestamp line**, which is the expected null result and
@@ -371,16 +403,16 @@ assistant saw a claim (for example a build session's report) but did not check i
   `hasTell` imported rather than copied: **286 sentences in 201 write-ups were dropped by the reply filter, 198 of them the whole of a
   fact or a clarifying answer**, so the member who asked for one of those got the stand-in line (`FALLBACK`) and none of the figures.
   285 of the 286 were the third-person rule; 270 of those matched on the words "the candidate" alone. A content rewrite would have been
-  ~198 sentences in ~200 cases and would reach members only at the next seed reload, which is not scheduled; the rule change ships with
-  `npx supabase functions deploy live-case`. Hence the engine route.
+  ~198 sentences in ~200 cases and would reach members only at the next seed reload, which is not scheduled; the rule change needed
+  nothing but a deploy of the function, which happened the same day. Hence the engine route.
 - **What the rule now does.** `talksAboutThem` in `supabase/functions/_shared/liveCaseCoach.ts`: a sentence that names the member in the
   third person is a tell when it carries the model's own voice in the same breath (`I`, `me`, `my`), when it instructs them
   (`should`, `must`, `needs to`, `has to`, `is expected to`, ...), or when it holds no figure of the case — a pointer such as "Exhibit 1"
   does not count as a figure. Otherwise it is a fact and is read out **as written**. After the change the filter drops 246 sentences and
   165 whole facts or answers: **40 sentences in 35 cases reach the member who asks, 33 of them the whole of a fact or an answer.**
   Nothing that used to pass is dropped now (measured, 0 newly dropped).
-- **Unverified against a real model**, like every other change under `supabase/functions/**`, and it does nothing until the function is
-  deployed. The unit tests put the measured sentence shapes through the real `handleLive`; no model has been asked since.
+- **Unverified against a real model**, like every other change under `supabase/functions/**`. It is deployed (live-case version 23,
+  2026-11-17). The unit tests put the measured sentence shapes through the real `handleLive`; no model has been asked since.
 - **The fact is read out in the write-up's words, stage direction and all.** A kept sentence is not rewritten into the second person, so
   a member can read the condition the write-up puts on a fact ("given only once the candidate asks for them") before the figures.
   Rewriting "the candidate" to "you" was tried on paper and dropped: a case about schools says "a student" and means a pupil (A-Plus
@@ -410,7 +442,7 @@ assistant saw a claim (for example a build session's report) but did not check i
   exhibit and direction directives and its first-rung instruction in `supabase/functions/_shared/liveCaseCoach.ts` now say that a reply
   never confirms, denies or grades the member's reading and never introduces a driver they did not raise. No model has been asked since.
   The unit tests exercise the code-side checks on the pilot's own replies, and `npm run dryrun:live` stubs the model, so neither can say
-  whether the register moved. Like every change under `supabase/functions/**` it does nothing until `npx supabase functions deploy live-case`.
+  whether the register moved. It is deployed (live-case version 23, 2026-11-17).
 - **The verdict check is string-level.** `gradesTheirReading` matches the pilot's phrasings and the obvious variants ("you're right",
   "good instinct", "that's the key insight", "exactly the right lens", "which is the heart of", "not quite right"). A verdict worded
   some other way ("I can see where that takes you", "most candidates stop there") goes through. A bare "Good." or "Nice." is deliberately
@@ -438,8 +470,7 @@ assistant saw a claim (for example a build session's report) but did not check i
 
 - **The wording half is unverified against a real model.** `NOT_THE_ANSWER` and the notes on the interviewer's tables in
   `supabase/functions/_shared/liveCaseCoach.ts` now state the rubric's derivation test and forbid volunteering a derived figure; the unit
-  tests only exercise the code-side check. Like every other change under `supabase/functions/**` it does nothing until
-  `npx supabase functions deploy live-case`.
+  tests only exercise the code-side check. It is deployed (live-case version 23, 2026-11-17).
 - **The code-side check is numbers only, and only for figures it can be sure of.** `heldResults` holds back a figure in an
   interviewer-side table when the cell shows its own arithmetic or when the figure is the product or sum of others in the same row or
   column (same scale, within 0.5%). It cannot see a figure restated in words ("about eight billion"), a rounded version of one, a figure
@@ -463,8 +494,8 @@ assistant saw a claim (for example a build session's report) but did not check i
 
 - **Nothing of this is verified against a real model or a real member.** `buildPlan` now mixes the two kinds of beat, and the unit
   tests, `npm run audit:live` and `npm run dryrun:live` all agree the cases run; the dry run stubs the model, so whether Bucket's reply
-  on a part that hands over no exhibit reads like an interviewer putting a question is unknown. Like every change under
-  `supabase/functions/**` it does nothing until `npx supabase functions deploy live-case`.
+  on a part that hands over no exhibit reads like an interviewer putting a question is unknown. It is deployed (live-case version
+  23, 2026-11-17).
 - **The clock grew, by design and by a lot.** Beats per case went from 2.98 to 4.86 and the median planned case from 31 to 39 minutes;
   272 of the 847 eligible cases now plan the full 25-in-40 ceiling, against 57 before. Nothing runs longer than the ceiling, but a
   14-beat case shares 25 minutes between 14 parts (about 1:45 each before the budget is reshared). Whether a 39-minute case is one a
@@ -482,7 +513,7 @@ assistant saw a claim (for example a build session's report) but did not check i
   the time it really has: **354 of 7,080 (5.0%)**, 96 runs, 48 cases, 6 beats under a 2:00 budget (was 352) and none at the floor (was
   20, in 10 cases). The budget moves no stage end, so the 25-in-40 ceiling and the closing reserve are untouched; a stuck member now
   covers slightly fewer parts in the same time (7,614 beats revealed against 7,908), which is the rung being given back to them.
-  **It takes effect only after `npx supabase functions deploy live-case`.**
+  **It is deployed** (live-case version 23, 2026-11-17).
 - **The order between an exhibit and a step is a guess wherever no step names an exhibit.** 230 of the 847 write-ups have at least one
   step that names its exhibit; in the rest the exhibits are handed over first and the steps follow, which is the order those cases
   already had. Nothing in the data says where the book meant a step to sit, so a case can work through an exhibit before the sizing step
@@ -517,8 +548,8 @@ assistant saw a claim (for example a build session's report) but did not check i
   case, the stage machine stops the discussion for it and picks the discussion up again afterwards, and the unit tests,
   `npm run audit:live` and `npm run dryrun:live` all agree the cases run (10,164 of 12,705 runs reach the end, exactly as before; the
   rest are the learning-mode stalls that are open by design). The dry run stubs the model, so whether a mid-case brainstorm *reads*
-  right to a member — Bucket asking for ideas, then going back to an exhibit — is unknown. Like every change under
-  `supabase/functions/**` it does nothing until `npx supabase functions deploy live-case`.
+  right to a member — Bucket asking for ideas, then going back to an exhibit — is unknown. It is deployed (live-case version 23,
+  2026-11-17).
 - **Where a brainstorm sits is a guess wherever no step names an exhibit**, exactly as it is for an analytical step (issue #128). The
   brainstorm is placed by the same rule, so a write-up with no step naming an exhibit hands the exhibits over first and the brainstorm
   follows them, which is where it already was. Measured over the 847 eligible write-ups: 177 cases have a brainstorm, 196 brainstorm
@@ -566,7 +597,7 @@ assistant saw a claim (for example a build session's report) but did not check i
 
 - **Unverified against a real model.** `refusedTurn` in `supabase/functions/_shared/liveCaseCoach.ts` turns a `refusal` stop reason
   into the in-character line instead of the failure message; the unit tests stub the stop reason, and no real refusal has been seen
-  since. Like every change under `supabase/functions/**` it does nothing until `npx supabase functions deploy live-case`.
+  since. It is deployed (live-case version 23, 2026-11-17).
 - **How often the model refuses is still not recorded anywhere.** Only token usage is kept in `live_case_sessions.state`, so there is
   no way to say whether this moment happens once a case or once a month. Counting it means a new field on the session state and a
   mutation to raise it, which is more than the one line issue #142 was willing to spend, so nothing was added.
@@ -583,8 +614,8 @@ assistant saw a claim (for example a build session's report) but did not check i
 
 - **Unverified against a real model.** The topic comes from the engine, so the opening line itself is deterministic and tested; what a
   real Bucket then does with a member who has been handed the topic is not. The dry run's stub emits one fixed sentence, so nothing
-  here says whether the register reads well mid-case. Like every change under `supabase/functions/**` it does nothing until
-  `npx supabase functions deploy live-case`, and a case already running keeps the plan it started with, topics and all.
+  here says whether the register reads well mid-case. It is deployed (live-case version 23, 2026-11-17), and a case already running
+  keeps the plan it started with, topics and all.
 - **The test for "the title is the answer" is lexical.** `TITLE_IS_THE_ANSWER` in `supabase/functions/_shared/liveCase.ts` reads the
   words the books actually use ("why", "because", "driven by", "confirm", "lacks", "lags"), which covered 70 of the 2,723 parts talked
   through on 2026-11-17. A title that states a finding in plain words with none of those markers still passes: the one found by hand
@@ -611,12 +642,12 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **The PM and developer agent files are converted to GitHub** (`gh`, pull requests) and saved in `.claude/agents/pm.md` and
   `.claude/agents/developer.md`, but `.claude/` is git-ignored (`.gitignore` line 29), so they exist only on the owner's machine and are
   not in the repository.
-- **The labels the workflow depends on do not exist yet.** `gh label list` (2026-11-15) shows only GitHub's default labels, with no
-  `proposed` or `approved`. The PM file tells the PM to create `proposed` if it is missing; `approved` is the owner's label and someone has
-  to create it.
+- **Both workflow labels exist** (`gh label list`, rechecked 2026-11-17): `proposed` ("Proposed by the PM; waiting for the owner")
+  and `approved` ("Approved by the PM agent for the developer to build"), beside GitHub's defaults. They were missing on 2026-11-15.
 - **The developer file tells the developer to run "the lint command from CLAUDE.md"**, but there is no lint command (see Tests and CI).
 - **Where the agents would find these documents**: `PRODUCT.md`, `ROADMAP.md`, `DECISIONS.md`, `KNOWN_ISSUES.md` and `CLAUDE.md` were
-  created at the repo root on 2026-11-15 and are not yet committed.
+  created at the repo root on 2026-11-15 and committed the same day (`a947c28`); they are kept current in the PRs that change
+  behaviour.
 
 ## Bugs fixed that could come back
 
@@ -734,11 +765,15 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
 
 ## The pilot runner (`npm run pilot:live`, issue #125, added 2026-11-17)
 
-- **It has now run against production** (the owner, 2026-11-17, runs 1 to 4 of the $2 pilot, about $0.12 spent): the sign-in, the `live-case`
-  call, the catalogue RPC and the per-turn usage read worked together on first contact. The one defect that run found was arithmetic: on a
-  `finish` turn the running total priced the feedback call at the coach model, so it printed about twenty times less than that call cost and
-  disagreed with `spend` (issue #134, fixed by building both totals from `spendReport` — `spendWithTurn` hands it the turn not yet on disk).
-  What the pilot is for — whether Bucket's words nudge or solve — is still open.
+- **The whole $2 pilot has run against production** (the owner, 2026-11-17: 8 real starts — there are 8 transcripts in the
+  git-ignored `reports/pilot/` — for about $0.21 in all, the figure PRODUCT.md and DECISIONS.md record): the sign-in, the `live-case`
+  call, the catalogue RPC and the per-turn usage read worked together on first contact. The one defect the first runs found in the runner itself was
+  arithmetic: on a `finish` turn the running total priced the feedback call at the coach model, so it printed about twenty times less
+  than that call cost and disagreed with `spend` (issue #134, fixed by building both totals from `spendReport` — `spendWithTurn` hands it the turn not yet on disk).
+  **What the pilot is for, it did**: it found seven things about Bucket's words, six of which are fixed and live (#128, #129, #131,
+  #133 and #142 in the deployed function, #132 in the reloaded library seed), and #128, #129 and #131 were each proved by re-running
+  the exact case that failed. The seventh (#130, an interview reply confirming the member's guess) is deployed on deterministic
+  evidence and still unproved against a real model, because the function allows 4 starts per account per day.
 - **Spend is attributed, not measured per call.** `state -> 'usage'` is one running total per session with no model and no per-call split, so
   the script prices every turn at the coach model and the single `finish` turn at the feedback model. A future change that made two kinds of
   call in one turn would be priced wrongly and nothing would say so.
