@@ -124,27 +124,6 @@ export const SAMPLE_LIBRARY_SOLUTIONS: Record<string, BookSolution> = {
   },
 };
 
-/**
- * A second case for the live catalogue only: a market-sizing write-up with no exhibits, which the live case runs on the book's steps with
- * nothing on screen. It is here so the picker has one case of each kind to label and to filter.
- */
-export const SAMPLE_LIVE_DISCUSSION_CASE = {
-  confidence: 'high',
-  prompt: 'How many cases of craft beer would a new brewery sell in its first year?',
-  facts: ['The brewery can make 40,000 cases a year.'],
-  clarifyingQuestions: [],
-  structure: [{ heading: 'Market', keyQuestion: 'How big is it?', why: '', points: ['Drinkers', 'Cases a year'] }],
-  steps: [
-    { title: 'Size the drinking-age population', body: 'Start from the city and take the share old enough to drink.', calc: [], whatToNotice: '', commonMiss: [], checkYourself: [] },
-    { title: 'Work out cases a drinker buys a year', body: 'Split regular drinkers from occasional ones.', calc: [], whatToNotice: '', commonMiss: [], checkYourself: [] },
-  ],
-  exhibits: [],
-  recommendation: 'Plan for about 25,000 cases in the first year, which is inside what the brewery can make.',
-  recommendationDetail: { because: ['The market is big enough for a new entrant.'], delivery: '', commonMisses: [] },
-  risks: [],
-  nextSteps: [],
-};
-
 export const MY_PROFILE: Profile = {
   userId: TEST_USER.userId,
   displayName: 'Test User',
@@ -281,14 +260,9 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
   const myPractice = practice.as(TEST_USER.userId);
   const chat = createMemoryMessages(practice, () => community.profiles.map((p) => ({ userId: p.userId, name: p.displayName })));
   const myChat = chat.as(TEST_USER.userId);
-  const liveCase = (c: LibraryCase, solution: unknown) => ({ info: { name: c.name, book: c.book, caseType: c.caseType, industry: c.industry }, solution });
   const live = createMemoryLive({
     userId: TEST_USER.userId,
-    cases: {
-      [SAMPLE_LIBRARY[0].id]: liveCase(SAMPLE_LIBRARY[0], SAMPLE_LIBRARY_SOLUTIONS[SAMPLE_LIBRARY[0].id]),
-      // A case with nothing on screen, so the picker's label and filter have one of each kind.
-      [SAMPLE_LIBRARY[2].id]: liveCase(SAMPLE_LIBRARY[2], SAMPLE_LIVE_DISCUSSION_CASE),
-    },
+    cases: { [SAMPLE_LIBRARY[0].id]: { info: { name: SAMPLE_LIBRARY[0].name, book: SAMPLE_LIBRARY[0].book, caseType: SAMPLE_LIBRARY[0].caseType, industry: SAMPLE_LIBRARY[0].industry }, solution: SAMPLE_LIBRARY_SOLUTIONS[SAMPLE_LIBRARY[0].id] } },
   });
   const publicReader = createMemoryPublic({ profiles: () => community.profiles, shared });
 
