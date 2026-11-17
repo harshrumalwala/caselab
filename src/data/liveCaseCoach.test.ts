@@ -11,6 +11,7 @@ import {
   leaks,
   movingOnOnly,
   openingText,
+  saysMovingOn,
   sharesSubstance,
   statesHeldResult,
   withoutSourceNarration,
@@ -2016,5 +2017,104 @@ describe('the model declines the turn itself (issue #142)', () => {
     expect(refusedTurn({ mode: 'practice' }).message).toBe(WORK_IS_YOURS);
     expect(refusedTurn({ mode: 'learning' }).message).toBe(WORK_IT_TOGETHER);
     expect(refusedTurn({}).message).toBe(WORK_IS_YOURS); // a session saved before modes existed is a timed one
+  });
+});
+
+// Issue #165: the interaction between #145's interview register and #136's move-on rule. At rung `advance` the move-on rule kept the
+// model's first sentence whatever it said; the interview branch then stripped it as a verdict, the reply went empty, and the guard
+// that stands in for an empty reply — which was not rung-aware — handed the member `OVER_TO_YOU` while `applyTurn` moved the case on.
+// The three inputs below are the reproductions recorded in the issue, run through the real `parseTurn`.
+describe('a move-on says the case is moving on, in every mode (issue #165)', () => {
+  const VERDICT_THEN_MOVE = "You're right that the margin is the issue. Let us move on to the next piece.";
+  const VERDICT_THEN_LATER = 'Good instinct. We will come back to that; let us move on.';
+  const JUST_THE_MOVE = 'Let us move on to the next piece.';
+  /** A turn the engine reads as the move-on: the rung that advances, no question answered and no beat finished. */
+  const movingTurn = (text: string) => JSON.stringify(turn(text, { assessment: 'stuck' }));
+  const atAdvance = (text: string, mode: 'practice' | 'interview' | 'learning', kind: 'exhibit' | 'direction' = 'exhibit') =>
+    parseTurn(movingTurn(text), [], FALLBACK, 700, 'advance', [], { mode, kind })!.message;
+
+  /** The opening stages done quickly in the chosen mode: the id of a session on its first exhibit. */
+  async function toExhibitsIn(mode: 'practice' | 'interview' | 'learning'): Promise<string> {
+    const id = view(await call({ type: 'start', libraryId: LIB, mode })).sessionId;
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'submit', sessionId: id, text: 'Demand, supply, cost' });
+    w.script.reply = () => turn('Good start, let us look at the data.', { direction_clear: true, assessment: 'progress' });
+    expect(view(await call({ type: 'say', sessionId: id, text: 'I would start with demand' })).stage).toBe('exhibits');
+    w.asked.length = 0;
+    return id;
+  }
+
+  it('turns the three reproductions into a line that moves the case on', () => {
+    // Was `OVER_TO_YOU` — "stay with it" on the very turn the part is taken away.
+    expect(atAdvance(VERDICT_THEN_MOVE, 'interview')).toBe(MOVING_ON);
+    expect(atAdvance(VERDICT_THEN_LATER, 'interview')).toBe(MOVING_ON);
+    // ...and the reply that was already right is untouched.
+    expect(atAdvance(JUST_THE_MOVE, 'interview')).toBe(JUST_THE_MOVE);
+    for (const text of [VERDICT_THEN_MOVE, VERDICT_THEN_LATER, JUST_THE_MOVE]) {
+      expect(atAdvance(text, 'interview'), text).not.toBe(OVER_TO_YOU);
+      expect(atAdvance(text, 'interview'), text).not.toBe('');
+      expect(saysMovingOn(atAdvance(text, 'interview')), text).toBe(true);
+    }
+  });
+
+  it('never leaves the member with a bare verdict in practice', () => {
+    // #136 as written kept the first sentence whatever it said, so this reached the member with no move-on in it at all.
+    expect(atAdvance(VERDICT_THEN_MOVE, 'practice')).toBe(MOVING_ON);
+    expect(atAdvance(VERDICT_THEN_LATER, 'practice')).toBe(MOVING_ON);
+    expect(atAdvance(JUST_THE_MOVE, 'practice')).toBe(JUST_THE_MOVE);
+    // Learning mode goes the same way, and so does the turn that hands the direction over (which never reaches this rung in
+    // production — `nudgeLevel` is `none` outside the exhibits stage — but the rule is the rule wherever it is asked).
+    expect(atAdvance(VERDICT_THEN_MOVE, 'learning')).toBe(MOVING_ON);
+    expect(atAdvance(VERDICT_THEN_MOVE, 'interview', 'direction')).toBe(MOVING_ON);
+  });
+
+  it('knows a sentence that moves the case on from one that does not', () => {
+    for (const sentence of [
+      'Let us move on to the next piece.',
+      "That's fine, we can move on.",
+      'Good — on to the next exhibit.',
+      'Let us park that and keep moving.',
+      'We will come back to that later.',
+      'Let us leave that there.',
+      'Time to take the next part.',
+    ]) {
+      expect(saysMovingOn(sentence), sentence).toBe(true);
+    }
+    for (const sentence of [
+      "You're right that the margin is the issue.",
+      'Good instinct.',
+      'What would you do with that?',
+      'Off-peak occupancy is 31% and peak is 95%.',
+      OVER_TO_YOU,
+      FALLBACK,
+    ]) {
+      expect(saysMovingOn(sentence), sentence).toBe(false);
+    }
+    expect(saysMovingOn(MOVING_ON)).toBe(true); // our own line is one, so the substitution satisfies the rule it enforces
+  });
+
+  it('still says nothing about the part it is leaving (issue #131)', () => {
+    const notes = ['Off-peak occupancy is the number that decides the case.'];
+    const message = (text: string, mode: 'practice' | 'interview') =>
+      parseTurn(movingTurn(text), notes, FALLBACK, 700, 'advance', [], { mode, kind: 'exhibit' })!.message;
+    // A move-on carrying the beat's substance is still replaced, exactly as #136 left it.
+    expect(message('Off-peak occupancy decides this one, so let us move on.', 'practice')).toBe(MOVING_ON);
+    expect(message('Off-peak occupancy decides this one, so let us move on.', 'interview')).toBe(MOVING_ON);
+    expect(movingOnOnly('Off-peak occupancy decides this one, so let us move on.', notes)).toBe(MOVING_ON);
+    for (const mode of ['practice', 'interview'] as const) expect(message(VERDICT_THEN_MOVE, mode)).not.toMatch(/margin|occupancy/i);
+  });
+
+  it('tells the member the case is moving on, and then moves it on', async () => {
+    const id = await toExhibitsIn('interview');
+    w.script.reply = () => turn(VERDICT_THEN_MOVE, { assessment: 'stuck' });
+    let r: LiveView | null = null;
+    for (const text of ['I am not sure', 'Still not sure', 'Hmm', 'I really do not know']) r = view(await call({ type: 'say', sessionId: id, text }));
+    const movedOn = r!.messages.filter((m) => m.from !== 'user' && m.kind !== 'exhibit').at(-1)!;
+    expect(movedOn.text).toBe(MOVING_ON);
+    expect(movedOn.text).not.toBe(OVER_TO_YOU); // the member is not asked to stay with the part being taken away
+    expect(movedOn.text).not.toMatch(/margin/i);
+    expect(r!.exhibits).toHaveLength(2); // ...and the next part is on the table
+    expect(w.db.get(id)!.state.beats[0].outcome).toBe('coach_moved');
   });
 });
