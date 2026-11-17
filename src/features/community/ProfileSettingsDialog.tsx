@@ -127,7 +127,7 @@ function Preview({ profile }: { profile: Profile }) {
               </>
             ))}
           {audience === 'visitors' && profile.publicProfile && (
-            <p className="text-xs text-muted">This is what someone sees when they open your link. You aren't listed or searchable anywhere outside CaseLab.</p>
+            <p className="text-xs text-muted">This is what someone sees when they open your link. Your link is the only way to it from outside CaseLab.</p>
           )}
           {audience === 'visitors' && (
             <p className="text-xs text-muted">
@@ -359,9 +359,9 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
         <p>
           Anyone who has your link, signed in or not, will be able to open{' '}
           <strong className="text-ink">{profile.displayName}</strong> and see your class and whatever you share below: case history
-          (the case names, casebook names and industries you typed) and any scores or improvement focus you've switched on. Nobody can
-          find you without the link: there is no public list or search. A link can be passed on, though, and you can only cut it off by
-          turning this switch off again.
+          (the case names, casebook names and industries you typed) and any scores or improvement focus you've switched on. Your link is the
+          only way to your profile from outside CaseLab. It can be passed on, though, and turning this switch off again is how you take
+          it back.
         </p>
         <p>
           This includes every case you've set to "share the case name only" or "share this case in full". A case set to "full" shows

@@ -57,8 +57,8 @@ export function AudienceSwitch({ checked, disabled, onChange, profileLink }: Pro
           <p className="text-sm font-medium text-ink">People with my link can see my profile</p>
           <p className="text-xs text-muted">
             Anyone you give your link to can open it without signing in, and see your name, class and the case history and
-            scores you share. You are never listed or searchable out there. Written feedback and notes stay members-only
-            unless you turn on Open everything. Off by default.
+            scores you share. Your link is the only way there, so your profile goes where you send it. Written feedback and
+            notes stay members-only unless you turn on Open everything. Off by default.
           </p>
         </div>
         <Switch label="People with my link can see my profile" checked={checked} disabled={disabled} onChange={onChange} />

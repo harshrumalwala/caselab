@@ -91,8 +91,8 @@ const ASSURANCES: { icon: ReactNode; title: string; text: string; tone: Tone }[]
   { icon: <ShieldCheck className="size-5" />, title: 'Members choose', text: 'Everything starts private. Each person switches on only what they’re comfortable showing.', tone: 'teal' },
   {
     icon: <EyeOff className="size-5" />,
-    title: 'Nothing to browse',
-    text: 'No member list, no search and no email addresses out here. A profile opens only for someone the member gave their link to.',
+    title: 'Shared by link',
+    text: 'A member’s profile opens for the people they gave their link to, and shows a name and a class year — never an email address.',
     tone: 'sun',
   },
   { icon: <Lock className="size-5" />, title: 'Detail is opt-in', text: 'Written feedback and notes are shown only if a member chooses to open everything. Otherwise they stay with members.', tone: 'lilac' },
@@ -355,8 +355,8 @@ function Landing() {
               suggestions and keep it all in one thread.
             </p>
             <p className="mt-3 text-base leading-relaxed text-ink-2">
-              Out here there is nobody to browse: no list and no search. Members share their own profile link with whoever they
-              choose, and it opens without an account.
+              From out here, each member&rsquo;s own link is the way in. They hand it to whoever they like, and it opens without an
+              account.
             </p>
           </div>
           <a href="#/signup" className={`${SECONDARY} mt-6`}>

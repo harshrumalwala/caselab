@@ -102,8 +102,8 @@ describe('the list of cases to practise', () => {
     const { rows } = await db.query<Record<string, unknown>>('select * from public.live_case_catalog()');
     expect(Object.keys(rows[0]).sort()).toEqual(['book', 'case_type', 'cochair_pick', 'done', 'id', 'industry', 'name', 'school', 'year']);
     expect(JSON.stringify(rows)).not.toContain('SECRET');
-    // Whether a case has exhibits to work through comes from the live-case Edge Function, which runs the real plan; the database never
-    // works it out, so nothing here may start saying anything about a case's exhibits.
+    // What a case holds — how many exhibits it has, whether it runs on discussion alone — is the shape of the case, and the catalogue a
+    // member reads before picking is not where it belongs. Nothing here may start saying anything about a case's exhibits.
     expect(Object.keys(rows[0]).some((k) => k.includes('exhibit'))).toBe(false);
   });
 

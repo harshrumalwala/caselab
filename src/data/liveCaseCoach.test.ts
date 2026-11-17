@@ -1,10 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  EXHIBIT_SIGNAL_MS,
-  forgetExhibitSignal,
   handleLive,
-  hasExhibitBeats,
   isFullSolution,
   leaks,
   openingText,
@@ -60,24 +57,11 @@ const INFO = { name: 'Army Hotel', book: 'Booth MCG', caseType: 'Profitability',
 
 const clock = { t: T0 };
 
-/**
- * The whole library, as the picker's signal reads it: the case above (two exhibits for the candidate and one the interviewer keeps), one
- * whose only exhibit is the interviewer's, one with no exhibits at all, and one write-up that is not complete.
- */
-const LIBRARY: Record<string, unknown> = {
-  [LIB]: SOLUTION,
-  'case-hidden-exhibit': { ...SOLUTION, exhibits: [{ ...EXHIBIT(1), title: 'Interviewer Guidance: Revenue' }] },
-  'case-no-exhibits': { ...SOLUTION, exhibits: [] },
-  'case-partial': { ...SOLUTION, confidence: 'partial' },
-};
-
 interface World {
   deps: LiveDeps;
   db: Map<string, StoredSession>;
   asked: TurnRequest[];
   starts: number[];
-  /** How many times the whole library has been read, so the kept signal can be checked. */
-  reads: { count: number };
   script: { reply: (kind: string, req: TurnRequest) => unknown | Promise<unknown> };
 }
 
@@ -99,17 +83,12 @@ function makeWorld(): World {
   const db = new Map<string, StoredSession>();
   const asked: TurnRequest[] = [];
   const starts: number[] = [];
-  const reads = { count: 0 };
   const script: World['script'] = {
     reply: (kind) => (kind === 'feedback' ? GOOD_FEEDBACK : turn(`Coach reply to ${kind}`, { assessment: 'progress' })),
   };
   const deps: LiveDeps = {
     now: () => clock.t,
     loadCase: async (id) => (id === LIB ? { info: INFO, solution: SOLUTION } : null),
-    eachCaseSolution: async (visit) => {
-      reads.count += 1;
-      for (const [id, solution] of Object.entries(LIBRARY)) visit({ id, solution });
-    },
     pickCase: async () => LIB,
     getSession: async (userId, id) => {
       const s = db.get(id);
@@ -140,13 +119,12 @@ function makeWorld(): World {
       return { text: typeof out === 'string' ? out : JSON.stringify(out), stopReason: 'end_turn' };
     },
   };
-  return { deps, db, asked, starts, reads, script };
+  return { deps, db, asked, starts, script };
 }
 
 let w: World;
 beforeEach(() => {
   clock.t = T0;
-  forgetExhibitSignal(); // the signal is kept in the handler's own memory, so one test must not read the last test's library
   w = makeWorld();
 });
 
@@ -672,55 +650,6 @@ describe('word for word, and full write-ups only', () => {
     w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, confidence: 'partial' } } : real(id));
     expect(await call({ type: 'start', libraryId: LIB })).toMatchObject({ status: 'refused' });
     expect(w.db.size).toBe(0);
-  });
-});
-
-describe('which cases have exhibits to work through (what the picker is told)', () => {
-  const signal = async () => {
-    const r = await call({ type: 'exhibits' });
-    if (r.status !== 'exhibits') throw new Error(`${r.status}`);
-    return r.cases;
-  };
-
-  it('says yes for a case with a candidate exhibit, no for one that runs on the book\'s steps, and nothing for a write-up that is not full', async () => {
-    expect(await signal()).toEqual([
-      { id: LIB, exhibits: true },
-      { id: 'case-hidden-exhibit', exhibits: false }, // the only table is the interviewer's, so the case runs on its steps
-      { id: 'case-no-exhibits', exhibits: false },
-    ]);
-    expect((await signal()).map((c) => c.id)).not.toContain('case-partial'); // not offered for live practice at all
-  });
-
-  it('is the plan the case will actually run on, not a count of what is in the write-up', async () => {
-    // The write-up holds three exhibits; two reach the candidate, so the case is planned on exhibits and the label says so.
-    const v = await begin();
-    expect(v.beatsTotal).toBe(2);
-    expect((await signal()).find((c) => c.id === LIB)?.exhibits).toBe(true);
-    expect(hasExhibitBeats(SOLUTION)).toBe(true);
-    expect(hasExhibitBeats({ ...SOLUTION, exhibits: [{ ...EXHIBIT(1), title: 'Exhibit 1: Answers' }] })).toBe(false);
-    expect(hasExhibitBeats({ ...SOLUTION, exhibits: [] })).toBe(false);
-    expect(hasExhibitBeats({})).toBe(false);
-  });
-
-  it('releases the case id and a yes-or-no, and nothing else about the case', async () => {
-    const r = await call({ type: 'exhibits' });
-    expect(Object.keys(r).sort()).toEqual(['cases', 'status']);
-    for (const c of await signal()) expect(Object.keys(c).sort()).toEqual(['exhibits', 'id']);
-    expect(JSON.stringify(r)).not.toContain('SECRET');
-    expect(JSON.stringify(r)).not.toContain('Exhibit'); // never a title, a caption or a figure
-    expect(JSON.stringify(r)).not.toContain('hotel');
-  });
-
-  it('is worked out once and kept, because reading every write-up is the expensive part, and worked out again later', async () => {
-    await signal();
-    await signal();
-    expect(w.reads.count).toBe(1);
-    clock.t = T0 + EXHIBIT_SIGNAL_MS - 1000;
-    await signal();
-    expect(w.reads.count).toBe(1);
-    clock.t = T0 + EXHIBIT_SIGNAL_MS + 1000;
-    expect(await signal()).toHaveLength(3);
-    expect(w.reads.count).toBe(2);
   });
 });
 

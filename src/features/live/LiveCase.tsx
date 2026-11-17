@@ -7,7 +7,7 @@ import { Badge, RatingBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { chipClass } from '../../components/ui/chips';
-import { filterByExhibits, groupLanes, liveCaseToInput, searchCases, surpriseFrom, withExhibitSignal, type ExhibitFilter, type Lane } from '../../domain/liveCase';
+import { groupLanes, liveCaseToInput, searchCases, type Lane } from '../../domain/liveCase';
 import { SKILLS } from '../../domain/constants';
 import { useData } from '../../state/DataProvider';
 import { useLive } from '../../state/LiveProvider';
@@ -25,12 +25,7 @@ const OUTLINE: [string, string][] = [
   ['0:30 + 1:30', 'Think, then write your recommendation'],
 ];
 
-/** What the case has on screen, in the member's words. Nothing is said about a case we have no answer for. */
-const EXHIBIT_LABEL = { exhibits: 'With exhibits', discussion: 'All discussion' } as const;
-const exhibitLabel = (c: LiveCatalogCase): string => (c.exhibits === undefined ? '' : c.exhibits ? EXHIBIT_LABEL.exhibits : EXHIBIT_LABEL.discussion);
-
 function CaseButton({ c, busy, hint, onStart }: { c: LiveCatalogCase; busy: boolean; hint: string; onStart: (id: string) => void }) {
-  const label = exhibitLabel(c);
   return (
     <li>
       <button
@@ -43,7 +38,6 @@ function CaseButton({ c, busy, hint, onStart }: { c: LiveCatalogCase; busy: bool
           <span className="block font-semibold text-ink">{c.name}</span>
           <span className="mt-0.5 block text-xs text-muted">
             {c.book} · {hint}
-            {label && ` · ${label}`}
           </span>
         </span>
         {c.done && <Badge>Done</Badge>}
@@ -55,12 +49,9 @@ function CaseButton({ c, busy, hint, onStart }: { c: LiveCatalogCase; busy: bool
 function Start({ s }: { s: LiveSession }) {
   const repo = useLive();
   const [cases, setCases] = useState<LiveCatalogCase[] | null>(null);
-  /** Which cases have exhibits to work through, from the live case itself. Null until it answers, and if it never does there are no labels. */
-  const [signal, setSignal] = useState<Record<string, boolean> | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [by, setBy] = useState<'type' | 'industry'>('type');
-  const [filter, setFilter] = useState<ExhibitFilter>('any');
   const [lane, setLane] = useState<string | null>(null);
   const [mode, setMode] = useState<LiveMode>('practice');
   const begin = (id: string | null) => void s.start(id, mode);
@@ -70,35 +61,20 @@ function Start({ s }: { s: LiveSession }) {
       .catalog()
       .then((c) => current && setCases(c))
       .catch((e) => current && setProblem(describeError(e)));
-    // The labels are extra: the list works without them, so a signal that does not arrive is quiet rather than an error on the screen.
-    repo
-      .exhibitSignal()
-      .then((x) => current && setSignal(x))
-      .catch(() => current && setSignal(null));
     return () => {
       current = false;
     };
   }, [repo]);
 
-  const labelled = useMemo(() => withExhibitSignal(cases ?? [], signal), [cases, signal]);
-  const shown = useMemo(() => filterByExhibits(labelled, filter), [labelled, filter]);
-  const lanes = useMemo(() => groupLanes(shown, by), [shown, by]);
+  const lanes = useMemo(() => groupLanes(cases ?? [], by), [cases, by]);
   const open = lane ? lanes.find((l) => l.name === lane) : undefined;
-  const found = useMemo(() => searchCases(shown, query), [shown, query]);
+  const found = useMemo(() => searchCases(cases ?? [], query), [cases, query]);
   const hintFor = (c: LiveCatalogCase) => (by === 'type' ? c.industry : c.caseType);
   /** A random case from the lane, preferring one not logged yet. */
   const surpriseIn = (l: Lane) => {
-    const pick = surpriseFrom(l.cases);
-    if (pick) begin(pick.id);
-  };
-  /**
-   * "Surprise me" over the whole catalogue. With no filter the live case picks (it knows what you have logged); once the member has
-   * asked for one kind of case, the pick is made here, from the cases they are looking at, so their choice is kept.
-   */
-  const surprise = () => {
-    if (filter === 'any') return begin(null);
-    const pick = surpriseFrom(shown);
-    if (pick) begin(pick.id);
+    const fresh = l.cases.filter((c) => !c.done);
+    const from = fresh.length > 0 ? fresh : l.cases;
+    begin(from[Math.floor(Math.random() * from.length)].id);
   };
 
   return (
@@ -114,13 +90,10 @@ function Start({ s }: { s: LiveSession }) {
       <BucketSays big mood="happy">
         Ready to case? Pick a lane below and I will find you a case, or let me surprise you!
         <span className="mt-3 flex flex-wrap items-center gap-3">
-          <Button variant="primary" size="lg" disabled={s.busy || cases === null || (filter !== 'any' && shown.length === 0)} onClick={surprise}>
+          <Button variant="primary" size="lg" disabled={s.busy || cases === null} onClick={() => begin(null)}>
             <Shuffle className="size-4" /> Surprise me with a case
           </Button>
-          <span className="text-xs font-normal text-muted">
-            Picks one you have not logged yet
-            {filter === 'exhibits' ? ', from the ones with exhibits.' : filter === 'discussion' ? ', from the ones that are all discussion.' : '.'}
-          </span>
+          <span className="text-xs font-normal text-muted">Picks one you have not logged yet.</span>
         </span>
       </BucketSays>
 
@@ -238,43 +211,7 @@ function Start({ s }: { s: LiveSession }) {
               />
             </div>
 
-            {signal !== null && (
-              <div className="space-y-2">
-                <div role="tablist" aria-label="Cases with or without exhibits" className="flex w-fit gap-1 rounded-xl bg-surface-2 p-1 text-sm font-semibold">
-                  {(
-                    [
-                      ['any', 'All cases'],
-                      ['exhibits', EXHIBIT_LABEL.exhibits],
-                      ['discussion', EXHIBIT_LABEL.discussion],
-                    ] as const
-                  ).map(([id, label]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      role="tab"
-                      aria-selected={filter === id}
-                      onClick={() => {
-                        setFilter(id);
-                        setLane(null);
-                      }}
-                      className={`rounded-lg px-4 py-2 transition ${filter === id ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-muted">
-                  Some cases hand you exhibits to work through. Others are all discussion, with nothing on screen: market sizing and judgement
-                  cases often run that way, and they are good practice too.
-                </p>
-              </div>
-            )}
-
-            {shown.length === 0 ? (
-              <p className="text-sm text-ink-2">
-                {filter === 'exhibits' ? 'No cases with exhibits here yet.' : 'No all-discussion cases here yet.'} Choose “All cases” to see the rest.
-              </p>
-            ) : query.trim() ? (
+            {query.trim() ? (
               found.length > 0 ? (
                 <ul className="grid gap-2.5 sm:grid-cols-2">
                   {found.map((c) => (

@@ -107,11 +107,19 @@ describe('the public front page', () => {
     await open(env);
     const section = (await screen.findByRole('heading', { name: 'Find someone to case with' })).closest('section')!;
     expect(section).toHaveTextContent(/Inside CaseLab, members can look each other up by name/);
-    expect(section).toHaveTextContent(/no list and no search/);
+    expect(section).toHaveTextContent(/own link is the way in/);
     expect(within(section).getByRole('link', { name: /Create an account to find people/ })).toHaveAttribute('href', '#/signup');
     const text = document.body.textContent ?? '';
     expect(text).not.toMatch(/Cased recently|Search all members|Browse members/i);
-    expect(text).toMatch(/No member list, no search and no email addresses out here/);
+
+    const privacy = screen.getByRole('heading', { name: 'How privacy works' }).closest('section')!;
+    expect(privacy).toHaveTextContent(/profile opens for the people they gave their link to/);
+
+    // The copy says what the product is, not what it stopped being: a visitor has never seen a directory, so nothing here may
+    // describe the way in as the absence of one, or read like a changelog.
+    for (const part of [section, privacy]) {
+      expect(part.textContent ?? '').not.toMatch(/no list|no search|no member list|nothing to browse|nobody to browse|no longer|used to/i);
+    }
   });
 
   it('shows who cased the member and where the case came from, when they chose to share it', async () => {
@@ -288,7 +296,7 @@ describe('turning your profile link on', () => {
     const confirm = await screen.findByRole('dialog', { name: 'Let people with your link see your profile?' });
     expect(confirm).toHaveTextContent(/not shown to visitors unless you turn on Open everything/i);
     expect(confirm).toHaveTextContent(/share this case in full/i); // warns what per-case settings mean
-    expect(confirm).toHaveTextContent(/there is no public list or search/i); // and tells the truth about who can find you
+    expect(confirm).toHaveTextContent(/only way to your profile from outside CaseLab/i); // and tells the truth about who can reach you
     await user.click(within(confirm).getByRole('button', { name: 'Cancel' }));
     expect(mine(env)?.publicProfile).toBe(false); // cancelling changes nothing
 
