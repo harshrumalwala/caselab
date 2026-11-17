@@ -99,6 +99,10 @@ Key mechanics worth knowing:
 - Behaviour changes update `README.md` in the same PR. Add tests for each behaviour change; do not weaken tests to pass.
 - Honest saving: nothing shows as saved until Supabase confirms; failures keep what the user typed.
 - Copy is light and human, not corporate; the UI never names Claude or Anthropic (it says Bucket and a small "AI" tag).
+- **Screen copy describes the product as it is, positively, on its own terms.** It never defines a feature as the absence of a previous
+  one ("there is nobody to browse: no list and no search") and never reads like a changelog: a member has not seen the old version and
+  should not be told what it was. Say what the thing does instead ("each member's own link is the way in"). Documentation (`README.md`,
+  `KNOWN_ISSUES.md`, `DECISIONS.md`) is the opposite and *should* record what changed and when.
 - Deterministic code decides rules and numbers; the model only writes words and judges the member's writing (and a rating is kept only
   if the feedback quotes something the member wrote).
 
