@@ -319,6 +319,243 @@ decide*, not about migrations: `npx supabase db push` remains their call every t
   stops before applying it and writes the request up as one thing the owner can answer in a single read. Sequenced after #85 because
   #85 moves some of the 39 all-interviewer-side cases back to the candidate, so the 285 will drop before this ships.
 
+## The interview rubric (2026-11-16): how a live case in interview mode must behave
+
+The owner asked for dry runs of real cases in interview mode and for a rubric defining "how our interview algo should work correctly
+and give as real exp as possible". Their three worries, in their words: a member should finish "end to end ... without worrying if the
+case would work or break in the middle"; Bucket must "not give solutions at any point" and must not "answer something for the candidate
+which they didn't need to know or didn't elude to"; and the metrics, rubric and timing must be defined correctly. This section is the
+rubric. It is written to be built and tested against, not as advice: every clause is either already true in code (marked **is**) or a
+change (marked **should**, with the issue that carries it).
+
+**The first finding, before any dry run.** Interview mode is not an interview today. `supabase/functions/_shared/liveCase.ts` makes
+`practice` and `interview` differ in exactly two things: `pause` and `end early` are refused in interview mode (lines 511, 554). Every
+other behaviour — the hint ladder in `nudgeLevel`, the `HELP` directives in `liveCaseCoach.ts`, what the model may see, when Bucket
+leads — is identical. `isUntimed` singles out `learning`; nothing singles out `interview`. So a member who picks "Interview" to test
+themselves gets the practice coach with the escape hatches bolted shut. That is the gap behind the owner's request, and it is bigger
+than any individual defect the exhibit audit found.
+
+### 1. Help: a real interviewer redirects, it does not rescue
+
+The ladder today is `process_hint` (rung 0, i.e. the member's **first** message on a beat), `directional_hint` (rung 1), `lead`
+(rung 2), `advance` (rung 3+), where the rung is `max(hints, messages since progress)`. Each rung above `none` is model-gated on "if and
+only if this message shows they are still stuck", which is a real safeguard but a soft one.
+
+- **Help is never unprompted.** Bucket speaks only in reply to something the member wrote; no timer produces a hint. **Is** true
+  (`nextNudgeAt` returns null, `nudgeLevel` returns `'none'` for `via: 'timer'`) and must stay true in every mode.
+- **In interview mode the first stuck message gets nothing.** A real interviewer lets you sit with it. The ladder **should** start one
+  rung later: rung 0 `none`, rung 1 a process question, rung 2 a directional nudge, rung 3+ `advance`.
+- **Interview mode has no `lead` rung.** `lead` tells the model to "stop asking open questions and lead them ... say plainly where to
+  look or what to compare". That is a teaching move and it is right for practice and learning. In an interview, being stuck costs you
+  the beat: the interviewer moves you on. **Should** change — interview goes from directional straight to `advance`, which already says
+  one neutral sentence and explicitly does "NOT explain, solve or summarise".
+- **A hint points; it never supplies.** A process hint names what *kind* of move to make ("what are you comparing these two against?").
+  A directional hint names *where* to look ("the cost column is the one that moved"). Neither states a comparison's result, an
+  implication, a conclusion, or a number the member could have computed. **Is** the stated intent of the directives; the dry runs exist
+  to find out whether the model keeps to it.
+- **Nothing the member did not ask for and did not point at.** The owner's "didn't elude to" clause. A reply answers the message in
+  front of it; it does not volunteer the next step, the next exhibit, or an observation the member has not reached. **Is** partly
+  enforced (a reply never sees the next exhibit or the recommendation); the rest is prompt discipline and is a dry-run question.
+
+### 2. The line between data and the answer (this is how #83 is reconciled with "never make it easy")
+
+#83 makes the interviewer's data reachable at any point in the case. The owner's "don't give solutions" worry looks like the opposite
+instruction. They are not in conflict, and the line between them is the single most important rule in this rubric:
+
+> **Inputs are given on request, in full, at any stage. Anything the member could derive from those inputs is theirs to produce, and is
+> never given at any rung, in any mode but learning.**
+
+- **Given, in full, whenever asked** (and never with "what do you think?" in place of an answer): a fact in the prompt or fact sheet; a
+  figure printed in an exhibit the member has been shown; every input figure in a table the interviewer hands over when asked. Read out
+  as written, every row, the way an interviewer reads a table aloud. Refusing a figure the case holds is a defect, not caution — that is
+  what #83 fixes, and it is realistic: a real interviewer who is asked for the cost base reads out the cost base.
+- **Never given**: the result of a calculation the member is there to do; a total, ratio, difference or growth rate derived from the
+  inputs; what an exhibit means or implies; the hypothesis; the `because` lines; the recommendation; the book's framework buckets before
+  the member has written their own. **Is** the existing rule in `referenceNotes` and `privateNotes`, backed by `leaks()`.
+- **The test of the line, for a developer and for a test:** could the member have produced this from what they already hold? If yes it is
+  an answer, whoever it came from. If it exists only on the interviewer's sheet and is not itself the thing being asked for, it is data.
+- **A figure that is itself the answer to the open beat is not data.** "Profit per customer: $4.20" is an answer when the beat is to work
+  out profit per customer, however input-shaped the row looks. **Should** be stated explicitly in the directives; today the rule is
+  "never state a result from a reference table", which does not cover a result that has been pre-printed as a row.
+- **Asking well is part of the case.** A member who asks for the right data and gets it has earned something; a member who asks for the
+  conclusion is told, briefly, that it is theirs to make. Neither costs them a hint rung.
+
+### 3. Completion: a case must survive to the end
+
+The bar is the owner's: a member never loses a case half way. Measured, not asserted.
+
+- Every live-eligible case, in every mode, reaches `stage: done` with `endReason: 'completed'` for a brisk candidate, a passive one who
+  writes almost nothing, and an off-track one. A case that ends any other way is a defect with a case name attached.
+- The closing stages are always protected: `closingNeeded` fits inside the limit at every beat count. **Is** true as of #82 by
+  construction (a fixed 15 minutes around the discussion), with a test across 0-12 beats.
+- No stage ends without the member having had a chance to write in it.
+- A model failure (refusal, bad JSON, timeout) degrades to the deterministic fallback and the case continues. **Is** the design
+  (`parseTurn` returns a fallback); the dry runs check it end to end rather than against a fake.
+
+### 4. Timing
+
+- The clock is sized from how much the case holds, not from a constant. **Is** true as of #82: 4 minutes to settle plus 4 a beat,
+  floored at 8, capped at 25, inside a case of that plus a fixed 15.
+- An interview does not stop. Pause and end-early stay refused in interview mode. **Is** true.
+- Running a little over on a beat while the member is making progress is realistic and stays. Running over while stuck is not: that is
+  what `advance` is for.
+
+### 5. The metrics a dry run reports (per case, and summed)
+
+Reached the end, or where it stopped. Beats completed `independent` / `hinted` / `coach_moved` / `timed_out`. Hints given and the
+highest rung reached, per beat. Every request for data that was refused while the write-up held it (should be zero after #83). Every
+reply that stated a derived result (should be zero; `leaks()` catches quoted conclusions, not paraphrased arithmetic, so this one needs
+a judge). Time in each stage against the plan. Whether the recommendation stage was reached with time left.
+
+**How the dry runs are done, and what they cost.** Two layers, because the expensive one answers only half the question. A scripted
+harness over the real `liveCase.ts` and `liveCaseCoach.ts` with a stubbed model answers "does the case break?" for all 847 cases at no
+API cost, and is the layer that can live in CI logic-wise (not in CI itself, since `private-data/` is not in git). It cannot answer
+"does the reply nudge or solve", because that is the model's words. That question needs real runs against the deployed function, which
+spend the owner's Anthropic credits — the README's estimate is under 10 cents a case, so a batch of a dozen is roughly a dollar, not
+verified against real usage. The owner's instruction is newest cases first; **newest is defined as the newest book edition** (Booth MCG
+2026-2027 and Fuqua 2025-26 before Darden 2018), because that is the content a member is most likely to meet and the content written
+most recently. Live runs use the throwaway accounts in `.env.e2e.local`, never the owner's account.
+
+**The pilot, as the owner scoped it on 2026-11-16.** Not the whole catalogue: "run a pilot on max 10 cases, take our learnings and
+implement fixes we need in our code - both on data and engine side / and then we will take a call what we need to do after", with
+**"I don't want us to spend more than 2$ on the pilot so cap to that"**. So: **10 real-model interview runs is a ceiling, not a target**,
+`$2` is a hard cap on model spend, and the scripted harness — which costs nothing — is outside both and is run as wide as it is useful.
+After the pilot and its fixes we stop and report; optimising the rest of the catalogue is the owner's call, not a continuation.
+Spend is measured, not projected: `live_case_sessions.state -> 'usage'` already stores tokens per case, so the runner totals real usage
+after every case, prints the running cost, and refuses to start another once the next case could cross the cap. If real usage cannot be
+read back for some reason, the fallback is turns-times-tokens with the assumed per-token prices stated in the report, labelled as an
+estimate. What was actually spent is reported, not what was projected.
+**The owner's hypothesis, recorded so it can be disproved:** that the pilot will shake out most of the algorithm's shortcomings and
+leave mostly data fixes, which cost nothing. Worth testing rather than assuming. If the engine problems turn out to be deeper than ten
+cases can settle, or the data fixes need model runs of their own, that is the finding and it is said plainly.
+
+## The link-and-scheduling backlog (#96-#102), triaged 2026-11-16
+
+The owner filed seven issues from another session on the same day as the live-case work: remove the public member search (#96), reset
+my link (#97), a preferred meeting link and time zone (#98), database rules for proposing and confirming a practice time (#99), the
+screens for it (#100), calendar-invite emails (#101) and reminder emails (#102). They asked the PM to "go through and fix them". The
+issues are detailed and their acceptance criteria are already strong; what follows is the triage, not a rewrite.
+
+- **Order: #96, #97, #98, #99, #100, #101, #102, and it is a chain, not a list.** Each one's criteria depend on the one before it
+  (#97's token only matters once the link is the only public way in; #99's rules must exist before #100's screens; #101's `UID` and
+  `SEQUENCE` are created by #99). Running them out of order means building against a floor that moves.
+- **Four of the seven need a migration, and every one of them stops at the owner.** #96 revokes `anon` reads, #97 adds a share token,
+  #98 adds a table with no API access, #99 adds the scheduling records. The developer builds up to the migration, says so in the PR, and
+  does not apply it. They will be put to the owner as one request per finished piece, not four separate asks.
+- **#96 reverses a recorded decision, and that is the point of recording this.** "A public front page that lets visitors browse members
+  who opted in" (PRs #4, #6, #8) exists because 2Y students and firm reps will not sign in each time. The owner's new evidence is that
+  "people are not finding it that helpful", and the personal link now serves that need. The reversal only ever reduces exposure: every
+  member who was publicly listed becomes link-only, nobody becomes more visible, and the in-app Community is untouched. Accepted on
+  that basis. The old reasoning stays in this file above, unedited, because the need it answered has not gone away — it is now answered
+  by links.
+- **Hiding the screen is not the deliverable; revoking `anon` is.** #96 is right to say so, and this is the clause not to trade away
+  under time pressure: a member who is "removed from search" while `anon` still holds `SELECT` on `public_profiles` is still
+  enumerable through the API, and we would have shipped a promise we did not keep.
+- **#101 and #102 are built on a channel nobody has confirmed works.** KNOWN_ISSUES records that the "someone asked you to case" email
+  has never been verified to arrive; only the sign-up flow was checked end to end. Stacking calendar invites and timed reminders on top
+  of an unverified sender is how a feature ships that silently does nothing. **Decided: before #101 is built, the existing
+  request-notification email is verified to arrive** (one throwaway account asking another, checking the inbox), and the result is
+  written into KNOWN_ISSUES either way. That check costs nothing and is the owner's own instruction applied to email: never report
+  something as working without checking it.
+- **#102 needs something CaseLab does not have: a timer.** Every function today runs because a member did something. A reminder needs
+  pg_cron or an external schedule, which is a new moving part and a new failure mode, and the issue itself says it is optional and
+  larger than it looks. **Held, not approved**, until #101 is shipped and the owner has seen invites working; then it is a yes/no on
+  one question — is a reminder worth a scheduler.
+- **Sequenced after the live-case work, not before it.** The owner has said twice that interview mode is the thing they care about now,
+  and #94 is an engine defect in front of members today. The scheduling chain is new capability; the live-case defects are a product
+  that does not do what it says.
+
+## Shipped on 2026-11-17, and what each one settled
+
+Five pull requests landed in one stretch (#114, #115, #116, #117, #118), two Edge Function deploys and one migration. The PM merged and
+deployed under the standing authority of 2026-11-15; the migration was the owner's own "yes", asked for and given. What is worth keeping
+from them is the decisions, not the diffs.
+
+- **#85 (PR #115): a soft word no longer hides a numbered book exhibit — and the gain was a third of what the issue predicted.**
+  The title rule is now two lists: hard markers (`interviewer`, `guidance`, `guide`, `solution`, `performed by`, `answer key`,
+  `keep private`, `not for the candidate`) hide a table wherever they appear; soft markers (`sample`, `approach`, `answer`, `brainstorm`,
+  `expected`, `calculation`, `math`) hide it only when the title is not the book's own name for an exhibit. Measured on both sides of the
+  merge by the PM: exhibits reaching the member 1,385 → 1,394, hidden 367 → 358, one-beat cases 172 → **171**. The issue predicted three
+  cases would come off one beat. **Recorded because the shortfall is the finding:** two of the nine known false positives are hidden by
+  their *caption*, which is wrong in `private-data/` rather than in the rule, and the other 99 soft-word hides really are the book's
+  working. So the remaining thin cases are a content problem and a #82 problem, not a title-matching one. The durable fix stays an
+  explicit `audience` field per exhibit, which needs a seed reload and so waits for the owner.
+- **#95 (PR #117): a member is never shown a cut-down book exhibit, and the audit fails rather than the member being told.**
+  The issue's own open question was whether truncation should fail loudly in the report or be surfaced to the member. **Both shipped, and
+  that is the decision.** The report reads the write-ups on one machine while the app draws whatever the database holds, so the two can
+  differ; a member quietly missing a column is worse off than one who knows. The note is deliberately vague ("part of it could not be
+  shown here") and the counts stay in the report. If it ever appears in production it is a data incident to chase, not a feature working.
+  Caps were raised to fit the real content (chart series 6 → 16, panels 4 → 8, text caps aligned with the live case), which took
+  `cut_by_parser_cap` from 2 to 0; run against the **old** caps the new report found 12 exhibits in 9 cases not whole, including seven
+  stacks silently losing segments that nobody had found. The by-hand rule that the two cap sets must agree is now a test, not a note.
+- **#87 (PR #118): conversation-only cases are labelled from the engine, not from SQL.** The signal is `hasExhibitBeats()` running the
+  same `readSolution` + `buildPlan` a case is started with, served by the `live-case` function, so the label cannot promise what the case
+  does not do. SQL was rejected even though it was easiest, as DECISIONS said it would be: it duplicates `buildPlan` in a second language,
+  the exact drift #84 exists to prevent. No migration; `live_case_catalog()` untouched, and a test now asserts no catalogue column
+  mentions exhibits. 285 of 847 cases are conversation-only, measured today — **#85 did not change that number**, contrary to the
+  prediction in #87's text. The copy says a discussion case is good practice, which is the product point: label, never hide.
+- **#96 (PR #116): the public directory is gone and `anon` has lost the tables.** Merged, then
+  `20261124120000_link_only_profiles.sql` applied to production with the owner's approval. Verified on the live database rather than
+  assumed: `anon` and `authenticated` have no table or column SELECT on `public_profiles` or `public_shared_cases`, RLS is on with zero
+  policies on each, `anon` still executes `public_person` / `public_person_cases`, and `npm run test:e2e` passed 60 / 10 skipped
+  afterwards. **The order was merge first, apply second**, the reverse of this project's usual rule, because the old front page's search
+  breaks the moment the grant goes; the only window in which the new settings copy ("You are never listed or searchable out there") was
+  not yet true was the few minutes between the two, which is why they were done back to back rather than merged and left.
+  **One irreversible part, recorded because it cannot be recovered later:** step 4's
+  `update profiles set public_link_only = true where public_profile` loses which members were directory-visible. The revokes can be
+  re-granted; that fact cannot. It only matters if a public directory is ever rebuilt, and then it means asking members again — which,
+  for a visibility setting, is the right way round anyway.
+- **A deploy is verified by content, never by a version number.** Both `live-case` deploys were checked by running
+  `supabase functions download live-case` into a worktree checked out at the merged commit and confirming `git status` came back empty,
+  so the deployed source is byte-identical to the merged code. A version bump and a fresh timestamp prove *a* deploy happened, not
+  *which* code shipped; this project has been wrong about that once before.
+
+### Learning mode: the dry run's finding is mostly a harness artefact, and the real gap is one disabled button (#119)
+
+`npm run dryrun:live` counts 1,694 Learning runs as "open by design", and KNOWN_ISSUES reads that as a learner who goes passive never
+being moved on. Investigated against the code on 2026-11-17, that is two different things wearing one description.
+
+- **There is a member-facing way to move on, and it is visible**: "I'm done with this exhibit" / "Done with the exhibits", beside the
+  chat input (`src/features/live/LiveSession.tsx`). A learner who writes anything at all already has it. The scripted candidate never
+  presses a button, so the harness can never finish a Learning run however the engine behaves. That half is a model of a member, not a
+  defect; the limitation is already recorded under "Missing tests".
+- **The real gap is that the button is disabled until the member has written about the beat** (`saidSomething`), and the server refuses
+  it too (`moveOn`: `if (b.userMessages < 1)`). In Practice and Interview that rule is right — it stops a stray click skipping an exhibit
+  nobody looked at, and those modes assess. **Learning assesses nothing** (ratings are forced blank on the server), so the gate is a rule
+  borrowed from modes with a different purpose, and it leaves a learner who wants to say "show me how this one works" with nothing but
+  ending the case. That is #119.
+- **Do not add a clock or an `advance` rung to Learning.** Adding `advance` to the ladder would change nothing anyway: its trigger needs
+  `behindSchedule`, which cannot fire without a clock. More importantly, help is never unprompted in any mode, and Learning being untimed
+  is a decision, not an oversight.
+
+### The public profile link has to answer "what should I give them?" (#120, #121)
+
+Owner, 2026-11-16: the shared link "lists just all past cases" and does not help someone without an account pick the next case. #96 makes
+this sharper — the link is now the *whole* public face of a profile.
+
+- **"Find a case for them" cannot be shown to visitors, and that is the crux.** It is computed from the *viewer's* log
+  (`src/domain/pairing.ts`), and a visitor has none. The visitor answer must be built from what the member shared about themselves.
+- **Nothing new is released.** Coverage, the member's own written improvement focus and the skill averages are all already in the rows
+  `public_person_cases(id)` returns, governed by the member's existing switches. So both issues are browser-side arithmetic: no migration,
+  no new switch, no widening of a surface narrowed on purpose hours earlier. **No model call**, because deterministic code decides
+  numbers.
+- **Split in two deliberately.** #120 (coverage plus their own stated focus) is uncontroversial and answers most of the request. #121
+  (skills) is a judgment about a named person on a page anonymous people read.
+- **The framing stance on #121, which is the PM's call and the owner may reverse it.** A per-case score in a list is data; "Weakest:
+  Structuring" at the top of a public page is a verdict, and the readers most likely to open a link are 2Y students about to run you a
+  case and firm representatives. So: at most three skills to sharpen and three strengths, the product's existing sharpening language, no
+  ranking of all eight, no number presented as a grade, and **silent** below the existing minimum counts rather than saying "not enough
+  data yet", which is itself a statement about the person. The counter-argument is recorded in the issue: consent to per-case scores is
+  not consent to a summary judgment, and if the owner finds that persuasive the alternative is a separate off-by-default switch and a
+  migration.
+
+### The $2 interview pilot is deferred to the next usage window, by the owner's choice
+
+Asked on 2026-11-17 whether to spend the remaining window clearing the queue or save room for the pilot, the owner chose **"finish the
+queue"**. Nothing of the $2 has been spent. The pilot's scope is unchanged (max 10 real-model interview runs, newest books first,
+nudge-versus-solve only, spend read from `live_case_sessions.state -> 'usage'` and stopped at $2); the free scripted harness is outside
+that cap and was run repeatedly today at no cost. Recorded so nobody reads the delay as a change of plan.
+
 ## Process decisions
 
 - **The owner approves every production action.** Migrations, library loads, function deploys and merges wait for an explicit "yes" or
@@ -341,6 +578,19 @@ decide*, not about migrations: `npx supabase db push` remains their call every t
   (`supabase db push`), loading the library seed, changing Supabase secrets.** Why the split: merges and function deploys are
   reversible and visible in the PR; a migration changes production data shape and the seed load is a 13 MB hand process, so both stay
   with the person who owns the database. Note for anyone reading a PR from around this date: a merge no longer implies the owner saw it.
+- **Work interrupted in a worktree is committed and pushed before anything else is started (2026-11-17).** A PM session was stopped
+  mid-flight and its three developer agents died with it, leaving one branch with commits and two worktrees holding 16 and 26 changed
+  files that existed nowhere but one machine's disk. The rule now: the incoming PM reads each one, decides carry-forward or redo on the
+  merits, and for anything carried forward **commits it as a checkpoint and pushes the branch before launching anything new** — the
+  commit message saying plainly that it is unverified and that the next developer owns it. Both pieces turned out to be good work and
+  shipped the same day as #116 and #117; redoing either would have thrown away hours for nothing. Two smaller lessons from the same
+  episode: a checkpoint branch based on a stale `main` silently reverts whatever landed in between (it nearly dropped the colour-audit
+  docs), so rebase before reading a diff; and a developer that will not force-push cannot reuse the checkpoint's branch name, so expect
+  the final PR to come from a fresh branch.
+- **Developers run in parallel, review and merge stay serial and stay with the PM (2026-11-17).** Up to three developer agents at once,
+  each with its own git worktree, on issues that do not touch the same files. A developer sharing the primary working tree once switched
+  its branch underneath a commit and cost a cherry-pick recovery, so isolation is not optional. Parallelism goes into writing code, never
+  into deciding what lands.
 
 ## Decisions whose reasons live only in the README (collected here so a new agent finds them)
 
