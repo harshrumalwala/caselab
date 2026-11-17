@@ -741,14 +741,18 @@ export function nextBeat(settled: SessionState, now: number, how: 'independent' 
 
 /**
  * The member says they are done with this exhibit: on to the next one, or, after the last, on to the next section (the time saved carries over).
- * Bucket's job is to help them drive and cover the exhibit; this is the way out for a member who is stuck or has had enough. They have to have
- * said something about it first, so a stray click can't skip an exhibit nobody looked at.
+ * Bucket's job is to help them drive and cover the exhibit; this is the way out for a member who is stuck or has had enough.
+ *
+ * In practice and interview they have to have said something about it first, so a stray click can't skip an exhibit nobody looked at, and
+ * because the member is being assessed on what they cover. Learning assesses nothing and has no clock, so the member alone decides when a
+ * beat is over: a learner who does not know how to start one may move on without writing, which is the only way out of that beat short of
+ * ending the case.
  */
 export function moveOn(settled: SessionState, now: number): ActionResult {
   if (settled.pausedAt != null) return refuse(PAUSED);
   const b = settled.stage === 'exhibits' ? openBeat(settled) : undefined;
   if (!b) return refuse('There is nothing to move on from right now.');
-  if (b.userMessages < 1) return refuse('Tell me what you make of this one first.');
+  if (b.userMessages < 1 && !isUntimed(settled)) return refuse('Tell me what you make of this one first.');
   return { ok: true, state: nextBeat(settled, now, 'member_moved') };
 }
 

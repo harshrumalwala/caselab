@@ -533,6 +533,29 @@ describe('learning mode', () => {
     expect(screen.queryAllByRole('timer')).toHaveLength(0);
   });
 
+  it('lets the member move on from an exhibit they have written nothing about, and says so on the button', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    await pickLearning(user);
+    await user.click(await screen.findByRole('button', { name: /Surprise me/ }));
+    await screen.findByText(/Should a hotel chain open a new property/);
+    reply(env, () => ({ message: 'Go on.', beat_complete: false }));
+    await user.click(screen.getByRole('button', { name: 'Ready for framework' }));
+    await user.click(await screen.findByRole('button', { name: 'Ready to write' }));
+    await user.type(await screen.findByLabelText('Your framework'), 'Demand, supply and cost');
+    await user.click(screen.getByRole('button', { name: 'Hand in framework' }));
+    await user.type(await screen.findByLabelText('Where would you start?'), 'Demand by season');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    await screen.findByText('Exhibit 1 of 1');
+
+    const move = screen.getByRole('button', { name: 'Move on from the exhibits' }); // the only exhibit, so it says so
+    expect(move).toBeEnabled(); // nothing written about it, and in learning mode that is the member's call
+    expect(move).not.toHaveAttribute('title'); // there is no condition left to explain
+    await user.click(move);
+    expect(await screen.findByRole('heading', { name: 'Think about your recommendation' })).toBeInTheDocument();
+    expect([...env.live.db.values()][0].state.beats[0].outcome).toBe('member_moved'); // recorded as any other member-moved beat
+  });
+
   it('ends with notes to learn from instead of scores, and saves the case with no ratings', async () => {
     const env = createFakeEnv();
     const user = await openLive(env);
