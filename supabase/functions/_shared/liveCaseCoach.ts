@@ -1092,8 +1092,12 @@ export function withoutVerdicts(message: string): string {
  * What "gives nothing" looks like at the rung where an interview gives nothing: an acknowledgement and the question handed back. An
  * empty reply is not an option — the member has to read something — so this is what a reply becomes when everything in it was a
  * verdict, or when it was carrying the beat's own notes to someone who has not earned them.
+ *
+ * It points at the part the member is on rather than at "that": a part of the analysis hands over nothing to point at, so a pronoun
+ * there has nothing to refer to (issue #163). The part itself always has a referent — the engine opens every part by saying what it
+ * is, an exhibit on the table or a topic in words.
  */
-export const OVER_TO_YOU = 'Okay, stay with it — what do you make of that, and what would you do next?';
+export const OVER_TO_YOU = 'Okay, stay with it — what do you make of this part, and what would you do next?';
 /** The same, for the one turn before the case has anything on the table: their starting point heard, and the data coming out. */
 export const SHOW_DATA = 'Understood. Let us look at some data.';
 

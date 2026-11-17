@@ -579,6 +579,27 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **The nudge and feedback paths are untouched.** A refusal on a timer-driven nudge still leaves the screen as it was (no message, no
   failure), and a refused feedback call still shows the feedback failure. Both were out of scope.
 
+## What a part with no exhibit says it is about (issue #163, 2026-11-17)
+
+- **Unverified against a real model.** The topic comes from the engine, so the opening line itself is deterministic and tested; what a
+  real Bucket then does with a member who has been handed the topic is not. The dry run's stub emits one fixed sentence, so nothing
+  here says whether the register reads well mid-case. Like every change under `supabase/functions/**` it does nothing until
+  `npx supabase functions deploy live-case`, and a case already running keeps the plan it started with, topics and all.
+- **The test for "the title is the answer" is lexical.** `TITLE_IS_THE_ANSWER` in `supabase/functions/_shared/liveCase.ts` reads the
+  words the books actually use ("why", "because", "driven by", "confirm", "lacks", "lags"), which covered 70 of the 2,723 parts talked
+  through on 2026-11-17. A title that states a finding in plain words with none of those markers still passes: the one found by hand
+  puts the finding in a trailing parenthesis. Nothing measures that class, and only a person reading a title can tell.
+- **A topic can still carry the book's own cross-reference.** A step the book titles "... (Exhibit 4)" or "... (Q5-Q6)" keeps that
+  parenthesis, and the exhibit it names may be one the member was never handed. About 30 titles in the library hold one. It was left
+  alone to keep the rule small; a trailing-reference stripper is the obvious fix.
+- **Bucket's line for a part that is talked through lives in the screen, not in `bucketLine`.** `LiveSession.tsx` swaps the stage's
+  line for its own when nothing is on the table, and tells the two apart by the mood `bucketLine` returned, which is an indirect way
+  of asking "is this the stage's generic line?". The tidier home is `bucketLine` in `src/domain/liveCase.ts`, which this change was
+  asked to stay out of (#167 had just changed that file).
+- **The 32 parts whose title names an interviewer-side table say nothing.** Dropping the topic is the safe side of the rule (the
+  member is never told the name of a table they will not see, issue #95), but those parts are back to being unnamed. The write-ups
+  could be retitled instead; nothing flags them.
+
 ## Unverified user-side checks left open
 
 - Whether the "someone said yes" notification email arrives (the owner confirmed the sign-up email flow; whether the "asked you" request email was checked is not known).

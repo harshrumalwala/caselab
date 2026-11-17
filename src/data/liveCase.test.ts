@@ -29,6 +29,7 @@ import {
   saveScratchpad,
   settle,
   stageEndsAt,
+  stepTopic,
   submit,
   userSays,
   WRITING_GRACE_MS,
@@ -77,7 +78,7 @@ describe('the plan from a case', () => {
     expect(p.beats).toEqual([
       { kind: 'exhibit', index: 0 },
       { kind: 'exhibit', index: 1 },
-      { kind: 'step', index: 0 },
+      { kind: 'step', index: 0, topic: 'Size demand' },
       { kind: 'brainstorm', index: 1, topic: 'ways to grow' },
     ]);
     expect(p.hasBrainstorm).toBe(true);
@@ -86,7 +87,7 @@ describe('the plan from a case', () => {
 
   it('keeps the brainstorm where the book put it when a case has no exhibits', () => {
     const p = buildPlan({ exhibits: [], steps: [{ title: 'Size demand' }, { title: 'Brainstorming ideas' }, { title: 'Check break-even' }] });
-    expect(p.beats).toEqual([{ kind: 'step', index: 0 }, { kind: 'brainstorm', index: 1, topic: 'ideas' }, { kind: 'step', index: 2 }]);
+    expect(p.beats).toEqual([{ kind: 'step', index: 0, topic: 'Size demand' }, { kind: 'brainstorm', index: 1, topic: 'ideas' }, { kind: 'step', index: 2, topic: 'Check break-even' }]);
     expect(p.hasBrainstorm).toBe(true);
   });
 
@@ -101,7 +102,7 @@ describe('the plan from a case', () => {
   it('works through the steps when every table is the interviewer\'s (as in a case whose only table is a guide)', () => {
     const p = buildPlan({ exhibits: [{ title: 'Interviewer Guidance: Revenue' }], steps: [{ title: 'Framework' }, { title: 'Pricing analysis' }, { title: 'Brainstorm: costs' }] });
     // The "Framework" step is not discussed again; the brainstorm keeps its place in the case and is answered in its own two stages.
-    expect(p.beats).toEqual([{ kind: 'step', index: 1 }, { kind: 'brainstorm', index: 2, topic: 'costs' }]);
+    expect(p.beats).toEqual([{ kind: 'step', index: 1, topic: 'Pricing analysis' }, { kind: 'brainstorm', index: 2, topic: 'costs' }]);
     expect(p.hasBrainstorm).toBe(true);
   });
 
@@ -145,12 +146,12 @@ describe('the plan from a case', () => {
       steps: [{ title: 'Framework for revenue growth' }, { title: 'Sizing the market' }],
     });
     // The member gets the exhibit to look at, and the sizing step is theirs to work through: nothing in the write-up ties it to that exhibit.
-    expect(p.beats).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'step', index: 1 }]);
+    expect(p.beats).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'step', index: 1, topic: 'Sizing the market' }]);
   });
 
   it('does not discuss a framework step again, whether it is called "Framework", "Framework for ...", "Framework: ..." or "Structure the problem", but keeps a step that has more in it', () => {
     const steps = ['Framework', 'Framework for revenue growth', 'Framework: what to weigh', 'Structure the problem', 'Framework and Exhibit 1', 'Pricing'].map((title) => ({ title }));
-    expect(buildPlan({ exhibits: [], steps }).beats).toEqual([{ kind: 'step', index: 4 }, { kind: 'step', index: 5 }]);
+    expect(buildPlan({ exhibits: [], steps }).beats).toEqual([{ kind: 'step', index: 4, topic: 'Framework and Exhibit 1' }, { kind: 'step', index: 5, topic: 'Pricing' }]);
   });
 
   it('has no brainstorm when the case has none', () => {
@@ -171,15 +172,15 @@ describe('the exhibits and the steps of one case, together', () => {
       beats([E(1), E(2)], ['Framework', 'Exhibit 1: the numbers', 'Close or invest: the ROIC test', 'Exhibit 2: the numbers', 'Pick the cheaper plant', 'Recommendation']),
     ).toEqual([
       { kind: 'exhibit', index: 0 },
-      { kind: 'step', index: 2 },
+      { kind: 'step', index: 2, topic: 'Close or invest: the ROIC test' },
       { kind: 'exhibit', index: 1 },
-      { kind: 'step', index: 4 },
+      { kind: 'step', index: 4, topic: 'Pick the cheaper plant' },
     ]);
   });
 
   it('works an exhibit the member never sees into nothing, but keeps the step that discusses it', () => {
     expect(beats([{ title: 'Interviewer guidance: the answer' }, E(2)], ['Exhibit 1: what the guidance holds', 'Exhibit 2: the numbers'])).toEqual([
-      { kind: 'step', index: 0 },
+      { kind: 'step', index: 0, topic: 'what the guidance holds' },
       { kind: 'exhibit', index: 1 },
     ]);
   });
@@ -191,9 +192,9 @@ describe('the exhibits and the steps of one case, together', () => {
       { kind: 'exhibit', index: 2 },
     ]);
     expect(beats([], ['Framework', 'Size the market', 'Brainstorm: ways to grow', 'Check the break-even'])).toEqual([
-      { kind: 'step', index: 1 },
+      { kind: 'step', index: 1, topic: 'Size the market' },
       { kind: 'brainstorm', index: 2, topic: 'ways to grow' },
-      { kind: 'step', index: 3 },
+      { kind: 'step', index: 3, topic: 'Check the break-even' },
     ]);
   });
 
@@ -201,8 +202,8 @@ describe('the exhibits and the steps of one case, together', () => {
     expect(beats([E(1), E(2)], ['Size the market', 'Check the break-even'])).toEqual([
       { kind: 'exhibit', index: 0 },
       { kind: 'exhibit', index: 1 },
-      { kind: 'step', index: 0 },
-      { kind: 'step', index: 1 },
+      { kind: 'step', index: 0, topic: 'Size the market' },
+      { kind: 'step', index: 1, topic: 'Check the break-even' },
     ]);
   });
 
@@ -220,17 +221,17 @@ describe('the exhibits and the steps of one case, together', () => {
     for (const title of headed) expect(beats([E(1)], [title]), title).toEqual([{ kind: 'exhibit', index: 0 }]);
     // Not headed by it, so there is work of its own in there: the member has handed in a framework, not revisited one.
     const kept = ['Revisiting the framework after Exhibit 2', 'Pick the framework', 'Hypothesis and framework', 'Profitability framework and the key issue'];
-    for (const title of kept) expect(beats([E(1)], [title]), title).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'step', index: 0 }]);
+    for (const title of kept) expect(beats([E(1)], [title]), title).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'step', index: 0, topic: title }]);
     // Headed by it, but it goes on to name an exhibit: that exhibit's beat is the work, and it is not handed over twice.
     expect(beats([E(1)], ['Framework and Exhibit 1'])).toEqual([{ kind: 'exhibit', index: 0 }]);
-    expect(beats([{ title: 'Interviewer guidance: the answer' }], ['Framework and Exhibit 1'])).toEqual([{ kind: 'step', index: 0 }]);
+    expect(beats([{ title: 'Interviewer guidance: the answer' }], ['Framework and Exhibit 1'])).toEqual([{ kind: 'step', index: 0, topic: 'Framework and Exhibit 1' }]);
   });
 
   it('reads the plural of the noun as a plural, not as the label "s"', () => {
     // "the exhibits" names no exhibit in particular, so the step is matched on what it is about, as a step with no label is.
     expect(beats([{ title: 'Exhibit 1: the regions' }], ['Read the exhibits and split the population'])).toEqual([
       { kind: 'exhibit', index: 0 },
-      { kind: 'step', index: 0 },
+      { kind: 'step', index: 0, topic: 'Read the exhibits and split the population' },
     ]);
     expect(beats([{ title: 'Exhibit A: the regions' }], ['Exhibit A: what the regions show'])).toEqual([{ kind: 'exhibit', index: 0 }]);
     expect(beats([{ title: 'Exhibit #B: costs' }], ['Exhibit #B: what the costs show'])).toEqual([{ kind: 'exhibit', index: 0 }]);
@@ -242,7 +243,7 @@ describe('the exhibits and the steps of one case, together', () => {
     // Analysis that happens to use one of those words further along, which the member must still work through.
     const analysis = ['Close or invest: the ROIC test', 'Closing the payback gap', 'Answer the board question on capacity'];
     for (const title of analysis) {
-      expect(beats([E(1)], [title])).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'step', index: 0 }]);
+      expect(beats([E(1)], [title])).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'step', index: 0, topic: title }]);
     }
   });
 
@@ -255,6 +256,107 @@ describe('the exhibits and the steps of one case, together', () => {
     expect(planned(2, ['Size the market'])).toEqual([3, 16, 31]); // the step the case used to drop is four minutes more
     expect(planned(3, ['Size the market', 'Check the break-even', 'Pick the plant'])).toEqual([6, 25, 40]);
     expect(planned(6, ['Size the market', 'Check the break-even', 'Pick the plant', 'Work the payback'])).toEqual([10, 25, 40]); // the ceiling holds
+  });
+});
+
+/**
+ * A part of the case that is talked through says what it is about before it asks for anything (issue #163). An exhibit names its own
+ * subject on the table; a step of the analysis hands over nothing, so the engine opens it with the book's step title — and with
+ * nothing else of the step, because the rest of it is the answer the member is there to reach.
+ */
+describe('what a part with no exhibit says it is about', () => {
+  const stepPlan = (...titles: string[]): CasePlan => buildPlan({ exhibits: [], steps: titles.map((title) => ({ title })) });
+  const toParts = (p: CasePlan, mode: LiveMode = 'practice'): SessionState => {
+    let s = newSession(p, T0, 'Prompt text', mode);
+    s = ok(ready(s, at(5)));
+    s = ok(ready(s, at(6)));
+    s = ok(submit(s, 'My framework', at(7)));
+    s = ok(userSays(s, 'I would start with demand', at(8)));
+    return endFrameworkStage(s, at(9));
+  };
+  const said = (s: SessionState): string => s.messages.at(-1)!.text;
+
+  it('opens the first part with its topic, and each later part with its own', () => {
+    let s = toParts(stepPlan('Size peak demand', 'Check the break-even'));
+    expect(said(s)).toBe('Let us dig in. First part: Size peak demand. What would you analyse first, and how?');
+    s = nextBeat(s, at(200), 'independent');
+    expect(said(s)).toBe('Good. Next part: Check the break-even. What would you look at, and how?');
+  });
+
+  it('says it the same way in every mode: the topic is the engine\'s to give, not the model\'s', () => {
+    for (const mode of ['practice', 'interview', 'learning'] as const) {
+      expect(said(toParts(stepPlan('Size peak demand'), mode)), mode).toBe('Let us dig in. First part: Size peak demand. What would you analyse first, and how?');
+    }
+  });
+
+  it('keeps the question mark of a title the book wrote as a question, and adds the full stop to one it did not', () => {
+    expect(said(toParts(stepPlan('Should the client invest?')))).toBe('Let us dig in. First part: Should the client invest? What would you analyse first, and how?');
+    expect(said(toParts(stepPlan('Break-even volume')))).toBe('Let us dig in. First part: Break-even volume. What would you analyse first, and how?');
+  });
+
+  it('takes the book\'s numbering off, which says nothing about the part', () => {
+    expect(stepTopic('Question 3B: the cost of the upgrade')).toBe('the cost of the upgrade');
+    expect(stepTopic('Q2. How big are sales of the new model?')).toBe('How big are sales of the new model?');
+    expect(stepTopic('Part B: the most Acme should pay')).toBe('the most Acme should pay');
+    expect(stepTopic('Exhibit 1: market share and revenue')).toBe('market share and revenue');
+    expect(stepTopic('Prompt #2, Question 1: the labour cut needed')).toBe('the labour cut needed');
+    // The number comes off only when something separates it from the subject, so a title that is a phrase of its own keeps its words.
+    expect(stepTopic('Question 4 and recommendation')).toBe('Question 4 and recommendation');
+    expect(stepTopic('Parts and labour')).toBe('Parts and labour');
+  });
+
+  it('says nothing at all when the title is the answer rather than the question', () => {
+    const answers = ['Why the suburban shops lag', 'Demand is driven by end users', 'Confirm the profit decline', 'Capabilities Megatron lacks', 'Why is Dolphin losing revenue?'];
+    for (const title of answers) expect(stepTopic(title), title).toBe('');
+    // ...and the part keeps the opening line that asks the question without naming it.
+    let s = toParts(stepPlan('Why the suburban shops lag', 'Why revenue fell'));
+    expect(said(s)).toBe('Let us dig in. What would you analyse first, and how?');
+    s = nextBeat(s, at(200), 'independent');
+    expect(said(s)).toBe('Good. What would you look at next, and how?');
+  });
+
+  it('says nothing when the book heads the step with the name of the interviewer\'s own table', () => {
+    // Some books title a step after the table the interviewer works it from. The member never sees that table and is never told its
+    // name (issue #95), so the topic goes and the part keeps the line that names nothing.
+    const p = buildPlan({ exhibits: [{ title: 'Break-even analysis', caption: 'Interviewer guidance only.' }], steps: [{ title: 'Break-even analysis' }] });
+    expect(p.beats).toEqual([{ kind: 'step', index: 0 }]);
+    expect(said(toParts(p))).toBe('Let us dig in. What would you analyse first, and how?');
+    // Part of the name is still the name: a topic inside a hidden title, or one that swallows it, goes the same way.
+    expect(buildPlan({ exhibits: [{ title: 'Interviewer guidance: cost savings by region' }], steps: [{ title: 'Cost savings by region' }] }).beats).toEqual([{ kind: 'step', index: 0 }]);
+    // An exhibit the member is handed names itself on the table, so a step titled after one is no secret (this one is that exhibit's part).
+    expect(buildPlan({ exhibits: [{ title: 'Ticket revenue' }], steps: [{ title: 'Ticket revenue' }] }).beats).toEqual([{ kind: 'exhibit', index: 0 }]);
+  });
+
+  it('says nothing when the title is too thin or too long to be a subject', () => {
+    expect(stepTopic('Q1:')).toBe('');
+    expect(stepTopic(`The ${'very '.repeat(20)}long way round`)).toBe('');
+  });
+
+  it('carries the title and nothing else of the step: the working, the reading, the misses and the checks stay on the interviewer\'s side', () => {
+    const step = {
+      title: 'Size peak demand',
+      body: 'Peak demand fills the hotel for four months.',
+      calc: ['Rooms = 200 x 120 nights'],
+      whatToNotice: 'The base is busy only part of the year.',
+      commonMiss: ['Treating peak demand as year-round'],
+      checkYourself: ['Did you separate peak from off-peak?'],
+    };
+    const p = buildPlan({ exhibits: [], steps: [step] });
+    expect(p.beats).toEqual([{ kind: 'step', index: 0, topic: 'Size peak demand' }]);
+    const opening = said(toParts(p));
+    for (const secret of [step.body, ...step.calc, step.whatToNotice, ...step.commonMiss, ...step.checkYourself]) expect(opening).not.toContain(secret);
+  });
+
+  it('leaves a part that hands over an exhibit exactly as it was: the exhibit names itself on the table', () => {
+    let s = toExhibits(plan(2), 100);
+    expect(said(s)).toBe('Here is the first exhibit. Take a moment, then tell me what you notice.');
+    s = nextBeat(s, at(200), 'independent');
+    expect(said(s)).toBe('Here is the next exhibit. What do you notice?');
+  });
+
+  it('opens a part of a plan saved before a step carried a topic with the line that names nothing', () => {
+    const old: CasePlan = { beats: [{ kind: 'step', index: 0 }], hasBrainstorm: false, brainstormTopic: '' };
+    expect(said(toParts(old))).toBe('Let us dig in. What would you analyse first, and how?');
   });
 });
 
@@ -291,7 +393,7 @@ describe('the brainstorm, in the book\'s own place', () => {
       { kind: 'exhibit', index: 0 },
       { kind: 'brainstorm', index: 2, topic: 'ways to categorize the new shops' },
       { kind: 'exhibit', index: 1 },
-      { kind: 'step', index: 4 },
+      { kind: 'step', index: 4, topic: 'Close or invest' },
     ]);
   });
 

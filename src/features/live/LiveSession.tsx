@@ -20,6 +20,14 @@ const WRITE_TEXT: Record<string, { label: string; placeholder: string; submit: s
   recommend_write: { label: 'Your recommendation', placeholder: 'Answer first, then the reasons, the risks and your next steps.', submit: 'Hand in recommendation', key: 'recommendation' },
 };
 
+/**
+ * What Bucket says, and what the box asks for, on a part of the case that is worked through in conversation: Bucket has said what the
+ * part is about and there is nothing on the table, so both ask for the member's thinking rather than for a reading of an exhibit.
+ */
+const DISCUSSION_LINE = 'You are driving now. How would you work this part out? Tell me your maths, and what it means for the client.';
+const DISCUSSION_PLACEHOLDER = 'How would you work this part out? Show your calculations, then what it means for the client and what you would do next.';
+const EXHIBIT_PLACEHOLDER = 'What do you notice? Show your calculations, then what it means for the client and what you would do next.';
+
 /** What the member has done so far, to look back at while writing the recommendation. */
 function WorkSoFar({ view }: { view: LiveView }) {
   const sub = (kind: string) => view.submissions.find((s) => s.kind === kind);
@@ -168,7 +176,10 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
         : "I'm done with this part";
 
   const bucket = bucketLine(view, now, view.messages.at(-1)?.kind === 'hint');
-  const says = <BucketSays mood={bucket.mood}>{bucket.text}</BucketSays>;
+  // A part that is talked through has nothing to read, so Bucket asks for the thinking rather than for a reading of an exhibit. The
+  // happy mood is the stage's own line; the low-clock and hint lines have moods of their own and are about something else.
+  const talkedThrough = view.stage === 'exhibits' && !onTable && bucket.mood === 'happy';
+  const says = <BucketSays mood={bucket.mood}>{talkedThrough ? DISCUSSION_LINE : bucket.text}</BucketSays>;
 
   const warning = untimed
     ? null
@@ -311,7 +322,7 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
               draftKey="exhibit"
               initial={view.drafts.exhibit ?? ''}
               label="Your thinking"
-              placeholder="What do you notice? Show your calculations, then what it means for the client and what you would do next."
+              placeholder={onTable ? EXHIBIT_PLACEHOLDER : DISCUSSION_PLACEHOLDER}
               busy={busy}
               onSend={(t) => void s.say(t)}
               onDraft={(k, t) => void s.saveDraft(k, t)}

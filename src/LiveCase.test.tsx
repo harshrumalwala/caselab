@@ -360,6 +360,35 @@ describe('moving on early', () => {
     }
     expect(document.body.textContent).not.toContain('Peak demand fills the hotel for four months');
   });
+
+  // A part that is talked through hands the member nothing to look at, so the screen says what the part is and asks for the thinking
+  // rather than for a reading (issue #163).
+  it('says what a part with no exhibit is about, and asks for the thinking instead of the reading', async () => {
+    const env = createFakeEnv();
+    const user = await startCase(env);
+    reply(env, () => ({ message: 'Go on.', beat_complete: true }));
+    await user.click(screen.getByRole('button', { name: 'Ready for framework' }));
+    await user.click(await screen.findByRole('button', { name: 'Ready to write' }));
+    await user.type(await screen.findByLabelText('Your framework'), 'Demand, supply and cost');
+    await user.click(screen.getByRole('button', { name: 'Hand in framework' }));
+    await user.type(await screen.findByLabelText('Where would you start?'), 'Demand by season');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+
+    // The exhibit is on the table: it names itself, and the box asks what they notice.
+    await screen.findByText('Exhibit 1 of 1');
+    expect(screen.getByLabelText('Your thinking')).toHaveAttribute('placeholder', expect.stringContaining('What do you notice?'));
+
+    // The next two parts are talked through, and each one says what it is before it asks for anything.
+    await user.type(screen.getByLabelText('Your thinking'), 'Off-peak is 40 percent');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    expect(await screen.findByText('Good. Next part: Size peak demand. What would you look at, and how?')).toBeInTheDocument();
+    expect(screen.getByLabelText('Your thinking')).toHaveAttribute('placeholder', expect.stringContaining('How would you work this part out?'));
+    expect(screen.getByText(/How would you work this part out\? Tell me your maths/)).toBeInTheDocument(); // and Bucket asks for the same thing
+
+    await user.type(screen.getByLabelText('Your thinking'), 'Peak runs four months, so the year is 24,000 room-nights');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    expect(await screen.findByText('Good. Next part: Check the break-even. What would you look at, and how?')).toBeInTheDocument();
+  });
 });
 
 describe('the two modes', () => {
