@@ -99,6 +99,22 @@ assistant saw a claim (for example a build session's report) but did not check i
   (**50 write-ups have a fact that mentions it**, plus 18 clarifying answers; steps and recommendations mention it in hundreds, which is right for the Full solution
   screen but not for something a coach may read out mid-case). Neither was in scope for #132; the interviewer's side was measured and
   fixed by #149, the bullet below.
+- **Five prompts read from outside the case, and no audit rule matches them** (issue #159, 2026-11-17). Both leftovers of #157, flagged
+  there by the developer rather than acted on, and fixed together because one seed reload carries both. One prompt (MIT Sloan 2011) had
+  its ask put back in the middle by #157 and two sentences after it still narrating the arc of the case — what gets discussed next and
+  what the candidate then has to do. Four others (Ross 2010, Kellogg 2018, Columbia 2017, Ross 2009) carried the ask itself in the third
+  person, speaking of "the candidate" as someone watched from outside. **The rule applied, which is the one worth keeping: does this
+  sentence tell the member about the business, or about the case?** A role play stays, because it *is* the business situation; a sentence
+  describing what the candidate will be asked to do, or how the case unfolds, goes. All five were rewritten on 2026-11-17 in
+  `private-data/solutions/*.json`: two trailing sentences dropped from the first, and the ask turned to the second person in the other
+  four with every fact and the question itself kept. Each dropped or reworded sentence was checked against `facts`, the clarifying
+  answers and the step notes first, and all of it was already held there (the costs, growth and partnership arc of the first prompt is in
+  its own `facts` entry and in four step notes), so nothing had to be moved. **No audit count moved, which is the point**: the whole
+  report was byte-identical apart from its timestamp, because none of the five matched a rule before the change either. Widening
+  `scripts/liveCaseAudit.mjs` to catch "the candidate" as the subject of the sentence carrying the ask is the obvious follow-up and was
+  deliberately **not** done here (#156 was open in that file); nobody has measured how many of the 872 such a rule would flag, or how
+  many of those would be role plays. **The write-ups are fixed; production only changes when the regenerated
+  `supabase/seeds/library.sql` is loaded** (the owner's call; not done — 13,223,152 bytes, 297 smaller, 872 / 872 / 872 rows).
 - **The interviewer's own facts named the book, and 44 sentences of them would have reached a member** (issue #149, 2026-11-17). A fact
   and a clarifying answer are never shown to the member, but the coach reads one out, in full, when they ask for it (#83), so they take
   the path the prompt took. Measured with the engine's own reply filter rather than with real model runs (which the issue did not
