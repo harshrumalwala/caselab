@@ -618,6 +618,35 @@ yet"), the computation stays deterministic and in the browser, and there is stil
 exists at all, not how it reads. **Applying the migration is the owner's call, as always**; it is in the batched request of 2026-11-17
 alongside #97, #98 and #99.
 
+### #97 is closed, not planned: one permanent link per member, and no way to take it back
+
+Owner, 2026-11-17: *"why do we have #97, it's fine if we just have one static link for all users, no need to refresh or remove it."* So
+#97 (reset my link) is closed as not planned. Read it the only way it sensibly can be: **each member keeps one permanent link that never
+changes.** There is no reset, no rotation and no revoke. It does *not* mean one link shared across all members; nothing about per-member
+isolation changes, and `public_person(id)` still answers for exactly one member.
+
+Recorded as a decision with its cost, because the cost is real and someone will ask again:
+
+- **The public link carries the member's own account id, permanently.** It is a v4 UUID, so it is unguessable and the exposure is low,
+  but it is the real id and it is the same one for ever.
+- **A link that gets out cannot be taken back.** The only lever a member has is switching "people with my link can see my profile" off,
+  which removes them from everyone who holds the link, not only from whoever it reached. That is blunt, and it is what the project is
+  accepting.
+- Since #96 the link is the whole public face of a profile, which is what made #97 look necessary in the first place. The counter is that
+  a profile only ever shows what the member switched on, so a stale link leaks nothing they had not already chosen to make public.
+- It is a deliberate trade for simplicity, consistent with the owner's standing preference not to add security layers where simple
+  behaviour will do ("let's be simple", first said about name suggestions).
+
+If link rotation is asked for again, this is the entry that says it was weighed, what it would have bought, and on what grounds it was
+declined — not that nobody thought of it.
+
+### Engine before scheduling (2026-11-17)
+
+Put to the owner after the pilot: where should developer time go, given defects that touch 502 of 847 cases. They chose **engine fixes
+first** — #128, #130 and #129 — over doing both in parallel or starting the scheduling chain. The reason on the option they picked is the
+one to keep: **members meet the live-case defects today, and scheduling is capability they do not have yet.** The #98 / #99 / #121
+migrations are approved to be *written*, and they queue behind the engine work; applying any of them is still a separate yes, every time.
+
 ## The $2 interview pilot, run on 2026-11-17: what six real-model runs found
 
 The pilot the owner scoped on 2026-11-16 ran on 2026-11-17 against the deployed `live-case` function, through a runner built for it

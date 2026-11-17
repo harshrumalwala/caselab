@@ -86,14 +86,17 @@ problem was rendering, not coverage. **R34** (check live case at phone width, ad
 open and still unverified; #81 adds unit coverage but nothing in `e2e/` starts a live case. **R20** (offer partial write-ups in
 Learning mode) is unchanged; the 25 partial write-ups stay excluded.
 
-## Front page and scheduling (proposed 2026-11-16: GitHub issues, none approved)
+## Front page and scheduling (proposed 2026-11-16)
+
+**Order, set by the owner on 2026-11-17: engine fixes first.** The live-case defects the pilot found (#128, #130, #129) touch members
+today; scheduling is capability they do not have yet. The whole chain below waits behind that work.
 
 | Issue | Item | Status | Needs |
 |---|---|---|---|
 | #96 | Remove the front-page member search; revoke `anon` reads of the public tables; one "people with my link" switch | `proposed` | A migration (owner approves); merge first, then apply |
-| #97 | Reset my link (random share token) | `proposed`; after #96 | A migration |
-| #98 | Preferred meeting link and time zone in Profile | `proposed` | A migration |
-| #99 | Database rules for proposing, confirming, countering and cancelling a practice time | `proposed` | A migration |
+| #97 | Reset my link (random share token) | **closed, not planned** (owner, 2026-11-17). One permanent link per member, no reset and no revoke; the cost the project is accepting is in DECISIONS.md | — |
+| #98 | Preferred meeting link and time zone in Profile | `proposed`; the migration **shape is approved to be written** (owner, 2026-11-17), queued behind the engine fixes. Applying it is still a separate yes | A migration |
+| #99 | Database rules for proposing, confirming, countering and cancelling a practice time | `proposed`; same — shape approved to be written, queued behind the engine fixes | A migration |
 | #100 | Screens: pick a time inside a request and a conversation; retire `when_text` | `proposed`; after #98, #99 | App only (a migration only if `when_text` is dropped) |
 | #101 | Invite emails with `.ics` (stable UID, sequence number) on confirm, change, cancel | `proposed`; after #100 | `functions deploy notify-request`; possibly a migration |
 | #102 | Optional reminder email shortly before | `proposed`; after #101; owner to decide it is worth a scheduled job | A scheduler, a migration, possibly a secret |
