@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { ChartSeries, ExhibitChart as Chart, SolutionExhibit } from '../../domain/bookSolution';
 
 // The book draws its charts in greys with a few coloured lines, so ours do too: they should read as the book's exhibit, not as ours.
@@ -7,6 +7,11 @@ const GREYS = ['#d2d2d2', '#a9a9a9', '#7e7e7e', '#555555', '#3d3d3d', '#2a2a2a']
 const LINE_COLOURS: Record<string, string> = { red: '#c8202f', blue: '#1f6fa8', yellow: '#e2b93b', green: '#3b8a3e', black: '#222222', gray: '#888888', grey: '#888888', orange: '#e07b21', purple: '#6b4aa8', navy: '#0f2a5c', teal: '#0b8a8a' };
 const LINE_CYCLE = ['#1f6fa8', '#c8202f', '#e2b93b', '#3b8a3e', '#6b4aa8'];
 const INK = 'currentColor';
+// A value label is drawn at size 10: its digits reach about 8px above the baseline, and a bar needs about 15px of its own to hold one.
+const LABEL_RISE = 8;
+const LABEL_ROOM = 15;
+/** About how wide a size-10 label prints. Near enough to tell whether it would run off the panel; the file measures text this way throughout. */
+const labelWidth = (s: string) => s.length * 5.6;
 
 /** The colour a series name stands for: a known name, or a hex value; null for anything else (the chart then uses its greys). */
 const namedColour = (c: string): string | null => {
@@ -184,6 +189,20 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
   const fmtTick = (t: number) => `${chart.unit === '$' || chart.unit === '$M' || chart.unit === '$B' ? '$' : ''}${short(t)}${chart.unit === '%' ? '%' : chart.unit === '$M' ? 'M' : chart.unit === '$B' ? 'B' : ''}`;
   const labelFor = (s: ChartSeries, i: number) => s.labels[i] || (chart.valueLabels ? short(s.values[i]) : '');
 
+  /**
+   * Where a label that sits above a mark goes, and in what ink. A bar or a point whose value is the axis maximum has its top on the
+   * plot's own edge, so a label a few pixels above it fell outside the panel and was cut in half (issue #175) — on every percentage
+   * chart with a 100% bar. When the whole label does not fit above, it moves down: inside the bar, in ink that reads on the fill,
+   * when the bar is deep enough to hold it, and otherwise just under the mark, still inside the plot. `depth` is how far the mark
+   * reaches below `markY` (a bar's height; zero for a point).
+   */
+  const aboveMark = (markY: number, gap: number, depth = 0, fill: string | null = null): { y: number; fill: string } => {
+    const wanted = markY - gap;
+    if (wanted - LABEL_RISE >= plot.y) return { y: wanted, fill: INK };
+    if (fill && depth >= LABEL_ROOM) return { y: markY + 12, fill: inkOn(fill) };
+    return { y: Math.min(markY + 14, plot.y + plot.h - 2), fill: INK };
+  };
+
   const body: ReactNode[] = [];
 
   if (chart.kind === 'pie') {
@@ -257,7 +276,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
         body.push(<circle key={`p${i}`} cx={xx(xv)} cy={y(chart.series[0].values[i])} r={4.5} fill={GREYS[3]} />);
         if (chart.pointLabels) {
           body.push(
-            <Text key={`pl${i}`} x={xx(xv)} y={y(chart.series[0].values[i]) - 8} size={10}>
+            <Text key={`pl${i}`} x={xx(xv)} y={aboveMark(y(chart.series[0].values[i]), 8).y} size={10}>
               {chart.categories[i]}
             </Text>,
           );
@@ -278,9 +297,12 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
       const xScale = (v: number) => plot.x + (v / (xMaxV || 1)) * plot.w;
       ticksFor(0, xMaxV, chart.yStep).forEach((t) => {
         body.push(<line key={`xg${t}`} x1={xScale(t)} x2={xScale(t)} y1={plot.y} y2={plot.y + plot.h} stroke={INK} strokeOpacity={t === 0 ? 0.6 : 0.12} strokeWidth={1} />);
+        // the last number on the axis is centred on the plot's right edge, so the half of it past the edge was cut off: it ends there instead
+        const tick = fmtTick(t);
+        const past = xScale(t) + labelWidth(tick) / 2 > width - 2;
         body.push(
-          <Text key={`xt${t}`} x={xScale(t)} y={plot.y + plot.h + 14} size={10} opacity={0.75}>
-            {fmtTick(t)}
+          <Text key={`xt${t}`} x={past ? width - 2 : xScale(t)} y={plot.y + plot.h + 14} anchor={past ? 'end' : 'middle'} size={10} opacity={0.75}>
+            {tick}
           </Text>,
         );
       });
@@ -294,10 +316,17 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
         barSeries.forEach((s, si) => {
           const bh = barH / barSeries.length;
           const by = cy - barH / 2 + bh * si;
-          body.push(<rect key={`b${i}-${si}`} x={plot.x} y={by} width={Math.max(xScale(s.values[i]) - plot.x, 1)} height={Math.max(bh - 1, 2)} fill={barFill(i, si)} />);
+          const end = xScale(s.values[i]);
+          body.push(<rect key={`b${i}-${si}`} x={plot.x} y={by} width={Math.max(end - plot.x, 1)} height={Math.max(bh - 1, 2)} fill={barFill(i, si)} />);
+          // the same clipping sideways: a bar at the axis maximum ends at the plot's edge, so its number went off the panel. It moves
+          // inside the bar's end when there is room there, and otherwise sits against the panel's edge.
+          const txt = labelFor(s, i);
+          const w = labelWidth(txt);
+          const outside = end + 4 + w <= width - 2;
+          const inside = end - plot.x >= w + 10 && bh >= 12;
           body.push(
-            <Text key={`bv${i}-${si}`} x={xScale(s.values[i]) + 4} y={by + bh / 2 + 4} anchor="start" size={10}>
-              {labelFor(s, i)}
+            <Text key={`bv${i}-${si}`} x={outside ? end + 4 : inside ? end - 5 : width - 2} y={by + bh / 2 + 4} anchor={outside ? 'start' : 'end'} size={10} fill={!outside && inside ? inkOn(barFill(i, si)) : INK}>
+              {txt}
             </Text>,
           );
         });
@@ -308,7 +337,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
         body.push(<line key={`ref${ri}`} x1={rx} x2={rx} y1={plot.y} y2={plot.y + plot.h} stroke={col} strokeWidth={2} strokeDasharray="6 4" />);
         if (r.label) {
           body.push(
-            <Text key={`refl${ri}`} x={rx} y={plot.y - 4} size={11} weight={600} fill={col}>
+            <Text key={`refl${ri}`} x={rx} y={Math.max(plot.y - 4, 10)} size={11} weight={600} fill={col}>
               {r.label}
             </Text>,
           );
@@ -348,9 +377,11 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
             const bw = groupW / barSeries.length;
             const v = s.values[i];
             const top2 = Math.min(y(v), base);
-            body.push(<rect key={`b${i}-${si}`} x={x0 + bw * si} y={top2} width={Math.max(bw - 2, 2)} height={Math.max(Math.abs(y(v) - base), 1)} fill={barFill(i, si)} />);
+            const barH = Math.abs(y(v) - base);
+            body.push(<rect key={`b${i}-${si}`} x={x0 + bw * si} y={top2} width={Math.max(bw - 2, 2)} height={Math.max(barH, 1)} fill={barFill(i, si)} />);
+            const at = v >= 0 ? aboveMark(top2, 5, barH, barFill(i, si)) : { y: top2 + barH + 12, fill: INK };
             body.push(
-              <Text key={`bv${i}-${si}`} x={x0 + bw * si + (bw - 2) / 2} y={(v >= 0 ? top2 : top2 + Math.abs(y(v) - base)) + (v >= 0 ? -5 : 12)} size={10}>
+              <Text key={`bv${i}-${si}`} x={x0 + bw * si + (bw - 2) / 2} y={at.y} size={10} fill={at.fill}>
                 {labelFor(s, i)}
               </Text>,
             );
@@ -381,7 +412,7 @@ function Panel({ chart, width }: { chart: Chart; width: number }) {
           body.push(<circle key={`ld${li}-${i}`} cx={cx(i)} cy={y(v)} r={3} fill={col} />);
           if (chart.kind === 'line' && s.labels[i]) {
             body.push(
-              <Text key={`lv${li}-${i}`} x={cx(i)} y={y(v) - 7} size={10}>
+              <Text key={`lv${li}-${i}`} x={cx(i)} y={aboveMark(y(v), 7).y} size={10}>
                 {s.labels[i]}
               </Text>,
             );
@@ -500,11 +531,38 @@ const panelHeight = (c: Chart, width: number): number => {
 };
 
 /**
+ * True while part of the chart is off the right-hand edge of the box that holds it. The drawing has a readable size of its own, so on a
+ * phone the card is narrower than the chart and the chart is swiped sideways; this is what lets the exhibit say so, rather than leaving a
+ * member to read it and never learn that a category was past the edge (issue #175). It goes quiet once they reach the right-hand end, and
+ * on any screen wide enough to hold the whole chart.
+ */
+function useMoreToTheRight(box: RefObject<HTMLDivElement | null>, width: number): boolean {
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = () => setMore(el.scrollWidth - el.clientWidth - el.scrollLeft > 1);
+    measure();
+    el.addEventListener('scroll', measure, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(el);
+    window.addEventListener('resize', measure);
+    return () => {
+      el.removeEventListener('scroll', measure);
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [box, width]);
+  return more;
+}
+
+/**
  * The exhibit drawn the way the book draws it (its chart type, the labels it prints on the bars, the totals above the stacks, the notes beside
  * the chart), from the figures the book plots. It is our own drawing, never the book's picture. The exhibit's table stays beside it as the
  * exact source of every figure.
  */
 export function ExhibitChart({ exhibit, chart }: { exhibit: SolutionExhibit; chart: Chart }) {
+  const box = useRef<HTMLDivElement>(null);
   const panels = chart.panels.length > 0 ? chart.panels : [chart];
   const hasPie = panels.some((x) => x.kind === 'pie');
   const each = hasPie ? 420 : panels.length > 1 ? 340 : 560; // a pie needs room for its labels on both sides
@@ -513,20 +571,24 @@ export function ExhibitChart({ exhibit, chart }: { exhibit: SolutionExhibit; cha
   const rowHeights = rows.map((r) => Math.max(...r.map((p) => panelHeight(p, each))));
   const W = each * perRow;
   const H = rowHeights.reduce((a, b) => a + b, 0);
+  const more = useMoreToTheRight(box, W);
   const description = `${exhibit.title}: ${panels
     .map((p) => `${p.heading ? `${p.heading}: ` : ''}${p.categories.map((c, i) => `${c} ${p.series.map((s) => s.labels[i] || s.values[i]).join(', ')}`).join('; ')}`)
     .join(' | ')}`;
   return (
-    <div className="max-w-full overflow-x-auto text-ink">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={description} className="h-auto" style={{ width: '100%', maxWidth: W, minWidth: Math.min(W, 420) }}>
-        {rows.map((r, ri) =>
-          r.map((p, ci) => (
-            <g key={`${ri}-${ci}`} transform={`translate(${each * ci},${rowHeights.slice(0, ri).reduce((a, b) => a + b, 0)})`}>
-              <Panel chart={p} width={each} />
-            </g>
-          )),
-        )}
-      </svg>
+    <div>
+      <div ref={box} className="max-w-full overflow-x-auto text-ink">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={description} className="h-auto" style={{ width: '100%', maxWidth: W, minWidth: Math.min(W, 420) }}>
+          {rows.map((r, ri) =>
+            r.map((p, ci) => (
+              <g key={`${ri}-${ci}`} transform={`translate(${each * ci},${rowHeights.slice(0, ri).reduce((a, b) => a + b, 0)})`}>
+                <Panel chart={p} width={each} />
+              </g>
+            )),
+          )}
+        </svg>
+      </div>
+      {more && <p className="pt-1 text-xs text-muted">Swipe across to see the rest of this chart.</p>}
     </div>
   );
 }
