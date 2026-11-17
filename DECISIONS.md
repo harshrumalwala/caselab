@@ -728,6 +728,57 @@ throwaway accounts give 8 starts a day, and a start is consumed by the row exist
 - **The cheapest and most convincing verification is re-running the exact moment.** The #131 fix was confirmed by driving the same case to
   the same rung and reading the sentence. That cost one start and about three cents.
 
+## The night of 2026-11-17: the pilot's findings turned into shipped code
+
+The $2 pilot ran in the morning and found seven things (the section above). By the end of the day six of them were fixed, merged and deployed, two of them proved on the real model, and the library seed was reloaded once. What is worth keeping is not the list of pull requests but the handful of decisions and lessons inside them.
+
+### The clock grew, deliberately, and these are the measured figures
+
+#128 (PR #141) made a case plan hold both its candidate exhibits and its analytical steps, where before it held one kind or the other. The owner approved the change on a projected 39-minute median. **Measured after the second commit, which excluded the framework steps:**
+
+| | before (`7010009`) | after (`fea666f`) |
+|---|---|---|
+| beats per case, mean / median / max | 2.98 / 3 / 10 | **4.86 / 5 / 14** |
+| beats: exhibit + step | 1,396 + 1,128 | **1,396 + 2,723** |
+| cases working through both kinds | 0 | **520** |
+| cases with one beat | 171 | **10** |
+| planned case length, mean / median | 30.6 / 31 min | **36.0 / 39 min** |
+| at the 25-in-40 ceiling | 57 (6.7%) | **272 (32.1%)** |
+
+The median landed exactly on the 39 minutes the owner approved. The ceiling came out at **272, not the 285 in the pull request body** — 285 was the estimate from the first commit, 272 is the measured figure after the framework steps were excluded. Both numbers are recorded because the difference is the kind of thing that otherwise becomes folklore.
+
+**Why longer is right.** The alternative to a longer case is a shorter one that drops work. A case that has six things in it always was a 40-minute case; what was happening is that the member was given a 27-minute case and then judged on the 40-minute one. **What is still unknown is whether a member will sit through a 39-minute median**, which is a real-use question no harness answers, and it is in KNOWN_ISSUES rather than settled here.
+
+### The proof that mattered was re-running the same case, not the test suite
+
+Three fixes were confirmed against the real model by driving the exact moment that failed. This is now the pattern to use, because it costs about three cents and a few minutes and it is the only evidence that speaks to what a member sees.
+
+- **#128.** Boothbucks Coffee opened at 3 beats and 31 minutes instead of 2 and 27, and the restored step reached the member in the coach's own words — the two options, closing or $500K a store of marketing, against the 20% ROIC target. Yesterday's feedback on the same case said *"You never tested the marketing option against the hurdle rate"* about work the product had skipped; today's says *"ran the close-or-invest test correctly against closing"* and rates the recommendation 4. **A member being marked down for a step the case never gave them is the clearest kind of defect, and the clearest kind of fix.**
+- **#131.** The `advance` rung used to say *"That's fine, we can move on. Exhibit 1 shows the share infected by each age, and the vaccine matters to children who haven't yet been exposed."* It now says, in full, *"Let's move on to the next piece."*
+- **#129.** The turn that used to volunteer *"which gives a market revenue of $8 billion"* — a computed row of a hidden interviewer table — now reads out only attendance and price and asks what the member would calculate. Asked outright for the total: *"You are asking for the total itself, and that is yours to work out."* And the #83 handover is not regressed: asked for the cost base it still gives all three figures in full.
+
+### #130 was deployed without a real-model check, on purpose
+
+#130 is the defect the owner cares most about — replies confirming the member's guess, so guessing works. It passed unit tests, the dry-run harness and CI, and it shipped. **It has not been checked against a real model**, because both throwaway accounts hit the function's own limit of 4 starts per rolling 24 hours and the next one frees at 03:05 UTC the following day.
+
+Deploying anyway was a deliberate trade and is recorded as one: holding the fix for eighteen hours while members keep having their guesses confirmed is worse than shipping a change that every deterministic check passes. **The cost is that the register half is unproven**, and the honest position until it is run is "the half that can be measured deterministically is fixed; whether a plausible-sounding stuck member now climbs the ladder is unknown". The author wrote their prediction for the A/B into the pull request before it could be run, which is the right way round, and it will be reported line by line, including the parts they got wrong.
+
+### The lesson about the harness, which is separate from the lesson about the engine
+
+`npm run dryrun:live` has four scripted candidates: brisk, passive, off-track and asker. **None of them ever claims progress while stuck.** So when the pilot found that the ladder never climbs for a member who sounds plausible and is stuck, the harness that is supposed to measure the ladder could not have measured it — not because it was wrong, but because no candidate in it had that shape. The developer on #130 added a fifth, `plausible`, and every bit of movement in the rung distribution (none / process / directional / lead / advance, **4,235 / 4,235 / 1,694 / 847 / 1,694 → 3,388 / 2,541 / 1,694 / 1,694 / 3,388**) comes from its 2,541 runs.
+
+The general lesson, worth more than the fix: **a harness measures the behaviours its model of a user can produce, and nothing else.** A green harness is evidence about the shapes it contains. When a real run finds something the harness missed, the first question is whether the harness *could* have found it — and if not, the candidate that would have found it is part of the fix. The same applies to the limitation already recorded elsewhere: the scripted candidate models messages and never presses a button, so it can never finish a Learning case.
+
+### One seed reload done, a second batch already queued
+
+The owner approved one library reload and it was done: regenerate, split into 20 parts under 700 KB at blank-line statement boundaries, each in its own transaction, non-solution statements first and the duplicate-folding block with `link_cases_to_library()` last, loaded in order with no errors. Counts came back **872 / 872 / 872**, unchanged as expected because the fixes rewrite text inside existing rows, and `npm run test:e2e` passed 60 / 10 skipped. It carried two captions that were hiding candidate exhibits and nine cut exhibit labels.
+
+**Within hours a second batch had formed**, because the audit learned to see more than it could that morning: 17 case prompts that talk about the book (#132), three `belowRows` labels cut to length (#143), and one reference-line label (#151). The pattern is worth naming: **teach the measurement first, then measure, then fix the content once.** Two reloads of a 13 MB seed to save a day is a bad trade, so content fixes batch and wait.
+
+### Three things found while looking for something else, and all three were filed rather than folded in
+
+The developers on #133, #143 and #146 each found a defect outside their issue and wrote it up instead of fixing it: the progress strip never marking Recommendation in a case with no brainstorm (#150), a reference line's label cut in silence (#151), and the interviewer's own facts naming the book in 50 write-ups (#149). **That is the behaviour to keep.** A fix smuggled into an unrelated pull request is a fix nobody reviewed against an issue, and the next person cannot tell why it is there. #149 is also the one where the measurement comes first: facts are read out to a member on request, which is the same path the prompt took, but the engine's voice rules may already strip the phrase — and if they do, 65 files should not be rewritten.
+
 ## Process decisions
 
 - **The owner approves every production action.** Migrations, library loads, function deploys and merges wait for an explicit "yes" or
