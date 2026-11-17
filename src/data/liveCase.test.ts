@@ -205,6 +205,27 @@ describe('the exhibits and the steps of one case, together', () => {
     expect(beats([{ title: 'Cost structure of the client' }], ['Cost structure'])).toEqual([{ kind: 'exhibit', index: 0 }]);
   });
 
+  it('leaves a step headed by the framework to the framework stages, and keeps one that only mentions a framework later', () => {
+    const headed = ['Framework and hypothesis', 'Framework and the two parts of the case', 'Framework: what to weigh', 'Structure and prioritize', 'Clarifying questions and the goal', 'Framework and exhibits'];
+    for (const title of headed) expect(beats([E(1)], [title]), title).toEqual([{ kind: 'exhibit', index: 0 }]);
+    // Not headed by it, so there is work of its own in there: the member has handed in a framework, not revisited one.
+    const kept = ['Revisiting the framework after Exhibit 2', 'Pick the framework', 'Hypothesis and framework', 'Profitability framework and the key issue'];
+    for (const title of kept) expect(beats([E(1)], [title]), title).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'step', index: 0 }]);
+    // Headed by it, but it goes on to name an exhibit: that exhibit's beat is the work, and it is not handed over twice.
+    expect(beats([E(1)], ['Framework and Exhibit 1'])).toEqual([{ kind: 'exhibit', index: 0 }]);
+    expect(beats([{ title: 'Interviewer guidance: the answer' }], ['Framework and Exhibit 1'])).toEqual([{ kind: 'step', index: 0 }]);
+  });
+
+  it('reads the plural of the noun as a plural, not as the label "s"', () => {
+    // "the exhibits" names no exhibit in particular, so the step is matched on what it is about, as a step with no label is.
+    expect(beats([{ title: 'Exhibit 1: the regions' }], ['Read the exhibits and split the population'])).toEqual([
+      { kind: 'exhibit', index: 0 },
+      { kind: 'step', index: 0 },
+    ]);
+    expect(beats([{ title: 'Exhibit A: the regions' }], ['Exhibit A: what the regions show'])).toEqual([{ kind: 'exhibit', index: 0 }]);
+    expect(beats([{ title: 'Exhibit #B: costs' }], ['Exhibit #B: what the costs show'])).toEqual([{ kind: 'exhibit', index: 0 }]);
+  });
+
   it('leaves the closing recommendation to its own stages, and keeps an analytical step that merely sounds like one', () => {
     const closing = ['Recommendation', 'Final recommendation', 'Recommendation and next steps', 'Synthesis', 'Conclusion to the CEO', 'Wrap-up', 'Summary for the CEO', 'Answer', 'Closing the case', 'Bringing it all together'];
     for (const title of closing) expect(beats([E(1)], [title])).toEqual([{ kind: 'exhibit', index: 0 }]);

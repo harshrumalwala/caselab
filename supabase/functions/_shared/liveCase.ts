@@ -113,10 +113,26 @@ const isRecommendationStep = (title: string): boolean => RECOMMENDATION_STEP.tes
 /**
  * The book's own label for an exhibit, wherever it sits in a title: "Exhibit 2: ...", "Exhibit #1", "Financial analysis: Exhibit 1",
  * "Luxury market trend (Exhibit 1)", "Figure 3", "Table B". The books use the nouns interchangeably, so only the number or letter is
- * kept: a step that says "Table 1" and an exhibit called "Exhibit 1" are the same thing in every write-up we have.
+ * kept: a step that says "Table 1" and an exhibit called "Exhibit 1" are the same thing in every write-up we have. A label that is a
+ * letter on its own has to be separated from the noun ("Exhibit B", "Exhibit #B"), so that the plural of the noun is not read as one
+ * ("Read the exhibits and split the population" names no exhibit).
  */
-const EXHIBIT_LABEL_ANYWHERE = /\b(?:exhibits?|exh|figures?|figs?|appendix|appendices|attachments?|charts?|tables?|graphs?)\s*#?\s*(\d{1,2}[a-z]?|[a-z])\b/gi;
+const EXHIBIT_LABEL_ANYWHERE = /\b(?:exhibits?|exh|figures?|figs?|appendix|appendices|attachments?|charts?|tables?|graphs?)\s*#?\s*(\d{1,2}[a-z]?|(?<=[\s#])[a-z])\b/gi;
 const exhibitLabels = (title: string): string[] => [...title.matchAll(EXHIBIT_LABEL_ANYWHERE)].map((m) => m[1].toLowerCase());
+
+/**
+ * A step the framework stages have already done, read the same way as the closing recommendation: by the **head** of the title. The
+ * books write this step as "Framework and hypothesis", "Framework and the two parts of the case", "Clarifying questions and the goal",
+ * "Structure / where to start" — the framework word first, then a connector. A member who has just written a framework and handed it in
+ * should not meet it again as the first thing to work through.
+ *
+ * Two kinds of title keep their beat. One that only mentions a framework further along ("Revisiting the framework after Exhibit 2",
+ * "Pick the framework", "Hypothesis and framework") is not headed by it, so the rule never sees it. And one that goes on to name a book
+ * exhibit ("Framework and Exhibit 1") has an exhibit's worth of work in it, which is the exception the comment on `FRAMEWORK_STEP` has
+ * always made.
+ */
+const FRAMEWORK_HEAD = /^\s*(?:framework|structure|structuring|clarifying\s+questions?)\s*(?:$|[:\-–—,;/()]|&|\b(?:and|plus|with|then|for|of|to)\b)/i;
+const isFrameworkStep = (title: string): boolean => FRAMEWORK_STEP.test(title) || (FRAMEWORK_HEAD.test(title) && exhibitLabels(title).length === 0);
 
 /** Words that say nothing about what a step or an exhibit is about, so they do not count towards two titles being the same subject. */
 const SUBJECT_FILLER = new Set([
@@ -264,7 +280,7 @@ function planBeats(solution: PlanSource): Beat[] {
   const ownBeat = new Set<number>();
   solution.steps.forEach((s, index) => {
     const title = s.title ?? '';
-    if (BRAINSTORM.test(title) || FRAMEWORK_STEP.test(title) || isRecommendationStep(title)) return;
+    if (BRAINSTORM.test(title) || isFrameworkStep(title) || isRecommendationStep(title)) return;
     const about = stepsAbout(title, labels, words);
     if (about >= 0) {
       // Two steps on one exhibit (reading it, then its implication) are still that exhibit's single beat: the second adds nothing new

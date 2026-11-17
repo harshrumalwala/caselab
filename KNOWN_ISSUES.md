@@ -273,8 +273,8 @@ assistant saw a claim (for example a build session's report) but did not check i
   tests, `npm run audit:live` and `npm run dryrun:live` all agree the cases run; the dry run stubs the model, so whether Bucket's reply
   on a part that hands over no exhibit reads like an interviewer putting a question is unknown. Like every change under
   `supabase/functions/**` it does nothing until `npx supabase functions deploy live-case`.
-- **The clock grew, by design and by a lot.** Beats per case went from 2.98 to 4.94 and the median planned case from 31 to 39 minutes;
-  285 of the 847 eligible cases now plan the full 25-in-40 ceiling, against 57 before. Nothing runs longer than the ceiling, but a
+- **The clock grew, by design and by a lot.** Beats per case went from 2.98 to 4.86 and the median planned case from 31 to 39 minutes;
+  272 of the 847 eligible cases now plan the full 25-in-40 ceiling, against 57 before. Nothing runs longer than the ceiling, but a
   14-beat case shares 25 minutes between 14 parts (about 1:45 each before the budget is reshared). Whether a 39-minute case is one a
   member will sit through is a product question the pilot and real use will answer.
 - **The order between an exhibit and a step is a guess wherever no step names an exhibit.** 230 of the 847 write-ups have at least one
@@ -283,17 +283,26 @@ assistant saw a claim (for example a build session's report) but did not check i
   the book put first. The durable fix is a field in `private-data/` that says the order, which needs a seed reload.
 - **The duplicate test is a title test, and 218 steps sit in its uncertain band.** A step is taken as an exhibit's own discussion when
   it carries the book's label for it ("Exhibit 2: ...", "Financial analysis: Exhibit 1") or shares at least 80% of the shorter title's
-  content words: 297 steps match by label and 117 by words over the library. 218 steps in 164 cases share between half and 80% of their
+  content words: 297 steps match by label and 117 by words over the library. 217 steps in 163 cases share between half and 80% of their
   words with an exhibit and are kept as parts of their own; some of those may be a second run at an exhibit, and a step whose title says
-  nothing of what it is about would be missed by both tests.
-- **A step headed "Framework and ..." is still a part of its own.** `FRAMEWORK_STEP` is unchanged (the issue said to keep it as it is),
-  so "Framework and hypothesis", "Framework and market growth" and 95 others like them (75 distinct titles over the library) now become
-  parts in cases that have exhibits, where they would have been dropped before. Part of that work belongs to the framework stage, which
-  the member has already done. Whether to widen the rule is a question for the PM: widening it would also drop the analysis that such a
-  title carries.
+  nothing of what it is about ("Part 2", "Question 4") would be missed by both tests. A label that is a letter has to be separated from
+  the noun, so that "the exhibits" is not read as naming an exhibit "s"; 66 steps name an exhibit the member is never handed and keep
+  their part.
+- **The framework rule now reads the head of a title too (the PM's ruling on #128, after the first review).** `FRAMEWORK_STEP` is
+  unchanged and `FRAMEWORK_HEAD` sits beside it: a title that *begins* with framework / structure / structuring / clarifying questions
+  and then a connector is the framework stage's work and is not a part. 66 steps (51 distinct titles) are excluded this way. **The cost
+  is real**: a few of them carry analysis as well as structure ("Framework and market sizing", "Framework and current ROIC", "Framework
+  and first data request"), and that analysis is now in no part of the case. The exception is a title that goes on to name an exhibit
+  ("Framework and Exhibit 1"), which keeps the exhibit's work.
+- **37 steps (30 distinct titles) still mention a framework or a hypothesis and are parts of their own**, because they are not headed by
+  one: "Pick the framework", "Build the framework", "Hypothesis and framework", "Initial framework", "Question 1: Framework", "Market
+  entry framework", "Step 1: Develop a framework", "Opening and framework", "Scope and framework". A member meets those as a part after
+  writing their framework. Reading the head is what keeps "Revisiting the framework after Exhibit 2" and "Profitability framework and
+  the key issue", so widening the rule to any title whose subject is the framework would take those too; it is a judgement for the PM.
 - **The recommendation rule reads the head of a title.** "Recommendation", "Final recommendation", "Synthesis", "Conclusion to the CEO",
-  "Wrap-up", "Summary for the CEO", "Closing the case" and "Answer" (alone) are left to the recommendation stage; 61 conversation-only
-  cases lost exactly one beat that way. A closing step the books head some other way ("What should the client do about pricing?") is
+  "Wrap-up", "Summary for the CEO", "Closing the case" and "Answer" (alone) are left to the recommendation stage. 73 conversation-only
+  cases lost exactly one beat to the two head rules together (61 to the recommendation, 12 to the framework); no case with exhibits
+  lost one. A closing step the books head some other way ("What should the client do about pricing?") is
   still a part of its own, and a genuine analysis step headed "Summary of profitability" is dropped.
 
 ## Unverified user-side checks left open
