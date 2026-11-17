@@ -804,6 +804,17 @@ export const LEAD_FALLBACK = 'Let me get you moving. Start with the biggest numb
 export const MOVING_ON = 'Let us move on to the next piece.';
 /** The whole of a refusal: in the second person, the work is theirs, and no answer is mentioned as existing. */
 export const WORK_IS_YOURS = 'That one is yours to work out — talk me through how you would get there.';
+/** The same moment in learning mode, where the coach's job is to teach the work rather than to hold a line against it. */
+export const WORK_IT_TOGETHER = 'Let us get there together rather than skip to it — what is the first step you would take?';
+
+/**
+ * The model declined the turn itself (`stopReason === 'refusal'`), which is what being asked outright for the answer usually produces.
+ * Its own words still never reach the member, but neither does the failure message: they get the line for this moment, and the turn is
+ * an ordinary reply in everything the engine records — no hint, no beat finished, and asking costs no rung of help (issue #142).
+ */
+export function refusedTurn(state: Pick<SessionState, 'mode'>): Turn {
+  return { message: isUntimed(state) ? WORK_IT_TOGETHER : WORK_IS_YOURS, assessment: 'unclear', beatComplete: false, directionClear: false, dataRequest: true };
+}
 
 const sentencesOf = (t: string): string[] => t.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
 
@@ -1327,8 +1338,11 @@ async function converse(deps: LiveDeps, userId: string, sessionId: string, text:
   try {
     const answer = await deps.ask(turnRequest(sol, saved.state, kind, help));
     used = answer.usage;
-    if (answer.stopReason !== 'refusal')
-      turn = parseTurn(answer.text, privateNotes(sol, saved.state, help === 'lead'), help === 'lead' ? LEAD_FALLBACK : FALLBACK, isUntimed(saved.state) ? 1000 : 700, help, heldResults(sol, saved.state));
+    // A refusal is the model declining, not the call failing: the member hears it in character instead of being shown an error.
+    turn =
+      answer.stopReason === 'refusal'
+        ? refusedTurn(saved.state)
+        : parseTurn(answer.text, privateNotes(sol, saved.state, help === 'lead'), help === 'lead' ? LEAD_FALLBACK : FALLBACK, isUntimed(saved.state) ? 1000 : 700, help, heldResults(sol, saved.state));
   } catch {
     turn = null;
   }

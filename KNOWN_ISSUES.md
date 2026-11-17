@@ -305,6 +305,23 @@ assistant saw a claim (for example a build session's report) but did not check i
   lost one. A closing step the books head some other way ("What should the client do about pricing?") is
   still a part of its own, and a genuine analysis step headed "Summary of profitability" is dropped.
 
+## Asking outright for the answer (issue #142, 2026-11-17)
+
+- **Unverified against a real model.** `refusedTurn` in `supabase/functions/_shared/liveCaseCoach.ts` turns a `refusal` stop reason
+  into the in-character line instead of the failure message; the unit tests stub the stop reason, and no real refusal has been seen
+  since. Like every change under `supabase/functions/**` it does nothing until `npx supabase functions deploy live-case`.
+- **How often the model refuses is still not recorded anywhere.** Only token usage is kept in `live_case_sessions.state`, so there is
+  no way to say whether this moment happens once a case or once a month. Counting it means a new field on the session state and a
+  mutation to raise it, which is more than the one line issue #142 was willing to spend, so nothing was added.
+- **Every refusal gets the same line, whatever caused it.** The stop reason does not say why the model declined, so a turn refused for
+  some other reason (an off-topic or unpleasant message, say) is also answered with "That one is yours to work out" and also costs no
+  rung of the help ladder. The alternative was an error message for a member who did nothing wrong, which is the defect this fixed.
+- **It answers a refusal on any kind of beat.** Since issue #128 a part of a case may hand over no exhibit at all, and the line is the
+  same there: the reply is built from the mode alone, and `recordDataRequest` acts on whichever beat is open (or on none, in the
+  opening stages).
+- **The nudge and feedback paths are untouched.** A refusal on a timer-driven nudge still leaves the screen as it was (no message, no
+  failure), and a refused feedback call still shows the feedback failure. Both were out of scope.
+
 ## Unverified user-side checks left open
 
 - Whether the "someone said yes" notification email arrives (the owner confirmed the sign-up email flow; whether the "asked you" request email was checked is not known).
