@@ -404,6 +404,110 @@ describe('seeing more detail on a case', () => {
   });
 });
 
+describe('what to give this member next (a visitor has no log of their own)', () => {
+  /** `n` cases of one kind, with distinct titles, all Bob's. */
+  const lots = (n: number, over: Partial<SharedCase>): SharedCase[] =>
+    Array.from({ length: n }, (_, i) => row({ caseId: `${over.caseType}-${over.industry}-${i}`, title: `${over.caseType} case ${i}`, ...over }));
+
+  /** Five shared cases: three Profitability in tech, one Market Entry and one Market Sizing in financial services. */
+  const FIVE: SharedCase[] = [
+    ...lots(3, { caseType: 'Profitability', industry: 'Technology / SaaS', improvementArea: 'quant' }),
+    ...lots(1, { caseType: 'Market Entry', industry: 'Financial Services' }),
+    ...lots(1, { caseType: 'Market Sizing', industry: 'Financial Services' }),
+  ];
+  const section = async () => within(await screen.findByRole('region', { name: /What to give Bob next/ }));
+  const chips = (where: ReturnType<typeof within>, lane: string, label: string) =>
+    within(where.getByRole('group', { name: lane }))
+      .queryAllByRole('list', { name: label })
+      .flatMap((l) => within(l).getAllByRole('listitem').map((li) => li.textContent));
+
+  it('names the case types and industries they have never shared, and the ones they have shared once', async () => {
+    const env = visitor({ shared: FIVE });
+    await openLink(env, 'bob');
+    const give = await section();
+    expect(give.getByText(/From the 5 cases Bob shares: 3 case types and 2 industries so far/)).toBeInTheDocument();
+
+    // The most asked-about types and industries come first, and only a few are named.
+    expect(chips(give, 'Case types', 'Nothing shared yet')).toEqual(['Growth Strategy', 'Mergers and Acquisitions', 'Revenue', '+ 6 more']);
+    expect(chips(give, 'Case types', 'Shared once')).toEqual(['Market Entry', 'Market Sizing']);
+    expect(chips(give, 'Industries', 'Nothing shared yet')).toEqual([
+      'Healthcare / Pharmaceuticals',
+      'Consumer Products / Retail',
+      'Energy / Utilities',
+      '+ 7 more',
+    ]);
+    expect(chips(give, 'Industries', 'Shared once')).toEqual([]); // both of theirs have two cases
+    expect(chips(give, 'Case types', 'Nothing shared yet')).not.toContain('Profitability');
+  });
+
+  it("quotes the member's own improvement focus as theirs, with the count behind it", async () => {
+    const env = visitor({ shared: FIVE });
+    await openLink(env, 'bob');
+    const give = await section();
+    expect(give.getByText(/Bob's own focus: Quant \/ Math/)).toBeInTheDocument();
+    expect(give.getByText(/tagged it as the main thing to improve on 3 of the 5 cases they share/)).toBeInTheDocument();
+  });
+
+  it('says nothing about a focus the member does not share', async () => {
+    const env = visitor({ shared: FIVE.map((c) => ({ ...c, improvementArea: null })) });
+    await openLink(env, 'bob');
+    const give = await section();
+    expect(give.queryByText(/own focus/)).not.toBeInTheDocument();
+    expect(give.getByRole('group', { name: 'Case types' })).toBeInTheDocument(); // the rest is still there
+  });
+
+  it('shows coverage only, and suggests nothing, when too few cases are shared to say anything', async () => {
+    const env = visitor({ shared: FIVE.slice(0, 2) });
+    await openLink(env, 'bob');
+    const give = await section();
+    expect(give.getByText(/Only 2 cases shared so far, which is too few to read anything into what's missing/)).toBeInTheDocument();
+    expect(within(give.getByRole('list', { name: 'Case types' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Profitability']);
+    expect(within(give.getByRole('list', { name: 'Industries' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Technology / SaaS']);
+    expect(give.queryByRole('list', { name: 'Nothing shared yet' })).not.toBeInTheDocument();
+    expect(give.queryByRole('list', { name: 'Shared once' })).not.toBeInTheDocument();
+  });
+
+  it('does not appear at all for a member who shares no case history', async () => {
+    const env = visitor({ members: [{ ...BOB, sharing: { ...NO_SHARING } }], shared: [] });
+    await openLink(env, 'bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    expect(screen.queryByRole('region', { name: /What to give Bob next/ })).not.toBeInTheDocument();
+    expect(screen.getByText('No shared cases')).toBeInTheDocument();
+  });
+
+  it('keeps unpracticed neutral: never a weakness, and never the catch-all "Other"', async () => {
+    const env = visitor({ shared: [...FIVE, ...lots(1, { caseType: 'Other', industry: 'Other' })] });
+    await openLink(env, 'bob');
+    const give = await section();
+    for (const lane of ['Case types', 'Industries']) {
+      for (const label of ['Nothing shared yet', 'Shared once']) expect(chips(give, lane, label), `${lane} / ${label}`).not.toContain('Other');
+    }
+    expect(give.getByText(/exposure, not a verdict: a case type they haven't shared yet isn't a weakness/)).toBeInTheDocument();
+    expect(give.queryByText(/gap|weakness in|behind|needs work/i)).not.toBeInTheDocument();
+  });
+
+  it('counts only shared practice cases: burned cases are not in the numbers', async () => {
+    const burned = { burnedBooks: ['Cosentino'], burnedCases: [{ title: 'Piano tuners', book: '' }, { title: 'Airline profit', book: '' }] };
+    const env = visitor({ members: [{ ...BOB, ...burned, sharing: { ...BOB.sharing, burned: true } }], shared: FIVE });
+    await openLink(env, 'bob');
+    const give = await section();
+    expect(give.getByText(/From the 5 cases Bob shares/)).toBeInTheDocument();
+    expect(give.queryByText(/Piano tuners|Cosentino/)).not.toBeInTheDocument();
+  });
+
+  it('asks for nothing a visitor did not already ask for: no new read, and no model anywhere near it', async () => {
+    const fetched = vi.spyOn(globalThis, 'fetch');
+    const env = visitor({ shared: FIVE });
+    await openLink(env, 'bob');
+    await section();
+    expect([...new Set(env.publicReader.calls)].sort()).toEqual(['getPerson', 'getSharedCases']);
+    expect(env.calls).toEqual([]); // personal data repository untouched
+    expect(env.community.calls).toEqual([]); // member side untouched
+    expect(fetched).not.toHaveBeenCalled();
+    fetched.mockRestore();
+  });
+});
+
 describe('the link is the only way in', () => {
   const LENA: Profile = { ...BOB, userId: 'lena', displayName: 'Lena Link' };
   const lenaCase = { ...row({ caseId: 'l1', title: 'Lena only-by-link case' }), ownerId: 'lena' };

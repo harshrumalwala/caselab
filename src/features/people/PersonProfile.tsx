@@ -24,6 +24,7 @@ import { AskDialog } from '../requests/AskDialog';
 import { CaseFilterBar } from '../community/CaseFilterBar';
 import { SharedCaseRow } from '../community/SharedCaseRow';
 import { FindCase } from './FindCase';
+import { GiveThemNext } from './GiveThemNext';
 import { LevelTag } from '../progress/LevelTag';
 
 type Tab = 'cases' | 'find';
@@ -251,6 +252,11 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
           {!visitor && <MessageButton person={person} />}
         </div>
       </div>
+
+      {/* A visitor has no log, so pairing is out of reach: this is the nearest honest answer to "what should I give them?",
+          and it goes first because it is the reason someone opens a link five minutes before casing them. Members keep
+          "Find a case for them", which is the better answer once there is a log to compare with. */}
+      {visitor && <GiveThemNext person={person} shared={shared} />}
 
       <SharedPerformance shared={shared} />
       <InterviewedCard name={firstName(person.displayName)} items={interviewed} />
