@@ -211,7 +211,24 @@ move whenever the file does, so the quoted words are the reliable part):
 - **Exhibit chart kinds we cannot draw** stay as tables: marimekko, bubble size, waterfall, dual axis, maps, flow diagrams, stacked area,
   scatter trend lines, stacked horizontal bars.
 - **No visual regression tests for charts.** The render check (a temporary test that draws every chart to SVG, then a contact sheet) lives in
-  the assistant's scratch folder, not in the repo. `src/features/caselog/ExhibitChart.test.tsx` covers specific behaviours only.
+  the assistant's scratch folder, not in the repo. `src/features/caselog/ExhibitChart.test.tsx` covers specific behaviours only. **Issue #175 is
+  what that costs**: a value label was drawn five pixels above its bar and so landed outside the panel whenever the bar reached the axis maximum
+  (every 100% bar on a percentage chart), and nothing in the suite saw it, because the tests asked what a chart drew and never where it drew it.
+  The tests added with the fix measure a label's position against the plot's own edges, which is the shape of test that would have caught it; the
+  browser check behind that issue was still done by hand, at desktop width and at 390px.
+- **What the label fix in #175 leaves rough** (2026-11-17, `src/features/caselog/ExhibitChart.tsx`). The placement arithmetic is estimates, not
+  measured text: a size-10 numeral is assumed to reach 8px above its baseline and to be 5.6px wide per character (`LABEL_RISE`, `labelWidth`), the
+  same way the rest of the file measures text, so an unusually long label inside a sideways bar can still sit closer to the bar's start than the
+  estimate says. A bar needs 15px of depth to hold its label inside it; a shorter bar at the axis maximum has the label just under its top instead,
+  over the plot rather than over the bar, which reads but is not pretty. And the labels **below** a mark were left alone: the label under the
+  most-negative bar of a chart sits 12px under the axis, where the category names also sit, so the two can overlap. Nothing in the library has a
+  negative bar deep enough to have been noticed; it was out of scope for #175, which was about figures leaving the panel.
+- **A chart narrower than 420px scrolls rather than fits** (issue #175). The drawing has a size of its own (560px for a single panel), and the SVG
+  scales to the card down to a floor of 420px, which keeps a 10px label at 7.5px. Below that the chart is swiped sideways and says so. Scaling the
+  whole drawing into a phone card (320px inside the Full solution dialog at 390px) was tried in the browser and puts the axis numbers and the value
+  labels at about 5.7px, which is why the floor is there. Laying a panel out at the card's own width instead — fewer pixels for the plot but the
+  same 10px type — would fit a phone properly and is the real fix; it is a layout change across every chart kind, with no visual regression tests to
+  catch what it breaks. The note says “swipe”, which is phone language: a desktop window narrow enough to show it is dragged or scrolled instead.
 - **Live case hides interviewer-only tables by heuristic** (titles and wording in `supabase/functions/_shared/liveCase*.ts`); the README
   accepts that a candidate exhibit might be hidden (the "safer way to be wrong"). Issue #85 narrowed the title half of it (a soft word
   such as "calculation" no longer hides the book's own numbered exhibit on its own), which left three kinds of leftover, all measured on

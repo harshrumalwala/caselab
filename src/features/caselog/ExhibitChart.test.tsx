@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { blankChart, parseBookSolution, parseSolutionExhibit, type ExhibitChart as Chart, type SolutionExhibit } from '../../domain/bookSolution';
 import { ExhibitChart } from './ExhibitChart';
@@ -365,5 +365,139 @@ describe("the book's charts, redrawn", () => {
     expect(s?.exhibits[0].chart).toBeNull();
     expect(within(document.body).queryByRole('img')).toBeNull();
     expect(screen).toBeTruthy();
+  });
+});
+
+// Issue #175. A value label was drawn five pixels above its bar, so a bar whose value is the axis maximum — every 100% bar on a
+// percentage chart — had its number drawn outside the plot and cut in half by the panel's edge. These tests measure where the label
+// lands against the plot's own edges rather than checking that the chart renders, which is what let the defect through.
+describe('a value at the top of the axis', () => {
+  const RISE = 8; // how far a size-10 numeral reaches above its baseline
+  /** The plot's bottom edge: the lowest gridline the axis draws. */
+  const plotBottom = (svg: SVGSVGElement) => Math.max(...[...svg.querySelectorAll('line')].map((l) => Number(l.getAttribute('y1'))));
+  const labelled = (svg: SVGSVGElement, s: string) => [...svg.querySelectorAll('text')].find((t) => t.textContent === s)!;
+  const labelY = (svg: SVGSVGElement, s: string) => Number(labelled(svg, s).getAttribute('y'));
+  /**
+   * Every part of the label is between the plot's edges, so nothing of it is cut off. `top` is the plot's top edge, which is where the
+   * mark at the axis maximum sits (a bar's top, a point's centre) — that is the whole of the defect: the label used to be drawn above it.
+   */
+  const insideThePlot = (svg: SVGSVGElement, s: string, top: number) => {
+    expect(labelled(svg, s)).toBeTruthy();
+    const y = labelY(svg, s);
+    expect(y - RISE).toBeGreaterThanOrEqual(top);
+    expect(y).toBeLessThanOrEqual(plotBottom(svg));
+    expect(y - RISE).toBeGreaterThan(0); // and inside the panel the viewBox claims
+  };
+  const barTop = (svg: SVGSVGElement, i = 0) => Number([...svg.querySelectorAll('rect')][i].getAttribute('y'));
+
+  it('keeps a 100% bar’s label inside the plot, in ink that reads on the bar, and leaves a shorter bar’s label above it', () => {
+    const svg = draw({ kind: 'bar', percent: true, categories: ['Ours', 'Theirs'], series: [series('Share', [100, 40], { labels: ['100%', '40%'] })] });
+    insideThePlot(svg, '100%', barTop(svg)); // the 100% bar's top is the plot's top edge
+    // the bar fills the plot, so the label sits inside it and takes ink that reads on the fill
+    const bar = [...svg.querySelectorAll('rect')][0];
+    const top = Number(bar.getAttribute('y'));
+    expect(labelY(svg, '100%')).toBeLessThanOrEqual(top + Number(bar.getAttribute('height')));
+    expect(labelled(svg, '100%').getAttribute('fill')).toBe('#1f1f1f'); // near-black on the light grey fill
+    // the bar that does not reach the top is untouched: its label still sits above it in the usual ink
+    const short = [...svg.querySelectorAll('rect')][1];
+    expect(labelY(svg, '40%')).toBe(Number(short.getAttribute('y')) - 5);
+    expect(labelled(svg, '40%').getAttribute('fill')).toBe('currentColor');
+  });
+
+  it('keeps the label inside the plot when the nice axis lands on the data maximum', () => {
+    // 20 with a step of 5 gives a top tick of exactly 20, so the tallest bar's top is the plot's own edge
+    const svg = draw({ kind: 'bar', unit: '$M', categories: ['2025', '2026'], series: [series('Revenue', [10, 20], { labels: ['10', '20'] })], yStep: 5 });
+    insideThePlot(svg, '20', barTop(svg, 1));
+    expect(labelY(svg, '10')).toBe(barTop(svg) - 5);
+  });
+
+  it('keeps a short bar’s label readable: under the top of the plot in the usual ink, not white on nothing', () => {
+    // a deep negative bar pushes the axis floor down, so the bar at the maximum is only a few pixels tall and cannot hold a label
+    const svg = draw({ kind: 'bar', unit: '$M', categories: ['Up', 'Down'], series: [series('Change', [5, -100], { labels: ['5', '-100'] })] });
+    insideThePlot(svg, '5', barTop(svg));
+    const bar = [...svg.querySelectorAll('rect')][0];
+    expect(Number(bar.getAttribute('height'))).toBeLessThan(15); // the bar really is too short to print inside
+    expect(labelled(svg, '5').getAttribute('fill')).toBe('currentColor');
+  });
+
+  it('keeps a line’s point label and a scatter’s point label inside the plot at the top of the axis', () => {
+    // the unit keeps the axis numbers ($100M) apart from the printed value (100), which is otherwise the same text
+    const line = draw({ kind: 'line', unit: '$M', categories: ['Jan', 'Dec'], series: [series('Share', [50, 100], { labels: ['50', '100'] })] });
+    const point = (svg: SVGSVGElement) => Math.min(...[...svg.querySelectorAll('circle')].map((c) => Number(c.getAttribute('cy'))));
+    insideThePlot(line, '100', point(line));
+    const scatter = draw({ kind: 'scatter', categories: ['Top site', 'Low site'], xValues: [1, 2], series: [series('Yield', [100, 50])] });
+    insideThePlot(scatter, 'Top site', point(scatter));
+  });
+
+  // The other two label kinds that sit on a value were checked and left alone, and this is the one that needed proving.
+  it('leaves a full stack’s total where it is: the panel already reserves the room above the plot for it', () => {
+    const svg = draw({ kind: 'stacked', percent: true, categories: ['2026'], series: [series('Own', [60]), series('Other', [40])], totals: ['$12M'], segmentNames: true });
+    const y = labelY(svg, '$12M');
+    const plotTop = Math.min(...[...svg.querySelectorAll('line')].map((l) => Number(l.getAttribute('y1'))));
+    expect(y).toBeLessThan(plotTop); // above the plot, as the book prints it
+    expect(y - 8).toBeGreaterThan(0); // and inside the panel: a stack with totals is drawn 14px lower to make room
+    // a segment's own label is centred in the segment, so it cannot leave the plot either
+    const segment = labelY(svg, 'Own');
+    expect(segment - 8).toBeGreaterThanOrEqual(plotTop);
+  });
+
+  it('keeps the number on the longest sideways bar inside the panel', () => {
+    const svg = draw({ kind: 'bar', horizontal: true, unit: '$M', categories: ['Comedy', 'Drama'], series: [series('Domestic', [1500, 1000])], yStep: 500 });
+    const width = Number((svg.getAttribute('viewBox') ?? '').split(' ')[2]);
+    const longest = labelled(svg, '1,500');
+    const x = Number(longest.getAttribute('x'));
+    // it is drawn from the right, so the whole of it is between the panel's edges
+    expect(longest.getAttribute('text-anchor')).toBe('end');
+    expect(x).toBeLessThanOrEqual(width);
+    expect(x - '1,500'.length * 5.6).toBeGreaterThan(0);
+    expect(longest.getAttribute('fill')).toBe('#1f1f1f'); // it is inside the bar now, so it takes ink that reads on it
+    // the shorter bar's number still sits just past the end of the bar
+    const shorter = labelled(svg, '1,000');
+    expect(shorter.getAttribute('text-anchor')).toBe('start');
+    expect(Number(shorter.getAttribute('x')) + '1,000'.length * 5.6).toBeLessThan(width);
+    // and the last number on the axis below, which was centred on the plot's right edge, keeps all of itself on the panel
+    const lastTick = labelled(svg, '$1,500M');
+    expect(lastTick.getAttribute('text-anchor')).toBe('end');
+    expect(Number(lastTick.getAttribute('x'))).toBeLessThanOrEqual(width);
+  });
+});
+
+// Issue #175, the second half: on a phone the drawing is wider than the card that holds it. The card scrolls sideways, but nothing said
+// so, and a member could read an exhibit without ever learning that a category sat past the right-hand edge.
+describe('a chart wider than the card that holds it', () => {
+  /** jsdom lays nothing out, so the box's measurements are given to it: how wide the drawing is, how wide the card is, and where it is scrolled. */
+  function withBox(measurements: { drawing: number; card: number; scrolled: number }, run: (box: () => HTMLElement) => void) {
+    const names = ['scrollWidth', 'clientWidth', 'scrollLeft'] as const;
+    const read = { scrollWidth: () => measurements.drawing, clientWidth: () => measurements.card, scrollLeft: () => measurements.scrolled };
+    const saved = new Map(names.map((name) => [name, Object.getOwnPropertyDescriptor(Element.prototype, name)]));
+    for (const name of names) Object.defineProperty(Element.prototype, name, { configurable: true, get: read[name] });
+    try {
+      const { container } = render(<ExhibitChart exhibit={exhibit('Exhibit 1')} chart={{ ...blankChart, kind: 'bar', categories: ['North', 'South', 'East'], series: [series('Sales', [10, 20, 30])] }} />);
+      run(() => container.querySelector('svg')!.parentElement as HTMLElement);
+    } finally {
+      for (const name of names) {
+        const was = saved.get(name);
+        if (was) Object.defineProperty(Element.prototype, name, was);
+        else Reflect.deleteProperty(Element.prototype, name);
+      }
+    }
+  }
+
+  it('says the chart can be swiped, and says it only while there is more to see', () => {
+    // a 420px drawing in a 328px card: the phone case the issue was found on
+    const measurements = { drawing: 420, card: 328, scrolled: 0 };
+    withBox(measurements, (box) => {
+      expect(screen.getByText(/swipe/i)).toBeInTheDocument();
+      // once the member has swiped to the right-hand end there is nothing more to say
+      measurements.scrolled = 92;
+      fireEvent.scroll(box());
+      expect(screen.queryByText(/swipe/i)).toBeNull();
+    });
+  });
+
+  it('says nothing on a screen that shows the whole chart', () => {
+    withBox({ drawing: 560, card: 560, scrolled: 0 }, () => {
+      expect(screen.queryByText(/swipe/i)).toBeNull();
+    });
   });
 });
