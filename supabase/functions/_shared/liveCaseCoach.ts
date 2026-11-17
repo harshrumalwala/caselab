@@ -887,8 +887,38 @@ const sentencesOf = (t: string): string[] => t.split(/(?<=[.!?])\s+/).map((s) =>
 // Three tells the real-model pilot found (issue #131). The directives above ask for none of them; these checks are what happens
 // when the model does it anyway. They catch the obvious wording, not every paraphrase: see README.
 
-/** Talking about the member rather than to them. */
-const THIRD_PERSON = /\b(?:the|this|our|a)\s+(?:student|candidate|interviewee)\b|\bthey\s+(?:have\s+)?asked me\b/i;
+/**
+ * The member, named in the third person: "the candidate", "this student", "our interviewee". Singular, as issue #131 wrote it: a case
+ * about schools talks about "the students" and means the people in the case, not the member.
+ */
+const THE_MEMBER = /\b(?:the|this|our|a)\s+(?:student|candidate|interviewee)\b/i;
+/** Them, as the one who is talking to the model: the pilot's own shape. */
+const THEY_ASKED_ME = /\bthey\s+(?:have\s+)?asked me\b/i;
+/** The model's own voice in the same breath as them: "the student has asked me to ...", "I would give the candidate that". */
+const ITS_OWN_VOICE = /\b(?:I|me|my|myself)\b/;
+/** Telling them what to do, about them rather than to them: "the candidate should start with the revenue side". */
+const INSTRUCTS_THEM = /\b(?:should|must|ought to|needs? to|has to|have to|(?:is|are)\s+(?:expected|supposed|meant|asked)\s+to|will need to)\b/i;
+/** A pointer to something on the page, which is not a figure of the case: "Exhibit 1", "question 2", "Figure #3". */
+const A_POINTER = /\b(?:exhibits?|figures?|tables?|charts?|questions?|parts?|appendix|annex|slides?|pages?)\s*#?\s*\d+[a-z]?\b/gi;
+/** A figure of the case: the kind of thing the member asks for, and the thing it costs them when a sentence is dropped. */
+const carriesAFigure = (sentence: string): boolean => /\d/.test(sentence.replace(A_POINTER, ' '));
+
+/**
+ * Bucket talking about the member rather than to them (issue #131), told apart from a fact that happens to mention them (issue #156).
+ * The interviewer's own facts name the member too, because that is how the write-ups put a condition — "given once the candidate asks
+ * for it: ..." — and the coach reads a fact out in full when the member asks for it (issue #83). Measured over the 872 write-ups: the
+ * filter used to drop 286 sentences of the interviewer's side in 201 of them, all but one by this rule, and 198 of those were the whole
+ * of a fact or a clarifying answer, so the member who asked for one got the stand-in line and none of the figures.
+ *
+ * So the member's name in the third person is a tell when the sentence is Bucket's own talk — its own voice in the same breath, or an
+ * instruction aimed at them — and otherwise only when the sentence has no figure of the case in it to lose.
+ */
+function talksAboutThem(sentence: string): boolean {
+  if (THEY_ASKED_ME.test(sentence)) return true;
+  if (!THE_MEMBER.test(sentence)) return false;
+  return ITS_OWN_VOICE.test(sentence) || INSTRUCTS_THEM.test(sentence) || !carriesAFigure(sentence);
+}
+
 /** Narrating its own instructions. */
 const INSTRUCTIONS = /\b(?:my|the|these|those)\s+(?:instructions?|directive|guidelines?|system prompt|rules)\b|\bI\s+(?:am|'m)\s+(?:not\s+)?(?:allowed|supposed|instructed|meant|told)\s+to\b/i;
 /** Saying no. */
@@ -899,7 +929,7 @@ const NOT_HELD = /\b(?:do(?:es)?\s*n['’]?t have|do not have|have no|not (?:in|
 
 /** A sentence that talks about the member, narrates the instructions, or announces a withheld answer. */
 export function hasTell(sentence: string): boolean {
-  if (THIRD_PERSON.test(sentence) || INSTRUCTIONS.test(sentence)) return true;
+  if (talksAboutThem(sentence) || INSTRUCTIONS.test(sentence)) return true;
   return REFUSES.test(sentence) && AN_ANSWER.test(sentence) && !NOT_HELD.test(sentence);
 }
 

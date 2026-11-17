@@ -111,9 +111,11 @@ assistant saw a claim (for example a build session's report) but did not check i
   because the filter genuinely handles the narrated shape. **The write-ups are fixed; production only changes when the regenerated
   `supabase/seeds/library.sql` is loaded** (the owner's call; not done — 13,225,109 bytes, 575 smaller). Two things left: the voice
   filter's new source words (`casebook`, `case book`, `authors`) are in `supabase/functions/_shared/liveCaseCoach.ts` and only take
-  effect after `npx supabase functions deploy live-case`; and **16 of the 28 sentences left are dropped whole** by the reply filter
-  rather than cleaned, because the same sentence also talks about "the candidate" — so a reply that was only that sentence becomes the
-  stand-in line, and the member does not get the fact they asked for. That is the #132 pattern one layer in again, it is not about the book, and it has not been raised as an issue.
+  effect after `npx supabase functions deploy live-case`; and **16 of the 28 sentences left were dropped whole** by the reply filter
+  rather than cleaned, because the same sentence also talks about "the candidate" — so a reply that was only that sentence became the
+  stand-in line, and the member did not get the fact they asked for. That is the #132 pattern one layer in again, it is not about the book,
+  and it became issue #156, which measured it over every fact rather than only the book-naming ones (286 sentences, not 16) and fixed it
+  in the filter: see "A fact that mentions the candidate" below.
 - **A chart kind we do not draw is not counted as a loss.** `exhibitLoss` ignores a chart whose kind is outside `DRAWN_KINDS` (marimekko,
   waterfall, bubble, dual axis, maps): the exhibit stays the book's own table, which is the settled trade (ROADMAP R15). No write-up
   carries such a chart today (measured: 0 of 1,792 exhibits on 2026-11-16), so the rule costs nothing; if one is ever added, the member
@@ -298,6 +300,46 @@ assistant saw a claim (for example a build session's report) but did not check i
   refuses in that shape while really withholding an answer is not caught. Narrowing it would start dropping the honest reply.
 - **An `advance` reply is cut to its first sentence.** If a model ever answered a question and moved on in the same breath at that rung
   (with `data_request` unset), the answer would be lost. The flag and `beat_complete` are both excluded from the cut for that reason.
+
+## A fact that mentions the candidate (issue #156, 2026-11-17)
+
+- **The defect was 18 times bigger than the issue said, and that is what chose the route.** #149 had counted only the sentences that
+  *also* name the book (16 of 28). Measured here over every fact and clarifying answer of the 872 write-ups, with the engine's own
+  `hasTell` imported rather than copied: **286 sentences in 201 write-ups were dropped by the reply filter, 198 of them the whole of a
+  fact or a clarifying answer**, so the member who asked for one of those got the stand-in line (`FALLBACK`) and none of the figures.
+  285 of the 286 were the third-person rule; 270 of those matched on the words "the candidate" alone. A content rewrite would have been
+  ~198 sentences in ~200 cases and would reach members only at the next seed reload, which is not scheduled; the rule change ships with
+  `npx supabase functions deploy live-case`. Hence the engine route.
+- **What the rule now does.** `talksAboutThem` in `supabase/functions/_shared/liveCaseCoach.ts`: a sentence that names the member in the
+  third person is a tell when it carries the model's own voice in the same breath (`I`, `me`, `my`), when it instructs them
+  (`should`, `must`, `needs to`, `has to`, `is expected to`, ...), or when it holds no figure of the case — a pointer such as "Exhibit 1"
+  does not count as a figure. Otherwise it is a fact and is read out **as written**. After the change the filter drops 246 sentences and
+  165 whole facts or answers: **40 sentences in 35 cases reach the member who asks, 33 of them the whole of a fact or an answer.**
+  Nothing that used to pass is dropped now (measured, 0 newly dropped).
+- **Unverified against a real model**, like every other change under `supabase/functions/**`, and it does nothing until the function is
+  deployed. The unit tests put the measured sentence shapes through the real `handleLive`; no model has been asked since.
+- **The fact is read out in the write-up's words, stage direction and all.** A kept sentence is not rewritten into the second person, so
+  a member can read the condition the write-up puts on a fact ("given only once the candidate asks for them") before the figures.
+  Rewriting "the candidate" to "you" was tried on paper and dropped: a case about schools says "a student" and means a pupil (A-Plus
+  School District, Quahog Public Schools), and an instruction to hand an exhibit over does not survive the substitution. The directives already ask the model for the second person; this
+  filter is the net, not the author.
+- **A sentence that both instructs the member and carries figures is still dropped**, and four of those are data rather than an
+  inference: To Automate or Not, Bolsen Pharma, Fitness Startup Kiosks and Maldovian Coffins each hold one. The other seven of the
+  eleven are the book's own conclusion told to the candidate with the figure that proves it, which is right to drop.
+  Whether the four figures are reachable elsewhere in those write-ups was not checked.
+- **150 of the sentences still dropped carry no figure**, and a few of them are facts rather than stage directions (a list of target
+  regions, a brainstorm's named answers). Keeping them would mean a rule that cannot tell a qualitative fact from a stage direction;
+  the figure test was chosen because it is the thing a member asks for and the thing #83 is about.
+- **One book-naming sentence now reaches a member**: Chateau (Tuck Case Book 2009) has a clarifying answer that names the member, holds
+  a figure and mentions "the book's estimate", so `npm run audit:live` reports `still naming it after the reply filter` as **1** where
+  it was 0. It is a content fix of the #149 kind (reword the answer) for the next batch, not a filter fix: no filter can unsay a book
+  the sentence is built around.
+- **The neighbouring rule has a false positive nobody has fixed.** `INSTRUCTIONS` matches "the directive", so Donatella Co.'s one-sentence
+  fact about an EU reporting directive is dropped whole and its two revenue thresholds never reach a member. Found while measuring #156;
+  out of scope there (a different rule), and still open.
+- **The rule is string-level, like the rest of the voice filter.** A model that talks about the member some other way ("one would
+  usually start with ...") still goes through, and a model that writes a genuine tell with a figure in it and no instruction word
+  ("the candidate is at $4M already") is now kept. The audit's two new counts are what would show drift.
 
 ## The interview's register, and the ladder's entry condition (issue #130, 2026-11-17)
 
