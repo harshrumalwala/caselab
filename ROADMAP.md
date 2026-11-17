@@ -102,6 +102,34 @@ Learning mode) is unchanged; the 25 partial write-ups stay excluded.
 |---|---|---|---|
 | R37 | **Phase 2: connect Google and Microsoft calendars** (free/busy, availability, automatic event and Meet/Teams link creation) | Assistant, following the owner's request of 2026-11-16 ("reflect on their calendar"). **Deliberately not an issue yet.** | Needs the phase-1 results first. Open questions, each needing a check of the **current** platform documentation before anyone commits (the statements below are not verified): (1) Google OAuth verification: calendar scopes are, I believe, sensitive and may need app verification and a privacy review, and an unverified app may be limited to test users; (2) Microsoft school tenants often block third-party consent unless an admin approves, and whether Booth's tenant would is not known; (3) secure storage of refresh tokens, a new class of secret the project has none of (encrypted in the database or Supabase Vault, deleted with the account, revocable); (4) the availability UI (showing free/busy to a partner without exposing event details); (5) time zones, daylight-saving boundaries and recurring events; (6) the testing cost: real Google and Microsoft accounts and tenants, no CI coverage possible, and the privacy review. Revisit only if phase 1 proves people actually schedule in the app. |
 
+
+## Live-case programme: where it stands after 2026-11-17
+
+Every defect the exhibit audit found is now shipped and deployed. What remains is listed here so the next session starts from the state
+of the world rather than from the audit's original list.
+
+| Issue | Item | Status |
+|---|---|---|
+| #81 #82 #83 #85 | The four audit defects (charts never drawn, one-size clock, unreachable interviewer data, soft-word hiding) | **done and deployed**; #85 deployed 2026-11-17 and verified by downloading the deployed source and diffing it against the merged commit |
+| #84 #91 | The suitability report and the scripted dry run | **done**; both run free, both were re-run on both sides of every change today |
+| #94 | Interview mode nudges rather than rescues (its own ladder, no `lead` rung) | **done and live** in function version 11 |
+| #95 | No exhibit reaches a member cut; no interviewer artefact ever reaches them | **done** (PR #117): 1,792 exhibits compared write-up to screen, 0 cut; 10,164 runs, 12,766 exhibits, 0 leaks |
+| #87 | Conversation-only cases are labelled before the member picks | **done** (PR #118), `live-case` deployed |
+| #119 | A learner who writes nothing cannot move on (one disabled button, both ends) | `proposed`, new 2026-11-17 |
+| the $2 pilot | Real-model interview runs: does Bucket nudge or solve? | **not started, deferred by the owner to the next usage window.** Nothing of the $2 is spent. Max 10 runs, newest books first, spend read from `live_case_sessions.state -> 'usage'` |
+| #86 | A switch to take one case out of live practice | closed, not planned (see DECISIONS.md); the emergency exit is setting one row's `confidence` to `partial` |
+
+Two content fixes fell out of #85 and need a seed reload, so they wait for the owner: Contagion Containment and Bumpers R Us are
+candidate exhibits hidden by captions that are wrong in `private-data/`, not by the rule. Nine exhibit labels are cut to length for the
+same reason (a chart heading is one line inside a panel). ROADMAP R21-R23 still apply to the tooling and the backup.
+
+## The public profile link (added 2026-11-17; both proposed)
+
+| # | Item | Source | Notes |
+|---|---|---|---|
+| #120 | Tell a visitor what kind of case to give this person next: coverage plus the member's own written improvement focus | Owner, 2026-11-16 | Browser-side arithmetic over rows `public_person_cases(id)` already returns. No migration, no new switch, no model call. Uncontroversial half of the request |
+| #121 | Show what a member is sharpening, and their strengths, from the scores they already share | Owner, 2026-11-16 | The contentious half: a judgment about a named person on a page anonymous people read. Framing stance and the counter-argument are in DECISIONS.md; sequence after #120 |
+
 ## Added after the colour audit (2026-11-16; all proposed)
 
 | # | Item | Source | Notes |

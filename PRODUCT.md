@@ -20,8 +20,10 @@ root as the reference) and grew into a small community plus an AI practice partn
 ## Who it is for
 
 - **Primary users:** first-year ("1Y") Booth MBA students who are practising cases and want to track coverage, skills and progress.
-- **Secondary users:** second-year ("2Y") students and firm representatives, who may not want to sign in every time. They can browse
-  the public member directory without an account, and see only what members chose to make public.
+- **Secondary users:** second-year ("2Y") students and firm representatives, who may not want to sign in every time. Since 2026-11-17
+  they reach a member only through that member's own personal link, and see only what that member chose to make public. There is no
+  public directory and no public search any more (issue #96): the owner's evidence was that people were not finding the directory
+  helpful and that the personal link serves the need.
 - **Owner/operator:** one person (the repo owner). There is no in-app admin; moderation, reports and operations happen in the Supabase
   dashboard and CLI.
 - **Scale today:** a small group (the owner's consulting-prep circle, intended to grow to other Booth students). The README estimates
@@ -31,7 +33,7 @@ root as the reference) and grew into a small community plus an AI practice partn
 
 | Role | Can do |
 |---|---|
-| Visitor (no account) | Read the public front page; search and open members who chose "visible without an account" and see only what those members made public. Cannot see anything else. |
+| Visitor (no account) | Read the public front page; open **one** member at a time through that member's own profile link, if they switched "people with my link can see my profile" on, and see only what they made public. Cannot list, search or count members: since the migration of 2026-11-17 the `anon` role has no read at all on `public_profiles` or `public_shared_cases`, and the only way in is `public_person(id)` / `public_person_cases(id)` with an exact member id. |
 | Member (verified email) | Everything personal (log, dashboard, goals, Warm-up, Bucket, live cases, library), plus the Community features, subject to each member's sharing switches. |
 | Owner | Supabase dashboard (users, `message_reports` table, secrets, function deploys), Vercel, and approving every production change. |
 
@@ -69,7 +71,7 @@ assistant has no evidence it was checked by hand in production.
 | Dashboard, trends, coverage, suggestions, Improvement Areas | done | Plain deterministic code in `src/domain/`; no AI. |
 | Accounts (sign-up with verified email, reset, delete account) | done | Open self-service sign-up. **CAPTCHA is not wired in** (recommended in README, not built). Custom SMTP via Resend is configured on the production project. |
 | Profiles and per-switch privacy (members and visitors), per-case override, "only people with my link" | done | Privacy is enforced in the database (RLS plus projection tables), not in screens. |
-| Public front page with visitor directory, recent casers, hero loop, Meet Bucket section | done | Headline currently "Case with Bucket. Track your progress." |
+| Public front page (hero loop, Meet Bucket section, sign-up calls to action) | done | Headline currently "Case with Bucket. Track your progress." The visitor directory and "Cased recently" were removed on 2026-11-17 (#96); the front page no longer promises a searchable public directory. |
 | Community: Members, Find a case, Inbox | done | Five top-level tabs after merging People and Messages into Community. |
 | Practice requests; private messages; block/report/mute/archive | done | Messages poll every 5 s (not live push); not end-to-end encrypted; reports have no in-app admin. |
 | Email notifications for "asked you to case" and "said yes" | done / partly not verified | Resend sender; a one-time marker per request. The owner verified the sign-up emails; the "said yes" email path was left as a user-side check, and whether the "asked you" email was checked is not known. |
@@ -81,7 +83,7 @@ assistant has no evidence it was checked by hand in production.
 | Exhibits redrawn as charts | partial | Bar, stacked, 100% stack, line, bar+line, pie, scatter, multi-panel. Marimekko, bubble, waterfall, dual-axis, maps, flow diagrams, stacked area and scatter trend lines stay as exact tables. |
 | Compare with the book (Claude via Edge Function) | done | |
 | Bucket coach: feedback read (Claude via Edge Function) | done | Model `claude-sonnet-5-5` by default. Needs written feedback on at least 3 cases. |
-| Live case: Practice, Interview and Learning modes | partial — defects found 2026-11-15 | Practice can pause and end early; Interview has neither; Learning (merged 2026-11-15) has no clock and Bucket coaches. The session that built Learning reported it had not started a Learning case on the live site, and had not checked that Vercel had deployed. An audit of all 872 write-ups then found four defects, now issues #81-#83 and #85: **no exhibit chart has ever been drawn in a live case** (the renderer's parser call always returns null, affecting 450 exhibits); every case is timed the same regardless of how much it holds (172 of 847 have one beat); the interviewer's data cannot be reached outside an open exhibit beat, so a member asking for a number while clarifying is refused; and 103 exhibits are hidden from the member by a single soft word in the title. 847 of 872 cases are offered for live practice, and 285 of those have no exhibit at all and run as conversation. See DECISIONS.md "Live-case exhibit audit". |
+| Live case: Practice, Interview and Learning modes | partial — the four audit defects are fixed and deployed; the model's words are still unchecked | The audit of 2026-11-15 found four defects in how every case runs. All four have now shipped and are live: charts are drawn (#81), the clock is sized to how much the case holds (#82), the interviewer's data is reachable at any point (#83), and a soft word no longer hides a numbered book exhibit (#85, deployed 2026-11-17 and verified by content hash). Since then: interview mode has its own nudge ladder that redirects rather than rescues (#94); no exhibit reaches a member cut, and 10,164 scripted runs hand over 12,766 exhibits with zero interviewer-side leaks (#95); and the picker says which cases have exhibits (#87). Measured today: 847 of 872 cases are live-eligible, 285 of them conversation-only, 171 with a single beat. **What is still unverified is the only thing a scripted harness cannot test** — whether Bucket's actual words nudge or solve. That is the $2 pilot, deferred by the owner to the next usage window. Practice can pause and end early; Interview can do neither; Learning has no clock, and a learner who writes nothing cannot move on (#119). Nobody has yet started a Learning case on the live site. |
 | Levels, XP, weekly quests, skill medals, sticker book, level badge shown to members | done | Level shown to members is on by default; one setting hides all rewards. Warm-up earns no XP. |
 | Weekly goal with streak | done | |
 | Warm-up mental math | done | Fifteen question kinds, 30/60/120 s, bests synced to account. |
@@ -89,7 +91,7 @@ assistant has no evidence it was checked by hand in production.
 | Demo mode (16 sample cases, in memory only) | done | |
 | "Free this week" badge on profiles | not started | Owner said "not now". Overlaps with scheduling; retire or reconsider. |
 | Scheduling inside the community (meeting link, propose/confirm/counter/cancel, calendar invite emails) | not started | Proposed as issues #98-#102, phase 1 only (no calendar sign-in). None approved. |
-| Remove the public member search; personal link as the only public way in | not started | Proposed as issues #96 and #97. Until built, the front page still has the visitor directory above. |
+| Remove the public member search; personal link as the only public way in | done (#96) | Shipped 2026-11-17: PR #116 merged and migration `20261124120000_link_only_profiles.sql` applied with the owner's approval. Verified on production that `anon` and `authenticated` have no table or column SELECT on `public_profiles` / `public_shared_cases`, RLS on with zero policies, and `public_person` / `public_person_cases` still executable by `anon`; `npm run test:e2e` passed 60 / 10 skipped afterwards. The two visitor settings collapsed into one, "People with my link can see my profile", off by default. "Reset my link" (#97) is still proposed. |
 | Verified-Booth-only sign-up | not started | Designed so it needs no rebuild (see DECISIONS.md). |
 
 ## Data and privacy model (what must stay true)
