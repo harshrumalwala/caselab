@@ -7,10 +7,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { buildPlan, isInterviewerSideExhibit } from '../../supabase/functions/_shared/liveCase';
-import { givenOnRequest, isFullSolution, planFor, readSolution } from '../../supabase/functions/_shared/liveCaseCoach';
+import { givenOnRequest, interviewerVoice, isFullSolution, planFor, readSolution } from '../../supabase/functions/_shared/liveCaseCoach';
 import { LIVE_EXHIBIT_LIMITS, SOLUTION_EXHIBIT_LIMITS, parseBookSolution, parseSolutionExhibit } from '../domain/bookSolution';
 import { exhibitLoss } from '../domain/exhibitFidelity';
-import { PROMPT_BREACH, PROMPT_RULES, audit, auditCase, formatReport, formatSummary, lossKind, measureCaps, promptAsides, readSolutionFiles, summarise, type AuditRules } from '../../scripts/liveCaseAudit.mjs';
+import { FLAGS, INTERVIEWER_RULES, PROMPT_BREACH, PROMPT_RULES, audit, auditCase, formatReport, formatSummary, lossKind, measureCaps, promptAsides, readSolutionFiles, summarise, type AuditRules } from '../../scripts/liveCaseAudit.mjs';
 
 const rules: AuditRules = {
   isInterviewerSideExhibit,
@@ -19,6 +19,7 @@ const rules: AuditRules = {
   isFullSolution,
   givenOnRequest,
   planFor,
+  interviewerVoice,
   parseBookSolution,
   parseSolutionExhibit,
   exhibitLoss,
@@ -318,6 +319,88 @@ describe('what the prompt says', () => {
     const clean = formatReport(audit([writeUp()], rules, caps), { dir: 'private-data/solutions', files: 1, at: 'now' });
     expect(clean).toContain('## Prompts that are not only the case (0)');
     expect(clean).toContain('None: every prompt is the case and nothing else.');
+  });
+});
+
+// Issue #149: a fact and a clarifying answer are the interviewer's own, and the coach reads one out, in full, when the member asks for
+// it — so a sentence that names the book can reach a member mid-case. Reported, never failed: the reply filter takes the narrator off a
+// fact by itself, and the count that needs the write-up changed is the one it cannot.
+describe('what the interviewer holds', () => {
+  const held = (over: Record<string, unknown>) => one(over).interviewer;
+
+  it('flags a fact that names the book, the casebook or the authors, without failing the command', () => {
+    for (const fact of [
+      'The book says the plant runs three shifts.',
+      'The casebook gives no figure for the rent.',
+      'The authors run this as five questions.',
+      "The book's own working uses 50 weeks a year.",
+    ]) {
+      const c = one({ facts: [fact] });
+      expect(c.interviewer.labels).toEqual(['a fact names the book, the casebook or the authors']);
+      expect(c.flags).toContain('interviewer_names_the_book');
+      expect(PROMPT_BREACH).not.toBe('interviewer_names_the_book');
+      expect(FLAGS).toContain('interviewer_names_the_book');
+    }
+  });
+
+  it('flags a clarifying answer that names the book the same way', () => {
+    const c = one({ clarifyingQuestions: [{ question: 'Which units?', answer: 'The book wants both bottles and revenue.' }] });
+    expect(c.interviewer.labels).toEqual(['a clarifying answer names the book, the casebook or the authors']);
+    expect(c.flags).toContain('interviewer_names_the_book');
+  });
+
+  it('counts the sentences, and separately the ones the reply filter cannot take the book out of', () => {
+    // A narrated fact is read out without its narrator; a fact the book is the subject of has nothing to keep, so it is the write-up
+    // that has to change. Only the second count is work.
+    expect(held({ facts: ['The book says the plant runs three shifts.'] })).toMatchObject({ sentences: 1, afterVoice: 0 });
+    expect(held({ facts: ['The book labels this a second-round case.'] })).toMatchObject({ sentences: 1, afterVoice: 1 });
+    expect(held({ facts: ['Rent is $4,000 a month. The book shows the layout as a sketch.'] })).toMatchObject({ sentences: 1, afterVoice: 1 });
+  });
+
+  it('leaves an interviewer who holds the case and nothing else alone', () => {
+    expect(one({ facts: ['The plant runs three shifts a day.'] }).interviewer).toMatchObject({ labels: [], sentences: 0, afterVoice: 0 });
+    expect(one().flags).not.toContain('interviewer_names_the_book');
+  });
+
+  it('counts them in the summary, by rule', () => {
+    const result = audit(
+      [
+        writeUp({ name: 'Narrated Case', facts: ['The book says the plant runs three shifts.'] }),
+        writeUp({ name: 'Built-in Case', facts: ['The book labels this a second-round case.'], confidence: 'partial' }),
+        writeUp({ name: 'Asked Case', clarifyingQuestions: [{ question: 'Which units?', answer: 'The book wants bottles.' }] }),
+        writeUp({ name: 'Clean Case' }),
+      ],
+      rules,
+      caps,
+    );
+    const s = summarise(result);
+    expect(s).toMatchObject({
+      interviewerNamingTheBook: 3,
+      interviewerNamingTheBookLive: 2, // the partial write-up is counted, and counted again as one live practice never offers
+      interviewerSentences: 3,
+      interviewerAfterVoice: 2, // the narrated one is read out without its narrator; the other two are built around the book
+      interviewerCasesAfterVoice: 2,
+    });
+    expect(s.interviewerRules.get('a fact names the book, the casebook or the authors')).toBe(2);
+    expect(s.interviewerRules.get('a clarifying answer names the book, the casebook or the authors')).toBe(1);
+    const text = formatSummary(s);
+    expect(text).toContain('cases whose facts or answers name the book');
+    expect(text).toContain('still naming it after the reply filter');
+    for (const rule of INTERVIEWER_RULES) expect(text).toContain(rule.label);
+  });
+
+  it('names the case and the rule in the report, and never the fact', () => {
+    const report = formatReport(audit([writeUp({ facts: ['ZZFACT the book labels this a second-round case.'] })], rules, caps), {
+      dir: 'private-data/solutions',
+      files: 1,
+      at: 'now',
+    });
+    expect(report).toContain('## What the interviewer holds that names the book (1)');
+    expect(report).toContain('- Sample Co. — Booth MCG 2026-2027: a fact names the book, the casebook or the authors — 1 sentence(s), 1 the filter cannot take it out of');
+    expect(report).not.toContain('ZZFACT');
+    const clean = formatReport(audit([writeUp()], rules, caps), { dir: 'private-data/solutions', files: 1, at: 'now' });
+    expect(clean).toContain('## What the interviewer holds that names the book (0)');
+    expect(clean).toContain('None: everything the interviewer holds is held as the interviewer.');
   });
 });
 

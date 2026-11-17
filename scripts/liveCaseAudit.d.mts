@@ -1,5 +1,5 @@
 import type { buildPlan, isInterviewerSideExhibit } from '../supabase/functions/_shared/liveCase';
-import type { givenOnRequest, isFullSolution, planFor, readSolution } from '../supabase/functions/_shared/liveCaseCoach';
+import type { givenOnRequest, interviewerVoice, isFullSolution, planFor, readSolution } from '../supabase/functions/_shared/liveCaseCoach';
 import type { ExhibitLimits, parseBookSolution, parseSolutionExhibit } from '../src/domain/bookSolution';
 import type { ExhibitLoss, exhibitLoss } from '../src/domain/exhibitFidelity';
 
@@ -11,6 +11,7 @@ export interface AuditRules {
   isFullSolution: typeof isFullSolution;
   givenOnRequest: typeof givenOnRequest;
   planFor: typeof planFor;
+  interviewerVoice: typeof interviewerVoice;
   parseBookSolution: typeof parseBookSolution;
   parseSolutionExhibit: typeof parseSolutionExhibit;
   exhibitLoss: typeof exhibitLoss;
@@ -40,7 +41,8 @@ export type AuditFlag =
   | 'exhibit_not_whole'
   | 'exhibit_text_shortened'
   | 'prompt_names_the_book'
-  | 'prompt_talks_about_the_case';
+  | 'prompt_talks_about_the_case'
+  | 'interviewer_names_the_book';
 
 export interface ShownExhibit {
   /** Its place in the write-up's own list of exhibits, from 1. */
@@ -86,6 +88,8 @@ export interface CaseAudit {
   cuts: string[];
   /** Which `PROMPT_RULES` the prompt matches, by label. Never the sentence that matched. */
   asides: string[];
+  /** What the interviewer holds that names the book, in labels and counts. Never the sentence that matched. */
+  interviewer: InterviewerAsides;
   flags: AuditFlag[];
 }
 
@@ -132,6 +136,12 @@ export interface AuditSummary {
   promptsNamingTheBook: number;
   promptsAboutTheCase: number;
   promptRules: Map<string, number>;
+  interviewerNamingTheBook: number;
+  interviewerNamingTheBookLive: number;
+  interviewerRules: Map<string, number>;
+  interviewerSentences: number;
+  interviewerAfterVoice: number;
+  interviewerCasesAfterVoice: number;
   caps: Caps;
 }
 
@@ -151,6 +161,28 @@ export interface PromptRule {
 }
 
 export const PROMPT_RULES: PromptRule[];
+export const NAMES_THE_BOOK: RegExp;
+
+/** One kind of sentence the interviewer's own side must not hold. Reported, never failed: no `fails`. */
+export interface InterviewerRule {
+  label: string;
+  test: RegExp;
+}
+
+export const INTERVIEWER_RULES: InterviewerRule[];
+
+/** The interviewer's side of one write-up, in labels and counts: never the sentence that matched. */
+export interface InterviewerAsides {
+  labels: string[];
+  /** How many facts, and how many clarifying answers, name the book. */
+  facts: number;
+  answers: number;
+  /** Sentences of those that name it, and how many of them still do after `interviewerVoice` has had them. */
+  sentences: number;
+  afterVoice: number;
+}
+
+export function interviewerAsides(live: ReturnType<typeof readSolution>, voice: typeof interviewerVoice): InterviewerAsides;
 /** Which rules this prompt matches, by label; never the words that matched. */
 export function promptAsides(prompt: unknown): string[];
 export function namesTheBook(labels: string[]): boolean;

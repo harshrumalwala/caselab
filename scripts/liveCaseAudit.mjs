@@ -33,6 +33,7 @@ export async function loadRules() {
     buildPlan: liveCase.buildPlan,
     readSolution: coach.readSolution,
     isFullSolution: coach.isFullSolution,
+    interviewerVoice: coach.interviewerVoice,
     givenOnRequest: coach.givenOnRequest,
     planFor: coach.planFor,
     parseBookSolution: book.parseBookSolution,
@@ -189,6 +190,9 @@ function renderLoss(rawExhibit, liveExhibit, rules) {
 // What the prompt says
 // ---------------------------------------------------------------------------------------------------------------------------
 
+/** A sentence that says where the case came from: the book, the casebook or the authors. The prompt rule and the interviewer's rule below read the same words. */
+export const NAMES_THE_BOOK = /\b(?:the|this)\s+(?:book|casebook|case book)\b|\bthe\s+authors?\b|\bbook[’']s\b/i;
+
 /**
  * The prompt opens a live case word for word (`openingText`), so it holds the business situation and the question put to the
  * candidate, and nothing else. Each rule below names one kind of sentence that is something else. Only the label travels into the
@@ -202,7 +206,7 @@ export const PROMPT_RULES = [
   {
     label: 'names the book, the casebook or the authors',
     fails: true,
-    test: /\b(?:the|this)\s+(?:book|casebook|case book)\b|\bthe\s+authors?\b|\bbook[’']s\b/i,
+    test: NAMES_THE_BOOK,
   },
   {
     label: 'notes how the page prints something',
@@ -250,6 +254,42 @@ export const namesTheBook = (labels) => labels.some((label) => PROMPT_FAILS.has(
 /** The rest: the prompt describing the case as a case. Reported, for a person to judge. */
 export const talksAboutTheCase = (labels) => labels.some((label) => !PROMPT_FAILS.has(label));
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// What the interviewer's own side says (issue #149)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/**
+ * The member never reads a fact or a clarifying answer, but the coach does, and it reads one out when they ask for it (issue #83), so
+ * the same sentence can reach a member the way a prompt does. These rules are **reported, never failed**, because the engine takes
+ * part of it off by itself: `interviewerVoice` drops the narrator in front of a fact ("the book says X" is read out as X), and only a
+ * sentence the book is built into survives it. Both numbers are counted, so the one that needs the content changed is the visible one.
+ */
+export const INTERVIEWER_RULES = [
+  { label: 'a fact names the book, the casebook or the authors', test: NAMES_THE_BOOK },
+  { label: 'a clarifying answer names the book, the casebook or the authors', test: NAMES_THE_BOOK },
+];
+
+const sentencesOf = (text) => String(text ?? '').split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+
+/**
+ * The interviewer's side of one write-up, measured: which rules it matches, how many of its sentences name the book, and how many
+ * still name it after the reply filter production runs has had them. Labels and counts only, never the sentence.
+ */
+export function interviewerAsides(live, interviewerVoice) {
+  const facts = (live?.facts ?? []).filter((t) => NAMES_THE_BOOK.test(t));
+  const answers = (live?.clarifying ?? []).map((q) => q?.answer ?? '').filter((t) => NAMES_THE_BOOK.test(t));
+  const labels = [];
+  if (facts.length > 0) labels.push(INTERVIEWER_RULES[0].label);
+  if (answers.length > 0) labels.push(INTERVIEWER_RULES[1].label);
+  const named = [...facts, ...answers].flatMap(sentencesOf).filter((s) => NAMES_THE_BOOK.test(s));
+  // What a reply that repeats the sentence comes out as. A reply is one message, so the filter is asked the same question here.
+  const afterVoice = named.filter((s) => {
+    const said = interviewerVoice(s);
+    return said && NAMES_THE_BOOK.test(said);
+  });
+  return { labels, facts: facts.length, answers: answers.length, sentences: named.length, afterVoice: afterVoice.length };
+}
+
 /** Why a write-up is not offered for live practice. Descriptive only: `isFullSolution` is what decides. */
 function whyNotEligible(raw, live) {
   const reasons = [];
@@ -262,7 +302,8 @@ function whyNotEligible(raw, live) {
 
 /** One write-up, measured against the live case's own rules. */
 export function auditCase(raw, rules, caps) {
-  const { isInterviewerSideExhibit, readSolution, isFullSolution, givenOnRequest, planFor, parseBookSolution, parseSolutionExhibit, LIVE_EXHIBIT_LIMITS } = rules;
+  const { isInterviewerSideExhibit, readSolution, isFullSolution, givenOnRequest, planFor, parseBookSolution, parseSolutionExhibit, interviewerVoice, LIVE_EXHIBIT_LIMITS } =
+    rules;
   const live = readSolution(raw);
   const eligible = isFullSolution(raw);
   const plan = live ? planFor(live) : { beats: [] };
@@ -300,6 +341,7 @@ export function auditCase(raw, rules, caps) {
   const cuts = capCuts(raw, caps);
   if (readCount > exhibits.length && live) cuts.push(`exhibits read by the live case: ${readCount} of ${exhibits.length} kept`);
   const asides = promptAsides(raw.prompt);
+  const interviewer = interviewerAsides(live, interviewerVoice);
 
   const notWhole = fidelity.filter((f) => f.live.cut.length + f.full.cut.length > 0);
   const flags = [];
@@ -313,6 +355,7 @@ export function auditCase(raw, rules, caps) {
   if (fidelity.some((f) => f.live.shortened.length + f.full.shortened.length > 0)) flags.push('exhibit_text_shortened');
   if (namesTheBook(asides)) flags.push('prompt_names_the_book');
   if (talksAboutTheCase(asides)) flags.push('prompt_talks_about_the_case');
+  if (interviewer.labels.length > 0) flags.push('interviewer_names_the_book');
 
   return {
     name: String(raw.name ?? ''),
@@ -334,6 +377,7 @@ export function auditCase(raw, rules, caps) {
     fidelity,
     cuts,
     asides,
+    interviewer,
     flags,
   };
 }
@@ -374,6 +418,7 @@ export const FLAGS = [
   'exhibit_text_shortened',
   'prompt_names_the_book',
   'prompt_talks_about_the_case',
+  'interviewer_names_the_book',
 ];
 
 /** The one flag the command fails on: an exhibit a member can be shown is not the whole of what the write-up holds. */
@@ -438,6 +483,13 @@ export function summarise({ cases, folded, caps, read }) {
     promptsNamingTheBook: cases.filter((c) => c.flags.includes(PROMPT_BREACH)).length,
     promptsAboutTheCase: cases.filter((c) => c.flags.includes('prompt_talks_about_the_case')).length,
     promptRules: tally(cases.flatMap((c) => c.asides ?? [])),
+    // The interviewer's own side (issue #149). Counted over every case the coach can read, because a fact is read out in any mode.
+    interviewerNamingTheBook: cases.filter((c) => (c.interviewer?.labels ?? []).length > 0).length,
+    interviewerNamingTheBookLive: cases.filter((c) => c.eligible && (c.interviewer?.labels ?? []).length > 0).length,
+    interviewerRules: tally(cases.flatMap((c) => c.interviewer?.labels ?? [])),
+    interviewerSentences: sum(cases.map((c) => c.interviewer?.sentences ?? 0)),
+    interviewerAfterVoice: sum(cases.map((c) => c.interviewer?.afterVoice ?? 0)),
+    interviewerCasesAfterVoice: cases.filter((c) => (c.interviewer?.afterVoice ?? 0) > 0).length,
     flags: tally(cases.flatMap((c) => c.flags)),
     flagged: cases.filter((c) => c.flags.length > 0).length,
     caps,
@@ -511,6 +563,15 @@ export function formatSummary(s) {
     'By rule',
     ...counted(s.promptRules, PROMPT_RULES.map((rule) => rule.label)),
     '',
+    'What the interviewer holds (read out when the member asks: issue #83)',
+    pad('cases whose facts or answers name the book', s.interviewerNamingTheBook),
+    pad('  of those, live-eligible', s.interviewerNamingTheBookLive),
+    'By rule',
+    ...counted(s.interviewerRules, INTERVIEWER_RULES.map((rule) => rule.label)),
+    pad('sentences that name the book', s.interviewerSentences),
+    pad('  still naming it after the reply filter', s.interviewerAfterVoice),
+    pad('  cases with one of those', s.interviewerCasesAfterVoice),
+    '',
     'Parser caps (measured from parseBookSolution)',
     ...Object.entries(CAP_LABEL).map(([key, label]) => pad(`  ${label}`, s.caps[key])),
     '',
@@ -550,6 +611,8 @@ function caseLines(c) {
   for (const f of c.fidelity ?? []) lines.push(...fidelityLines(f));
   for (const cut of c.cuts) lines.push(`  cut    ${cut}`);
   if ((c.asides ?? []).length > 0) lines.push(`  prompt ${c.asides.join('; ')}`);
+  if ((c.interviewer?.labels ?? []).length > 0)
+    lines.push(`  held   ${c.interviewer.labels.join('; ')} — ${c.interviewer.sentences} sentence(s), ${c.interviewer.afterVoice} the reply filter cannot take it out of`);
   lines.push(`flags: ${c.flags.join(', ') || 'none'}`);
   return lines.join('\n');
 }
@@ -560,6 +623,7 @@ export function formatReport(result, { dir, files, at }) {
   const notWhole = result.cases.filter((c) => c.flags.includes(BREACH));
   const shortened = result.cases.filter((c) => c.flags.includes('exhibit_text_shortened'));
   const prompts = result.cases.filter((c) => (c.asides ?? []).length > 0);
+  const held = result.cases.filter((c) => (c.interviewer?.labels ?? []).length > 0);
   return [
     '# Live-case suitability report',
     '',
@@ -597,6 +661,9 @@ export function formatReport(result, { dir, files, at }) {
     '- `prompt_talks_about_the_case`: the prompt describes the case as a case — how hard it is, what kind it is, how it is run, how the',
     '  interviewer behaves, how the candidate should answer. Reported, not failed: a prompt can fairly name an interviewer who is a',
     '  character in the story, so a person decides.',
+    '- `interviewer_names_the_book`: a fact or a clarifying answer the interviewer holds names the book, the casebook or the',
+    '  authors. The coach reads a fact out when the member asks for it, so it can reach a member the way a prompt does. Reported, not',
+    '  failed: the reply filter takes the narrator off a fact by itself, and the count that matters is the one it cannot.',
     '',
     `## Exhibits that do not reach the member whole (${notWhole.length})`,
     '',
@@ -624,6 +691,20 @@ export function formatReport(result, { dir, files, at }) {
     ...(prompts.length > 0
       ? prompts.map((c) => `- ${c.name}${c.book ? ` — ${c.book}` : ''}: ${c.asides.join('; ')}`)
       : ['None: every prompt is the case and nothing else.']),
+    '',
+    `## What the interviewer holds that names the book (${held.length})`,
+    '',
+    'A fact and a clarifying answer are never shown to the member, and the coach reads one out, in full, when they ask for it. A sentence',
+    'that names the book can therefore reach a member mid-case. `interviewerVoice` (the filter every reply goes through) takes the',
+    'narrator off a fact it is in front of — "the book says X" is read out as X — so the second count is the one that needs the write-up',
+    'changed: the sentences the book is built into. Rule labels and counts only, never the sentence.',
+    '',
+    ...(held.length > 0
+      ? held.map(
+          (c) =>
+            `- ${c.name}${c.book ? ` — ${c.book}` : ''}: ${c.interviewer.labels.join('; ')} — ${c.interviewer.sentences} sentence(s), ${c.interviewer.afterVoice} the filter cannot take it out of`,
+        )
+      : ['None: everything the interviewer holds is held as the interviewer.']),
     '',
     ...(result.folded.length > 0
       ? ['## Folded duplicate names', '', ...result.folded.map((f) => `- ${f.name} (kept: ${f.keptName})`), '']

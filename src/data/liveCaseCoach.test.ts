@@ -970,11 +970,37 @@ describe("Bucket's voice: the three tells the pilot found (issue #131)", () => {
     expect(withoutSourceNarration('The exhibit shows 200 shops in 2021. What do you make of it?')).toBe('The exhibit shows 200 shops in 2021. What do you make of it?');
   });
 
+  it('treats the book, the casebook and the authors as places a fact is written, like any other (issue #149)', () => {
+    expect(withoutSourceNarration('The book says the plant runs three shifts a day.')).toBe('The plant runs three shifts a day.');
+    expect(withoutSourceNarration('The casebook says the contract is renewed every two years.')).toBe('The contract is renewed every two years.');
+    expect(withoutSourceNarration('The case book notes that the two sites share one warehouse.')).toBe('The two sites share one warehouse.');
+    expect(withoutSourceNarration('The authors say the client has no debt.')).toBe('The client has no debt.');
+    expect(withoutSourceNarration('According to the book, the rental fee is $40 a day.')).toBe('The rental fee is $40 a day.');
+    expect(withoutSourceNarration('Yes, the book states that the price has not moved since 2019.')).toBe('Yes, the price has not moved since 2019.');
+    // A sentence of the case that happens to hold the word stays whole: "book" is only a source in front of a fact.
+    expect(withoutSourceNarration('The client wants to book 300 more rooms a month.')).toBe('The client wants to book 300 more rooms a month.');
+  });
+
+  it('cannot unsay a book the sentence is built around, which is why the fact itself has to be written without one (issue #149)', () => {
+    // Measured on the write-ups: a fact that narrates ("the book says X") comes out as X; a fact where the book is the subject of the
+    // sentence has no X to keep, so no filter saves it and the content is what changes. This pins the line between the two.
+    expect(withoutSourceNarration('The book labels this a second-round case.')).toContain('The book labels this');
+    expect(withoutSourceNarration("The book's reference figure is 4 million households.")).toContain("The book's reference figure");
+  });
+
   it('takes the narration off what the member reads', async () => {
     const v = await begin();
     w.script.reply = () => turn('The case says the army pays a fixed per diem per soldier.', { assessment: 'progress', data_request: true });
     const r = view(await call({ type: 'say', sessionId: v.sessionId, text: 'Who pays for the rooms?' }));
     expect(said(r)).toBe('The army pays a fixed per diem per soldier.');
+  });
+
+  it('answers a request for data without the book, when the model reads a fact out the way it is written (issue #149)', async () => {
+    const v = await begin();
+    w.script.reply = () => turn('The book says the army pays a fixed per diem per soldier.', { assessment: 'progress', data_request: true });
+    const r = view(await call({ type: 'say', sessionId: v.sessionId, text: 'Who pays for the rooms?' }));
+    expect(said(r)).toBe('The army pays a fixed per diem per soldier.'); // the figure and the fact stay; the book does not reach the member
+    expect(said(r)).not.toMatch(/\bbook\b|\bauthors?\b/i);
   });
 
   it('moves on and says nothing else, when the model summarises the exhibit it is leaving', async () => {

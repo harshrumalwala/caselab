@@ -90,7 +90,23 @@ assistant saw a claim (for example a build session's report) but did not check i
   case as a case** (how it is run, how the interviewer behaves, what kind it is) — each needs a person to judge, because an interviewer
   can be a character in the story; and the interviewer's side of a write-up still speaks of the book (**50 write-ups have a fact that
   mentions it**, plus 18 clarifying answers; steps and recommendations mention it in hundreds, which is right for the Full solution
-  screen but not for something a coach may read out mid-case). Neither was in scope for #132.
+  screen but not for something a coach may read out mid-case). Neither was in scope for #132; the interviewer's side was measured and
+  fixed by #149, the bullet below.
+- **The interviewer's own facts named the book, and 44 sentences of them would have reached a member** (issue #149, 2026-11-17). A fact
+  and a clarifying answer are never shown to the member, but the coach reads one out, in full, when they ask for it (#83), so they take
+  the path the prompt took. Measured with the engine's own reply filter rather than with real model runs (which the issue did not
+  authorise): **65 cases held one (50 a fact, 17 a clarifying answer; 63 live-eligible), 72 sentences in all**, and `interviewerVoice`
+  cleaned only 28 of them. The 28 are the narrated shape — "the book says X" is read out as X — and the **44 others have the book as the
+  subject of the sentence** ("the book labels this ...", "the book's reference figure is ..."), where there is no fact left once the
+  book is taken out, so no filter can save them. Those 44, in 41 cases across 9 files, were rewritten on 2026-11-17 in
+  `private-data/solutions/*.json`, keeping the meaning, the figures and the order. `npm run audit:live` now reports
+  `interviewer_names_the_book` with both counts, so the second one cannot drift back above zero unnoticed; it is reported, never failed,
+  because the filter genuinely handles the narrated shape. **The write-ups are fixed; production only changes when the regenerated
+  `supabase/seeds/library.sql` is loaded** (the owner's call; not done — 13,225,109 bytes, 575 smaller). Two things left: the voice
+  filter's new source words (`casebook`, `case book`, `authors`) are in `supabase/functions/_shared/liveCaseCoach.ts` and only take
+  effect after `npx supabase functions deploy live-case`; and **16 of the 28 sentences left are dropped whole** by the reply filter
+  rather than cleaned, because the same sentence also talks about "the candidate" — so a reply that was only that sentence becomes the
+  stand-in line, and the member does not get the fact they asked for. That is the #132 pattern one layer in again, it is not about the book, and it has not been raised as an issue.
 - **A chart kind we do not draw is not counted as a loss.** `exhibitLoss` ignores a chart whose kind is outside `DRAWN_KINDS` (marimekko,
   waterfall, bubble, dual axis, maps): the exhibit stays the book's own table, which is the settled trade (ROADMAP R15). No write-up
   carries such a chart today (measured: 0 of 1,792 exhibits on 2026-11-16), so the rule costs nothing; if one is ever added, the member
