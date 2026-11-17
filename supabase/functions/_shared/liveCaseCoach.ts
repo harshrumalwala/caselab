@@ -903,7 +903,11 @@ export function hasTell(sentence: string): boolean {
   return REFUSES.test(sentence) && AN_ANSWER.test(sentence) && !NOT_HELD.test(sentence);
 }
 
-const SOURCE = '(?:case information|case|exhibit|prompt|write-?up|book|brief|background|material|data|information)';
+// Where a fact can be said to be written. The book, the casebook and the authors are on the list because the interviewer's own notes
+// sometimes name them (issue #149): wherever the model repeats one of those in front of a fact, the fact stays and the source goes.
+// "casebook" is listed before "case" so the longer word is the one that matches.
+const SOURCE =
+  '(?:case ?book|case information|case|exhibit|prompt|write-?up|book|authors?|brief|background|material|data|information)';
 const SAYS =
   '(?:says?|said|states?|stated|tells us|tell us|told us|notes?|mentions?|indicates?|specifies|specify|confirms?|reports?|shows? that|is clear that|makes? (?:it )?clear that)';
 /** "The case says ...", "According to the exhibit, ...": the narrator's voice in front of a fact the interviewer simply knows. */
