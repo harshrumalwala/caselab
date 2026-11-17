@@ -41,7 +41,7 @@ export function SharpeningCard({ name, shared, note }: { name: string; shared: S
       <CardHeader
         titleId="sharpening-title"
         title={`What ${name} is sharpening`}
-        subtitle={`${name} chose to show this, worked out from the skill scores on the ${plural(view.rated, 'case')} they share.`}
+        subtitle={`From the skill scores on the ${plural(view.rated, 'case')} ${name} shares.`}
         icon={<Sparkles className="size-4" />}
       />
 
@@ -51,8 +51,7 @@ export function SharpeningCard({ name, shared, note }: { name: string; shared: S
       </div>
 
       <p className="mt-4 text-xs text-muted">
-        Where {name}'s practice is pointed, in their own skill list. A useful case to give them asks for what they're
-        sharpening and leans on what's already strong.
+        A useful case to give {name} asks for what they're sharpening and leans on what's already strong.
       </p>
       {note}
     </Card>
@@ -86,7 +85,7 @@ export function SharpeningPreview({ name, shared, on }: { name: string; shared: 
         <p className="mt-3 rounded-xl bg-surface-2 px-4 py-3 text-xs text-ink-2">
           {on
             ? 'This is on your link now, word for word.'
-            : "This joins your link when you turn on What I'm sharpening. Until then the card is yours alone."}
+            : "This joins your link when you turn on What I'm sharpening."}
         </p>
       }
     />

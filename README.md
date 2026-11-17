@@ -246,13 +246,16 @@ didn't already make.
 
 - **Coverage.** The case types and industries they have **never shared**, and those they have **shared once**, the ones interviews
   use most first, at most three names each and then "+ n more". The catch-all "Other" is never named as something to practise.
-- **Their own focus.** If they share the **Improvement focus** tag, the one they tagged most often, with the count behind it and
-  labelled as theirs. It is the only judgment of the person on the page, and it is their own: skill scores are not read here.
 - **Silence when the rows can't support it.** A member who shares no case history gets no section at all. Below five shared cases
   (`MIN_CASES_FOR_TRENDS`, the same minimum the Dashboard's suggestions use) it shows only what is in those cases and suggests nothing.
 - **Unpracticed is neutral.** A case type nobody has shared is new ground, not a weakness — the same stance as the Dashboard's grey
-  unpracticed industries — and the section says so in as many words. Burned cases and interviewed cases are not part of a case log, so
-  they can't reach any of these counts.
+  unpracticed industries. The chips carry that in their own words ("Nothing shared yet"), and since 2026-11-17 no sentence underneath
+  explains it: the owner's instruction was that a card which tells the reader how to read itself reads as machine-written. Burned cases
+  and interviewed cases are not part of a case log, so they can't reach any of these counts.
+- **The reader is not told how to read it** (2026-11-17, issue #177's PR, at the owner's request after opening their own link). The
+  section is the two lanes of chips and one line of provenance. The member's own **Improvement focus** tag ("*name*'s own focus:
+  Framework, tagged on 4 of the 15 cases they share") was removed, because it did not help anyone decide what case to give; so was the
+  caveat under the lists. `whatToGiveNext` still returns `focus`; nothing reads it (see KNOWN_ISSUES).
 
 Signed-in members are unchanged: **Find a case for them** stays their first tab, because overlap with a real log is the better
 answer, and they don't see this section. The rules are plain functions in `src/domain/giveNext.ts` with unit tests, and like every
@@ -272,7 +275,8 @@ up-to-five ratings) for the second — worked out in the browser from the `skill
 - **Names only.** The skills are named and nothing else: no average, no position, no ranking of all eight, and no superlative. A skill
   is on one list, the other, or neither. The switch decides whether CaseLab writes that summary, not whether figures are on the page:
   the per-case scores and the **Shared performance** averages under the card belong to **Skill scores**, which the member switched on
-  separately, and the switch's own words say so.
+  separately. Since 2026-11-17 the switch's own line says what it writes ("Whether CaseLab sums up the skill scores you already
+  share ...") instead of promising "no numbers, no ranking", which was true of the card and false of the page below it.
 - **The line at the top says what the page carries.** The "Shares ..." sentence under a member's name reads the summary the same way
   the card does (`sharingShown` in `src/domain/sharpening.ts`), so it offers "what they're sharpening" only where the summary is
   really there: not below the minimum, not without shared skill scores, and not on the page another member sees, which never carries
@@ -814,8 +818,11 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **What to give someone next** (the link holder's summary): the rules (never shared / shared once in interview order, "Other" never
   named, industries they typed themselves counted but never called a gap, their own focus tag with ties broken by the app's skill
   order, coverage only below five shared cases, nothing at all with no shared history) and the visitor's screen (the two lanes and
-  their "+ n more", the focus line, the quiet state, nothing for a member who shares nothing, burned cases out of the numbers, the
-  member's own profile unchanged, and no request or network call that the page didn't already make)
+  their "+ n more", the quiet state, the improvement tag left off the card, nothing for a member who shares nothing, burned cases out
+  of the numbers, the member's own profile unchanged, and no request or network call that the page didn't already make)
+- **The profile link's register**: both cards read for sentences that interpret, hedge or restate what is already on them (the
+  removed caveat, the removed focus block, "chose to show this", "no numbers, no ranking"), and the **What I'm sharpening** switch
+  read for a line that says what it writes rather than what it leaves out
 - **Accounts**: sign-up, verification, resend, expired links, password reset, onboarding with everything off by default
 - **Supabase layer**: row mapping that round-trips every field, a repository run against a fake Supabase (paging past 1000 rows, chunked upserts, replace-without-data-loss, errors surfaced), friendly error messages, configuration checks
 - **Calculations**: week boundaries, averages that ignore missing ratings, behavioral combining, trend windows, coverage, matrix, weekly history

@@ -321,6 +321,15 @@ move whenever the file does, so the quoted words are the reliable part):
   the switches set them. Two small consequences: in the member's own preview the line is computed from an empty list while the rows are
   loading, so "and what they're sharpening" appears a moment after the rest of the sentence; and a reader who is a member never sees
   the summary offered, which is right today but would need revisiting if members were ever given the card.
+- **`whatToGiveNext` still computes a `focus` and nothing reads it** (2026-11-17). The owner asked for the "*name*'s own focus"
+  block to come off the profile link, so the screen dropped it; `src/domain/giveNext.ts` still returns the field and its unit tests
+  still cover it, on the view that the rule is sound and may be wanted elsewhere. Delete it, or use it, rather than leaving it
+  indefinitely.
+- **The copy rule the owner gave on 2026-11-17 is not enforceable by a test, only sampled by one.** "Cut any sentence that tells the
+  reader how to interpret what is above it, hedges against a misreading nobody has made, or restates in prose what the layout already
+  shows." The new test in `src/PublicSite.test.tsx` ("the profile link says its piece and stops") matches the phrasings that were
+  removed and the obvious neighbours; a fresh explanatory sentence worded some other way goes straight through. The rule itself is
+  not written down in `CLAUDE.md` beside the "never a changelog" convention yet, which is where it belongs (the owner's call).
 - **The two lists in the sharpening card wrap differently inside the preview** (noted by issue #173, out of scope for #177). The card's
   `sm:grid-cols-2` keys off the viewport, not the container, so in the narrow **What others see** panel "SHARPENING NOW" can wrap to two
   rows while "STRONG ALREADY" stays on one. Ragged, legible, and only in the preview.
