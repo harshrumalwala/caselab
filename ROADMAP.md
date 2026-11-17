@@ -124,17 +124,26 @@ pilot, run on 2026-11-17".
 | #125 | A runner for real-model pilot cases, with the spend read from the database and a hard cap | **done** (PR #126), `npm run pilot:live`. One defect found on first contact with production and fixed the same day (#134, PR #135) |
 | the $2 pilot | Real-model interview runs: does Bucket nudge or solve? | **done, 2026-11-17: 6 starts, $0.1485 of the $2.00.** Four complete interview cases from the two newest books, one practice/interview A/B, one verification run. Findings are #128-#134 below |
 | #131 | Three wording defects in Bucket's replies (third person, "the case says", `advance` summarising) | **done, deployed and verified on the real model** (PR #136): the same rung on the same case now says only "Let's move on to the next piece." |
-| #128 | A case with exhibits drops every analytical step that has no exhibit (`buildPlan` line 183 is exhibits **or** steps) | `proposed` — **the largest live-case defect found so far**: 502 of 847 cases, 1,567 steps, and the feedback then marks the member down for the step the case never ran |
-| #130 | An interview reply confirms the member's guess before they have earned it | `proposed` — guessing works, and it is why the ladder rarely engages. An A/B found interview and practice replies near-identical at the rungs a candidate reaches |
-| #129 | A result pre-printed on the interviewer's sheet is handed over as if it were data | `proposed` — predicted word for word by the rubric in DECISIONS.md; `leaks()` cannot see it, because it is paraphrased arithmetic |
-| #133 | The brainstorm always runs last, and a second brainstorm never runs | `proposed`; sequence after #128, which decides the ordering rule |
-| #132 | 17 case prompts talk about the book instead of to the candidate | `proposed` — **the pilot's only content finding**; needs a seed reload, so it joins the group waiting on the owner |
+| #128 | A case with exhibits drops every analytical step that has no exhibit | **done, deployed and proved on the real model** (PR #141). Beats per case 2.98 → 4.86, one-beat cases 171 → 10, planned median 31 → 39 min. Boothbucks' close-or-invest step reaches the member and the feedback no longer marks them down for skipping it |
+| #129 | A result pre-printed on the interviewer's sheet is handed over as if it were data | **done, deployed and proved on the real model** (PR #138). The turn that volunteered a computed $8B now reads out only the inputs; #83's handover is not regressed |
+| #131 | Three wording defects in Bucket's replies | **done, deployed and proved on the real model** (PR #136). `advance` now says only "Let's move on to the next piece." |
+| #142 | Asking outright for the answer showed the failure message | **done and deployed** (PR #144); unverified on the real model |
+| #130 | An interview reply confirms the member's guess before they have earned it | **done and deployed** (PR #145), **real-model A/B pending** — both throwaway accounts are at 4 starts per 24 hours until 03:05 UTC. Deployed on deterministic evidence as a deliberate trade; see DECISIONS.md. The author's prediction is in the PR and will be reported line by line |
+| #133 | The brainstorm always runs last, and a second brainstorm never runs | **done and deployed** (PR #148); 118 brainstorms in 110 cases were out of place, 21 cases have more than one. Unverified on the real model |
+| #132 | 17 case prompts talk about the book instead of to the candidate | **fixed in `private-data/` and merged** (PR #146); the audit now fails on the condition. **Takes effect only on the next seed reload**, which is the owner's call |
+| #143 #151 | Labels cut to length that the audit could not see (a `belowRows` row label; a reference line's label) | **measurement fixed** (PRs #147, #153). 3 exhibits and 1 exhibit respectively, out of 1,792; the content fixes join the reload batch |
+| #149 | The interviewer's own facts name the book, in 50 write-ups (49 live-eligible) | `proposed` — **measure before rewriting**: facts are read out to a member on request, but the engine's voice rules may already strip the phrase |
+| #150 | The progress strip never marks Recommendation in a case with no brainstorm | `approved`, in build |
 | #86 | A switch to take one case out of live practice | closed, not planned (see DECISIONS.md); the emergency exit is setting one row's `confidence` to `partial` |
 
-**Content fixes waiting on one seed reload** (put to the owner as a single request on 2026-11-17): Contagion Containment and Bumpers R
-Us are candidate exhibits hidden by captions that are wrong in `private-data/` rather than by the rule; seven cases carry an exhibit
-label cut to length, which is a shorter line in the write-up and not a bigger cap (measured on a fresh `npm run audit:live`; an earlier
-note counted nine labels across these); and #132's 17 prompts. ROADMAP R21-R23 still apply to the tooling and the backup.
+**One seed reload is done; a second batch is queued.** The owner approved a reload on 2026-11-17 and it was run: 20 parts, no errors,
+counts back at 872 / 872 / 872, `npm run test:e2e` 60 passed / 10 skipped. It carried the Contagion Containment and Bumpers R Us captions
+and nine cut exhibit labels.
+
+**Waiting for the next reload, which needs the owner's approval:** #132's 17 case prompts, #143's three `belowRows` row labels, #151's one
+reference-line label (Soap Co.), and the 13 further prompts that describe the case without naming the book. They batch on purpose —
+teach the measurement first, then measure, then fix the content once; two reloads of a 13 MB seed to save a day is a bad trade.
+ROADMAP R21-R23 still apply to the tooling and the backup.
 
 **What the pilot cost, for anyone planning the next one.** A whole interview case, prompt to Sonnet feedback, is about **$0.03** — a
 third of the README's estimate. The binding constraint is not money but **4 live-case starts per account per day** (`MAX_STARTS_PER_DAY`),
