@@ -161,6 +161,52 @@ describe('picking a case', () => {
     await screen.findByText(/Should a hotel chain open a new property/);
   });
 
+  it('says which cases have exhibits to work through and which are all discussion, before one is picked', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    await user.click(await screen.findByRole('button', { name: /Market Entry/ }));
+    expect(await screen.findByRole('button', { name: /Army Hotel/ })).toHaveTextContent('With exhibits');
+    await user.click(screen.getByRole('button', { name: /All lanes/ }));
+    await user.click(await screen.findByRole('button', { name: /Profitability/ }));
+    const quiet = await screen.findByRole('button', { name: /Duck Island Beer Company/ });
+    expect(quiet).toHaveTextContent('All discussion');
+    expect(quiet).not.toHaveTextContent('With exhibits');
+    expect(screen.getByText(/Others are all discussion, with nothing on screen/)).toBeInTheDocument();
+  });
+
+  it('lets the member keep to one kind of case, and "Surprise me" keeps to it too', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    await user.click(await screen.findByRole('tab', { name: 'All discussion' }));
+    expect(await screen.findByRole('button', { name: /Profitability/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Market Entry/ })).not.toBeInTheDocument(); // the lane with only an exhibit case is gone
+    await user.click(screen.getByRole('button', { name: /Surprise me with a case/ }));
+    await screen.findByText(/How many cases of craft beer/); // never the exhibit case
+  });
+
+  it('keeps to the cases with exhibits when that is what was asked for', async () => {
+    const env = createFakeEnv();
+    const user = await openLive(env);
+    await user.click(await screen.findByRole('tab', { name: 'With exhibits' }));
+    expect(screen.queryByRole('button', { name: /Profitability/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Surprise me with a case/ }));
+    await screen.findByText(/Should a hotel chain open a new property/);
+  });
+
+  it('still lists every case, with no labels and no filter, when the signal cannot be worked out', async () => {
+    const env = createFakeEnv();
+    env.live.exhibitSignal = async () => {
+      throw new Error('TypeError: Failed to fetch');
+    };
+    const user = await openLive(env);
+    const lane = await screen.findByRole('button', { name: /Market Entry/ });
+    expect(screen.queryByRole('tab', { name: 'All discussion' })).not.toBeInTheDocument();
+    await user.click(lane);
+    const army = await screen.findByRole('button', { name: /Army Hotel/ });
+    expect(army).not.toHaveTextContent('With exhibits');
+    expect(army).not.toHaveTextContent('All discussion');
+  });
+
   it('has Bucket guiding from the first screen to the last', async () => {
     const env = createFakeEnv();
     const user = await startCase(env);

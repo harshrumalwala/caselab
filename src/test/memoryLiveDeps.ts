@@ -6,6 +6,7 @@
 // app's own `LiveClient`; the dry run uses the deps directly, because it has to read the saved session back. Everything here is plain
 // TypeScript that Node's type stripping can read, so keep enums, namespaces and parameter properties out of it.
 import {
+  forgetExhibitSignal,
   isFullSolution,
   type CaseInfo,
   type LiveDeps,
@@ -73,6 +74,9 @@ const defaultReply = (kind: string): unknown =>
 
 /** The sessions table, the library, the clock and the model, in memory. Nothing of the engine is reimplemented here. */
 export function createMemoryLiveDeps(options: MemoryLiveOptions): MemoryLiveDeps {
+  // A new in-memory world is a new library, so the picker's signal (kept in the handler's own memory, as it is in the Edge Function)
+  // must not be the one the last test or the last dry run left behind.
+  forgetExhibitSignal();
   const now = options.now ?? (() => Date.now());
   const db = new Map<string, StoredSession>();
   const starts: number[] = [];
@@ -82,6 +86,9 @@ export function createMemoryLiveDeps(options: MemoryLiveOptions): MemoryLiveDeps
   const deps: LiveDeps = {
     now,
     loadCase: async (id) => options.cases[id] ?? null,
+    eachCaseSolution: async (visit) => {
+      for (const [id, c] of Object.entries(options.cases)) visit({ id, solution: c.solution });
+    },
     pickCase: async () => Object.keys(options.cases).find((id) => isFullSolution(options.cases[id].solution) && !(options.logged?.() ?? []).includes(id)) ?? null,
     getSession: async (userId, id) => {
       const s = db.get(id);

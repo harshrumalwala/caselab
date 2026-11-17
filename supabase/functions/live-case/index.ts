@@ -28,6 +28,8 @@ const DRAFTS = ['clarify', 'framework', 'direction', 'exhibit', 'brainstorm', 'r
 /** Accepts only the shapes of request the app sends; anything else is a bad request. */
 function readAction(b: Record<string, unknown>): LiveAction | null {
   switch (b.type) {
+    case 'exhibits':
+      return { type: 'exhibits' };
     case 'start':
       return (b.libraryId === undefined || b.libraryId === null || isId(b.libraryId)) && (b.mode === undefined || b.mode === 'practice' || b.mode === 'interview' || b.mode === 'learning')
         ? { type: 'start', libraryId: (b.libraryId as string | null | undefined) ?? null, mode: (b.mode as 'practice' | 'interview' | 'learning' | undefined) ?? 'practice' }
@@ -123,6 +125,17 @@ Deno.serve(async (req) => {
       ]);
       if (!info || !sol) return null;
       return { info: { name: info.name, book: info.book, caseType: info.case_type, industry: info.industry } as CaseInfo, solution: sol.solution };
+    },
+    // Every write-up, a page at a time, so the picker's signal can be worked out from each case's own plan. A page is handed over and
+    // then dropped, so the whole library is never held at once, and the result (one yes-or-no per case) is kept for EXHIBIT_SIGNAL_MS.
+    eachCaseSolution: async (visit) => {
+      const PAGE = 200;
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await db.from('library_case_solutions').select('case_id, solution').order('case_id').range(from, from + PAGE - 1);
+        if (error) throw error;
+        for (const row of data ?? []) visit({ id: row.case_id as string, solution: row.solution });
+        if ((data?.length ?? 0) < PAGE) return;
+      }
     },
     pickCase: async (userId) => {
       const { data } = await db.rpc('live_case_pick_for', { p_user: userId });

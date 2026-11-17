@@ -190,6 +190,16 @@ export function openingText(s: LiveSolution): string {
 }
 
 /**
+ * Will a live case on this write-up have book exhibits to work through, or will it run on the book's steps with nothing on screen? This is
+ * the picker's label, and it is the plan itself that answers: the same `readSolution` and `buildPlan` the case is started with, so the
+ * label cannot promise the member something the case then does not do.
+ */
+export function hasExhibitBeats(raw: unknown): boolean {
+  const solution = readSolution(raw);
+  return solution !== null && planFor(solution).beats.some((b) => b.kind === 'exhibit');
+}
+
+/**
  * A write-up we can run a case on: marked complete (not "partial"), with the prompt, a recommendation, and something to work through
  * (exhibits or steps). The database applies the same rule to the list of cases and to "surprise me".
  */
@@ -813,6 +823,7 @@ export const MAX_COACH_CALLS = 90;
 export const MAX_FEEDBACK_ATTEMPTS = 3;
 
 export type LiveAction =
+  | { type: 'exhibits' }
   | { type: 'start'; libraryId?: string | null; mode?: LiveMode }
   | { type: 'resume'; sessionId?: string }
   | { type: 'ready'; sessionId: string }
@@ -828,9 +839,16 @@ export type LiveAction =
   | { type: 'finish'; sessionId: string }
   | { type: 'logged'; sessionId: string; caseId: string };
 
+/** One case in the picker, and whether it has exhibits to work through. The id and the yes-or-no are all of it: never a title, never a figure. */
+export interface ExhibitSignal {
+  id: string;
+  exhibits: boolean;
+}
+
 export type LiveResponse =
   | { status: 'ok'; view: LiveView }
   | { status: 'saved'; serverNow: number }
+  | { status: 'exhibits'; cases: ExhibitSignal[] }
   | { status: 'refused'; message: string; view?: LiveView }
   | { status: 'failed'; message: string };
 
@@ -838,6 +856,8 @@ export interface LiveDeps {
   now(): number;
   /** The case's name, book, type and industry (public), and its write-up (private), or null if it has none. */
   loadCase(libraryId: string): Promise<{ info: CaseInfo; solution: unknown } | null>;
+  /** Every case's write-up, one at a time so none of them is held all at once. Only for working out the picker's signal. */
+  eachCaseSolution(visit: (c: { id: string; solution: unknown }) => void): Promise<void>;
   /** A case with a write-up that this member has not logged, at random. */
   pickCase(userId: string): Promise<string | null>;
   getSession(userId: string, sessionId: string): Promise<StoredSession | null>;
@@ -855,6 +875,33 @@ const DAY = 24 * 60 * 60 * 1000;
 
 const fingerprint = (s: SessionState): string => `${s.stage}|${s.frameworkPhase}|${s.messages.length}|${s.beats.map((b) => b.outcome).join(',')}`;
 
+/**
+ * How long the picker's signal is kept before it is worked out again. Reading every write-up is the one expensive thing this function
+ * does (about 10 MB and a sixth of a second for 872 cases on the measurements in PR #118), and the answer only changes when the library
+ * is reloaded, so it is worked out at most this often and kept in memory meanwhile. Nothing member-specific is in it.
+ */
+export const EXHIBIT_SIGNAL_MS = 30 * 60 * 1000;
+
+let signalCache: { at: number; cases: ExhibitSignal[] } | null = null;
+
+/** Throws the kept signal away, so the next request works it out again. For tests, and for anything that reloads the library. */
+export const forgetExhibitSignal = (): void => {
+  signalCache = null;
+};
+
+/** Which of the cases a member can practise have exhibits to work through: one yes-or-no per case, from each case's own plan. */
+async function exhibitSignal(deps: LiveDeps): Promise<ExhibitSignal[]> {
+  const now = deps.now();
+  if (signalCache && now >= signalCache.at && now - signalCache.at < EXHIBIT_SIGNAL_MS) return signalCache.cases;
+  const cases: ExhibitSignal[] = [];
+  // Only the cases the catalogue offers: the same `isFullSolution` the list and "surprise me" are built on.
+  await deps.eachCaseSolution((c) => {
+    if (isFullSolution(c.solution)) cases.push({ id: c.id, exhibits: hasExhibitBeats(c.solution) });
+  });
+  signalCache = { at: now, cases };
+  return cases;
+}
+
 async function viewOf(deps: LiveDeps, stored: StoredSession): Promise<LiveView> {
   const c = await deps.loadCase(stored.libraryId);
   return toView(stored, c ? readSolution(c.solution) : null, c?.info ?? null, deps.now());
@@ -862,6 +909,8 @@ async function viewOf(deps: LiveDeps, stored: StoredSession): Promise<LiveView> 
 
 export async function handleLive(userId: string, action: LiveAction, deps: LiveDeps): Promise<LiveResponse> {
   const refuse = (message: string, view?: LiveView): LiveResponse => ({ status: 'refused', message, ...(view ? { view } : {}) });
+
+  if (action.type === 'exhibits') return { status: 'exhibits', cases: await exhibitSignal(deps) };
 
   if (action.type === 'start') {
     const active = await deps.getActive(userId);

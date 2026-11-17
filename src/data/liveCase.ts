@@ -1,9 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { CaseInfo, Feedback, LiveAction, LiveResponse, LiveView, PublicExhibit } from '../../supabase/functions/_shared/liveCaseCoach';
+import type { CaseInfo, ExhibitSignal, Feedback, LiveAction, LiveResponse, LiveView, PublicExhibit } from '../../supabase/functions/_shared/liveCaseCoach';
 import type { DraftKey, LiveMode, Message, Stage } from '../../supabase/functions/_shared/liveCase';
 import { DataError } from './errors';
 
-export type { CaseInfo, DraftKey, Feedback, LiveMode, LiveView, Message, PublicExhibit, Stage };
+export type { CaseInfo, DraftKey, ExhibitSignal, Feedback, LiveMode, LiveView, Message, PublicExhibit, Stage };
 
 /** A casebook case that can be practised live. Names only: nothing about the case. */
 export interface LiveCatalogCase {
@@ -17,6 +17,11 @@ export interface LiveCatalogCase {
   cochairPick: boolean;
   /** You have logged this case already. */
   done: boolean;
+  /**
+   * Does the case have exhibits to work through, or does it run on discussion alone? Not part of the list the database returns: it comes
+   * from `exhibitSignal()` and is folded in by `withExhibitSignal`, so it is undefined until that has arrived (or if it never does).
+   */
+  exhibits?: boolean;
 }
 
 /**
@@ -25,6 +30,11 @@ export interface LiveCatalogCase {
  */
 export interface LiveCaseRepository {
   catalog(): Promise<LiveCatalogCase[]>;
+  /**
+   * Which cases have exhibits to work through, by case id. Worked out where the case is run, from the plan the case will run on, so the
+   * picker's label cannot disagree with what the member then gets.
+   */
+  exhibitSignal(): Promise<Record<string, boolean>>;
   /** Starts a case (a random one when `libraryId` is null), or returns the one already running. */
   start(libraryId: string | null, mode?: LiveMode): Promise<LiveView>;
   /** The running case, or the latest finished one; null if there has never been one. */
@@ -60,6 +70,11 @@ export class LiveClient implements LiveCaseRepository {
   }
 
   catalog = () => this.list();
+  async exhibitSignal(): Promise<Record<string, boolean>> {
+    const r = await this.send({ type: 'exhibits' });
+    if (r.status !== 'exhibits') throw new DataError('message' in r ? r.message : 'Something went wrong. Try again.');
+    return Object.fromEntries(r.cases.map((c) => [c.id, c.exhibits]));
+  }
   start = (libraryId: string | null, mode: LiveMode = 'practice') => this.view({ type: 'start', libraryId, mode });
   async resume(): Promise<LiveView | null> {
     const r = await this.send({ type: 'resume' });
