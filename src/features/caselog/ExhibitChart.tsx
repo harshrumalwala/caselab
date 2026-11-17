@@ -14,7 +14,8 @@ const namedColour = (c: string): string | null => {
   return LINE_COLOURS[k] ?? (/^#[0-9a-f]{3}([0-9a-f]{3})?$/.test(k) ? k : null);
 };
 const lineColour = (s: ChartSeries, i: number) => namedColour(s.color) ?? LINE_CYCLE[i % LINE_CYCLE.length];
-const greyFor = (i: number) => GREYS[Math.min(i, GREYS.length - 1)];
+/** The grey a series is drawn in. Past the end of the ramp it starts again, so the seventh segment of a stack is not the sixth's colour. */
+const greyFor = (i: number) => GREYS[i % GREYS.length];
 /** What a bar or stack segment is filled with: the colour the book gives the series, else the series' grey. */
 const seriesFill = (s: ChartSeries, i: number) => namedColour(s.color) ?? greyFor(i);
 /** Readable text on a fill: white on dark fills, near-black on light ones. */

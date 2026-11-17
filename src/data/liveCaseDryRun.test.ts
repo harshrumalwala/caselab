@@ -3,13 +3,14 @@
 // The scripted dry run (scripts/liveCaseDryRun.mjs): it must play a real case through the real engine to the end, drive the clock instead of
 // waiting for it, say honestly where a case stopped, and never carry a word of the book's content out of private-data.
 import { describe, expect, it } from 'vitest';
-import { handleLive, isFullSolution } from '../../supabase/functions/_shared/liveCaseCoach';
-import { PLANNED_MS, nudgeLevel, timeInStages } from '../../supabase/functions/_shared/liveCase';
+import { handleLive, isFullSolution, readSolution } from '../../supabase/functions/_shared/liveCaseCoach';
+import { PLANNED_MS, isInterviewerSideExhibit, nudgeLevel, timeInStages } from '../../supabase/functions/_shared/liveCase';
 import { createMemoryLiveDeps } from '../test/memoryLiveDeps';
 import {
   CANDIDATES,
   CANDIDATE_SPECS,
   MODES,
+  exhibitLeaks,
   failedTheBar,
   failureCause,
   openByDesign,
@@ -23,7 +24,7 @@ import {
   type DryRunEngine,
 } from '../../scripts/liveCaseDryRun.mjs';
 
-const engine: DryRunEngine = { handleLive, isFullSolution, nudgeLevel, timeInStages, PLANNED_MS, createMemoryLiveDeps };
+const engine: DryRunEngine = { handleLive, isFullSolution, readSolution, isInterviewerSideExhibit, nudgeLevel, timeInStages, PLANNED_MS, createMemoryLiveDeps };
 
 const exhibit = (n: number, over: Record<string, unknown> = {}) => ({
   title: `Exhibit ${n}: Revenue by region`,
@@ -292,7 +293,69 @@ describe('what the report may contain', () => {
   it('says so plainly when every case reached the end', async () => {
     const r = await playAll([writeUp()], engine, { modes: ['interview'], candidates: ['brisk'] });
     const report = formatReport(r, { dir: 'private-data/solutions', files: 1, at: '2026-11-16T00:00:00.000Z', seconds: 1 });
-    expect(report).toContain('None: every case reached stage done in every timed mode, for every candidate.');
+    expect(report).toContain('None: every case reached stage done in every timed mode, for every candidate');
     expect(report).toContain('## Open by design (0)');
+  });
+});
+
+// The second half of issue #95: an exhibit the rule classes as the interviewer's must never reach the member — not its table, not its
+// chart, not its title, not its caption — in any mode, for any candidate. The dry run already holds every message the member received,
+// so the check is made over the whole catalogue for free.
+describe('nothing of the interviewer\'s own exhibits reaches the member', () => {
+  const answerKey = exhibit(9, { title: 'Exhibit 9: Solution to the profit calculation', caption: 'The book\'s working, for the interviewer only.' });
+  const withAnswerKey = writeUp({ exhibits: [exhibit(1), answerKey, exhibit(2)] });
+
+  it('hands over the candidate exhibits only, in every mode and for every candidate', async () => {
+    expect(isInterviewerSideExhibit(answerKey)).toBe(true);
+    for (const mode of MODES) {
+      for (const candidate of CANDIDATES) {
+        const run = await playCase(withAnswerKey, mode as 'practice', candidate as 'brisk', engine);
+        expect(run.leaks, `${mode}/${candidate}`).toEqual([]);
+        // A candidate who works through the case is handed the two candidate exhibits and never the third.
+        expect(run.exhibitsShown, `${mode}/${candidate}`).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
+  it('asks the production rule of every payload the member was handed, not of the plan that chose it', () => {
+    const solution = readSolution(withAnswerKey)!;
+    const handed = [{ beat: 2, ...answerKey, columns: answerKey.columns, rows: answerKey.rows, approx: false, chart: null }];
+    expect(exhibitLeaks(handed as never, [], solution, isInterviewerSideExhibit)).toEqual([
+      'shown as an exhibit: Exhibit 9: Solution to the profit calculation',
+    ]);
+  });
+
+  it('counts its title or its caption written out in a message as a leak', () => {
+    const solution = readSolution(withAnswerKey)!;
+    const titled = exhibitLeaks([], [`Here is ${answerKey.title} for you.`], solution, isInterviewerSideExhibit);
+    expect(titled).toEqual(['its title was written to the member: Exhibit 9: Solution to the profit calculation']);
+    const captioned = exhibitLeaks([], [`As it says: ${answerKey.caption}`], solution, isInterviewerSideExhibit);
+    expect(captioned).toEqual(['its caption was written to the member: Exhibit 9: Solution to the profit calculation']);
+  });
+
+  it('does not count a figure read out of an interviewer table: that is the interviewer answering a question (issue #83)', () => {
+    const solution = readSolution(withAnswerKey)!;
+    expect(exhibitLeaks([], ['North is 90 and South is 95.'], solution, isInterviewerSideExhibit)).toEqual([]);
+  });
+
+  it('fails the bar on a leak even when the case ran to the end, and names it in the report', async () => {
+    const run = await playCase(withAnswerKey, 'interview', 'brisk', engine);
+    expect(reachedEnd(run)).toBe(true);
+    const leaked: DryRun = { ...run, leaks: ['shown as an exhibit: Exhibit 9: Solution to the profit calculation'] };
+    expect(failedTheBar(leaked)).toBe(true);
+    expect(openByDesign(leaked)).toBe(false);
+    expect(failureCause(leaked)).toBe('an interviewer-side exhibit reached the member');
+  });
+
+  it('says plainly in the report that nothing reached the member, over the whole run', async () => {
+    const r = await playAll([withAnswerKey], engine, { modes: ['practice', 'interview'], candidates: ['brisk', 'asker'] });
+    const s = summarise(r);
+    expect(s.leaked).toBe(0);
+    expect(s.exhibitsDelivered).toBeGreaterThan(0);
+    const report = formatReport(r, { dir: 'private-data/solutions', files: 1, at: '2026-11-16T00:00:00.000Z', seconds: 1 });
+    expect(report).toContain('## Interviewer-side exhibits that reached the member (0)');
+    expect(report).toContain('None: in every mode, for every candidate, over the whole catalogue.');
+    // The title of the interviewer's own exhibit is not in the report either.
+    expect(report).not.toContain('Solution to the profit calculation');
   });
 });

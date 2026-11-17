@@ -27,6 +27,7 @@ export async function loadRules() {
   const liveCase = await import(pathToFileURL(join(ROOT, 'supabase/functions/_shared/liveCase.ts')).href);
   const coach = await import(pathToFileURL(join(ROOT, 'supabase/functions/_shared/liveCaseCoach.ts')).href);
   const book = await import(pathToFileURL(join(ROOT, 'src/domain/bookSolution.ts')).href);
+  const fidelity = await import(pathToFileURL(join(ROOT, 'src/domain/exhibitFidelity.ts')).href);
   return {
     isInterviewerSideExhibit: liveCase.isInterviewerSideExhibit,
     buildPlan: liveCase.buildPlan,
@@ -36,6 +37,7 @@ export async function loadRules() {
     planFor: coach.planFor,
     parseBookSolution: book.parseBookSolution,
     parseSolutionExhibit: book.parseSolutionExhibit,
+    exhibitLoss: fidelity.exhibitLoss,
     LIVE_EXHIBIT_LIMITS: book.LIVE_EXHIBIT_LIMITS,
   };
 }
@@ -51,11 +53,11 @@ const list = (n, make) => Array.from({ length: n }, (_, i) => make(i));
  * of being written down here, so a cap that changes in the parser changes in the report with it.
  */
 export function measureCaps({ parseBookSolution }) {
-  const probe = { exhibits: 40, columns: 40, rows: 200, points: 200, panels: 12, structure: 24, clarifyingQuestions: 16, takeaways: 12 };
+  const probe = { exhibits: 40, columns: 40, rows: 200, points: 200, series: 32, panels: 16, structure: 24, clarifyingQuestions: 16, takeaways: 12 };
   const chart = {
     kind: 'bar',
     categories: ['a', 'b'],
-    series: [{ name: 's', values: [1, 2] }],
+    series: list(probe.series, (i) => ({ name: `s${i}`, values: [1, 2] })),
     totals: list(probe.points, (i) => `t${i}`),
     panels: list(probe.panels, () => ({ kind: 'bar', categories: ['a'], series: [{ name: 'p', values: [1] }] })),
   };
@@ -81,6 +83,7 @@ export function measureCaps({ parseBookSolution }) {
     columns: first.columns.length,
     rows: first.rows.length,
     points: first.chart.totals.length,
+    series: first.chart.series.length,
     panels: first.chart.panels.length,
     structure: parsed.structure.length,
     clarifyingQuestions: parsed.clarifyingQuestions.length,
@@ -97,6 +100,7 @@ export const CAP_LABEL = {
   columns: 'columns',
   rows: 'rows',
   points: 'chart points',
+  series: 'chart series',
   panels: 'panels',
   structure: 'structure buckets',
   clarifyingQuestions: 'clarifying questions',
@@ -140,15 +144,45 @@ function capCuts(raw, caps) {
     const where = `exhibit ${i + 1}`;
     over(`${where} columns`, arr(e?.columns).length, caps.columns);
     over(`${where} rows`, arr(e?.rows).length, caps.rows);
-    const chart = e?.chart;
-    if (chart && typeof chart === 'object') {
-      over(`${where} chart categories`, arr(chart.categories).length, caps.points);
-      over(`${where} chart totals`, arr(chart.totals).length, caps.points);
-      over(`${where} chart panels`, arr(chart.panels).length, caps.panels);
-      arr(chart.belowRows).forEach((r, j) => over(`${where} chart row ${j + 1}`, arr(r?.values).length, caps.points));
-    }
+    const charts = (c, label) => {
+      if (!c || typeof c !== 'object') return;
+      over(`${label} categories`, arr(c.categories).length, caps.points);
+      over(`${label} totals`, arr(c.totals).length, caps.points);
+      over(`${label} series`, arr(c.series).length, caps.series);
+      over(`${label} panels`, arr(c.panels).length, caps.panels);
+      arr(c.belowRows).forEach((r, j) => over(`${label} row ${j + 1}`, arr(r?.values).length, caps.points));
+      arr(c.panels).forEach((p, j) => charts(p, `${label} panel ${j + 1}`));
+    };
+    charts(e?.chart, `${where} chart`);
   });
   return cuts;
+}
+
+/**
+ * The heart of this report since issue #95: what the write-up holds for one exhibit, against what is actually drawn from it, on both the
+ * screens that draw one. `exhibitLoss` does the comparing (chart kind, series, panels, points, columns, rows and their order), and it is
+ * the same function the screens read to decide whether to tell the member the exhibit is not whole, so the report and the screen can
+ * never disagree.
+ *
+ * **Write-up to render, not book to render.** The casebook pages are not in the repo, so nothing here can say whether a write-up is
+ * faithful to the printed page; only that nothing is lost after the write-up.
+ *
+ * The live case is compared from the raw write-up all the way to the screen, which covers both cuts: the one `readExhibits` makes in the
+ * Edge Function and the one `parseSolutionExhibit` makes in the browser.
+ */
+function renderLoss(rawExhibit, liveExhibit, rules) {
+  const { parseSolutionExhibit, exhibitLoss, LIVE_EXHIBIT_LIMITS } = rules;
+  const source = rawExhibit ?? liveExhibit;
+  const live = liveExhibit
+    ? exhibitLoss(
+        source,
+        // Exactly what the screen does with an exhibit the member is shown (see ExhibitView in src/features/live/liveParts.tsx).
+        parseSolutionExhibit({ title: liveExhibit.title, caption: liveExhibit.caption, columns: liveExhibit.columns, rows: liveExhibit.rows, approx: liveExhibit.approx, chart: liveExhibit.chart }, LIVE_EXHIBIT_LIMITS),
+      )
+    : { cut: [], shortened: [] };
+  // The Full solution screen draws every exhibit of the write-up, the interviewer's included, with the write-up's own (smaller) caps.
+  const full = rawExhibit ? exhibitLoss(rawExhibit, parseSolutionExhibit(rawExhibit)) : { cut: [], shortened: [] };
+  return { live, full };
 }
 
 /** Why a write-up is not offered for live practice. Descriptive only: `isFullSolution` is what decides. */
@@ -168,11 +202,22 @@ export function auditCase(raw, rules, caps) {
   const eligible = isFullSolution(raw);
   const plan = live ? planFor(live) : { beats: [] };
   const exhibits = live ? live.exhibits : [];
+  const readCount = arr(raw.exhibits).length;
+  // The live case reads every exhibit of the write-up in order unless one was dropped outright; only then do the two lists stop lining
+  // up, and the comparison below falls back to the live case's own copy as the source (the dropped exhibit is reported as a cut).
+  const aligned = readCount === exhibits.length;
 
   const shown = [];
   const hidden = [];
+  const fidelity = [];
   exhibits.forEach((e, index) => {
-    if (isInterviewerSideExhibit(e)) {
+    const rawExhibit = aligned ? arr(raw.exhibits)[index] : null;
+    const candidate = !isInterviewerSideExhibit(e);
+    const loss = renderLoss(rawExhibit, candidate ? e : null, rules);
+    if (loss.live.cut.length + loss.live.shortened.length + loss.full.cut.length + loss.full.shortened.length > 0) {
+      fidelity.push({ index: index + 1, title: e.title, candidate, ...loss });
+    }
+    if (!candidate) {
       hidden.push({ index: index + 1, title: e.title, rules: hidingRules(e, isInterviewerSideExhibit), class: givenOnRequest(e) ? 'onRequest' : 'reference' });
       return;
     }
@@ -188,9 +233,9 @@ export function auditCase(raw, rules, caps) {
   });
 
   const cuts = capCuts(raw, caps);
-  const readCount = arr(raw.exhibits).length;
   if (readCount > exhibits.length && live) cuts.push(`exhibits read by the live case: ${readCount} of ${exhibits.length} kept`);
 
+  const notWhole = fidelity.filter((f) => f.live.cut.length + f.full.cut.length > 0);
   const flags = [];
   if (!eligible) flags.push('not_live_eligible');
   if (!parseBookSolution(raw)) flags.push('full_solution_refused');
@@ -198,6 +243,8 @@ export function auditCase(raw, rules, caps) {
   if (shown.some((e) => e.empty)) flags.push('candidate_exhibit_empty');
   if (cuts.length > 0) flags.push('cut_by_parser_cap');
   if (eligible && hidden.length > 0 && shown.length === 0 && plan.beats.length < 2) flags.push('all_exhibits_hidden');
+  if (notWhole.length > 0) flags.push('exhibit_not_whole');
+  if (fidelity.some((f) => f.live.shortened.length + f.full.shortened.length > 0)) flags.push('exhibit_text_shortened');
 
   return {
     name: String(raw.name ?? ''),
@@ -213,6 +260,7 @@ export function auditCase(raw, rules, caps) {
     exhibits: { inWriteUp: readCount, read: exhibits.length, shown: shown.length, hidden: hidden.length },
     shown,
     hidden,
+    fidelity,
     cuts,
     flags,
   };
@@ -243,10 +291,25 @@ export function audit(entries, rules, caps = measureCaps(rules)) {
   return { cases, folded, caps, read: entries.length };
 }
 
-export const FLAGS = ['not_live_eligible', 'full_solution_refused', 'fewer_than_2_beats', 'candidate_exhibit_empty', 'cut_by_parser_cap', 'all_exhibits_hidden'];
+export const FLAGS = [
+  'not_live_eligible',
+  'full_solution_refused',
+  'fewer_than_2_beats',
+  'candidate_exhibit_empty',
+  'cut_by_parser_cap',
+  'all_exhibits_hidden',
+  'exhibit_not_whole',
+  'exhibit_text_shortened',
+];
+
+/** The one flag the command fails on: an exhibit a member can be shown is not the whole of what the write-up holds. */
+export const BREACH = 'exhibit_not_whole';
 
 const tally = (values) => values.reduce((m, v) => m.set(v, (m.get(v) ?? 0) + 1), new Map());
 const sum = (values) => values.reduce((t, v) => t + v, 0);
+
+/** The group a loss line belongs to, with its counts and positions taken out: "chart panel 2 points: 7 ... 6 ..." becomes "chart panel points". */
+export const lossKind = (line) => String(line).split(':')[0].replace(/\b\d+\b/g, '').replace(/\s+/g, ' ').trim();
 
 /**
  * The numbers the summary is made of. Exhibits, charts and beats are counted over the cases live practice actually offers, because a
@@ -256,7 +319,17 @@ export function summarise({ cases, folded, caps, read }) {
   const eligible = cases.filter((c) => c.eligible);
   const shown = eligible.flatMap((c) => c.shown);
   const hidden = eligible.flatMap((c) => c.hidden);
+  const fidelity = cases.flatMap((c) => c.fidelity ?? []);
+  const cutLive = fidelity.filter((f) => f.live.cut.length > 0);
+  const cutFull = fidelity.filter((f) => f.full.cut.length > 0);
   return {
+    exhibitsCompared: cases.flatMap((c) => c.shown).length + cases.flatMap((c) => c.hidden).length,
+    notWholeLive: cutLive.length,
+    notWholeFull: cutFull.length,
+    notWhole: fidelity.filter((f) => f.live.cut.length + f.full.cut.length > 0).length,
+    shortened: fidelity.filter((f) => f.live.shortened.length + f.full.shortened.length > 0).length,
+    lostBy: tally([...cutLive.flatMap((f) => f.live.cut), ...cutFull.flatMap((f) => f.full.cut)].map(lossKind)),
+    shortenedBy: tally(fidelity.flatMap((f) => [...new Set([...f.live.shortened, ...f.full.shortened])]).map(lossKind)),
     read,
     folded: folded.length,
     audited: cases.length,
@@ -314,6 +387,17 @@ export function formatSummary(s) {
     ...counted(s.hiddenByRule, ['title', 'caption', 'column', 'cell']),
     pad('exhibits in write-ups that are not eligible', s.exhibitsNotEligible),
     '',
+    'Does the whole of the write-up reach the member? (write-up to render, not book to render)',
+    pad('exhibits compared', s.exhibitsCompared),
+    pad('not whole on screen (something is gone)', s.notWhole),
+    pad('  in a live case', s.notWholeLive),
+    pad('  on the Full solution screen', s.notWholeFull),
+    'What was lost',
+    ...(s.lostBy.size === 0 ? [pad('  nothing', 0)] : counted(s.lostBy, sortedKeys(s.lostBy))),
+    pad('exhibits with text cut to length (all figures kept)', s.shortened),
+    'What was cut to length',
+    ...(s.shortenedBy.size === 0 ? [pad('  nothing', 0)] : counted(s.shortenedBy, sortedKeys(s.shortenedBy))),
+    '',
     'Charts on the exhibits the candidate sees',
     pad('a chart is drawn', s.chartsDrawn),
     pad('no chart is drawn', s.chartsNotDrawn),
@@ -335,6 +419,17 @@ export function formatSummary(s) {
   ].join('\n');
 }
 
+/** One exhibit whose render is not the whole of the write-up: what is gone, and on which screen. */
+const cutLines = (f) => [
+  ...f.live.cut.map((cut) => `  NOT WHOLE ${f.index}. ${f.title || '(no title)'} — live case — ${cut}`),
+  ...f.full.cut.map((cut) => `  NOT WHOLE ${f.index}. ${f.title || '(no title)'} — Full solution screen — ${cut}`),
+];
+
+/** The text caps are the same on both paths, so a shortened label is the same loss twice: say it once. */
+const shortenedLines = (f) => [...new Set([...f.live.shortened, ...f.full.shortened])].map((text) => `  shortened ${f.index}. ${f.title || '(no title)'} — ${text}`);
+
+const fidelityLines = (f) => [...cutLines(f), ...shortenedLines(f)];
+
 function caseLines(c) {
   const lines = [`### ${c.name}${c.book ? ` — ${c.book}` : ''}`];
   lines.push(`live-eligible: ${c.eligible ? 'yes' : `no (${c.reasons.join('; ')})`}`);
@@ -348,6 +443,7 @@ function caseLines(c) {
   for (const e of c.hidden) {
     lines.push(`  hidden ${e.index}. ${e.title || '(no title)'} — by ${e.rules.join(', ') || 'none (rule not identified)'} — ${e.class}`);
   }
+  for (const f of c.fidelity ?? []) lines.push(...fidelityLines(f));
   for (const cut of c.cuts) lines.push(`  cut    ${cut}`);
   lines.push(`flags: ${c.flags.join(', ') || 'none'}`);
   return lines.join('\n');
@@ -356,13 +452,20 @@ function caseLines(c) {
 export function formatReport(result, { dir, files, at }) {
   const s = summarise(result);
   const flagged = result.cases.filter((c) => c.flags.length > 0);
+  const notWhole = result.cases.filter((c) => c.flags.includes(BREACH));
+  const shortened = result.cases.filter((c) => c.flags.includes('exhibit_text_shortened'));
   return [
     '# Live-case suitability report',
     '',
     `Run: ${at}`,
     `Source: ${dir} (${files} file(s))`,
-    'Rules: imported from supabase/functions/_shared/liveCase.ts, liveCaseCoach.ts and src/domain/bookSolution.ts, never copied.',
+    'Rules: imported from supabase/functions/_shared/liveCase.ts, liveCaseCoach.ts, src/domain/bookSolution.ts and',
+    'src/domain/exhibitFidelity.ts, never copied.',
     'Content: case names, book names, exhibit titles, counts and verdicts only. No prompt, figure or solution text is in this file.',
+    '',
+    '**This compares the write-up to the render, not the book to the render.** The casebook pages are not in this repository, so nothing',
+    'here can say whether a write-up is faithful to the printed page: only that nothing is lost between the write-up and the screen. A',
+    'write-up that got the book wrong would pass every check in this file.',
     '',
     '## Summary',
     '',
@@ -376,9 +479,30 @@ export function formatReport(result, { dir, files, at }) {
     '- `full_solution_refused`: `parseBookSolution` returns null, so the Full solution screen has nothing to show.',
     '- `fewer_than_2_beats`: an eligible case with nothing, or only one thing, to work through.',
     '- `candidate_exhibit_empty`: an exhibit the candidate is shown has no columns or no rows.',
-    '- `cut_by_parser_cap`: a parser cap silently cuts part of the write-up.',
+    '- `cut_by_parser_cap`: a parser cap cuts part of the write-up (the write-up measured against the caps, whatever the screen does).',
     '- `all_exhibits_hidden`: every exhibit in the write-up is hidden and fewer than two step beats are left.',
+    '- `exhibit_not_whole`: an exhibit a member can be shown has lost something between the write-up and the screen — a column, a row, a',
+    '  cell, a chart point, a series, a panel. **This is the one that fails the command.**',
+    '- `exhibit_text_shortened`: a label was cut to length (a panel heading, an axis title, a footnote, a side note). Every figure is on',
+    '  screen; one piece of text does not fit the drawing. Reported, not failed: the fix is a shorter line in the write-up, which is a',
+    '  content change and the owner\'s call.',
     '',
+    `## Exhibits that do not reach the member whole (${notWhole.length})`,
+    '',
+    'What the write-up holds for the exhibit, against what is drawn from it: chart kind, series count and names, panel count, point count,',
+    'the column list, and the rows with their order. Each line says which screen loses it and what is gone, in counts.',
+    '',
+    ...(notWhole.length > 0
+      ? notWhole.flatMap((c) => [`### ${c.name}${c.book ? ` — ${c.book}` : ''}`, ...(c.fidelity ?? []).flatMap(cutLines), ''])
+      : ['None: every exhibit reaches the member with everything the write-up holds for it.', '']),
+    `## Text cut to length (${shortened.length} case(s))`,
+    '',
+    'The exhibit is whole; a label is too long for where it is drawn. A chart heading and an axis title are single lines inside a panel,',
+    'so a longer one would run outside it: raising those caps would break the drawing rather than fix anything.',
+    '',
+    ...(shortened.length > 0
+      ? shortened.flatMap((c) => [`### ${c.name}${c.book ? ` — ${c.book}` : ''}`, ...(c.fidelity ?? []).flatMap(shortenedLines), ''])
+      : ['None.', '']),
     ...(result.folded.length > 0
       ? ['## Folded duplicate names', '', ...result.folded.map((f) => `- ${f.name} (kept: ${f.keptName})`), '']
       : []),
@@ -447,6 +571,15 @@ async function main(argv) {
   if (broken.length > 0) {
     console.error(`\n${broken.length} write-up(s) could not be read:`);
     for (const b of broken) console.error(`  ${b}`);
+    return 1;
+  }
+  // The one thing this command fails on: a member can be shown less of a book exhibit than the write-up holds. Nothing should ever be
+  // loaded in that state, so this is loud rather than a line in a list. Raise the cap, or shorten the exhibit in the write-up.
+  const notWhole = result.cases.filter((c) => c.flags.includes(BREACH));
+  if (notWhole.length > 0) {
+    console.error(`\n${notWhole.length} case(s) hold an exhibit that does not reach the member whole:`);
+    for (const c of notWhole) console.error(`  ${c.name}${c.book ? ` — ${c.book}` : ''}: ${(c.fidelity ?? []).flatMap(cutLines).length} line(s) in the report`);
+    console.error('See "Exhibits that do not reach the member whole" in the report.');
     return 1;
   }
   return 0;

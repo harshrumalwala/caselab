@@ -32,15 +32,29 @@ assistant saw a claim (for example a build session's report) but did not check i
   `private-data/solutions/*.json`. Re-assembling from the reader outputs would silently undo them.
 - **`buildLibrarySeed.mjs` reads every `private-data/casebooks/*.json` except `*.index.json`** and every `private-data/solutions/*.json`;
   a file with the wrong name or shape is either picked up wrongly or ignored. The new-analysis files are named `solutions-waveN.json`.
-- **The parser silently truncates oversized content.** `src/domain/bookSolution.ts` caps: exhibits 12, columns 16, rows 70, chart
-  points/categories 70, structure buckets 8, clarifying questions 5, takeaways 3, panels 4. Empty-string chart categories are dropped, so a
-  single unlabelled bar needs a non-empty label or the chart disappears. Content over the caps is cut without an error.
-  The per-exhibit caps are now `SOLUTION_EXHIBIT_LIMITS` and `LIVE_EXHIBIT_LIMITS` (40 columns / 400 rows / 400 chart points), both in that
-  file; the live case passes the second to match `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts`. The two sets are
-  kept in step by hand: change one and the other has to be changed with it, or a live exhibit is cut a second time on its way to the screen.
-- **Two exhibits lose a chart panel to the 4-panel cap** (found by `npm run audit:live` on 2026-11-16): Lactose King (Fuqua 2025-26)
-  exhibit 1 has 5 panels and Sueno Mattress (Booth MCG 2026-2027) exhibit 3 has 6, so the last ones are dropped without a word. Either
-  raise the cap or split the exhibit. Nothing else in the 872 write-ups is over any cap.
+- **The parser's caps, and what they still cut** (issue #95 made every cut visible; none of them bites the library today).
+  `src/domain/bookSolution.ts` caps: exhibits 12, columns 16, rows 70, chart points/categories 70, structure buckets 8, clarifying
+  questions 5, takeaways 3, chart series 16, panels 8, and the character caps in `EXHIBIT_CAPS` (a cell or column heading 800, a title
+  400, a caption 3,000 — the live case's own numbers). Empty-string chart categories are dropped, so a single unlabelled bar needs a
+  non-empty label or the chart disappears. **Content over a cap is no longer cut in silence**: `parseSolutionExhibit` records what it
+  left behind on the exhibit's `cut` and `shortened` lists (`exhibitLoss` in `src/domain/exhibitFidelity.ts`), the screen says so on the
+  exhibit, and `npm run audit:live` exits non-zero on any exhibit that cannot be shown whole. What is *still* cut, and cannot be
+  helped by a bigger number: a chart heading (60 characters), an axis title (80), a footnote (240) and a side note (60) are single lines
+  inside a panel, so 9 exhibits in the library have one cut to length. Those are counted as `shortened`, not as content gone, and the fix
+  is a shorter line in the write-up (a content change, the owner's call).
+  The per-exhibit caps are `SOLUTION_EXHIBIT_LIMITS` and `LIVE_EXHIBIT_LIMITS` (40 columns / 400 rows / 400 chart points), both in that
+  file; the live case passes the second to match `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts`. **They are no longer
+  kept in step by hand**: `src/data/liveExhibitCaps.test.ts` sends an oversized exhibit through the real `readExhibits` and then through
+  the screen's parser and fails if the screen cuts anything the Edge Function let through.
+- **A chart kind we do not draw is not counted as a loss.** `exhibitLoss` ignores a chart whose kind is outside `DRAWN_KINDS` (marimekko,
+  waterfall, bubble, dual axis, maps): the exhibit stays the book's own table, which is the settled trade (ROADMAP R15). No write-up
+  carries such a chart today (measured: 0 of 1,792 exhibits on 2026-11-16), so the rule costs nothing; if one is ever added, the member
+  is told nothing and only the audit's "a chart is in the write-up but cannot be drawn" line will show it.
+- **The two exhibits that lost a chart panel are fixed** (they were Lactose King, Fuqua 2025-26 exhibit 1 with 5 panels, and Sueno
+  Mattress, Booth MCG 2026-2027 exhibit 3 with 6, against a cap of 4). The cap is 8. The same re-measurement found ten stacked charts
+  with more than six segments, which the old 6-series cap had been cutting without anyone noticing, and 60 cells in 33 exhibits over the
+  old 120-character cell cap; the series cap is 16 and cells now match the live case's 800. On 2026-11-16 nothing in the 872 write-ups is
+  over any cap.
 - **The live-case audit and the dry run need Node 22.6 or newer** (`npm run audit:live`, `npm run dryrun:live`): they import the Edge
   Function's TypeScript with Node's type stripping and restart themselves with `--experimental-strip-types` when the Node they are
   started with has none. `package.json` still says Node 20.19 for the app, which is correct for everything else. Neither can run in CI,
@@ -86,7 +100,10 @@ assistant saw a claim (for example a build session's report) but did not check i
   diarrhoeal disease, Polar Bear Pool Float Exhibit 1), so nearly every chart is still in greys. Circle Bubble Exhibit 2 has none yet: it gets
   its key now, and its orange / navy / teal once the main session patches `private-data/solutions/*.json` (palette names accepted: red, blue,
   yellow, green, black, gray, orange, purple, navy, teal, or a hex value). The key lists series left to right and is not ordered to match a
-  stack from top to bottom. A stack with `segmentNames` gets no key, but a segment under 14 px tall prints no name, so a very thin segment in
+  stack from top to bottom. **The grey ramp has six shades and now starts again past the sixth** (it used to stop on the darkest, so every
+  segment after the sixth was the same colour); the ten stacks with 7 to 13 segments therefore repeat a grey further down, and only the
+  key tells those two segments apart. Giving those stacks the book's own colours (issue #106) is the real fix.
+  A stack with `segmentNames` gets no key, but a segment under 14 px tall prints no name, so a very thin segment in
   such a stack is unnamed (not checked across the data). The pie slices and scatter points ignore series colours.
 - **Colour audit of stacked charts (2026-11-16; owner approved; loaded to production).** Readers compared 102 exhibits (114 stacked panels) with the
   book pages and recorded series colours: 97 panels in 69 cases now carry them. What is still not right: (1) where the book uses two or more shades
@@ -272,6 +289,14 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   left at the prompt and a stuck one on beat 1; both can still end the case from the screen. It is the design, so the dry run counts those
   1,694 runs as "open by design" and does not fail on them (`npm run dryrun:live` exits 0 today), but it names them, because whether a
   learner who stops engaging should be moved on is an open product question rather than a settled one.
+- **The dry run's "nothing of the interviewer's reached the member" is about the engine, not about Bucket's words** (issue #95). It
+  checks every exhibit payload handed over against `isInterviewerSideExhibit` and looks for an interviewer-side title or caption written
+  out whole in a message, over all 10,164 runs. The model is stubbed, so it cannot say whether a real Bucket would paraphrase a private
+  table: that is `leaks()` plus the real-model pilot in DECISIONS.md. The title test also needs 8 characters and the caption 20, so a
+  very short title would not be matched.
+- **The note on a cut exhibit does not say what is missing.** `ExhibitNotWhole` says only that part of the exhibit could not be shown;
+  the counts are in the report. It has never been seen in production (nothing in the library is cut), so how a member reads it is
+  unverified, and so is how it looks: no one has viewed it on a phone.
 - **No test calls a real model.** Prompts and answer schemas for Bucket, Compare and Live case are tested against fakes, which is how the
   first live Bucket run found a rejected format. Run a real call after changing a prompt or schema.
 - **`e2e/deployed.e2e.test.ts` checks the database** (tables, columns, functions with the right arguments) **but not that the Edge Functions

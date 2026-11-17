@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { blankChart, parseBookSolution, parseSolutionExhibit, type ExhibitChart as Chart, type SolutionExhibit } from '../../domain/bookSolution';
 import { ExhibitChart } from './ExhibitChart';
 
-const exhibit = (title: string): SolutionExhibit => ({ title, caption: '', columns: ['A'], rows: [['1']], approx: false, howToRead: '', takeaways: [], chart: null });
+const exhibit = (title: string): SolutionExhibit => ({ title, caption: '', columns: ['A'], rows: [['1']], approx: false, howToRead: '', takeaways: [], chart: null, cut: [], shortened: [] });
 const series = (name: string, values: number[], over: Partial<Chart['series'][number]> = {}) => ({ name, values, labels: [], type: 'bar' as const, color: '', ...over });
 
 function draw(chart: Partial<Chart>) {
@@ -86,6 +86,44 @@ describe("the book's charts, redrawn", () => {
     const [w, h] = (svg.getAttribute('viewBox') ?? '').split(' ').slice(2).map(Number);
     expect(w).toBeLessThanOrEqual(680);
     expect(h).toBeGreaterThan(300); // two rows
+  });
+
+  // Issue #95 raised the panel cap from four to eight (the library's biggest exhibit has six charts). The drawing lays panels two to a
+  // row, so more of them makes the exhibit taller and never narrower: each panel keeps the width and the height it had at four.
+  it('lays out five, six and eight charts two to a row, each the same size as in a four-panel exhibit', () => {
+    const panel = (heading: string) => ({ ...blankChart, kind: 'bar' as const, heading, categories: ['x'], series: [series('COGS', [3])] });
+    const box = (n: number) => {
+      const svg = draw({ kind: 'bar', panels: Array.from({ length: n }, (_, i) => panel(`P${i + 1}`)) });
+      const [w, h] = (svg.getAttribute('viewBox') ?? '').split(' ').slice(2).map(Number);
+      return { w, h, headings: text(svg).filter((t) => t?.startsWith('P')).length, svg };
+    };
+    const four = box(4);
+    for (const n of [5, 6, 8]) {
+      const many = box(n);
+      expect(many.headings, `${n} panels`).toBe(n); // every chart is drawn, none dropped
+      expect(many.w, `${n} panels`).toBe(four.w); // the same two columns, so no panel is squeezed
+      expect(many.h, `${n} panels`).toBe((four.h / 2) * Math.ceil(n / 2)); // one more row, nothing overlapping
+      // and nothing is drawn outside the box the viewBox claims
+      expect(Math.max(...[...many.svg.querySelectorAll('text')].map((t) => Number(t.getAttribute('y')) || 0))).toBeLessThan(many.h);
+    }
+  });
+
+  // The series cap went from six to sixteen in the same issue: ten stacks in the library have more than six segments, and the last ones
+  // used to be dropped. The key wraps onto as many rows as it needs and the panel grows to hold them.
+  it('draws every segment of a thirteen-segment stack, with a key that wraps and no two neighbours in the same grey', () => {
+    const names = Array.from({ length: 13 }, (_, i) => `Segment ${i + 1}`);
+    const svg = draw({ kind: 'stacked', categories: ['2026'], series: names.map((n, i) => series(n, [i + 1])) });
+    expect(text(svg)).toEqual(expect.arrayContaining(names));
+    const key = swatches(svg);
+    expect(key).toHaveLength(13);
+    const fill = key.map((r) => r.getAttribute('fill'));
+    expect(fill.slice(0, 6)).toEqual(['#d2d2d2', '#a9a9a9', '#7e7e7e', '#555555', '#3d3d3d', '#2a2a2a']);
+    expect(fill.every((f, i) => i === 0 || f !== fill[i - 1])).toBe(true); // the ramp starts again rather than repeating one grey
+    // the key sits inside the panel: several rows, and the plot moved down to make room for them
+    const rows = new Set(key.map((r) => r.getAttribute('y')));
+    expect(rows.size).toBeGreaterThan(1);
+    const h = Number((svg.getAttribute('viewBox') ?? '').split(' ')[3]);
+    expect(Math.max(...[...svg.querySelectorAll('text')].map((t) => Number(t.getAttribute('y')) || 0))).toBeLessThan(h);
   });
 
   it('describes the chart for a screen reader', () => {

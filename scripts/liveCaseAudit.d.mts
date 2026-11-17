@@ -1,6 +1,7 @@
 import type { buildPlan, isInterviewerSideExhibit } from '../supabase/functions/_shared/liveCase';
 import type { givenOnRequest, isFullSolution, planFor, readSolution } from '../supabase/functions/_shared/liveCaseCoach';
 import type { ExhibitLimits, parseBookSolution, parseSolutionExhibit } from '../src/domain/bookSolution';
+import type { ExhibitLoss, exhibitLoss } from '../src/domain/exhibitFidelity';
 
 /** The real rules the report applies: the same functions the Edge Function and the screen use, never a copy of them. */
 export interface AuditRules {
@@ -12,6 +13,7 @@ export interface AuditRules {
   planFor: typeof planFor;
   parseBookSolution: typeof parseBookSolution;
   parseSolutionExhibit: typeof parseSolutionExhibit;
+  exhibitLoss: typeof exhibitLoss;
   LIVE_EXHIBIT_LIMITS: ExhibitLimits;
 }
 
@@ -21,6 +23,7 @@ export interface Caps {
   columns: number;
   rows: number;
   points: number;
+  series: number;
   panels: number;
   structure: number;
   clarifyingQuestions: number;
@@ -33,7 +36,9 @@ export type AuditFlag =
   | 'fewer_than_2_beats'
   | 'candidate_exhibit_empty'
   | 'cut_by_parser_cap'
-  | 'all_exhibits_hidden';
+  | 'all_exhibits_hidden'
+  | 'exhibit_not_whole'
+  | 'exhibit_text_shortened';
 
 export interface ShownExhibit {
   /** Its place in the write-up's own list of exhibits, from 1. */
@@ -53,6 +58,16 @@ export interface HiddenExhibit {
   class: 'reference' | 'onRequest';
 }
 
+/** One exhibit's trip from the write-up to the screen, on both the screens that draw one. Only exhibits that lost something appear. */
+export interface ExhibitFidelity {
+  index: number;
+  title: string;
+  /** False when the live case keeps this exhibit back: only the Full solution screen draws it. */
+  candidate: boolean;
+  live: ExhibitLoss;
+  full: ExhibitLoss;
+}
+
 export interface CaseAudit {
   name: string;
   book: string;
@@ -63,6 +78,8 @@ export interface CaseAudit {
   exhibits: { inWriteUp: number; read: number; shown: number; hidden: number };
   shown: ShownExhibit[];
   hidden: HiddenExhibit[];
+  /** The write-up against the render, for every exhibit that lost something on the way. */
+  fidelity: ExhibitFidelity[];
   /** What a parser cap cuts, as counts only. */
   cuts: string[];
   flags: AuditFlag[];
@@ -76,6 +93,13 @@ export interface AuditResult {
 }
 
 export interface AuditSummary {
+  exhibitsCompared: number;
+  notWholeLive: number;
+  notWholeFull: number;
+  notWhole: number;
+  shortened: number;
+  lostBy: Map<string, number>;
+  shortenedBy: Map<string, number>;
   read: number;
   folded: number;
   audited: number;
@@ -102,7 +126,10 @@ export interface AuditSummary {
 }
 
 export const FLAGS: AuditFlag[];
+/** The one flag `npm run audit:live` exits non-zero on. */
+export const BREACH: 'exhibit_not_whole';
 export const CAP_LABEL: Record<keyof Caps, string>;
+export function lossKind(line: string): string;
 
 export function loadRules(): Promise<AuditRules>;
 export function measureCaps(rules: Pick<AuditRules, 'parseBookSolution'>): Caps;

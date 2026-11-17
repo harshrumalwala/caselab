@@ -5,6 +5,7 @@ import type { CaseRecord } from '../../domain/types';
 import { useData } from '../../state/DataProvider';
 import { useLibrary } from '../../state/LibraryProvider';
 import { ExhibitChart } from './ExhibitChart';
+import { ExhibitNotWhole } from './ExhibitNotWhole';
 
 function Block({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -126,6 +127,7 @@ function SolutionBody({ s }: { s: BookSolution }) {
                   {e.approx && <span className="ml-2 text-xs font-normal text-muted">(values read off a chart, approximate)</span>}
                 </figcaption>
                 {e.caption && <p className="text-xs text-muted">{e.caption}</p>}
+                <ExhibitNotWhole cut={e.cut} />
                 {e.chart && <ExhibitChart exhibit={e} chart={e.chart} />}
                 <div className="overflow-x-auto rounded-lg border border-line">
                   <table className="w-full text-left text-xs">
