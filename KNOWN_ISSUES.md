@@ -208,6 +208,23 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **Migration order matters**: the app expects the newest tables, so a migration must be applied before the app version that needs it
   is deployed. `e2e/deployed.e2e.test.ts` checks that the live database matches the code.
 
+## The interviewer's voice in a live reply (issue #131, 2026-11-17)
+
+- **The wording change is unverified against a real model.** The directives in `supabase/functions/_shared/liveCaseCoach.ts` were rewritten
+  to stop three tells the $2 pilot found (third person, "the case says ...", an `advance` reply that summarises the beat it leaves). Unit
+  tests prove the code-side checks on the pilot's own replies; no real model has been asked since. It also only takes effect after
+  `npx supabase functions deploy live-case`.
+- **The checks are string-level, so they catch wording and not meaning.** `hasTell` matches the phrasings the pilot produced and the
+  obvious variants ("the student", "the candidate", "my instructions", a refusal that names an answer); a model that talks about the member
+  some other way ("one would usually start with ...") goes through. `withoutSourceNarration` strips a listed source plus a listed verb of
+  saying at a sentence boundary; "that is what you are told at the start" does not match. `sharesSubstance` needs three content words of one
+  private-note sentence to appear in the move-on reply, so a summary written in different words passes, and the first-sentence cut is what
+  catches the common shape.
+- **A refusal that the case genuinely cannot answer is kept by a carve-out** (`NOT_HELD`: "I do not have that figure"), so a model that
+  refuses in that shape while really withholding an answer is not caught. Narrowing it would start dropping the honest reply.
+- **An `advance` reply is cut to its first sentence.** If a model ever answered a question and moved on in the same breath at that rung
+  (with `data_request` unset), the answer would be lost. The flag and `beat_complete` are both excluded from the cut for that reason.
+
 ## Unverified user-side checks left open
 
 - Whether the "someone said yes" notification email arrives (the owner confirmed the sign-up email flow; whether the "asked you" request email was checked is not known).
