@@ -323,3 +323,29 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
 - **No visual or snapshot tests** for charts or screens; charts were checked by eye from rendered SVGs.
 - **Content is validated by scripts outside the repo**, not by tests: the solution parser (`src/domain/bookSolution.ts`) is tested, but
   whether a write-up is faithful to its book is not.
+
+## The pilot runner (`npm run pilot:live`, issue #125, added 2026-11-17)
+
+- **Nobody has run it against production.** It was built and tested with a fake `send` and a fake usage reader (`src/data/liveCasePilot.test.ts`),
+  and its one live check was a read-only `supabase db query` that matched no rows. The sign-in, the `live-case` call, the catalogue RPC and the
+  per-turn usage read have never been exercised together against the real project; the first run of the pilot is also the first run of the tool.
+- **Spend is attributed, not measured per call.** `state -> 'usage'` is one running total per session with no model and no per-call split, so
+  the script prices every turn at the coach model and the single `finish` turn at the feedback model. A future change that made two kinds of
+  call in one turn would be priced wrongly and nothing would say so.
+- **The >100K Haiku tier cannot be told from a multi-call turn.** The threshold is about one prompt; a per-turn delta covering several calls
+  can pass 100,000 tokens without any single prompt doing so. The script prices such a turn at the higher tier (the dearer way to be wrong,
+  which keeps the cap honest) and prints "single-call turns only" beside the flag. `tierCertain` on the turn's cost records which it was.
+- **Usage no transcript accounts for is priced at the cheaper model.** A session started by hand, or a call that lands after the last reading,
+  shows up as "not in any transcript" and is priced at Haiku rates, so that part of a total can only be understated. `spend` names the figure.
+- **The cap is a reserve, not a guarantee.** It stops the next call when `spent + reserve` would cross the cap, where the reserve is the
+  dearest turn so far (floored at $0.05, or $0.25 for a `finish`). A single turn that costs more than every turn before it can still carry the
+  total past the cap; nothing can stop that without a per-call limit the Edge Function does not offer.
+- **The catalogue cannot say which cases are conversation-only.** PR #118 added that signal and PR #124 removed it again on purpose, so
+  `catalog` prints a line saying there is none rather than reimplementing `buildPlan`. Choosing a case with exhibits for the pilot means
+  reading `reports/live-case-audit.md`.
+- **Which action belongs at which stage is written out twice.** `STAGES_FOR` in `scripts/liveCasePilot.mjs` encodes the same knowledge as
+  `playCase` in `scripts/liveCaseDryRun.mjs`; they were kept apart deliberately (the free harness is not worth disturbing for a guard), so a
+  change to the stage machine has to be made in both. In the pilot it only stops an unattended `play`; a hand-driven `turn` goes ahead and
+  says so.
+- **Transcripts are a new place the book's content sits on disk.** `reports/pilot/*.json` holds prompts and exhibits in full. `/reports/` is
+  git-ignored and the script's header and every run say so, but nothing enforces it.

@@ -40,6 +40,7 @@ npm run dev                    # http://localhost:5173
 | `npx vitest run <file>` | one file; use this while iterating |
 | `npm run build` | typecheck plus `vite build` to `dist/` |
 | `npm run test:e2e` | live checks against the real Supabase project in `.env.local`; needs git-ignored `.env.e2e.local` with throwaway accounts; creates rows titled `ZZ CaseLab e2e ...` and removes them. 58 tests pass, 10 skipped (2026-11-13) |
+| `npm run pilot:live -- <command>` | **spends real money.** Drives one live case against the *deployed* `live-case` function as a throwaway account, reads the real spend from `live_case_sessions`, and stops before a call that would cross the cap (`--cap`, default $2.00). Transcripts land in git-ignored `reports/pilot/` and hold the book's own exhibits. Who may run it, and on what budget, is the owner's call; see README |
 
 CI (`.github/workflows/ci.yml`, on every PR and push to `main`): `npm ci`, `npm run typecheck`, `npm test`, `npm run build`. **There is no
 lint script and no linter configured.** Vercel deploys `main` automatically and builds a preview for each PR.
