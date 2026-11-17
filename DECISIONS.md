@@ -554,7 +554,150 @@ this sharper — the link is now the *whole* public face of a profile.
 Asked on 2026-11-17 whether to spend the remaining window clearing the queue or save room for the pilot, the owner chose **"finish the
 queue"**. Nothing of the $2 has been spent. The pilot's scope is unchanged (max 10 real-model interview runs, newest books first,
 nudge-versus-solve only, spend read from `live_case_sessions.state -> 'usage'` and stopped at $2); the free scripted harness is outside
-that cap and was run repeatedly today at no cost. Recorded so nobody reads the delay as a change of plan.
+that cap and was run repeatedly today at no cost. Recorded so nobody reads the delay as a change of plan. **It ran on 2026-11-17 in the next window; what it found is the section below.**
+
+## What 2026-11-17 settled after the five PRs: a reversal, a copy rule, and a switch
+
+### #118 was reversed the day it shipped (#124), and the reason is a product one
+
+PR #118 shipped the live-case picker's **All cases / With exhibits / All discussion** filter, built on a new `exhibits` action in the
+Edge Function (`hasExhibitBeats()` running the real `readSolution` + `buildPlan`, deliberately not SQL). Having seen it live, the owner
+said: *"this is not needed when people are selecting cases, no one needs to know what internal case dynamics look like."* PR #124
+reverted it, by `git revert` of #118's squash commit rather than by hand.
+
+- **What went, and why the machinery went with the screen.** The filter, its paragraph, the per-tile suffix and its hold over lanes,
+  search and both "Surprise me" buttons; and then the `exhibits` action and response, `hasExhibitBeats()`, the `eachCaseSolution` dep and
+  the paged library read behind it, the kept signal and `EXHIBIT_SIGNAL_MS` (with it the only mutable module state in the shared Edge
+  code), the client call and the domain helpers. A dead endpoint that hands out the structure of a case is worse than no endpoint: it is
+  a surface nobody is maintaining that still answers questions about what a case holds.
+- **The one thing kept from #118**, reworded: the PGlite assertion in `src/data/liveCase.db.test.ts` that `live_case_catalog()` releases
+  no column whose name mentions exhibits. That is worth having whether or not a picker wants to know — the catalogue should stay quiet
+  about what a case holds — so it outlived the feature it was written for.
+- **Why it is recorded here rather than being left as a revert in the log.** #87 and #118 were argued carefully, measured on both sides
+  and shipped with a test asserting the signal came from the engine and not from SQL. All of that was right, and the feature was still
+  wrong, because the question it answered ("does this case have exhibits?") is ours and not the member's. Picking a case is about the
+  business problem, the book and the lane. The cost of learning that was one day; recording it is how the next person does not rebuild
+  it. **A member-facing control that exposes how a write-up happens to be built is the pattern to refuse**, not this one filter.
+- One consequence to know about: **the catalogue can no longer say which cases are conversation-only.** The pilot runner (#125) needed
+  that and did not get it; it prints a line saying there is no such signal and nothing was reimplemented. Choosing a case by what it
+  holds means reading `reports/live-case-audit.md`, which is the right place for it — a report for us, not an endpoint for the browser.
+
+### "Copy states the design, never a change": why the convention exists
+
+The convention itself now lives in `CLAUDE.md` under Conventions, and `src/PublicSite.test.tsx` enforces it, so it does not need
+restating here. What belongs here is **why**, because the rule reads like a style preference and is not one.
+
+It came out of the front-page work for #96. Removing the public directory produced copy that defined the new design by the absence of
+the old one — a line to the effect that there is nobody to browse, no list and no search. Every word of that was true, and a member
+reading it had never seen the directory. To them it says only that something is missing: it advertises a hole where there is in fact a
+deliberate design, the personal link. The fix was to say what the thing does — each member's own link is the way in.
+
+So the rule is: **screen copy describes the product as it is, positively, on its own terms. It never defines a feature as the absence of
+a previous one and never reads like a changelog.** Documentation is the exact opposite and *should* record what changed and when; that is
+what `README.md`, `KNOWN_ISSUES.md` and this file are for. A test enforces the screen half because this is the kind of rule that is
+obvious once stated and very easy to break while writing a diff, when the change is the thing you have in your head.
+
+### #121: the owner chose a separate off-by-default switch, overruling the PM
+
+The PM's recommendation on #121 (show what a member is sharpening, on their public profile link) was **no new switch**: `share_skills`
+already governs the per-case scores the summary is computed from, the numbers are already returned by `public_person_cases(id)`, and a
+second switch over already-released data protects nothing while costing a migration on a surface that had just been narrowed on purpose.
+
+The owner chose the alternative the issue recorded as the counter-argument: **a separate switch, off by default**, which needs a
+migration. Relayed to the PM at the start of the session of 2026-11-17.
+
+The counter-argument is the reason, and it is a good one: **consent to per-case scores is not consent to a summary judgment.** A score
+buried in a list of cases is data; "what this person is weakest at", at the top of a page that anonymous people open, is a verdict about a
+named person — and since #96 the people most likely to open a link are 2Y students about to run them a case and firm representatives. A
+member who switched `share_skills` on months ago agreed to the first thing and was never asked about the second. Off by default means
+nobody is summarised until they ask to be.
+
+What this does **not** change: the framing stance stays (at most three to sharpen and three strengths, the product's existing sharpening
+language, no ranking of all eight, no number presented as a grade, silent below the minimum counts rather than saying "not enough data
+yet"), the computation stays deterministic and in the browser, and there is still no model call. The switch decides whether the section
+exists at all, not how it reads. **Applying the migration is the owner's call, as always**; it is in the batched request of 2026-11-17
+alongside #97, #98 and #99.
+
+## The $2 interview pilot, run on 2026-11-17: what six real-model runs found
+
+The pilot the owner scoped on 2026-11-16 ran on 2026-11-17 against the deployed `live-case` function, through a runner built for it
+(#125, `npm run pilot:live`). **Six starts, $0.1485 of the $2.00 cap**, read from `live_case_sessions.state -> 'usage'` after every turn
+and priced at the published Haiku 5.5 and Sonnet 5.5 rates. Four complete interview cases from the two newest books (Boothbucks Coffee,
+Elena's Electronics, Chicken Pox Vaccine from Booth MCG 2026-2027; Swift Business from Fuqua 2025-26), one practice-against-interview A/B
+on the same case and the same messages, and one verification run after the first fix shipped.
+
+**The headline, and it disproves the owner's hypothesis.** The owner expected the pilot to shake out mostly data fixes. It did the
+opposite: the largest findings are in the engine and in the prompt, and only one is content. That is worth more than a clean pass, and it
+is why the pilot was worth running at all — the free harness had already said every case completes, and every one of these findings is
+invisible to it.
+
+**A cost finding first, because it changes what is affordable.** A whole interview case, prompt to Sonnet feedback, costs about **$0.03** —
+a third of the README's estimate. The $2 cap was never the binding constraint; **4 live-case starts per account per day** was. Two
+throwaway accounts give 8 starts a day, and a start is consumed by the row existing, not by the run finishing.
+
+### What is working, and must survive any fix
+
+- **Asked point blank for a calculation and its takeaway, the coach refuses and reads the inputs aloud instead.** On Boothbucks:
+  *"I can read the exhibit's figures aloud: 2021 has 200 shops, $400MM revenue and $100MM profit..."* and then the question back. That is
+  exactly the line the rubric draws, and it held every time it was tested directly.
+- **The data handover of #83 works.** Asked for the cost base on Swift Business, the coach gave all three figures in full and no totals.
+  Facts in the fact sheet come out on request, in words, without a hint rung being charged.
+- **No interviewer-only exhibit was ever handed over as an artefact.** Across four cases with hidden tables — including Elena's
+  Electronics, whose three hidden exhibits are literally the worked solution — no title, no caption and no chart reached the member.
+- **Exhibit fidelity in the real flow is good.** Every exhibit arrived exactly as the write-up prints it: same columns, every row, the
+  caption, the `approx` flag where the figures were read off a picture, and the chart spec present where there is one (a line chart and a
+  bar chart were both delivered with their series).
+- **The interview ladder itself is right.** On Chicken Pox Vaccine a member who wrote only "I don't know" / "No idea" / "Still nothing"
+  climbed it properly and `advance` fired at rung 3, `outcome: coach_moved`.
+
+### What the pilot found, in the order it matters (issues #128 to #134)
+
+1. **A case with exhibits drops every analytical step that has no exhibit (#128).** `buildPlan` (`liveCase.ts` line 183) is
+   `exhibitBeats.length > 0 ? exhibitBeats : stepBeats` — exhibits **or** steps, never both. Boothbucks lost its hardest step, the
+   close-or-invest ROIC test, and then the feedback marked the member down for not doing it: *"You never tested the marketing option
+   against the hurdle rate."* Measured over the library: **502 of 847 live-eligible cases lose at least one purely analytical step, 1,567
+   steps in total.** This is the biggest live-case defect found since the exhibit audit, and the free harness cannot see it because a case
+   that is missing a third of itself still completes.
+2. **A reply confirms the member's guess before they have earned it (#130).** Every reply, at every rung including rung 0 where an
+   interview is supposed to say nothing, opens by validating: *"You're right that profit is flat while revenue and store count climb,
+   which is the core signal"* (first message on the beat, and it introduced the store count the member had not mentioned);
+   *"You're on a good track by isolating the suburban group"* (said to a member who had simply guessed the answer). **Guessing works.**
+   This is also why the ladder rarely engages: `asked` counts messages since the last progress and the model judges progress, so a
+   plausible-sounding stuck message resets the counter — six messages, four openly stuck, gave `hints: 1, asked: 0`. The A/B against
+   practice mode on the same case and the same three messages found the replies near-identical, with practice volunteering a derived
+   figure (75%) that interview did not. **#94 changed the ladder's indices; it did not change the register of the replies.**
+3. **A result pre-printed on the interviewer's sheet is handed over as data (#129), exactly as the rubric predicted.** On Swift Business,
+   unprompted and before the exhibit was even shown: *"attendance is 80 million with an average ticket price of $100, which gives a market
+   revenue of $8 billion"* — $8B is a row of a hidden "Interviewer guidance" table and the first step of the member's own task. On Elena's
+   Electronics, while correctly refusing the totals: *"quantities per store are 200, 150 and 100 in 2016, and 100, 150 and 400 in 2017"* —
+   the cells of a hidden table that prints them as `24,000/120 = 200`. **The failure mode is volunteering, not capitulating**, and
+   `leaks()` cannot see either because both are paraphrased arithmetic.
+4. **Three wording defects (#131), now fixed, deployed and verified on the real model.** A reply narrated its own instructions in the
+   third person (*"The student has asked me to calculate the figures ... so I won't give it"*); every data answer was prefixed *"The case
+   says ..."*; and `advance` summarised the exhibit it was abandoning. PR #136 fixed all three with a directive change *and* a check on the
+   reply that comes back, because a prompt is a request and not a guarantee. Verified by re-running the same rung on the same case after
+   the deploy: it now says, in full, *"Let's move on to the next piece."*
+5. **The brainstorm always runs last (#133).** Boothbucks' brainstorm — *ways to categorise the new shops* — is step 3 in the book, asked
+   before the exhibit that reveals the grouping. The engine asked it after, when the answer was already on the table. Swift Business has two
+   brainstorms and only the first ran, labelled on screen as "Brainstorm: #1: Revenue factors".
+6. **17 case prompts talk about the book instead of to the candidate (#132).** Swift Business opens the member's case with *"The book flags
+   this as a hard, complex case meant for people already at ease with case interviews."* Two tell the member which method to use, two
+   describe how the interviewer should behave, and two note a spelling slip in the book, which the owner's no-slips rule forbids outright.
+   **This is the pilot's only content finding, and it needs a seed reload**, so it joins the group waiting on the owner.
+7. **The pilot runner's own cap arithmetic (#134), found on first contact with production and fixed the same day (PR #135).** The running
+   total built the report from the transcripts on disk, so a turn that had just happened fell into the unattributed bucket and was priced at
+   Haiku — which understated a `finish` about twentyfold. It was a real safety bug, one turn deep: the next invocation reloads from disk and
+   `spend` was never wrong.
+
+### What the pilot settles about how to test this product
+
+- **The free harness and the paid pilot answer different questions and neither substitutes for the other.** `audit:live` and `dryrun:live`
+  proved every case completes and no exhibit leaks, over 10,164 runs, for nothing. Not one of findings 1 to 5 above is visible to them: a
+  case missing a third of its content completes; a reply that validates a guess completes; a volunteered derived figure completes.
+- **Six real runs were enough.** Every finding above appeared in the first four cases and repeated. The remaining budget is better spent
+  verifying fixes than enlarging the sample, which is what the sixth run did.
+- **The cheapest and most convincing verification is re-running the exact moment.** The #131 fix was confirmed by driving the same case to
+  the same rung and reading the sentence. That cost one start and about three cents.
 
 ## Process decisions
 
