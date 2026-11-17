@@ -206,6 +206,30 @@ describe('an exhibit in a live case', () => {
     expect(screen.getByRole('img', { name: /M90 90/ })).toBeInTheDocument();
   });
 
+  // Issue #95: a member working an exhibit must never be handed a shortened one as if it were the book's whole exhibit. The live case
+  // sends the exhibit whole (see src/data/liveExhibitCaps.test.ts), so this should never be seen; it is here for the day it is.
+  it('says so when a cap cut part of the exhibit, and says nothing when the whole of it is drawn', () => {
+    const { rerender } = render(<ExhibitView exhibit={exhibit({ chart: barChart })} />);
+    expect(screen.queryByText(/Not the whole exhibit/)).not.toBeInTheDocument();
+    // 500 chart points against the live cap of 400: the member sees part of the line and is told so.
+    const months = Array.from({ length: 500 }, (_, i) => `M${i + 1}`);
+    rerender(
+      <ExhibitView
+        exhibit={exhibit({
+          title: 'Exhibit 5: Units by month',
+          chart: { kind: 'line', categories: months, series: [{ name: 'Units', values: months.map((_, i) => i + 1), labels: [], type: 'bar', color: '' }] },
+        })}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Not the whole exhibit');
+  });
+
+  it('says nothing for a chart kind we do not draw: the table beside it is the book\'s own exhibit', () => {
+    render(<ExhibitView exhibit={exhibit({ chart: { ...barChart, kind: 'marimekko' } })} />);
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.queryByText(/Not the whole exhibit/)).not.toBeInTheDocument();
+  });
+
   it('plots a chart with more points than a write-up may hold', () => {
     const months = Array.from({ length: 90 }, (_, i) => `M${i + 1}`);
     render(

@@ -6,6 +6,7 @@ import { formatClock, STAGE_LABEL, STEPS } from '../../domain/liveCase';
 import { tableRepeatsChart } from '../../domain/liveExhibit';
 import { Button } from '../../components/ui/Button';
 import { ExhibitChart } from '../caselog/ExhibitChart';
+import { ExhibitNotWhole } from '../caselog/ExhibitNotWhole';
 import { BucketAvatar } from '../improvement/BucketAvatar';
 
 /** Saves what is typed a moment after typing stops, and once more when the box goes away, so a refresh or a timeout never loses a draft. */
@@ -36,6 +37,8 @@ export function useAutosave(value: string, save: (text: string) => void, delayMs
  * chart already prints, the table is left out: it is our own transcription of the chart (the book prints the chart alone), and a real
  * candidate would not have it. A table with anything the chart does not print stays (see `tableRepeatsChart`).
  * The "values read off a chart, approximate" note describes that table's figures, so it is shown only while the table is.
+ * If a cap did cut something out of this exhibit, the member is told: working an exhibit that is quietly missing a column or a panel is
+ * worse than knowing it is (see `ExhibitNotWhole`).
  */
 export function ExhibitView({ exhibit }: { exhibit: PublicExhibit }) {
   const normalised = useMemo(() => parseSolutionExhibit(exhibit, LIVE_EXHIBIT_LIMITS), [exhibit]);
@@ -47,6 +50,7 @@ export function ExhibitView({ exhibit }: { exhibit: PublicExhibit }) {
         {exhibit.approx && showTable && <span className="ml-2 text-xs font-normal text-muted">(values read off a chart, approximate)</span>}
       </figcaption>
       {exhibit.caption && <p className="text-xs text-muted">{exhibit.caption}</p>}
+      <ExhibitNotWhole cut={normalised.cut} />
       {normalised.chart && <ExhibitChart exhibit={normalised} chart={normalised.chart} />}
       {showTable && (
         <div className="overflow-x-auto rounded-lg border border-line">
