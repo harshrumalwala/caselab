@@ -36,7 +36,7 @@ const STEP_CAP = 400;
 const SECOND = 1000;
 
 export const MODES = ['practice', 'interview', 'learning'];
-export const CANDIDATES = ['brisk', 'passive', 'offtrack', 'asker'];
+export const CANDIDATES = ['brisk', 'passive', 'offtrack', 'asker', 'plausible'];
 export const BEAT_OUTCOMES = ['independent', 'hinted', 'coach_moved', 'member_moved', 'timed_out', 'open'];
 export const RUNGS = ['none', 'process_hint', 'directional_hint', 'lead', 'advance'];
 
@@ -100,6 +100,8 @@ const WRITES = {
   framework: 'Three buckets: the market, the economics and the ways to act on them.',
   direction: 'I would start with the economics, because that is where the problem is most likely to sit.',
   exhibit: 'Looking at this, the pattern I notice seems worth following up.',
+  /** The one message written to be judged rather than counted: it sounds like an answer and names nothing (issue #130). */
+  plausible: 'There is definitely something going on here and it feels like it matters for the client.',
   brainstorm: 'A few ideas, grouped into the ones that act on volume and the ones that act on price.',
   recommendation: 'My recommendation is the option the numbers support, with the main risk named and a next step.',
 };
@@ -157,6 +159,23 @@ export const CANDIDATE_SPECS = {
     exhibit: { assessment: 'unclear', beatComplete: false },
     endsBeats: true, // by choosing "move on"
     beat: (written) => (written < 2 ? 'write' : 'moveOn'),
+  },
+  plausible: {
+    what: 'writes messages that sound like progress and name nothing, and whose every message the model scores a clear step forward',
+    acts: true,
+    thinkMs: 30 * SECOND,
+    clarifyQuestions: 2,
+    directionClear: true,
+    /**
+     * The pilot's own failure (issue #130): the member sounds reasonable and is stuck, and the model calls every message a step
+     * forward, so the rung counter is reset every time and the help ladder never engages. This is the one candidate whose messages
+     * are written to be read rather than counted, because the engine now holds that score to what they wrote.
+     */
+    exhibit: { assessment: 'progress', beatComplete: false },
+    writes: 'plausible',
+    beatCap: OFFTRACK_BEAT_CAP,
+    endsBeats: false,
+    beat: (written) => (written < OFFTRACK_BEAT_CAP ? 'write' : 'nothing'),
   },
 };
 
@@ -343,7 +362,7 @@ export async function playCase(raw, mode, candidate, engine, startAt = START_AT)
           if (state) run.rungs.push(engine.nudgeLevel(state, clock.t));
           writtenOnBeat += 1;
           run.coachCalls += 1;
-          await ask({ type: 'say', sessionId: id, text: WRITES.exhibit });
+          await ask({ type: 'say', sessionId: id, text: WRITES[spec.writes ?? 'exhibit'] });
           return true;
         }
         default:

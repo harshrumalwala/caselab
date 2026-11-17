@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
+  assessmentOf,
   buildPlan,
   coachSays,
   continueCase,
@@ -10,6 +11,7 @@ import {
   hardEnd,
   isInterviewerSideExhibit,
   LIMIT_MS,
+  madeAStep,
   moveOn,
   newSession,
   nextBeat,
@@ -946,5 +948,64 @@ describe('the help ladder, mode by mode', () => {
     const b = openBeat(s)!;
     const old: SessionState = { ...s, mode: undefined, beats: [{ ...b, asked: 2 }] };
     expect(nudgeLevel(old, b.revealedAt + sec(30))).toBe('lead');
+  });
+
+  // The ladder is entered by `asked`, and `asked` is reset by a message the model scored as a step forward. The real-model pilot found
+  // that score given to messages that said nothing, so the counter never climbed for the member who most needed it (issue #130).
+  describe('what counts as a step forward', () => {
+    it('counts a message that names a figure, a comparison or the next move', () => {
+      for (const text of [
+        'Off-peak occupancy is 31% against 95% at peak',
+        'The suburban shops look worse than the urban ones',
+        'Profit is flat while revenue grows, so the new shops must be the drag',
+        'I would work out the profit per shop for each group',
+        "Let's check the cost side next",
+        'I am not sure if this is right, but the margin per customer is the thing to compare',
+      ]) {
+        expect(madeAStep(text), text).toBe(true);
+      }
+    });
+
+    it('does not count a message that names none of them, however reasonable it sounds', () => {
+      for (const text of [
+        'Looking at this, the pattern I notice seems worth following up',
+        'There is definitely something interesting happening here',
+        'Okay, I see',
+        'I do not know',
+        'No idea',
+        'Hmm',
+      ]) {
+        expect(madeAStep(text), text).toBe(false);
+      }
+    });
+
+    it('does not count a reading the member says plainly they cannot use, and does count one they can', () => {
+      // The pilot's own first message: it reads the exhibit, and then says they do not know what to do with it.
+      expect(madeAStep("Revenue is going up a lot and profit is just sitting there. I'm not really sure what to do with that.")).toBe(false);
+      expect(madeAStep('Revenue is up and profit is flat, so I would look at the cost per shop')).toBe(true);
+    });
+
+    it('only ever takes a score away, and only the top one', () => {
+      expect(assessmentOf('progress', 'Looking at this, the pattern seems worth following up')).toBe('unclear');
+      expect(assessmentOf('progress', 'Off-peak occupancy is 31% against 95% at peak')).toBe('progress');
+      for (const claimed of ['partial', 'stuck', 'unclear'] as const) expect(assessmentOf(claimed, 'Anything at all')).toBe(claimed);
+    });
+
+    it('keeps the rung counter climbing when every message is scored a step forward', () => {
+      // Six messages that say nothing, each one scored 'progress' by the model: before, the counter was reset six times.
+      let s = onExhibit('interview');
+      for (let i = 0; i < 3; i++) {
+        s = ok(userSays(s, 'There is definitely something interesting happening here', at(10)));
+        s = recordAssessment(s, assessmentOf('progress', 'There is definitely something interesting happening here'), at(10));
+        s = coachSays(s, 'Okay, go on.', at(10));
+      }
+      expect(openBeat(s)!.asked).toBe(3);
+      expect(nudgeLevel(s, openBeat(s)!.revealedAt + sec(30))).toBe('advance');
+      // ...and a message that does say something still starts the count again.
+      s = ok(userSays(s, 'Off-peak occupancy is 31% against 95% at peak', at(10)));
+      s = recordAssessment(s, assessmentOf('progress', 'Off-peak occupancy is 31% against 95% at peak'), at(10));
+      expect(openBeat(s)!.asked).toBe(0);
+      expect(nudgeLevel(s, openBeat(s)!.revealedAt + sec(30))).toBe('none');
+    });
   });
 });

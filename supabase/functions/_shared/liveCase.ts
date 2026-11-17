@@ -907,6 +907,62 @@ export function moveOn(settled: SessionState, now: number): ActionResult {
 /** What the member's last message showed: progress, partial progress, being stuck, or not enough to tell. */
 export type Assessment = 'progress' | 'partial' | 'stuck' | 'unclear';
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// Did that message move the case forward? (issue #130)
+// ---------------------------------------------------------------------------------------------------------------------------
+// The help ladder is entered through `asked`, which counts the messages since the member last made a clear step forward, and the model
+// is what judges the step. The real-model pilot found that judgement far too generous: six messages on one beat, four of them openly
+// stuck, came back as six steps forward, so the counter never left zero and the ladder never engaged for the member who needed it most.
+// The test below is the floor the model's score is held to. It is one-way on purpose: it can take 'progress' away from a message that
+// shows nothing concrete, and it can never hand 'progress' to a message the model called stuck.
+
+/** A figure of any kind, including the few that are written as words. */
+const A_FIGURE = /\d|\b(?:half|halved|double[ds]?|doubling|twice|triple[ds]?|third|quarter|percent|percentage)\b/i;
+/** Two things set against each other, a direction of change, or a driver named as the cause of something. */
+const A_COMPARISON =
+  /\b(?:than|versus|vs\.?|compares?|compared|comparing|comparison|against|relative to|higher|lower|bigger|smaller|larger|greater|fewer|more|less|faster|slower|rose|rising|risen|fell|fallen|falling|grew|grown|growing|growth|declin\w*|increas\w*|decreas\w*|shrink\w*|shrank|flat|gap|differen\w*|between|per|each|ratio|margin|share|driver|driving|driven by|caused by|because|due to|therefore|which means|that means|means that|implies|suggests|explains)\b/i;
+/** The next thing they would do. */
+const A_NEXT_MOVE =
+  // "I'd ...", "I'll ..." say what they would do; "I'm ..." does not (it is how "I'm not sure" starts), so it is only here with a verb.
+  /\b(?:i(?:'|’)?(?:d|ll) \w+|i(?:'|’)?m (?:going to|about to)|i would|i will|i want to|i need to|i am going to|let(?:'|’)?s|next i|next step|then i|we should|i should|i could|can we|could we|calculat\w*|comput\w*|work out|work it out|figure out|check|look at|dig into|break it down|break this down|segment|split|estimate|size the|test|quantify|rule out)\b/i;
+/**
+ * Saying, in so many words, that they do not know what to do. A hedge in front of a claim ("I am not sure if this is right, but the
+ * suburban shops look like the problem") is deliberately not one of these: it is the admission standing on its own that says they are
+ * stuck, and a message that goes on to name the next move is a step forward whatever it admits.
+ */
+const STUCK_ADMISSION =
+  /\b(?:no idea|no clue|i(?:'|’)?m stuck|i am stuck|i(?:'|’)?m lost|not (?:really |entirely |quite |totally )?sure (?:what|where|how|why)|(?:do|does)(?:n(?:'|’)?t| not) know (?:what|where|how|why)|nothing comes to mind|drawing a blank|what should i|where should i)\b/i;
+/** A whole message that is nothing but giving up. */
+const GAVE_UP = /^\W*(?:i (?:really )?(?:do ?n(?:'|’)?t|do not) know|not sure|no idea|nothing|still nothing|hmm+|erm+|\?+)\W*$/i;
+
+/**
+ * Whether what the member wrote is a step forward: it names a comparison or a driver, it names or works with a figure, or it says the
+ * next thing they would do. A message that does none of those three has not moved the case on, however reasonable it sounds — and nor
+ * has one that says plainly that they do not know what to do with what is in front of them, unless it also says what they would do next.
+ */
+export function madeAStep(text: string): boolean {
+  if (GAVE_UP.test(text.trim())) return false;
+  const next = A_NEXT_MOVE.test(text);
+  if (!next && !A_FIGURE.test(text) && !A_COMPARISON.test(text)) return false;
+  return next || !STUCK_ADMISSION.test(text);
+}
+
+/**
+ * The score the engine acts on: the model's own, unless it called a message a clear step forward and the message names nothing
+ * concrete. Then it is 'unclear' rather than 'stuck', because no rule here can tell a lost member from a quiet one; what matters is
+ * that a message which did nothing no longer resets the rung counter. A model that never says 'progress' leaves the ladder exactly as
+ * it was (the safe way round); a model that says it on everything no longer stops the ladder climbing.
+ */
+export function assessmentOf(claimed: Assessment, memberText: string): Assessment {
+  return claimed === 'progress' && !madeAStep(memberText) ? 'unclear' : claimed;
+}
+
+/** The member's last message, which is the one a reply is answering. */
+export function lastMemberMessage(s: SessionState): string {
+  for (let i = s.messages.length - 1; i >= 0; i--) if (s.messages[i].from === 'user') return s.messages[i].text;
+  return '';
+}
+
 export function recordAssessment(settled: SessionState, assessment: Assessment, now: number): SessionState {
   const s = structuredClone(settled);
   const b = openBeat(s);

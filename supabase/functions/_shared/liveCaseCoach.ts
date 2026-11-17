@@ -5,9 +5,11 @@
 // in (`ask`), as is the database, so all of it is tested with no network. ../live-case/index.ts only plugs in the real services.
 
 import {
+  assessmentOf,
   buildPlan,
   isInterviewerSideExhibit,
   coachSays,
+  lastMemberMessage,
   endFrameworkStage,
   hardEnd,
   newSession,
@@ -368,9 +370,24 @@ How you behave:
 - There is no clock. Never mention time limits, pace or being behind, and never rush them.
 - Reply in plain text, with no markdown headings, no bullet lists and no emoji.`;
 
-export function systemPrompt(s: LiveSolution, learning = false): string {
+/**
+ * Interview mode's register (issue #130). A real interviewer is pleasant and simply does not tell you whether you are right: the
+ * candidate finds that out by doing the work. The warmth is in the tone, never in a verdict. Practice and learning keep theirs below.
+ */
+const INTERVIEW_REGISTER = `
+- You are running this as a real interview, so your register is neutral: pleasant and interested, never a verdict. Do not tell them whether their reading of the part you are on is right, wrong, close or clever, and do not grade it back at them — no "you're right", "good instinct", "you're on a good track", "exactly the right lens", "that is the core signal", and no "not quite" either. They find out whether they were right by doing the work.
+- Add nothing of your own to their thinking: no driver, comparison, segment, ratio or line of enquiry they have not raised themselves, unless the directive below tells you to give them a hint. That hint is the only help in an interview.
+- Acknowledging is enough, and it is warm: "Okay.", "Right.", "Go on.", "Understood." — and then one question that puts the work back to them.
+- A direct question about a fact is a different thing and is answered as it always is: give the figure or the fact they asked for.`;
+
+/** Practice's register: the same interviewer, coaching as it goes. Saying what is good about an answer is part of what practice is for. */
+const PRACTICE_REGISTER = `
+- This is practice rather than a test, so you coach as you go: when they take a real step you may say briefly and warmly what was good about it before your next question. Keep it to a few words, and never do the thinking, the reading or the arithmetic for them.`;
+
+export function systemPrompt(s: LiveSolution, mode: LiveMode = 'practice'): string {
   const qa = s.clarifying.map((q) => `Q: ${q.question}\nA: ${q.answer}`).join('\n\n');
-  return `${learning ? LEARNING_RULES : BASE_RULES}
+  const rules = mode === 'learning' ? LEARNING_RULES : `${BASE_RULES}${mode === 'interview' ? INTERVIEW_REGISTER : PRACTICE_REGISTER}`;
+  return `${rules}
 
 <case>
 Prompt: ${s.prompt}
@@ -672,6 +689,13 @@ const NOT_THE_ANSWER =
 const DATA_REQUESTS =
   ` If the student asks to see data or an exhibit, or for a number they need for their calculation, and it is in the case information, in the exhibit shown to them or in the data you hold for them (listed below), give it instead of answering with a question. Data you hold for them is read out in full, every figure, in plain spoken sentences exactly as written (as an interviewer reads a table aloud), and then you ask what they make of it or what they would calculate. Never say a result, a total, a ratio or what it means.${NOT_THE_ANSWER} Asking for the right data is part of doing the case well: give it without treating it as being stuck. Set data_request to true when their message asks you for something — data, an exhibit, a figure, a fact, or the answer itself — instead of working on the case; it costs them nothing either way. The case must keep moving: if the information really is not there, say so briefly and ask them to state an assumption and carry on. Give what you give in your own voice: state the fact or the figure itself and never where it is written ("the case says", "the exhibit states", "according to the prompt").`;
 
+/**
+ * What counts as a step forward, said the same way in every mode (issue #130). The engine holds the score to this in code as well
+ * (`assessmentOf` in liveCase.ts), because the rung counter that enters the help ladder is reset by it.
+ */
+const PROGRESS_TEST =
+  ' "progress" means the message does at least one of these: it names a comparison or a driver, it states or works with a figure, it says what this part means for the client, or it says the next thing they would do. A message that does none of them — a restatement of what is in front of them, a feeling about it, or saying they do not know what to do with it — is "stuck" or "unclear" however reasonable it sounds, and a message that says plainly they are stuck is "stuck".';
+
 const DIRECTIVES: Record<TurnKind, string> = {
   clarify:
     'The student asked a clarifying question. Answer it using only the case information, briefly, giving every figure, name and detail exactly as written there (do not round, summarise, generalise or add anything), and only what the question asks for. If it is too vague, ask them to be specific. Do not hint at the framework. After about four questions you may say they can take their framework time when ready. Set assessment to "progress", beat_complete and direction_clear to false.' +
@@ -680,7 +704,10 @@ const DIRECTIVES: Record<TurnKind, string> = {
     'The student has handed in a framework (you will not see it) and has now said where they would start. Reply in one or two sentences: acknowledge their starting point, and say you will show them some data. If their direction is unclear or off-track, instead ask ONE focused follow-up question about where they would start. Do not teach, rewrite or praise at length. Set direction_clear to true when their starting direction is clear enough to move on.' +
     DATA_REQUESTS,
   exhibit:
-    'The student is working on the exhibit. Judge what they just wrote, then respond in one to three short sentences: if they are on a good track, let them continue or ask for the implication for the client, then the next step they would take. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell). Set beat_complete to true as soon as they have independently stated what the exhibit means for the client (a sensible next step is welcome but not needed), so a student who gets it quickly moves on without being held here. Do not give a hint unless told to below.' + DATA_REQUESTS,
+    'The student is working on the exhibit. Judge what they just wrote, then respond in one to three short sentences: if they are on a good track, let them continue or ask for the implication for the client, then the next step they would take. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell).' +
+    PROGRESS_TEST +
+    ' Set beat_complete to true as soon as they have independently stated what the exhibit means for the client (a sensible next step is welcome but not needed), so a student who gets it quickly moves on without being held here. Do not give a hint unless told to below.' +
+    DATA_REQUESTS,
   nudge_process:
     'The student has made no progress for a while. Give ONE brief process-oriented hint: suggest a way to approach the data (what to compare, what to ask of it, how to structure the calculation) without telling them what to conclude. One or two sentences.',
   nudge_directional:
@@ -700,6 +727,35 @@ const HELP: Record<NudgeLevel, string> = {
     ' The student has been stuck for a long time. If (and only if) this message shows they are still stuck, your whole reply is ONE short, neutral sentence saying you will move on to the next piece, and nothing else: do NOT explain, solve or summarise this one, and say nothing about what it showed, what it was about or what they should have seen.',
 };
 
+/**
+ * An interview's own directives (issue #130). The ladder (liveCase.ts) decides how much help a mode gives; these decide the register
+ * it is given in. Only the turns where the member is working something out differ — a clarifying question and a request for data are
+ * answered the same way in every mode.
+ */
+const INTERVIEW_DIRECTIVES: Record<TurnKind, string> = {
+  ...DIRECTIVES,
+  direction:
+    'The student has handed in a framework (you will not see it) and has now said where they would start. Reply in one or two sentences: acknowledge their starting point in a neutral word or two, without saying whether it is a good place to start and without naming anything they did not, and say you will show them some data. If their direction is unclear or off-track, instead ask ONE focused follow-up question about where they would start. Do not teach, rewrite, praise or correct. Set direction_clear to true when their starting direction is clear enough to move on.' +
+    DATA_REQUESTS,
+  exhibit:
+    'The student is working on the exhibit. Judge what they just wrote — silently: your judgement sets the fields below and never appears in your reply. Then answer in one to three short sentences that tell them nothing about whether their reading is right: acknowledge what they wrote in a word or two and ask them ONE question that puts the work back to them (what they make of it, what it would mean for the client, or what they would do next). Name no driver, comparison, segment or figure they have not raised themselves. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell).' +
+    PROGRESS_TEST +
+    ' Set beat_complete to true as soon as they have independently stated what the exhibit means for the client (a sensible next step is welcome but not needed), so a student who gets it quickly moves on without being held here. Do not give a hint unless told to below.' +
+    DATA_REQUESTS,
+};
+
+/**
+ * The same rungs an interview has always had (the ladder is `LADDER.interview` in liveCase.ts and is untouched), said in the
+ * interview's register. The first rung is the one that matters: it gives nothing, and "nothing" still has to be something on screen.
+ */
+const INTERVIEW_HELP: Record<NudgeLevel, string> = {
+  ...HELP,
+  none:
+    ' There is no help at this point in an interview, whether or not they are stuck: say nothing about whether their reading is right, add no driver, comparison or figure they have not raised, and do not point them anywhere. Acknowledge what they wrote in a word or two and put one question back to them — that is the whole reply.',
+  process_hint: `${HELP.process_hint} The hint is the one thing you may point at that they have not raised; even in it, say nothing about whether their reading so far is right.`,
+  directional_hint: `${HELP.directional_hint} Still say nothing about whether their reading is right: the hint points, it does not judge.`,
+};
+
 // A learning case teaches as it goes, so its replies are a little longer and say why. Same rules for facts: only what the case holds, and the inputs of a calculation, never the student's own work done for them.
 // Learning is the one mode where a figure they are there to work out may be said at all, and then only once they have tried.
 const LEARNING_DATA_REQUESTS = DATA_REQUESTS.replace(
@@ -714,7 +770,9 @@ const LEARNING_DIRECTIVES: Record<TurnKind, string> = {
     'The student has handed in a framework (you will not see it) and has now said where they would start. In two to four short sentences: say what is good about starting there, explain briefly why a starting point like that matters in a real case (a good start tests the biggest driver of the problem first), and say you will show them some data. If their direction is unclear, instead ask ONE focused follow-up question about where they would start. Set direction_clear to true when their starting direction is clear enough to move on.' +
     LEARNING_DATA_REQUESTS,
   exhibit:
-    'The student is working on the exhibit. Judge what they just wrote, then respond in two to five short sentences: say what they got right and why it matters; if they missed or misread something, point gently at what to look at and why; if they have stated what the exhibit means for the client, say what a strong answer to this exhibit sounds like (in your own words, from your notes) and why that conclusion is the useful one. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell). Set beat_complete to true as soon as they have stated what the exhibit means for the client; your message is then the short lesson on this exhibit, and the next one comes out. Do not give a hint unless told to below.' +
+    'The student is working on the exhibit. Judge what they just wrote, then respond in two to five short sentences: say what they got right and why it matters; if they missed or misread something, point gently at what to look at and why; if they have stated what the exhibit means for the client, say what a strong answer to this exhibit sounds like (in your own words, from your notes) and why that conclusion is the useful one. Set assessment to "progress" (clear step forward), "partial", "stuck" (going nowhere) or "unclear" (cannot tell).' +
+    PROGRESS_TEST +
+    ' Set beat_complete to true as soon as they have stated what the exhibit means for the client; your message is then the short lesson on this exhibit, and the next one comes out. Do not give a hint unless told to below.' +
     LEARNING_DATA_REQUESTS,
 };
 
@@ -767,6 +825,9 @@ function history(state: SessionState): { role: 'user' | 'assistant'; content: st
   return out;
 }
 
+/** Which mode a session is in. A case saved before there were modes counts as practice, as it does everywhere else. */
+const modeOf = (state: SessionState): LiveMode => (isUntimed(state) ? 'learning' : state.mode === 'interview' ? 'interview' : 'practice');
+
 export function turnRequest(sol: LiveSolution, state: SessionState, kind: TurnKind, help: NudgeLevel = 'none'): TurnRequest {
   const beat = openBeat(state);
   const learning = isUntimed(state);
@@ -775,12 +836,16 @@ export function turnRequest(sol: LiveSolution, state: SessionState, kind: TurnKi
   const onTheTable = kind === 'exhibit' || kind.startsWith('nudge') ? beatContext(sol, beat ? state.plan.beats[beat.index] : undefined, learning) : '';
   const context = onTheTable || earlyDataContext(sol, learning);
   const messages = history(state);
+  // Which register this mode is in (issue #130): an interview judges without saying so, practice and learning coach as they go.
+  const mode = modeOf(state);
+  const directives = mode === 'learning' ? LEARNING_DIRECTIVES : mode === 'interview' ? INTERVIEW_DIRECTIVES : DIRECTIVES;
+  const helps = mode === 'learning' ? LEARNING_HELP : mode === 'interview' ? INTERVIEW_HELP : HELP;
   // The directive rides on the last turn only and is not saved, so the conversation before it stays identical from request to request.
-  const directive = `\n\n<directive>\n${(learning ? LEARNING_DIRECTIVES : DIRECTIVES)[kind]}${kind === 'exhibit' ? (learning ? LEARNING_HELP : HELP)[help] : ''}\n</directive>${context ? `\n${context}` : ''}`;
+  const directive = `\n\n<directive>\n${directives[kind]}${kind === 'exhibit' ? helps[help] : ''}\n</directive>${context ? `\n${context}` : ''}`;
   const last = messages[messages.length - 1];
   if (last.role === 'user') last.content += directive;
   else messages.push({ role: 'user', content: `(The student has said nothing new.)${directive}` });
-  return { model: 'coach', system: systemPrompt(sol, learning), messages, schema: TURN_SCHEMA, maxTokens: learning ? 800 : 600, effort: 'low' };
+  return { model: 'coach', system: systemPrompt(sol, mode), messages, schema: TURN_SCHEMA, maxTokens: learning ? 800 : 600, effort: 'low' };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -872,14 +937,17 @@ const contentWords = (t: string): Set<string> => new Set(norm(t).split(' ').filt
 
 /**
  * True when a reply carries the substance of a sentence of the private notes, word for word or not: three or more of that sentence's
- * own content words are in it. Coarser than `leaks` and meant to be: it is asked of a reply that is only allowed to say "moving on".
+ * own content words are in it. Coarser than `leaks` and meant to be: it is asked of a reply that is only allowed to say "moving on",
+ * and of an interview reply at the rung that gives nothing. `theirs` is what the member has already written: a word they raised
+ * themselves is theirs, not the interviewer's, so it never counts towards the three (issue #130).
  */
-export function sharesSubstance(message: string, notes: readonly string[]): boolean {
+export function sharesSubstance(message: string, notes: readonly string[], theirs = ''): boolean {
   const m = contentWords(message);
   if (m.size === 0) return false;
+  const raised = contentWords(theirs);
   for (const block of notes) {
     for (const sentence of block.split(/(?<=[.!?])\s+|\s\/\s/)) {
-      const words = [...contentWords(sentence)];
+      const words = [...contentWords(sentence)].filter((w) => !raised.has(w));
       if (words.length >= 3 && words.filter((w) => m.has(w)).length >= 3) return true;
     }
   }
@@ -895,6 +963,71 @@ export function movingOnOnly(message: string, notes: readonly string[]): string 
   return !first || first.length > MOVING_ON_CHARS || sharesSubstance(first, notes) ? MOVING_ON : first;
 }
 
+// --- The interviewer's register (issue #130) ---------------------------------------------------------------------------------
+// In an interview a reply does not tell the member whether their reading of the part in front of them is right. The directives ask
+// for that; these checks are what happens when the model confirms the guess anyway, which the real-model pilot found it doing in
+// every run and at every rung. They read the wording, so they catch the pilot's phrasings and the obvious variants of them, not
+// every way a verdict can be worded: see README.
+
+/** Telling them their reading is right — or wrong. The three replies the pilot quoted are each caught by one of these. */
+const VERDICT = new RegExp(
+  [
+    // "You're right", "you are exactly right", "you're on a good track", "you're close", "you've spotted it", "you nailed it"
+    "\\byou(?:'|\\u2019)?(?:re| are|ve| have)?\\s+(?:absolutely\\s+|exactly\\s+|quite\\s+|completely\\s+|certainly\\s+|correctly\\s+)?(?:right\\b|correct\\b|onto something\\b|on (?:the|a) (?:right|good) (?:track|lines|path)\\b|on track\\b|close\\b|spot[- ]on\\b|nailed\\b|got it\\b|hit (?:on|upon)\\b|(?:correctly )?(?:spotted|identified|zeroed|picked up on|linked|caught)\\b)",
+    // "Good instinct", "nice catch", "great question", "well spotted"
+    '\\b(?:good|great|nice|strong|excellent|sharp|solid)\\s+(?:instinct|thinking|catch|call|point|spot|read|observation|insight|start|question|logic|intuition)\\b',
+    '\\bwell (?:spotted|put|reasoned|observed)\\b',
+    // "That's right", "that is exactly it", "that's the key insight". "That's ..." on its own is far too common to drop a sentence
+    // for ("That's the figure you asked for"), so it is only a verdict when what follows it is one.
+    "\\bthat(?:'|\\u2019)?(?:s| is)\\s+(?:absolutely\\s+|exactly\\s+|precisely\\s+)?(?:right\\b|correct\\b|it\\b|true\\b|a (?:good|strong|fair|sharp) \\w+|the (?:right|key|core|main|central|crucial|important|real) \\w+)",
+    // "which is the core signal", "exactly the right lens", "the heart of the ROIC drop"
+    '\\bwhich is (?:exactly )?(?:the|a)\\b',
+    '\\bexactly the (?:right|key|core|point)\\b',
+    '\\bthe (?:heart|crux|core) of\\b',
+    // ...and the other way: a verdict is a verdict when it says they are wrong.
+    '\\bnot (?:quite|really|exactly) (?:right|it|there)\\b',
+    "\\bthat(?:'|\\u2019)?s not (?:quite|right|correct|it)\\b",
+    "\\byou(?:'|\\u2019)?(?:re| are) (?:wrong|mistaken|missing|off (?:track|base))\\b",
+    '^correct[.!]?$',
+    '\\bi agree\\b|\\bagreed\\b',
+  ].join('|'),
+  'i',
+);
+/** A sentence that confirms, denies or grades what the member just said. */
+export function gradesTheirReading(sentence: string): boolean {
+  return VERDICT.test(sentence);
+}
+
+/** A verdict with the next question stuck on the end of it ("You're right — so what does that imply?"): the question survives. */
+function questionIn(sentence: string): string {
+  if (!sentence.trimEnd().endsWith('?')) return '';
+  const parts = sentence.split(/\s*[—–:;]\s*|,\s+(?=(?:so|and|but|now)\b)/i);
+  const tail = parts.length > 1 ? parts[parts.length - 1].trim() : '';
+  return tail.endsWith('?') && !gradesTheirReading(tail) ? capitalised(tail) : '';
+}
+
+/** The same reply with no verdict in it. A sentence that was a verdict and a question keeps the question. */
+export function withoutVerdicts(message: string): string {
+  const kept: string[] = [];
+  for (const sentence of sentencesOf(message)) {
+    if (!gradesTheirReading(sentence)) kept.push(sentence);
+    else {
+      const question = questionIn(sentence);
+      if (question) kept.push(question);
+    }
+  }
+  return kept.join(' ');
+}
+
+/**
+ * What "gives nothing" looks like at the rung where an interview gives nothing: an acknowledgement and the question handed back. An
+ * empty reply is not an option — the member has to read something — so this is what a reply becomes when everything in it was a
+ * verdict, or when it was carrying the beat's own notes to someone who has not earned them.
+ */
+export const OVER_TO_YOU = 'Okay, stay with it — what do you make of that, and what would you do next?';
+/** The same, for the one turn before the case has anything on the table: their starting point heard, and the data coming out. */
+export const SHOW_DATA = 'Understood. Let us look at some data.';
+
 export function parseTurn(
   text: string,
   privateText: readonly string[],
@@ -902,6 +1035,8 @@ export function parseTurn(
   maxChars = 700,
   rung: NudgeLevel = 'none',
   held: readonly string[] = [],
+  /** Which register the reply has to be in, and what the member wrote (so a word they raised themselves is theirs, not ours). */
+  opts: { mode?: LiveMode; kind?: TurnKind; memberText?: string } = {},
 ): Turn | null {
   let raw: unknown;
   try {
@@ -912,20 +1047,34 @@ export function parseTurn(
   const o = obj(raw);
   const message = str(o.message, maxChars);
   if (!message) return null;
-  const assessment: Assessment = (['progress', 'partial', 'stuck', 'unclear'] as const).find((a) => a === o.assessment) ?? 'unclear';
+  const claimed: Assessment = (['progress', 'partial', 'stuck', 'unclear'] as const).find((a) => a === o.assessment) ?? 'unclear';
+  // The score the engine acts on is the model's, held to what the member actually wrote (issue #130). `applyTurn` runs the same test
+  // again on the session's own last message, so a caller with no text to give is no worse off than it was.
+  const assessment = opts.memberText === undefined ? claimed : assessmentOf(claimed, opts.memberText);
   const beatComplete = o.beat_complete === true;
   const dataRequest = o.data_request === true;
+  const directionClear = o.direction_clear === true;
   // The same test `applyTurn` makes before it moves the case on, so only a reply that really is the move-on is held to the move-on rule:
   // a question answered at that rung, or a beat finished at it, is an ordinary reply and keeps everything it said.
   const moving = rung === 'advance' && !beatComplete && !dataRequest && (assessment === 'stuck' || assessment === 'unclear');
   const voiced = interviewerVoice(message);
-  const said = moving ? movingOnOnly(voiced, privateText) : voiced;
+  let said = moving ? movingOnOnly(voiced, privateText) : voiced;
+  // An interview says nothing about whether they are right, on the turns where they are working something out. A clarifying question
+  // and a request for data are answered the same way in every mode, so neither is touched here.
+  if (opts.mode === 'interview' && (opts.kind === 'exhibit' || opts.kind === 'direction')) {
+    said = withoutVerdicts(said);
+    // At the rung that gives nothing, a reply carrying the substance of the beat's private notes is handing over the beat: the
+    // member has to read something, so they read the acknowledgement and the question instead.
+    const givesNothing = opts.kind === 'exhibit' && rung === 'none' && !beatComplete && !dataRequest;
+    if (!said || (givesNothing && sharesSubstance(said, privateText, opts.memberText ?? '')))
+      said = opts.kind === 'exhibit' ? OVER_TO_YOU : directionClear ? SHOW_DATA : '';
+  }
   return {
     // A reply that states a figure the book worked out goes the way a reply that quotes a private note goes: it is replaced whole.
     message: !said || leaks(said, privateText) || statesHeldResult(said, held) ? fallback : said,
     assessment,
     beatComplete,
-    directionClear: o.direction_clear === true,
+    directionClear,
     dataRequest,
   };
 }
@@ -1285,15 +1434,18 @@ function applyTurn(st: StoredSession, turn: Turn, kind: TurnKind, now: number, h
     return { ...s, directionFollowUps: s.directionFollowUps + 1 };
   }
   if (kind === 'exhibit') {
-    s = recordAssessment(s, turn.assessment, now);
+    // The model's score, held to what the member actually wrote (issue #130): a message that names no comparison, no figure and no
+    // next move is not a step forward, so it does not reset the count that climbs the help ladder.
+    const assessment = assessmentOf(turn.assessment, lastMemberMessage(s));
+    s = recordAssessment(s, assessment, now);
     if (turn.beatComplete) return nextBeat(coachSays(s, turn.message, now), now, 'independent');
     // They asked for something rather than being stuck on it: the question is answered and the message is taken back off the help ladder.
     if (turn.dataRequest) return coachSays(recordDataRequest(s), turn.message, now);
-    const stuck = turn.assessment === 'stuck' || turn.assessment === 'unclear';
+    const stuck = assessment === 'stuck' || assessment === 'unclear';
     // Help only for a member who is in fact stuck: a good answer that arrives as help falls due is never cut off.
     if (stuck && (help === 'process_hint' || help === 'directional_hint')) return recordHint(coachSays(s, turn.message, now, 'hint'), now);
     // The third message without getting anywhere: Bucket leads, whatever the clock says, unless the member has just made a clear step forward.
-    if (help === 'lead' && turn.assessment !== 'progress') return recordHint(coachSays(s, turn.message, now, 'hint'), now);
+    if (help === 'lead' && assessment !== 'progress') return recordHint(coachSays(s, turn.message, now, 'hint'), now);
     if (stuck && help === 'advance') return nextBeat(coachSays(s, turn.message, now), now, 'coach_moved');
     return coachSays(s, turn.message, now);
   }
@@ -1339,10 +1491,15 @@ async function converse(deps: LiveDeps, userId: string, sessionId: string, text:
     const answer = await deps.ask(turnRequest(sol, saved.state, kind, help));
     used = answer.usage;
     // A refusal is the model declining, not the call failing: the member hears it in character instead of being shown an error.
+    // It never went near the model's words, so neither the interview register nor the progress test has anything to read (issue #130).
     turn =
       answer.stopReason === 'refusal'
         ? refusedTurn(saved.state)
-        : parseTurn(answer.text, privateNotes(sol, saved.state, help === 'lead'), help === 'lead' ? LEAD_FALLBACK : FALLBACK, isUntimed(saved.state) ? 1000 : 700, help, heldResults(sol, saved.state));
+        : parseTurn(answer.text, privateNotes(sol, saved.state, help === 'lead'), help === 'lead' ? LEAD_FALLBACK : FALLBACK, isUntimed(saved.state) ? 1000 : 700, help, heldResults(sol, saved.state), {
+            mode: modeOf(saved.state),
+            kind,
+            memberText: lastMemberMessage(saved.state),
+          });
   } catch {
     turn = null;
   }
@@ -1388,7 +1545,12 @@ async function nudge(deps: LiveDeps, userId: string, sessionId: string, mutate: 
   let turn: Turn | null = null;
   try {
     const answer = await deps.ask(turnRequest(sol, marked.state, kind));
-    if (answer.stopReason !== 'refusal') turn = parseTurn(answer.text, privateNotes(sol, marked.state), FALLBACK, isUntimed(marked.state) ? 1000 : 700, 'none', heldResults(sol, marked.state));
+    if (answer.stopReason !== 'refusal')
+      turn = parseTurn(answer.text, privateNotes(sol, marked.state), FALLBACK, isUntimed(marked.state) ? 1000 : 700, 'none', heldResults(sol, marked.state), {
+        mode: modeOf(marked.state),
+        kind,
+        memberText: lastMemberMessage(marked.state),
+      });
   } catch {
     turn = null;
   }

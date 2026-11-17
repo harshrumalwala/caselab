@@ -167,6 +167,18 @@ describe('the candidates, and the one piece of pretending', () => {
     expect(run.rungs).toContain('advance');
   });
 
+  it('a plausible-sounding candidate climbs the ladder although the model calls every message a step forward', async () => {
+    // The pilot's own failure (issue #130): the score says progress, the message says nothing, and the rung counter used to stand
+    // still at zero for the whole beat. The engine now reads what was written, so the ladder engages in an interview too.
+    expect(CANDIDATE_SPECS.plausible.exhibit).toEqual({ assessment: 'progress', beatComplete: false });
+    const run = await play('interview', 'plausible');
+    expect(run.rungs).toContain('process_hint');
+    expect(run.rungs).toContain('advance');
+    expect(hints(run)).toBeGreaterThan(0);
+    expect(outcomes(run)).toContain('coach_moved');
+    expect(run.stage).toBe('done');
+  });
+
   it('an asker asks for data and then chooses to move on, which no other candidate does', async () => {
     const run = await play('learning', 'asker');
     expect(outcomes(run)).toEqual(['member_moved', 'member_moved', 'member_moved']);

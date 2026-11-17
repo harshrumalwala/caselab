@@ -242,6 +242,36 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **An `advance` reply is cut to its first sentence.** If a model ever answered a question and moved on in the same breath at that rung
   (with `data_request` unset), the answer would be lost. The flag and `beat_complete` are both excluded from the cut for that reason.
 
+## The interview's register, and the ladder's entry condition (issue #130, 2026-11-17)
+
+- **The register half is unverified against a real model, and it is the half that matters.** The interview mode's system prompt, its
+  exhibit and direction directives and its first-rung instruction in `supabase/functions/_shared/liveCaseCoach.ts` now say that a reply
+  never confirms, denies or grades the member's reading and never introduces a driver they did not raise. No model has been asked since.
+  The unit tests exercise the code-side checks on the pilot's own replies, and `npm run dryrun:live` stubs the model, so neither can say
+  whether the register moved. Like every change under `supabase/functions/**` it does nothing until `npx supabase functions deploy live-case`.
+- **The verdict check is string-level.** `gradesTheirReading` matches the pilot's phrasings and the obvious variants ("you're right",
+  "good instinct", "that's the key insight", "exactly the right lens", "which is the heart of", "not quite right"). A verdict worded
+  some other way ("I can see where that takes you", "most candidates stop there") goes through. A bare "Good." or "Nice." is deliberately
+  **not** matched: it is the neutral acknowledgement the app's own opener uses, and matching it would drop the acknowledgement the
+  directive asks for.
+- **A sentence that grades is dropped whole, which can cost a fact.** If a model ever wrote "You're right, and the cost base is $4M." in
+  an interview, the figure would go with the verdict. A verdict that ends in a question keeps the question (`questionIn`), but a verdict
+  that carries a fact does not keep the fact. #136 chose sentence-level dropping for the same reason and this follows it.
+- **"Introduces a driver they have not raised" is only checked at the first rung.** At rung `none` a reply that shares three content
+  words of one sentence of the beat's private notes, none of them words the member has used, is replaced by `OVER_TO_YOU`. Above that
+  rung the hint is allowed to point somewhere, so nothing checks it; and the check cannot tell a driver the member raised in their own
+  words from one they never mentioned, beyond that word comparison.
+- **The progress test reads words, not meaning.** `madeAStep` (in `liveCase.ts`) looks for a figure, a comparison or driver word, or a
+  next move, and discounts a message that admits being stuck without naming a next move. A real step forward written without any of
+  those words ("the new shops are the problem") is scored `unclear`, which costs the member a rung sooner than it should — the cost is a
+  hint they did not need, in practice from the first message and in an interview from the second. The opposite error is likelier: a
+  message full of comparison words that says nothing is still counted as a step. It is applied in **every** mode, because the ladder is.
+- **A model that sets `beat_complete` on everything still ends beats early**, and nothing deterministic checks that flag. Only
+  `assessment` is held to the member's writing; the issue asked for the progress judgment and that is what is in.
+- **The dry run can only measure this through a candidate written for it.** The four old candidates never claim progress while stuck, so
+  the change moves nothing for them (per-case lines byte-identical before and after). The new `plausible` candidate is the pilot's
+  failure in scripted form; its numbers are the whole of the measured movement, and they are about the engine, not about words.
+
 ## A result the book worked out, handed over as data (issue #129, 2026-11-17)
 
 - **The wording half is unverified against a real model.** `NOT_THE_ANSWER` and the notes on the interviewer's tables in
