@@ -599,8 +599,9 @@ move whenever the file does, so the quoted words are the reliable part):
 - **The strip no longer calls the discussion finished while a mid-case brainstorm runs (issue #166, 2026-11-17).** An interaction
   between #148 and #152, not a bug in either: `caseSteps` filled a pill in when it was earlier in the list than the stage, which was
   the same as "finished" only while the brainstorm ran last. Since #148 it does not (100 of 844 live-eligible cases have a brainstorm
-  that is not the last beat, 20 of them before any part of the discussion). The discussion now has a fourth look, `open` (outlined in
-  the accent colour, no mini Bucket), used while the case stands in a brainstorm with `beatsShown < beatsTotal`. What is left:
+  that is not the last beat, 20 of them before any part of the discussion). The discussion now has a fourth look, `open` (a tint of the
+  accent colour since issue #176, no mini Bucket), used while the case stands in a brainstorm with `beatsShown < beatsTotal`. What is
+  left:
   - the view says how many parts of the plan the case has reached, not **which** ones. When the clock ends the discussion early the
     parts it did not reach are let go and the case goes to the brainstorm and then to the recommendation, so during that brainstorm
     the discussion is drawn as open although the case will not come back to it. The careful reading (open, not finished) was chosen
@@ -609,6 +610,38 @@ move whenever the file does, so the quoted words are the reliable part):
     the brainstorm pushes no `BeatRecord` there.
   - a case with two brainstorms still fills the Brainstorm pill in after the first one is handed in, which is #152's decision and
     unchanged: the view carries no count of the brainstorms a plan has left.
+
+## What the browser pass of issue #176 saw, and what it could not (2026-11-17)
+
+- **The four states were measured and redrawn, and the rules behind them are untouched.** `caseSteps` decides the same four states it
+  decided before; only `ClockBar` changed. `done` is a flat grey fill with a tick, `open` a tint of the accent colour with a
+  continuation mark, `current` the solid accent with the mini Bucket, `ahead` a dashed outline with no fill and no mark. The looks were
+  checked in a browser at 1,280 px and at a real 390 px viewport, in light, in dark and under a `grayscale(1)` filter.
+- **A part standing open is still drawn and read the same whether the member has worked part of it or has never been in it**, which was
+  the sharper half of #176 and is **not** fixed, deliberately. The view says how many parts the case has reached (`beatsShown` against
+  `beatsTotal`), not which, and the brainstorm beat is counted in that total in some plans and pushed as no beat at all in others, so
+  "has a discussion beat been worked?" cannot be answered from it without guessing. What the state word says was chosen to fit both:
+  "still open" claims nothing about progress, and the continuation mark says the part is not closed rather than that the member is part
+  way through it. **The durable fix is a field on the view** that says which parts of the plan have been reached (an Edge Function
+  change), which was out of scope here as it was in #152 and #167.
+- **The state word reaches a screen reader as the list item's accessible name** (`aria-label` on the `<li>`, `STEP_STATE_WORD` in
+  `src/domain/liveCase.ts`), because a visually hidden span would change the pill's `textContent` and #152's and #167's tests read
+  that. **No screen reader was run.** Browsers expose the name, and the tests assert it, but NVDA in browse mode is known to read a
+  list item's content rather than its name, so a member using that combination may hear "Prompt" without "finished". The visual marks
+  (tick, continuation, mini Bucket) do not depend on it.
+- **At 390 px the pills now wrap 3 + 2 where they wrapped 4 + 1.** Nothing about the wrapping changed — same `flex-wrap`, same gaps,
+  same padding — but a tick or a continuation mark makes a pill about 18 px wider, and the first row had about 15 px of room. Measured
+  at a 390 px viewport: the list is 358 px wide and the five pills are 82, 105, 86, 106 and 124 px. It still reads as a wrapped list,
+  and the second row is no longer one lone pill. **The 390 px viewport had to be forced through the DevTools protocol**: headless
+  Chrome on this machine will not make a window narrower than 484 px, so a `--window-size=390` screenshot is a 484 px page cropped to
+  390 and wraps one pill too late. Any future phone check of this app should set the viewport with `Emulation.setDeviceMetricsOverride`
+  rather than trust the window size.
+- **Nothing was looked at inside a real live case.** The pass rendered `ClockBar` from fixtures against the app's own stylesheet, with
+  no model call and no live-case start (the issue forbade spending one). The strip has no behaviour of its own beyond `caseSteps`,
+  which the unit tests cover, but nobody has yet watched the states change as a real case moves.
+- **`open` survives greyscale on its mark, not on its fill.** The accent tint is very light (`--accent-soft`), so under a greyscale
+  filter it is nearly the page colour; the continuation mark and the darker text are what separate it from `ahead` there. The pair the
+  issue ranked first, `done` against `ahead`, separates on fill, border and mark at once.
 
 ## Asking outright for the answer (issue #142, 2026-11-17)
 
@@ -733,10 +766,11 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   most three skills a side with no way to see the rest (the point is a short answer, not a table), and the two lines that explain an
   empty preview (too few rated cases, or every skill in the middle band) are shown to the member only, so they have never been seen
   outside a test either.
-- **The live case's progress strip has been read by tests, not by eyes** (issues #150 and #166, 2026-11-17). Screen tests assert which
-  pill is marked, and in which state, in each shape of case, but nobody has opened a live case in a browser since either change, and
-  phone width — where five pills wrap onto two rows — is unchecked, the same gap the rest of the live-case screens have. The `open`
-  look #166 added (an accent outline with no fill) has never been seen on a screen either.
+- **The live case's progress strip has now been looked at, and its four states redrawn** (issues #150, #166, #173 and #176,
+  2026-11-17). It was read in a browser for the first time on 2026-11-17 (#173) and four things it communicated badly became #176;
+  all four were changed and looked at again at 1,280 px, at 390 px, in dark mode and in greyscale, against the real stylesheet. What
+  is left is below ("What the browser pass of issue #176 saw, and what it could not"). The strip itself is no longer an unseen
+  surface; the live-case screens around it still are.
 - **No end-to-end coverage of Live case** (PR #79 says so: "E2E untouched (no live case coverage there)"). The live-case logic, handler and
   screens are covered by unit tests with a fake model and an in-memory backend, and `live_case_sessions` by PGlite tests, but nothing in
   `e2e/` starts a case against the real function. The Learning-mode screen was not exercised in a browser by its author.
