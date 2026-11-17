@@ -1,11 +1,13 @@
-import type { handleLive, isFullSolution } from '../supabase/functions/_shared/liveCaseCoach';
-import type { BeatOutcome, LiveMode, NudgeLevel, PLANNED_MS, Stage, StageLogEntry, nudgeLevel, timeInStages } from '../supabase/functions/_shared/liveCase';
+import type { LiveSolution, PublicExhibit, handleLive, isFullSolution, readSolution } from '../supabase/functions/_shared/liveCaseCoach';
+import type { BeatOutcome, LiveMode, NudgeLevel, PLANNED_MS, Stage, StageLogEntry, isInterviewerSideExhibit, nudgeLevel, timeInStages } from '../supabase/functions/_shared/liveCase';
 import type { createMemoryLiveDeps } from '../src/test/memoryLiveDeps';
 
 /** The real engine the dry run plays: the same functions the Edge Function runs, never a copy of them. */
 export interface DryRunEngine {
   handleLive: typeof handleLive;
   isFullSolution: typeof isFullSolution;
+  readSolution: typeof readSolution;
+  isInterviewerSideExhibit: typeof isInterviewerSideExhibit;
   nudgeLevel: typeof nudgeLevel;
   timeInStages: typeof timeInStages;
   PLANNED_MS: typeof PLANNED_MS;
@@ -53,6 +55,10 @@ export interface DryRun {
   cappedOut: boolean;
   threw: boolean;
   error: string | null;
+  /** How many exhibits the member was handed, counted from what arrived rather than from the plan. */
+  exhibitsShown: number;
+  /** Anything of an interviewer-side exhibit that reached the member. Must stay empty. */
+  leaks: string[];
   steps: number;
   coachCalls: number;
   /** Everything the engine refused, as it was said to the member. */
@@ -100,6 +106,9 @@ export interface DryRunSummary {
   byDesign: number;
   threw: number;
   stalled: number;
+  /** Runs where an interviewer-side exhibit reached the member. Must be 0. */
+  leaked: number;
+  exhibitsDelivered: number;
   /** 'mode/candidate' to how many of its runs reached the end. */
   cells: Map<string, { of: number; done: number }>;
   endStates: Map<string, number>;
@@ -139,6 +148,12 @@ export const RUNGS: NudgeLevel[];
 export const CANDIDATE_SPECS: Record<CandidateName, CandidateSpec>;
 
 export function loadEngine(): Promise<DryRunEngine>;
+export function exhibitLeaks(
+  delivered: PublicExhibit[],
+  texts: string[],
+  solution: LiveSolution,
+  isInterviewerSide: typeof isInterviewerSideExhibit,
+): string[];
 export function stubModel(spec: CandidateSpec): (kind: string) => unknown;
 export function playCase(raw: unknown, mode: LiveMode, candidate: CandidateName, engine: DryRunEngine, startAt?: number): Promise<DryRun>;
 export function playAll(entries: unknown[], engine: DryRunEngine, options?: PlayOptions): Promise<DryRunResult>;

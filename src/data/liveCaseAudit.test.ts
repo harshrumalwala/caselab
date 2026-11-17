@@ -9,6 +9,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { buildPlan, isInterviewerSideExhibit } from '../../supabase/functions/_shared/liveCase';
 import { givenOnRequest, isFullSolution, planFor, readSolution } from '../../supabase/functions/_shared/liveCaseCoach';
 import { LIVE_EXHIBIT_LIMITS, SOLUTION_EXHIBIT_LIMITS, parseBookSolution, parseSolutionExhibit } from '../domain/bookSolution';
+import { exhibitLoss } from '../domain/exhibitFidelity';
 import { audit, auditCase, formatReport, formatSummary, measureCaps, readSolutionFiles, summarise, type AuditRules } from '../../scripts/liveCaseAudit.mjs';
 
 const rules: AuditRules = {
@@ -20,6 +21,7 @@ const rules: AuditRules = {
   planFor,
   parseBookSolution,
   parseSolutionExhibit,
+  exhibitLoss,
   LIVE_EXHIBIT_LIMITS,
 };
 const caps = measureCaps(rules);
@@ -55,7 +57,7 @@ describe('the parser caps', () => {
     expect(caps.columns).toBe(SOLUTION_EXHIBIT_LIMITS.columns);
     expect(caps.rows).toBe(SOLUTION_EXHIBIT_LIMITS.rows);
     expect(caps.points).toBe(SOLUTION_EXHIBIT_LIMITS.points);
-    expect(caps).toMatchObject({ exhibits: 12, panels: 4, structure: 8, clarifyingQuestions: 5, takeaways: 3 });
+    expect(caps).toMatchObject({ exhibits: 12, series: 16, panels: 8, structure: 8, clarifyingQuestions: 5, takeaways: 3 });
   });
 });
 
@@ -153,6 +155,32 @@ describe('the flags', () => {
     expect(rescued.flags).not.toContain('all_exhibits_hidden');
   });
 
+  // Issue #95: the report's one loud failure. An exhibit a member can be shown must hold everything the write-up holds for it.
+  it('flags an exhibit that does not reach the member whole, and keeps text cut to length apart from it', () => {
+    const wide = Array.from({ length: caps.columns + 4 }, (_, i) => `Product ${i + 1}`);
+    const cut = one({ exhibits: [exhibit({ columns: wide, rows: [wide.map((_, i) => String(i))] })] });
+    expect(cut.flags).toContain('exhibit_not_whole');
+    expect(cut.fidelity[0].full.cut).toContain(`columns: ${wide.length} in the write-up, ${caps.columns} on screen`);
+    expect(cut.fidelity[0].full.shortened).toEqual([]);
+
+    const heading = 'A panel heading that runs on well past the sixty characters a panel can hold';
+    const long = one({ exhibits: [exhibit({ chart: { kind: 'bar', heading, categories: ['North'], series: [{ name: 'Revenue', values: [10] }] } })] });
+    expect(long.flags).toContain('exhibit_text_shortened');
+    expect(long.flags).not.toContain('exhibit_not_whole'); // every figure is on screen; one label does not fit
+    expect(long.fidelity[0].live.shortened).toContain('chart heading shortened: 1');
+
+    // Nothing to report for an exhibit that reaches the screen whole, on either path.
+    expect(one().fidelity).toEqual([]);
+    expect(one().flags).not.toContain('exhibit_not_whole');
+  });
+
+  it('compares the interviewer\'s own exhibits on the Full solution screen only: a live case never draws them', () => {
+    const wide = Array.from({ length: caps.columns + 4 }, (_, i) => `Product ${i + 1}`);
+    const hidden = one({ exhibits: [exhibit({ title: 'Interviewer guidance', columns: wide, rows: [wide.map((_, i) => String(i))] })] });
+    expect(hidden.fidelity[0]).toMatchObject({ candidate: false, live: { cut: [], shortened: [] } });
+    expect(hidden.fidelity[0].full.cut.length).toBeGreaterThan(0);
+  });
+
   it('flags a write-up that is not live-eligible, and one the Full solution screen would refuse', () => {
     expect(one({ confidence: 'partial' }).flags).toContain('not_live_eligible');
     expect(one({ steps: [] }).flags).toContain('full_solution_refused');
@@ -220,6 +248,25 @@ describe('what the report may contain', () => {
     expect(report).toContain('Exhibit 1: Revenue by region');
     expect(report).toContain('Interviewer guidance');
     expect(report).toContain('live-eligible: yes');
+  });
+
+  // Issue #95: the new half of the report measures content, so it is the half most likely to carry some of it out.
+  it('says what a cut exhibit lost in counts and positions, and none of what was in it', () => {
+    const wide = Array.from({ length: 30 }, (_, i) => `ZZCOLUMN${i}`);
+    const cut = formatReport(
+      audit([writeUp({ exhibits: [exhibit({ title: 'Exhibit 1: Revenue by region', columns: wide, rows: [wide.map((_, i) => `ZZCUTCELL${i}`)] })] })], rules),
+      { dir: 'private-data/solutions', files: 1, at: '2026-11-16T00:00:00.000Z' },
+    );
+    expect(cut).not.toMatch(/ZZ(COLUMN|CUTCELL)/);
+    expect(cut).toContain('## Exhibits that do not reach the member whole (1)');
+    expect(cut).toContain('NOT WHOLE 1. Exhibit 1: Revenue by region');
+  });
+
+  it('says plainly that it compares the write-up with the render, and not the book with the render', () => {
+    expect(report).toContain('**This compares the write-up to the render, not the book to the render.**');
+    expect(report).toContain('nothing\nhere can say whether a write-up is faithful to the printed page');
+    expect(report).toContain('## Exhibits that do not reach the member whole (0)');
+    expect(report).toContain('None: every exhibit reaches the member with everything the write-up holds for it.');
   });
 });
 
