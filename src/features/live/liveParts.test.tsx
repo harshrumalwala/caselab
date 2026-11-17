@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { PublicExhibit } from '../../data/liveCase';
-import { ExhibitView } from './liveParts';
+import type { LiveView, PublicExhibit } from '../../data/liveCase';
+import { ClockBar, ExhibitView } from './liveParts';
 
 const exhibit = (over: Partial<PublicExhibit> = {}): PublicExhibit => ({
   beat: 1,
@@ -241,5 +241,142 @@ describe('an exhibit in a live case', () => {
       />,
     );
     expect(screen.getByRole('img', { name: /M90 90/ })).toBeInTheDocument();
+  });
+});
+
+const NOW = 1_700_000_000_000;
+
+const liveView = (over: Partial<LiveView> = {}): LiveView => ({
+  sessionId: 'session-1',
+  serverNow: NOW,
+  startedAt: NOW,
+  endsAt: NOW + 20 * 60_000,
+  stage: 'exhibits',
+  stageStartedAt: NOW,
+  stageEndsAt: NOW + 5 * 60_000,
+  plannedEndsAt: NOW + 15 * 60_000,
+  nextNudgeAt: null,
+  frameworkPhase: 'framework',
+  messages: [],
+  exhibits: [],
+  drafts: {},
+  scratchpad: '',
+  submissions: [],
+  clarifyCount: 0,
+  beatsTotal: 3,
+  beatsShown: 1,
+  exhibitsTotal: 3,
+  hasBrainstorm: false,
+  status: 'active',
+  endReason: null,
+  mode: 'practice',
+  pausedAt: null,
+  feedback: null,
+  feedbackAttempts: 0,
+  caseInfo: null,
+  loggedCaseId: null,
+  ...over,
+});
+
+/** The strip as a member reads it: every pill in order, which one is marked, and which ones are behind. */
+function strip(over: Partial<LiveView> = {}) {
+  const { unmount } = render(<ClockBar view={liveView(over)} now={NOW} />);
+  const pills = within(screen.getByRole('list', { name: 'Steps of the case' })).getAllByRole('listitem');
+  const labels = pills.map((p) => p.textContent?.trim() ?? '');
+  const result = {
+    labels,
+    current: pills.filter((p) => p.getAttribute('aria-current') === 'step').map((p) => p.textContent?.trim() ?? ''),
+    done: pills.filter((p) => p.dataset.state === 'done').map((p) => p.textContent?.trim() ?? ''),
+    ahead: pills.filter((p) => p.dataset.state === 'ahead').map((p) => p.textContent?.trim() ?? ''),
+    unmount,
+  };
+  return result;
+}
+
+describe('the progress strip of a live case', () => {
+  it('marks the recommendation in a case whose book asks for no brainstorm', () => {
+    const think = strip({ stage: 'recommend_think' });
+    expect(think.labels).toEqual(['Prompt', 'Framework', 'Exhibits', 'Recommendation']);
+    expect(think.current).toEqual(['Recommendation']);
+    expect(think.done).toEqual(['Prompt', 'Framework', 'Exhibits']);
+    think.unmount();
+
+    const write = strip({ stage: 'recommend_write' });
+    expect(write.current).toEqual(['Recommendation']);
+    write.unmount();
+
+    const exhibits = strip({ stage: 'exhibits' });
+    expect(exhibits.current).toEqual(['Exhibits']);
+    expect(exhibits.ahead).toEqual(['Recommendation']);
+  });
+
+  it('marks each step of a case that has a brainstorm', () => {
+    const framework = strip({ hasBrainstorm: true, stage: 'framework_write' });
+    expect(framework.labels).toEqual(['Prompt', 'Framework', 'Exhibits', 'Brainstorm', 'Recommendation']);
+    expect(framework.current).toEqual(['Framework']);
+    expect(framework.ahead).toEqual(['Exhibits', 'Brainstorm', 'Recommendation']);
+    framework.unmount();
+
+    const brainstorm = strip({ hasBrainstorm: true, stage: 'brainstorm_write' });
+    expect(brainstorm.current).toEqual(['Brainstorm']);
+    brainstorm.unmount();
+
+    const recommend = strip({ hasBrainstorm: true, stage: 'recommend_write' });
+    expect(recommend.current).toEqual(['Recommendation']);
+    expect(recommend.done).toEqual(['Prompt', 'Framework', 'Exhibits', 'Brainstorm']);
+  });
+
+  it('comes back to the discussion with the case, and keeps a brainstorm already handed in behind the member', () => {
+    const back = strip({
+      hasBrainstorm: true,
+      stage: 'exhibits',
+      submissions: [
+        { kind: 'framework', text: 'Revenue and cost', timedOut: false },
+        { kind: 'brainstorm', text: 'Three ways to grow', timedOut: false },
+      ],
+    });
+    expect(back.current).toEqual(['Exhibits']);
+    expect(back.done).toEqual(['Prompt', 'Framework', 'Brainstorm']);
+    expect(back.ahead).toEqual(['Recommendation']);
+    back.unmount();
+
+    // The second brainstorm of the same case: the marker is on it again.
+    const second = strip({
+      hasBrainstorm: true,
+      stage: 'brainstorm_think',
+      submissions: [{ kind: 'brainstorm', text: 'Three ways to grow', timedOut: false }],
+    });
+    expect(second.current).toEqual(['Brainstorm']);
+  });
+
+  it('calls the middle of a case that hands over no exhibit what it is, and still marks the recommendation', () => {
+    const talking = strip({ exhibitsTotal: 0, stage: 'exhibits' });
+    expect(talking.labels).toEqual(['Prompt', 'Framework', 'Discussion', 'Recommendation']);
+    expect(talking.current).toEqual(['Discussion']);
+    expect(screen.getByText('Discussion', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.queryByText(/Exhibit/)).not.toBeInTheDocument();
+    talking.unmount();
+
+    const closing = strip({ exhibitsTotal: 0, stage: 'recommend_write' });
+    expect(closing.current).toEqual(['Recommendation']);
+    expect(closing.done).toEqual(['Prompt', 'Framework', 'Discussion']);
+  });
+
+  it('marks the step of a learning case, which has no clock to show', () => {
+    const learning = strip({ mode: 'learning', stage: 'recommend_write' });
+    expect(learning.current).toEqual(['Recommendation']);
+    expect(screen.queryAllByRole('timer')).toHaveLength(0);
+    expect(screen.getByText(/no clock/)).toBeInTheDocument();
+    learning.unmount();
+
+    const brainstorming = strip({ mode: 'learning', hasBrainstorm: true, stage: 'brainstorm_think' });
+    expect(brainstorming.current).toEqual(['Brainstorm']);
+    expect(brainstorming.ahead).toEqual(['Recommendation']);
+  });
+
+  it('shows the whole case behind the member once it is over', () => {
+    const over = strip({ stage: 'done', status: 'done', endReason: 'completed' });
+    expect(over.current).toEqual([]);
+    expect(over.done).toEqual(['Prompt', 'Framework', 'Exhibits', 'Recommendation']);
   });
 });
