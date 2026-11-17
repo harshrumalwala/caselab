@@ -141,8 +141,10 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
   const { now, busy, pending } = s;
   const stageLeft = view.stageEndsAt - now;
   const key = `${view.stage}-${view.frameworkPhase}`;
-  const latest = view.exhibits.at(-1);
-  const earlier = view.exhibits.slice(0, -1);
+  // What is on the table right now. Some parts of a case are an exhibit; the rest are talked through, and then the exhibits already
+  // handed over move into the fold, where they stay within reach.
+  const onTable = view.exhibits.find((e) => e.beat === view.beatsShown - 1);
+  const earlier = view.exhibits.filter((e) => e !== onTable);
   const writing = WRITE_TEXT[view.stage];
   const thinking = THINK_TEXT[view.stage];
   const thread = view.messages;
@@ -155,7 +157,15 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
   const saidSomething = view.messages.slice(lastExhibitAt + 1).some((m) => m.from === 'user');
   const sayFirst = !untimed && !saidSomething;
   const lastBeat = view.beatsShown >= view.beatsTotal;
-  const moveOnLabel = untimed ? (lastBeat ? 'Move on from the exhibits' : 'Move on') : lastBeat ? 'Done with the exhibits' : "I'm done with this exhibit";
+  const moveOnLabel = untimed
+    ? lastBeat
+      ? 'Move on from this section'
+      : 'Move on'
+    : lastBeat
+      ? 'Done with this section'
+      : onTable
+        ? "I'm done with this exhibit"
+        : "I'm done with this part";
 
   const bucket = bucketLine(view, now, view.messages.at(-1)?.kind === 'hint');
   const says = <BucketSays mood={bucket.mood}>{bucket.text}</BucketSays>;
@@ -267,15 +277,21 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
       {view.stage === 'exhibits' && (
         <div key={key} className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-start">
           {/* The exhibit stays in view while the conversation grows, so it never has to be scrolled back to. */}
-          {latest && (
+          {view.exhibits.length > 0 && (
             <section
-              aria-label="The exhibit on the table"
+              aria-label={onTable ? 'The exhibit on the table' : 'The exhibits you have been given'}
               className="sticky top-[7.5rem] z-20 max-h-[42vh] space-y-3 overflow-y-auto bg-bg pb-2 lg:top-28 lg:max-h-[calc(100vh-8rem)]"
             >
-              <h2 className="eyebrow">
-                Exhibit {latest.beat + 1} of {view.beatsTotal}
-              </h2>
-              <ExhibitView exhibit={latest} />
+              {onTable ? (
+                <>
+                  <h2 className="eyebrow">
+                    Exhibit {view.exhibits.indexOf(onTable) + 1} of {view.exhibitsTotal}
+                  </h2>
+                  <ExhibitView exhibit={onTable} />
+                </>
+              ) : (
+                <h2 className="eyebrow">Exhibits so far</h2>
+              )}
               {earlier.length > 0 && (
                 <details className="rounded-2xl border border-line bg-surface p-4">
                   <summary className="cursor-pointer text-sm font-semibold text-ink">Earlier exhibits ({earlier.length})</summary>

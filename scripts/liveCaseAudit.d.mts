@@ -120,6 +120,9 @@ export interface AuditSummary {
   chartKinds: Map<string, number>;
   noCandidateExhibit: number;
   beats: Map<number, number>;
+  beatsExhibit: number;
+  beatsStep: number;
+  bothKinds: number;
   flags: Map<AuditFlag, number>;
   flagged: number;
   caps: Caps;

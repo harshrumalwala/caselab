@@ -190,7 +190,7 @@ describe('starting a live case', () => {
     // Only the prompt, word for word. What the interviewer holds comes out when the student asks for it.
     expect(v.messages[0].text).not.toContain('The base houses 20,000 soldiers.');
     expect(v.startedAt).toBe(T0);
-    expect(v.endsAt).toBe(T0 + sec(1620)); // 27 minutes: the case is sized to its two exhibits (12 minutes of discussion plus 15 around it)
+    expect(v.endsAt).toBe(T0 + sec(1860)); // 31 minutes: the case is sized to its three beats, two exhibits and a step with none (16 minutes of discussion plus 15 around it)
     expect(v.caseInfo).toBeNull(); // the name would spoil it
     expect(v.exhibits).toEqual([]);
     expect(w.asked).toHaveLength(0); // starting costs nothing
@@ -407,7 +407,8 @@ describe('the exhibit discussion', () => {
     const id = await toExhibits();
     const stored = [...w.db.values()].find((s) => s.id === id)!.state;
     expect(stored.beats[0].budgetMs).toBeGreaterThan(0);
-    expect(stored.plan.beats).toHaveLength(2);
+    // The two exhibits the member is given, and the step of the analysis that has no exhibit of its own.
+    expect(stored.plan.beats).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'exhibit', index: 1 }, { kind: 'step', index: 0 }]);
   });
 });
 
@@ -468,6 +469,7 @@ describe('drafts, the scratchpad and the end of the case', () => {
     w.script.reply = () => turn('Good', { assessment: 'progress', beat_complete: true });
     await call({ type: 'say', sessionId: id, text: 'First implication and next step' });
     await call({ type: 'say', sessionId: id, text: 'Second implication and next step' });
+    await call({ type: 'say', sessionId: id, text: 'And how I would work the last part' });
     let v = view(await call({ type: 'resume', sessionId: id }));
     expect(v.stage).toBe('brainstorm_think');
     at(1700);
@@ -673,7 +675,7 @@ describe("the interviewer's own tables", () => {
       const v = view(await call({ type: 'say', sessionId: id, text: `My view ${i}` }));
       expect(JSON.stringify(v)).not.toContain('SECRET-GUIDE');
       expect(JSON.stringify(v)).not.toContain('Interviewer Guidance');
-      expect(v.beatsTotal).toBe(2);
+      expect(v.beatsTotal).toBe(3); // the two exhibits meant for the candidate, and the step that has no exhibit
     }
   });
 
@@ -1036,7 +1038,7 @@ describe("the interviewer's sheets, found by what they say", () => {
     expect(JSON.stringify(v)).not.toContain('Keep Private');
     expect(JSON.stringify(v)).not.toContain('$80,000,000');
     expect(v.exhibits.map((e) => e.title)).toEqual(['Exhibit 1: Occupancy by season']);
-    expect(v.beatsTotal).toBe(1);
+    expect(v.beatsTotal).toBe(2); // the one exhibit the member is given, and the step of the analysis that has none
   });
 
   it('are given to the model as private reference instead', async () => {
@@ -1279,11 +1281,67 @@ describe('the member moves on from an exhibit', () => {
     await call({ type: 'say', sessionId: id, text: 'Off-peak is 31 percent' });
     await call({ type: 'next', sessionId: id });
     await call({ type: 'say', sessionId: id, text: 'Off-peak is 32 percent' });
-    await call({ type: 'next', sessionId: id }); // after the last exhibit: on to the next section
+    await call({ type: 'next', sessionId: id }); // after the last exhibit: on to the step that has no exhibit of its own
     w.script.reply = (kind) => (kind === 'feedback' ? GOOD_FEEDBACK : turn('ok'));
     await call({ type: 'end', sessionId: id });
     await call({ type: 'finish', sessionId: id });
     expect(JSON.stringify(w.asked.at(-1))).toContain('the student chose to move on');
+  });
+});
+
+/**
+ * A case runs its exhibits and the steps of the book's analysis that have none (issue #128). A step is put to the member in
+ * conversation, and everything the book worked out about it stays on the interviewer's side, exactly as an exhibit's notes do.
+ */
+describe('a part of the case that hands over no exhibit', () => {
+  const STEP = {
+    title: 'Close or invest: the ROIC test',
+    body: 'The marketing offer costs five hundred thousand a store SECRET-BODY',
+    calc: ['The uplift is measured against the gain over closing, not the whole offer SECRET-CALC'],
+    whatToNotice: 'The build cost is sunk and has no place in the return test SECRET-NOTICE',
+    commonMiss: ['Dividing the uplift by the whole offer instead of the gain over closing SECRET-MISS'],
+    checkYourself: ['Did you test the marketing option against the hurdle rate before answering SECRET-CHECK'],
+  };
+  const withStep = { ...SOLUTION, steps: [...SOLUTION.steps, STEP] };
+
+  /** Walks the case to its last part, the one with no exhibit. */
+  async function toTheStep(): Promise<string> {
+    w.deps.loadCase = async (lib) => (lib === LIB ? { info: INFO, solution: withStep } : null);
+    const id = await toExhibits();
+    w.script.reply = () => turn('Go on.', { assessment: 'partial' });
+    for (let i = 0; i < 3; i += 1) {
+      await call({ type: 'say', sessionId: id, text: `Reading number ${i}` });
+      await call({ type: 'next', sessionId: id });
+    }
+    const v = view(await call({ type: 'resume', sessionId: id }));
+    expect(v.beatsTotal).toBe(4); // two exhibits, the sizing step and this one
+    expect(v.beatsShown).toBe(4);
+    expect(v.exhibits).toHaveLength(2); // nothing new is handed over: this part is talked through
+    w.asked.length = 0;
+    return id;
+  }
+
+  it('gives the model the topic to steer by, and the member nothing of it', async () => {
+    const id = await toTheStep();
+    await call({ type: 'say', sessionId: id, text: 'I would compare the options' });
+    const sent = JSON.stringify(w.asked.at(-1));
+    expect(sent).toContain('There is no exhibit here');
+    expect(sent).toContain('SECRET-CALC'); // the book's working, for the coach to judge by
+    expect(sent).toContain('SECRET-NOTICE');
+    expect(sent).toContain('SECRET-MISS');
+    expect(sent).not.toContain('SECRET-CHECK'); // the questions the book hands the candidate afterwards are never sent at all
+    const seen = JSON.stringify(view(await call({ type: 'resume', sessionId: id })));
+    for (const secret of ['SECRET-BODY', 'SECRET-CALC', 'SECRET-NOTICE', 'SECRET-MISS', 'SECRET-CHECK']) expect(seen, secret).not.toContain(secret);
+  });
+
+  it('replaces a reply that repeats the step\'s own notes, line by line', async () => {
+    const id = await toTheStep();
+    for (const note of [STEP.body, STEP.calc[0], STEP.whatToNotice, STEP.commonMiss[0], STEP.checkYourself[0]]) {
+      w.script.reply = () => turn(`Here is the thing. ${note}`, { assessment: 'progress' });
+      const r = view(await call({ type: 'say', sessionId: id, text: 'What should I be looking at?' }));
+      expect(r.messages.at(-1)?.text, note).not.toContain('SECRET');
+      expect(r.messages.at(-1)?.text).toContain('stay with your reasoning');
+    }
   });
 });
 

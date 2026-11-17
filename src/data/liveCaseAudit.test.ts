@@ -78,10 +78,16 @@ describe('what the report says about one case', () => {
 
   it('counts the beats and says whether they are exhibits or steps', () => {
     const withExhibits = one({ exhibits: [exhibit(), exhibit({ title: 'Exhibit 2: Costs' })] });
-    expect(withExhibits.beats).toMatchObject({ total: 2, exhibits: 2, steps: 0 });
+    // Two exhibits, and the write-up's "Size the market" step, which has no exhibit of its own.
+    expect(withExhibits.beats).toMatchObject({ total: 3, exhibits: 2, steps: 1 });
     const withSteps = one({ exhibits: [], steps: [{ title: 'Size the market', body: 'a' }, { title: 'Check the costs', body: 'b' }] });
     expect(withSteps.beats).toMatchObject({ total: 2, exhibits: 0, steps: 2 });
     expect(withExhibits.beats.total).toBe(planFor(readSolution(writeUp({ exhibits: [exhibit(), exhibit({ title: 'Exhibit 2: Costs' })] }))!).beats.length);
+  });
+
+  it('says both kinds in the case line when a case works through exhibits and steps', () => {
+    const report = formatReport(audit([writeUp({ exhibits: [exhibit(), exhibit({ title: 'Exhibit 2: Costs' })] })], rules, caps), { dir: 'x', files: 1, at: 'now' });
+    expect(report).toContain('beats: 3 (2 exhibit + 1 step)');
   });
 
   it('counts exhibits in the write-up, shown to the candidate and hidden', () => {
@@ -130,7 +136,9 @@ describe('what the report says about one case', () => {
 
 describe('the flags', () => {
   it('flags a case with fewer than two beats', () => {
-    expect(one().flags).toContain('fewer_than_2_beats');
+    // One exhibit, and the only step is that exhibit's own discussion: one thing to work through.
+    expect(one({ steps: [{ title: 'Exhibit 1: Revenue by region', body: 'Read the two regions.' }] }).flags).toContain('fewer_than_2_beats');
+    expect(one().flags).not.toContain('fewer_than_2_beats');
     expect(one({ exhibits: [exhibit(), exhibit({ title: 'Exhibit 2: Costs' })] }).flags).not.toContain('fewer_than_2_beats');
   });
 
@@ -191,7 +199,7 @@ describe('the flags', () => {
 describe('the whole run', () => {
   const result = audit(
     [
-      writeUp(),
+      writeUp({ steps: [{ title: 'Exhibit 1: Revenue by region', body: 'Read the two regions.' }] }),
       writeUp({ name: 'Midwest Machinery Co.', exhibits: [exhibit(), exhibit({ title: 'Exhibit 2: Costs' })] }),
       writeUp({ name: 'Midwest machinery', exhibits: [] }),
       writeUp({ name: 'Half Case', confidence: 'partial' }),
@@ -213,11 +221,14 @@ describe('the whole run', () => {
     const s = summarise(result);
     expect(s).toMatchObject({ read: 4, folded: 1, audited: 3, eligible: 2, notEligible: 1, shown: 3, hidden: 0, noCandidateExhibit: 0 });
     expect(s.beats.get(1)).toBe(1);
-    expect(s.beats.get(2)).toBe(1);
+    expect(s.beats.get(3)).toBe(1);
     expect(s.flags.get('not_live_eligible')).toBe(1);
     expect(s.flags.get('fewer_than_2_beats')).toBe(1);
     const text = formatSummary(s);
-    for (const line of ['live-eligible', 'cases with no candidate exhibit', 'hidden from the candidate', 'a chart is drawn', 'Beats per case', 'clarifying questions']) {
+    expect(s.beatsExhibit).toBe(3);
+    expect(s.beatsStep).toBe(1); // the Midwest write-up's "Size the market" step; the other case's only step is its exhibit's discussion
+    expect(s.bothKinds).toBe(1);
+    for (const line of ['live-eligible', 'cases with no candidate exhibit', 'beats talked through', 'cases that work through both kinds', 'hidden from the candidate', 'a chart is drawn', 'Beats per case', 'clarifying questions']) {
       expect(text).toContain(line);
     }
   });

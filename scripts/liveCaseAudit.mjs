@@ -350,6 +350,9 @@ export function summarise({ cases, folded, caps, read }) {
     chartKinds: tally(shown.filter((e) => e.chart).map((e) => e.chart.replace(/ \(.*\)$/, ''))),
     noCandidateExhibit: eligible.filter((c) => c.exhibits.shown === 0).length,
     beats: tally(eligible.map((c) => Math.min(c.beats.total, 8))),
+    beatsExhibit: sum(eligible.map((c) => c.beats.exhibits)),
+    beatsStep: sum(eligible.map((c) => c.beats.steps)),
+    bothKinds: eligible.filter((c) => c.beats.exhibits > 0 && c.beats.steps > 0).length,
     flags: tally(cases.flatMap((c) => c.flags)),
     flagged: cases.filter((c) => c.flags.length > 0).length,
     caps,
@@ -407,6 +410,9 @@ export function formatSummary(s) {
     '',
     'Shape of the live case (eligible cases)',
     pad('cases with no candidate exhibit', s.noCandidateExhibit),
+    pad('beats that hand over an exhibit', s.beatsExhibit),
+    pad('beats talked through (a step with no exhibit)', s.beatsStep),
+    pad('cases that work through both kinds', s.bothKinds),
     'Beats per case',
     ...[1, 2, 3, 4, 5, 6, 7, 8].map(beat),
     '',
@@ -433,7 +439,7 @@ const fidelityLines = (f) => [...cutLines(f), ...shortenedLines(f)];
 function caseLines(c) {
   const lines = [`### ${c.name}${c.book ? ` — ${c.book}` : ''}`];
   lines.push(`live-eligible: ${c.eligible ? 'yes' : `no (${c.reasons.join('; ')})`}`);
-  const kinds = c.beats.exhibits > 0 ? `${c.beats.exhibits} exhibit` : c.beats.steps > 0 ? `${c.beats.steps} step` : 'none';
+  const kinds = [c.beats.exhibits > 0 ? `${c.beats.exhibits} exhibit` : '', c.beats.steps > 0 ? `${c.beats.steps} step` : ''].filter(Boolean).join(' + ') || 'none';
   lines.push(`beats: ${c.beats.total} (${kinds})${c.beats.hasBrainstorm ? ', brainstorm stage' : ''}`);
   lines.push(`exhibits: ${c.exhibits.inWriteUp} in the write-up, ${c.exhibits.shown} to the candidate, ${c.exhibits.hidden} hidden`);
   for (const e of c.shown) {

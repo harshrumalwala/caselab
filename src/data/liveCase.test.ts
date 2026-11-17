@@ -69,9 +69,9 @@ function toExhibits(p: CasePlan, now: number): SessionState {
 }
 
 describe('the plan from a case', () => {
-  it('uses the exhibits as the main work, and finds a brainstorm among the steps', () => {
+  it('works through the exhibits and the steps that have none, and finds a brainstorm among the steps', () => {
     const p = buildPlan({ exhibits: [{}, {}], steps: [{ title: 'Size demand' }, { title: 'Brainstorm: ways to grow' }] });
-    expect(p.beats).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'exhibit', index: 1 }]);
+    expect(p.beats).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'exhibit', index: 1 }, { kind: 'step', index: 0 }]);
     expect(p.hasBrainstorm).toBe(true);
     expect(p.brainstormTopic).toBe('ways to grow');
   });
@@ -135,7 +135,8 @@ describe('the plan from a case', () => {
       exhibits: [{ title: 'Exhibit #1: Current solutions for retirees' }, { title: 'Market sizes (given if prompted)', caption: 'From the interviewer guidance for Exhibit 1.' }, { title: 'Solutions to Exhibit 1' }, { title: 'Solution: market size' }],
       steps: [{ title: 'Framework for revenue growth' }, { title: 'Sizing the market' }],
     });
-    expect(p.beats).toEqual([{ kind: 'exhibit', index: 0 }]); // the member does get an exhibit to look at
+    // The member gets the exhibit to look at, and the sizing step is theirs to work through: nothing in the write-up ties it to that exhibit.
+    expect(p.beats).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'step', index: 1 }]);
   });
 
   it('does not discuss a framework step again, whether it is called "Framework", "Framework for ...", "Framework: ..." or "Structure the problem", but keeps a step that has more in it', () => {
@@ -145,6 +146,105 @@ describe('the plan from a case', () => {
 
   it('has no brainstorm when the case has none', () => {
     expect(buildPlan({ exhibits: [{}], steps: [{ title: 'Size demand' }] }).hasBrainstorm).toBe(false);
+  });
+});
+
+/**
+ * A case is worked through as the book wrote it: its exhibits, and the steps of its analysis that have no exhibit (issue #128). The two
+ * lists are joined by the only link the write-ups hold — a step that names its exhibit — and neither list is ever reordered.
+ */
+describe('the exhibits and the steps of one case, together', () => {
+  const beats = (exhibits: { title: string }[], steps: string[]) => buildPlan({ exhibits, steps: steps.map((title) => ({ title })) }).beats;
+  const E = (n: number) => ({ title: `Exhibit ${n}: the numbers` });
+
+  it('puts each exhibit where the step that discusses it sits, and gives the steps with no exhibit a part of their own', () => {
+    expect(
+      beats([E(1), E(2)], ['Framework', 'Exhibit 1: the numbers', 'Close or invest: the ROIC test', 'Exhibit 2: the numbers', 'Pick the cheaper plant', 'Recommendation']),
+    ).toEqual([
+      { kind: 'exhibit', index: 0 },
+      { kind: 'step', index: 2 },
+      { kind: 'exhibit', index: 1 },
+      { kind: 'step', index: 4 },
+    ]);
+  });
+
+  it('works an exhibit the member never sees into nothing, but keeps the step that discusses it', () => {
+    expect(beats([{ title: 'Interviewer guidance: the answer' }, E(2)], ['Exhibit 1: what the guidance holds', 'Exhibit 2: the numbers'])).toEqual([
+      { kind: 'step', index: 0 },
+      { kind: 'exhibit', index: 1 },
+    ]);
+  });
+
+  it('leaves a case with only exhibits, and a case with only steps, exactly as they were', () => {
+    expect(beats([E(1), E(2), E(3)], [])).toEqual([
+      { kind: 'exhibit', index: 0 },
+      { kind: 'exhibit', index: 1 },
+      { kind: 'exhibit', index: 2 },
+    ]);
+    expect(beats([], ['Framework', 'Size the market', 'Brainstorm: ways to grow', 'Check the break-even'])).toEqual([
+      { kind: 'step', index: 1 },
+      { kind: 'step', index: 3 },
+    ]);
+  });
+
+  it('hands the exhibits over first when nothing in the write-up ties a step to one, rather than guessing an order', () => {
+    expect(beats([E(1), E(2)], ['Size the market', 'Check the break-even'])).toEqual([
+      { kind: 'exhibit', index: 0 },
+      { kind: 'exhibit', index: 1 },
+      { kind: 'step', index: 0 },
+      { kind: 'step', index: 1 },
+    ]);
+  });
+
+  it('never works through an exhibit twice, however the step names it', () => {
+    const named = ['Exhibit #1: the numbers', 'Financial analysis: Exhibit 1', 'The numbers (Exhibit 1)', 'Table 1: the numbers'];
+    for (const title of named) expect(beats([E(1)], [title])).toEqual([{ kind: 'exhibit', index: 0 }]);
+    // Two steps on one exhibit (read it, then what it means) are still that exhibit's one part.
+    expect(beats([E(1)], ['Exhibit 1: read the numbers', 'Exhibit 1: what it means for the client'])).toEqual([{ kind: 'exhibit', index: 0 }]);
+    // No label, but the step is about the same thing as the exhibit: still one part, because a part the member meets twice is worse.
+    expect(beats([{ title: 'Cost structure of the client' }], ['Cost structure'])).toEqual([{ kind: 'exhibit', index: 0 }]);
+  });
+
+  it('leaves a step headed by the framework to the framework stages, and keeps one that only mentions a framework later', () => {
+    const headed = ['Framework and hypothesis', 'Framework and the two parts of the case', 'Framework: what to weigh', 'Structure and prioritize', 'Clarifying questions and the goal', 'Framework and exhibits'];
+    for (const title of headed) expect(beats([E(1)], [title]), title).toEqual([{ kind: 'exhibit', index: 0 }]);
+    // Not headed by it, so there is work of its own in there: the member has handed in a framework, not revisited one.
+    const kept = ['Revisiting the framework after Exhibit 2', 'Pick the framework', 'Hypothesis and framework', 'Profitability framework and the key issue'];
+    for (const title of kept) expect(beats([E(1)], [title]), title).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'step', index: 0 }]);
+    // Headed by it, but it goes on to name an exhibit: that exhibit's beat is the work, and it is not handed over twice.
+    expect(beats([E(1)], ['Framework and Exhibit 1'])).toEqual([{ kind: 'exhibit', index: 0 }]);
+    expect(beats([{ title: 'Interviewer guidance: the answer' }], ['Framework and Exhibit 1'])).toEqual([{ kind: 'step', index: 0 }]);
+  });
+
+  it('reads the plural of the noun as a plural, not as the label "s"', () => {
+    // "the exhibits" names no exhibit in particular, so the step is matched on what it is about, as a step with no label is.
+    expect(beats([{ title: 'Exhibit 1: the regions' }], ['Read the exhibits and split the population'])).toEqual([
+      { kind: 'exhibit', index: 0 },
+      { kind: 'step', index: 0 },
+    ]);
+    expect(beats([{ title: 'Exhibit A: the regions' }], ['Exhibit A: what the regions show'])).toEqual([{ kind: 'exhibit', index: 0 }]);
+    expect(beats([{ title: 'Exhibit #B: costs' }], ['Exhibit #B: what the costs show'])).toEqual([{ kind: 'exhibit', index: 0 }]);
+  });
+
+  it('leaves the closing recommendation to its own stages, and keeps an analytical step that merely sounds like one', () => {
+    const closing = ['Recommendation', 'Final recommendation', 'Recommendation and next steps', 'Synthesis', 'Conclusion to the CEO', 'Wrap-up', 'Summary for the CEO', 'Answer', 'Closing the case', 'Bringing it all together'];
+    for (const title of closing) expect(beats([E(1)], [title])).toEqual([{ kind: 'exhibit', index: 0 }]);
+    // Analysis that happens to use one of those words further along, which the member must still work through.
+    const analysis = ['Close or invest: the ROIC test', 'Closing the payback gap', 'Answer the board question on capacity'];
+    for (const title of analysis) {
+      expect(beats([E(1)], [title])).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'step', index: 0 }]);
+    }
+  });
+
+  it('grows the clock with what there is to work through, and never past 25 minutes in 40', () => {
+    const planned = (exhibits: number, steps: string[]) => {
+      const p = buildPlan({ exhibits: Array.from({ length: exhibits }, (_, i) => E(i + 1)), steps: steps.map((title) => ({ title })) });
+      return [p.beats.length, (p.exhibitMs ?? 0) / 60_000, (p.limitMs ?? 0) / 60_000];
+    };
+    expect(planned(2, [])).toEqual([2, 12, 27]);
+    expect(planned(2, ['Size the market'])).toEqual([3, 16, 31]); // the step the case used to drop is four minutes more
+    expect(planned(3, ['Size the market', 'Check the break-even', 'Pick the plant'])).toEqual([6, 25, 40]);
+    expect(planned(6, ['Size the market', 'Check the break-even', 'Pick the plant', 'Work the payback'])).toEqual([10, 25, 40]); // the ceiling holds
   });
 });
 
