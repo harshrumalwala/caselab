@@ -207,6 +207,13 @@ export interface SpendReport {
 }
 
 export function spendReport(sessions: readonly SessionRow[], transcripts: readonly Transcript[]): SpendReport;
+/** The same report, counting one turn that has happened but is not in a transcript on disk yet. */
+export function spendWithTurn(input: {
+  sessions: readonly SessionRow[];
+  transcripts: readonly Transcript[];
+  sessionId: string;
+  turn: { cost: TurnCost | null; usage: { delta: Usage } };
+}): SpendReport;
 export function formatPriceTable(): string;
 export function formatSpend(report: SpendReport, options?: { cap?: number }): string;
 
@@ -267,6 +274,13 @@ export interface StepState {
   strict?: boolean;
 }
 
+/** One reading of what has been spent: this session's running usage, and everything a spend report is built from. */
+export interface SpendRead {
+  usage: Usage;
+  sessions: readonly SessionRow[];
+  transcripts: readonly Transcript[];
+}
+
 export interface StepResult {
   misfit?: string | null;
   stopped: 'cap' | 'stage' | 'refused' | null;
@@ -282,7 +296,7 @@ export interface StepResult {
 export function runStep(
   step: Step,
   state: StepState,
-  deps: { send: (action: LiveAction) => Promise<PilotResponse>; readSpend: () => Promise<{ usage: Usage; totalUsd: number }> | { usage: Usage; totalUsd: number } },
+  deps: { send: (action: LiveAction) => Promise<PilotResponse>; readSpend: () => Promise<SpendRead> | SpendRead },
 ): Promise<StepResult>;
 
 // Talking to the project

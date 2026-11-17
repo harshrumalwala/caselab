@@ -487,6 +487,18 @@ export function spendReport(sessions, transcripts) {
   };
 }
 
+/**
+ * What `spend` will report once this turn is written to disk. A turn that has just happened is in no transcript yet, so a report built
+ * from the folder alone drops its tokens into the unattributed bucket and prices them at the coach model — which is how a `finish`
+ * turn, whose one call is priced at the feedback model, came to print a running total about twenty times too small (issue #134).
+ * Handing the turn to `spendReport` before the total is taken keeps the figure printed after a turn and the figure `spend` prints
+ * afterwards the same number: both are `spendReport` over the same turns, each priced by the same `priceTurn`.
+ */
+export function spendWithTurn({ sessions, transcripts, sessionId, turn }) {
+  const stored = transcripts ?? [];
+  return spendReport(sessions, turn?.cost ? [...stored, { sessionId, turns: [turn] }] : stored);
+}
+
 export function formatPriceTable() {
   const row = (label, p) => `  ${label.padEnd(30)} in ${String(p.input).padStart(5)}   out ${String(p.output).padStart(5)}   cache read ${String(p.cacheRead).padStart(5)}   cache write ${String(p.cacheWrite).padStart(5)}`;
   return [
@@ -714,6 +726,10 @@ export function turnRecord({ n, step, response, diff, usageBefore, usageAfter, c
  * Takes one step: checks the cap first, sends the action, reads the spend back, and returns what to print and what to record. Everything
  * it touches is injected (`send`, `readSpend`), so the whole path is exercised in tests without a network or a database.
  *
+ * `readSpend` hands back this session's running usage together with the rows and the transcripts a spend report is built from; the
+ * running total is `spendWithTurn`, which is `spendReport` with this turn included, so the figure printed here is the figure `spend`
+ * prints next. The cap decision for the step after this one is taken against that same total.
+ *
  * `state` is { sessionId, view, spentUsd, largestTurnUsd, cap, usage, n }.
  */
 export async function runStep(step, state, { send, readSpend }) {
@@ -728,13 +744,14 @@ export async function runStep(step, state, { send, readSpend }) {
 
   let usageAfter = state.usage;
   let spentUsd = state.spentUsd;
+  let cost = null;
   if (callsModel(step.do)) {
     const read = await readSpend();
     usageAfter = read.usage;
-    spentUsd = read.totalUsd;
+    const delta = usageDelta(state.usage, usageAfter);
+    cost = priceTurn(delta, { finish: step.do === 'finish' });
+    spentUsd = spendWithTurn({ sessions: read.sessions, transcripts: read.transcripts, sessionId: state.sessionId, turn: { cost, usage: { delta } } }).totalUsd;
   }
-  const delta = usageDelta(state.usage, usageAfter);
-  const cost = callsModel(step.do) ? priceTurn(delta, { finish: step.do === 'finish' }) : null;
   const n = state.n;
   const record = turnRecord({ n, step, response, diff, usageBefore: state.usage, usageAfter, cost, spentUsd });
   const printed = formatTurn({ n, step, response, diff, cost, spentUsd, cap: state.cap });
@@ -990,11 +1007,11 @@ async function takeSteps(ctx, opened, steps, { strict }) {
     strict,
   };
   let code = 0;
-  // The transcript on disk is rewritten after every step, so reading the folder is reading this run too: nothing is counted twice.
+  // One read of the database and of the folder; `runStep` totals them together with the turn it has just taken. The transcript on disk
+  // is rewritten after every step, so reading the folder is reading this run too: nothing is counted twice.
   const readSpend = () => {
     const sessions = readSessionRows(runQuery(sessionsSql(ctx.userId), { workdir: ctx.workdir }));
-    const report = spendReport(sessions, readTranscripts(ctx.dir).map((t) => t.data));
-    return { usage: usageOf(sessions, sessionId), totalUsd: report.totalUsd };
+    return { usage: usageOf(sessions, sessionId), sessions, transcripts: readTranscripts(ctx.dir).map((t) => t.data) };
   };
   for (const step of steps) {
     const result = await runStep(step, state, { send: ctx.send, readSpend });

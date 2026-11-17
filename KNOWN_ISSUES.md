@@ -332,9 +332,11 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
 
 ## The pilot runner (`npm run pilot:live`, issue #125, added 2026-11-17)
 
-- **Nobody has run it against production.** It was built and tested with a fake `send` and a fake usage reader (`src/data/liveCasePilot.test.ts`),
-  and its one live check was a read-only `supabase db query` that matched no rows. The sign-in, the `live-case` call, the catalogue RPC and the
-  per-turn usage read have never been exercised together against the real project; the first run of the pilot is also the first run of the tool.
+- **It has now run against production** (the owner, 2026-11-17, runs 1 to 4 of the $2 pilot, about $0.12 spent): the sign-in, the `live-case`
+  call, the catalogue RPC and the per-turn usage read worked together on first contact. The one defect that run found was arithmetic: on a
+  `finish` turn the running total priced the feedback call at the coach model, so it printed about twenty times less than that call cost and
+  disagreed with `spend` (issue #134, fixed by building both totals from `spendReport` — `spendWithTurn` hands it the turn not yet on disk).
+  What the pilot is for — whether Bucket's words nudge or solve — is still open.
 - **Spend is attributed, not measured per call.** `state -> 'usage'` is one running total per session with no model and no per-call split, so
   the script prices every turn at the coach model and the single `finish` turn at the feedback model. A future change that made two kinds of
   call in one turn would be priced wrongly and nothing would say so.
