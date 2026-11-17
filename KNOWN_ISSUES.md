@@ -329,7 +329,9 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **Unverified against a real model**, like every other change under `supabase/functions/**`, and it does nothing until
   `npx supabase functions deploy live-case`. The unit tests put the issue's three reproductions through the real `parseTurn`.
 - **The dry run cannot see it at all.** `npm run dryrun:live` stubs the model with one fixed sentence, so no content filter in
-  `parseTurn` executes in any of its 12,705 runs; its numbers are the same before and after and prove nothing about this.
+  `parseTurn` executes in any of its 12,705 runs. Run before and after (847 cases, 12,705 runs, 0 that failed the bar, 2,541 open by
+  design, both times): the two reports are **byte-identical apart from their timestamp line**, which is the expected null result and
+  is not evidence for this fix. The unit tests over the real `parseTurn` are.
 - **`saysMovingOn` is string-level, like the rest of the filter.** It matches the usual wordings (move on / move to / on to the next /
   next piece / leave that there / park that / come back to that / keep moving / press on). A genuine move-on worded some other way
   ("that is enough on this one") is replaced by `MOVING_ON`, which says the same thing — the cost is the model's own wording, not the
