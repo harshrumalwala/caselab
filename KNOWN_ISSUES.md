@@ -303,11 +303,17 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   keeping in mind: a model that never sets the flag leaves the ladder exactly as it was (the fallback is the old behaviour, which is the
   safe way round), and a model that sets it on everything would stop the ladder climbing at all. The real-model pilot is the place to
   measure how often it is set, and `asker` could be taught to send it once that is known.
-- **Learning mode cannot be finished by a member who neither completes a beat nor presses "move on."** Found by the dry run: there is no
-  clock (`isUntimed`) and `nudgeLevel` never reaches `advance` for a learner, so nothing but the member ends a beat. A silent member is
-  left at the prompt and a stuck one on beat 1; both can still end the case from the screen. It is the design, so the dry run counts those
-  1,694 runs as "open by design" and does not fail on them (`npm run dryrun:live` exits 0 today), but it names them, because whether a
-  learner who stops engaging should be moved on is an open product question rather than a settled one.
+- **In Learning mode nothing but the member ends a beat, so a member who presses nothing is never carried on.** Found by the dry run:
+  there is no clock (`isUntimed`) and `nudgeLevel` never reaches `advance` for a learner. The harness finding stands; its reading has
+  changed. Issue #119 removed the one part of it that was a real gap: "Move on" is now live from the moment the exhibit appears, written
+  about or not (`moveOn` skips the "say something first" rule when `isUntimed`), so a learner who does not know how to start on an exhibit
+  is no longer held there. What is left is a member who writes nothing *and* presses nothing, which is exactly what the dry run's scripted
+  candidates do: they model messages, never clicks (see "The dry run's candidates are a model of a member, not a member" above). The run
+  counts those 1,694 runs (847 cases x `passive` and `offtrack`) as "open by design" and does not fail on them (`npm run dryrun:live`
+  exits 0). **Re-measured on 2026-11-17 after #119: 1,694 before and 1,694 after**, the two reports identical apart from the timestamp,
+  which is the expected result and not a sign the change did nothing. The count cannot fall without teaching a candidate to press the
+  button, and should not be tuned to make it fall. Whether a learner who stops engaging altogether should be moved on is still an open
+  product question; a clock and an `advance` rung were both ruled out for Learning (issue #119, "Out of scope").
 - **The dry run's "nothing of the interviewer's reached the member" is about the engine, not about Bucket's words** (issue #95). It
   checks every exhibit payload handed over against `isInterviewerSideExhibit` and looks for an interviewer-side title or caption written
   out whole in a message, over all 10,164 runs. The model is stubbed, so it cannot say whether a real Bucket would paraphrase a private

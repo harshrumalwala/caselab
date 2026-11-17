@@ -680,6 +680,34 @@ describe('moving on from an exhibit', () => {
     s = ok(userSays(s, 'Costs', at(210)));
     expect(moveOn(ok(pause(s, at(215))), at(220)).ok).toBe(false);
   });
+
+  /** A session on its first exhibit in the given mode, got there the quick way, with nothing said about the exhibit. */
+  const silentOnExhibit = (mode: LiveMode): SessionState => {
+    let s = newSession(plan(3), T0, 'Prompt text', mode);
+    s = ok(ready(s, at(100)));
+    s = ok(ready(s, at(100)));
+    s = ok(submit(s, 'My framework', at(100)));
+    s = ok(userSays(s, 'I would start with demand', at(100)));
+    return endFrameworkStage(s, at(100));
+  };
+
+  it('asks the member to say something first in practice and in interview, where they are being assessed', () => {
+    for (const mode of ['practice', 'interview'] as const) {
+      const r = moveOn(silentOnExhibit(mode), at(200));
+      expect(r, mode).toMatchObject({ ok: false, reason: 'Tell me what you make of this one first.' });
+    }
+  });
+
+  it('lets a learner who has written nothing move on: in learning the member alone decides when a beat is over', () => {
+    const s = ok(moveOn(silentOnExhibit('learning'), at(200)));
+    expect(s.beats.map((b) => b.outcome)).toEqual(['member_moved', 'open']); // the same outcome as any other member-moved beat
+    expect(s.messages.at(-1)).toMatchObject({ kind: 'exhibit', beat: 1 });
+    expect(ok(moveOn(s, at(210))).beats.map((b) => b.outcome)).toEqual(['member_moved', 'member_moved', 'open']);
+  });
+
+  it('still refuses a learner outside the exhibit discussion and holds the rest of the rules', () => {
+    expect(moveOn(newSession(plan(3), T0, 'Prompt text', 'learning'), at(10)).ok).toBe(false);
+  });
 });
 
 describe('learning mode: no clock', () => {

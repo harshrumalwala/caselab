@@ -147,14 +147,19 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
   const thinking = THINK_TEXT[view.stage];
   const thread = view.messages;
 
-  // The member has written something about the exhibit on the table, so moving on is theirs to choose.
+  const untimed = view.mode === 'learning';
+
+  // The member has written something about the exhibit on the table, so moving on is theirs to choose. In learning mode it is theirs either
+  // way: the member sets the pace, and someone who does not know how to start on an exhibit can move past it.
   const lastExhibitAt = view.messages.map((m) => m.kind).lastIndexOf('exhibit');
   const saidSomething = view.messages.slice(lastExhibitAt + 1).some((m) => m.from === 'user');
+  const sayFirst = !untimed && !saidSomething;
+  const lastBeat = view.beatsShown >= view.beatsTotal;
+  const moveOnLabel = untimed ? (lastBeat ? 'Move on from the exhibits' : 'Move on') : lastBeat ? 'Done with the exhibits' : "I'm done with this exhibit";
 
   const bucket = bucketLine(view, now, view.messages.at(-1)?.kind === 'hint');
   const says = <BucketSays mood={bucket.mood}>{bucket.text}</BucketSays>;
 
-  const untimed = view.mode === 'learning';
   const warning = untimed
     ? null
     : view.stage === 'prompt' && stageLeft <= 20_000
@@ -295,8 +300,8 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
               onSend={(t) => void s.say(t)}
               onDraft={(k, t) => void s.saveDraft(k, t)}
               extra={
-                <Button variant="secondary" onClick={() => void s.next()} disabled={busy || !saidSomething} title={saidSomething ? undefined : 'Tell Bucket what you make of it first'}>
-                  {view.beatsShown >= view.beatsTotal ? 'Done with the exhibits' : "I'm done with this exhibit"}
+                <Button variant="secondary" onClick={() => void s.next()} disabled={busy || sayFirst} title={sayFirst ? 'Tell Bucket what you make of it first' : undefined}>
+                  {moveOnLabel}
                 </Button>
               }
             />
