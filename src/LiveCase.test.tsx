@@ -114,12 +114,13 @@ describe('starting a live case', () => {
   it('starts the clock when the prompt first appears, and keeps the case name secret', async () => {
     const env = createFakeEnv();
     await startCase(env);
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('23:00'); // this case has one exhibit to work through: 8 minutes of discussion in 23
+    // Three parts to work through (one exhibit and two steps of the analysis that have none): 16 minutes of discussion in 31.
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('31:00');
     expect(screen.getByRole('timer', { name: 'Time left in this part' })).toHaveTextContent('3:00');
     expect(screen.queryByText(/The base houses 20,000 soldiers/)).not.toBeInTheDocument(); // the interviewer's facts come out only when asked
     expect(screen.queryByText('Army Hotel')).not.toBeInTheDocument();
     await pass(61);
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('21:59');
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('29:59');
   });
 });
 
@@ -239,7 +240,12 @@ describe('the whole case', () => {
     await user.click(screen.getByRole('button', { name: /Send/ }));
     await user.type(await screen.findByLabelText('Your thinking'), 'Off-peak is 40 percent, so I would check costs next');
     await user.click(screen.getByRole('button', { name: /Send/ }));
-    // the last exhibit is done, so the recommendation is next (this case has no brainstorm)
+    // the two steps of the analysis that have no exhibit are worked through in conversation, one part at a time
+    await user.type(await screen.findByLabelText('Your thinking'), 'Peak runs four months, so the year is 24,000 room-nights');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    await user.type(await screen.findByLabelText('Your thinking'), 'Break-even needs 55 percent, and off-peak is below it');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    // everything is worked through, so the recommendation is next (this case has no brainstorm)
     await user.click(await screen.findByRole('button', { name: 'Ready to write' }));
     await user.type(await screen.findByLabelText('Your recommendation'), 'Do not open yet; test off-peak demand first.');
     await user.click(screen.getByRole('button', { name: 'Hand in recommendation' }));
@@ -306,16 +312,53 @@ describe('moving on early', () => {
     await user.click(screen.getByRole('button', { name: /Send/ }));
     await screen.findByText('Exhibit 1 of 1');
 
-    const done = screen.getByRole('button', { name: 'Done with the exhibits' }); // the only exhibit, so it says so
+    const done = screen.getByRole('button', { name: "I'm done with this exhibit" });
     expect(done).toBeDisabled(); // nothing said about it yet
     await user.type(screen.getByLabelText('Your thinking'), 'Off-peak is 40 percent, so costs next');
     await user.click(screen.getByRole('button', { name: /Send/ }));
     await screen.findByText('Go on.');
-    expect(screen.getByRole('button', { name: 'Done with the exhibits' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "I'm done with this exhibit" })).toBeEnabled();
 
-    await user.click(screen.getByRole('button', { name: 'Done with the exhibits' }));
+    // The next part of this case has no exhibit: it is talked through, and the exhibit already given stays within reach.
+    await user.click(screen.getByRole('button', { name: "I'm done with this exhibit" }));
+    expect(await screen.findByText('Exhibits so far')).toBeInTheDocument();
+    expect(screen.queryByText('Exhibit 1 of 1')).not.toBeInTheDocument();
+    expect(screen.getByText('Earlier exhibits (1)')).toBeInTheDocument(); // the exhibit already given is still there to look back at
+    const part = screen.getByRole('button', { name: "I'm done with this part" });
+    expect(part).toBeDisabled(); // the same rule as an exhibit: say something about it first
+    await user.type(screen.getByLabelText('Your thinking'), 'Peak runs four months, so the year is 24,000 room-nights');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    await screen.findAllByText('Go on.');
+    await user.click(screen.getByRole('button', { name: "I'm done with this part" }));
+
+    // The last part of the section says so on the button.
+    await user.type(await screen.findByLabelText('Your thinking'), 'Break-even needs 55 percent, so off-peak is short');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    await user.click(await screen.findByRole('button', { name: 'Done with this section' }));
     expect(await screen.findByRole('heading', { name: 'Think about your recommendation' })).toBeInTheDocument();
-    expect([...env.live.db.values()][0].state.beats[0].outcome).toBe('member_moved');
+    expect([...env.live.db.values()][0].state.beats.map((b) => b.outcome)).toEqual(['member_moved', 'member_moved', 'member_moved']);
+  });
+
+  it('keeps the private notes on a part that has no exhibit to itself', async () => {
+    const env = createFakeEnv();
+    const user = await startCase(env);
+    reply(env, () => ({ message: 'Go on.', beat_complete: true }));
+    await user.click(screen.getByRole('button', { name: 'Ready for framework' }));
+    await user.click(await screen.findByRole('button', { name: 'Ready to write' }));
+    await user.type(await screen.findByLabelText('Your framework'), 'Demand, supply and cost');
+    await user.click(screen.getByRole('button', { name: 'Hand in framework' }));
+    await user.type(await screen.findByLabelText('Where would you start?'), 'Demand by season');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    await screen.findByText('Exhibit 1 of 1');
+    await user.type(screen.getByLabelText('Your thinking'), 'Off-peak is 40 percent');
+    await user.click(screen.getByRole('button', { name: /Send/ }));
+    await screen.findByText('Exhibits so far'); // on the step that has no exhibit
+
+    // The book's working, what a strong candidate notices, the common miss and the questions to check yourself with are the interviewer's.
+    for (const secret of ['Rooms = 200 x 120 nights', 'The base is busy only part of the year', 'Treating peak demand as year-round', 'Did you separate peak from off-peak?']) {
+      expect(screen.queryByText(new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).not.toBeInTheDocument();
+    }
+    expect(document.body.textContent).not.toContain('Peak demand fills the hotel for four months');
   });
 });
 
@@ -363,7 +406,7 @@ describe('pausing and ending', () => {
     await startCase(env);
     const user = userEvent.setup({ advanceTimers: (ms) => void vi.advanceTimersByTime(ms) });
     await pass(30);
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('22:30');
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('30:30');
     await user.click(screen.getByRole('button', { name: /Pause/ }));
     await screen.findByText(/Paused\. The clock is stopped/);
     expect(screen.queryByText(/Should a hotel chain open a new property/)).not.toBeInTheDocument(); // no studying during a break
@@ -373,9 +416,9 @@ describe('pausing and ending', () => {
 
     await user.click(screen.getByRole('button', { name: /Continue/ }));
     await screen.findByText(/Should a hotel chain open a new property/);
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('22:30'); // not a second lost to the break
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('30:30'); // not a second lost to the break
     await pass(10);
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('22:20');
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('30:20');
   });
 
   it('is still paused after the page is opened again, and nothing runs out meanwhile', async () => {
@@ -387,7 +430,7 @@ describe('pausing and ending', () => {
     cleanup();
     render(<App backend={env.backend} />);
     expect(await screen.findByText(/Paused\. The clock is stopped/)).toBeInTheDocument();
-    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('23:00'); // this case has one exhibit to work through: 8 minutes of discussion in 23
+    expect(screen.getByRole('timer', { name: 'Time left in the case' })).toHaveTextContent('31:00'); // three parts to work through: 16 minutes of discussion in 31
   });
 
   it('ends a case that nothing was written in without asking for feedback or logging it', async () => {
@@ -478,7 +521,7 @@ describe('refreshing and failing', () => {
     await within(again.container).findByText('Two large chains compete.');
     expect(within(again.container).getByLabelText('Ask a clarifying question')).toHaveValue('And what about prices');
     const left = within(again.container).getByRole('timer', { name: 'Time left in the case' }).textContent!;
-    expect(left).toBe('22:20'); // the 40 seconds that passed are gone: the clock kept running instead of starting again
+    expect(left).toBe('30:20'); // the 40 seconds that passed are gone: the clock kept running instead of starting again
   });
 
   it('says so when Bucket cannot reply, and keeps what was written', async () => {
@@ -548,10 +591,13 @@ describe('learning mode', () => {
     await user.click(screen.getByRole('button', { name: /Send/ }));
     await screen.findByText('Exhibit 1 of 1');
 
-    const move = screen.getByRole('button', { name: 'Move on from the exhibits' }); // the only exhibit, so it says so
+    const move = screen.getByRole('button', { name: 'Move on' });
     expect(move).toBeEnabled(); // nothing written about it, and in learning mode that is the member's call
     expect(move).not.toHaveAttribute('title'); // there is no condition left to explain
     await user.click(move);
+    // The parts with no exhibit are the member's to leave as well, and the last one says it ends the section.
+    await user.click(await screen.findByRole('button', { name: 'Move on' }));
+    await user.click(await screen.findByRole('button', { name: 'Move on from this section' }));
     expect(await screen.findByRole('heading', { name: 'Think about your recommendation' })).toBeInTheDocument();
     expect([...env.live.db.values()][0].state.beats[0].outcome).toBe('member_moved'); // recorded as any other member-moved beat
   });

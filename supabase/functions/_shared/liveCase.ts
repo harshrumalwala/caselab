@@ -65,7 +65,10 @@ export type BeatOutcome = 'open' | 'independent' | 'hinted' | 'coach_moved' | 'm
 export type LiveMode = 'practice' | 'interview' | 'learning';
 export type NudgeLevel = 'none' | 'process_hint' | 'directional_hint' | 'lead' | 'advance';
 
-/** One thing to work through in the main section: an exhibit, or (for a case without exhibits) a step of the book's analysis. */
+/**
+ * One thing to work through in the main section: an exhibit the member is handed, or a step of the book's analysis that has no exhibit
+ * of its own and is put to them in conversation. A case has whichever of the two it holds, and most hold both.
+ */
 export interface Beat {
   kind: 'exhibit' | 'step';
   index: number;
@@ -92,6 +95,70 @@ const BRAINSTORM = /brainstorm/i;
 // A step that is only about building the framework ("Framework", "Framework for revenue growth", "Framework: what to weigh", "Structure the problem"): the framework
 // has its own stages, so it is not discussed again. ("Framework and Exhibit 1" has more in it, so it stays.)
 const FRAMEWORK_STEP = /^\s*(framework|structure|structuring|clarifying questions?)(\s+for\b.*|\s*[:/].*|\s+the\s+(problem|approach|project)\b.*)?\s*$/i;
+/**
+ * A step that is the case's closing answer. The recommendation has two stages of its own at the end, so it is not also worked through in
+ * the middle. The books head this step in many ways — "Recommendation", "Final recommendation", "Synthesis", "Conclusion to the CEO",
+ * "Wrap-up and next steps", "Summary for the CEO", "Answer" — so what is read is the **head** of the title, not the whole of it: a step
+ * that happens to use one of those words further along ("Close or invest: the ROIC test", "Closing the payback gap") is analysis and
+ * keeps its beat.
+ */
+const RECOMMENDATION_STEP =
+  /^\s*(?:(?:the|a|an|final|overall|closing|client'?s?)\s+)*(?:recommendations?|recommend|recommending|recommended|synthesis|synthesise|synthesize|synthesizing|conclusions?|conclude|concluding|wrap[-\s]?ups?|summary|summaries|summarise|summarize|verdict)\b/i;
+/** "Answer" is the one of these words the books also use as a verb ("Answer the board's question on capacity"), so it closes a case only when it is the whole of the title. */
+const ANSWER_STEP = /^\s*(?:the\s+|final\s+|your\s+)?answers?\s*[:.\-–—]?\s*$/i;
+/** The same step said as a phrase rather than a heading ("Closing the case", "Bringing it all together"). */
+const CLOSING_PHRASE = /^\s*(?:closing the case|(?:bring|pull|put|tie)(?:ing)?\s+it\s+(?:all\s+)?together|(?:bringing|pulling|putting|tying)\s+it\s+(?:all\s+)?together)\b/i;
+const isRecommendationStep = (title: string): boolean => RECOMMENDATION_STEP.test(title) || ANSWER_STEP.test(title) || CLOSING_PHRASE.test(title);
+
+/**
+ * The book's own label for an exhibit, wherever it sits in a title: "Exhibit 2: ...", "Exhibit #1", "Financial analysis: Exhibit 1",
+ * "Luxury market trend (Exhibit 1)", "Figure 3", "Table B". The books use the nouns interchangeably, so only the number or letter is
+ * kept: a step that says "Table 1" and an exhibit called "Exhibit 1" are the same thing in every write-up we have.
+ */
+const EXHIBIT_LABEL_ANYWHERE = /\b(?:exhibits?|exh|figures?|figs?|appendix|appendices|attachments?|charts?|tables?|graphs?)\s*#?\s*(\d{1,2}[a-z]?|[a-z])\b/gi;
+const exhibitLabels = (title: string): string[] => [...title.matchAll(EXHIBIT_LABEL_ANYWHERE)].map((m) => m[1].toLowerCase());
+
+/** Words that say nothing about what a step or an exhibit is about, so they do not count towards two titles being the same subject. */
+const SUBJECT_FILLER = new Set([
+  'the', 'and', 'for', 'with', 'per', 'its', 'what', 'why', 'how', 'are', 'does', 'you', 'your', 'this', 'that', 'from', 'vs', 'versus',
+  'into', 'over', 'under', 'about', 'case', 'step', 'steps', 'part', 'parts', 'analysis', 'analyse', 'analyze', 'exhibit', 'exhibits',
+  'figure', 'chart', 'table', 'appendix', 'attachment', 'data', 'question', 'questions', 'client',
+]);
+/** What a title is about: its own content words, lower-cased, with the filler and anything under three letters dropped. */
+const subjectWords = (title: string): Set<string> =>
+  new Set(
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .split(' ')
+      .filter((w) => w.length > 2 && !SUBJECT_FILLER.has(w)),
+  );
+/** Two titles are about the same thing when the shorter one's content words are (almost) all in the longer one's. */
+const SAME_SUBJECT = 0.8;
+function sameSubject(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  if (a.size === 0 || b.size === 0) return false;
+  let shared = 0;
+  for (const w of a) if (b.has(w)) shared += 1;
+  return shared / Math.min(a.size, b.size) >= SAME_SUBJECT;
+}
+
+/**
+ * Which exhibit a step is the discussion of, as a place in the candidate list, or -1 for a step that stands on its own. The only link
+ * between the two lists in a write-up is what the step calls itself, so it is read in two ways:
+ *
+ *  - **The book's label settles it.** "Exhibit 2: why the suburban shops lag" is the discussion of Exhibit 2 and nothing else. A step
+ *    that names an exhibit the member is never handed (the interviewer's own) matches nothing and keeps its beat: it is then the only
+ *    place that analysis happens.
+ *  - **Otherwise the subject does.** "Cost structure" beside an exhibit called "Cost structure of the client" is the same thing said
+ *    twice. A duplicated beat is worse than a dropped one, so the doubt goes this way: a step that shares nearly all of its words with
+ *    an exhibit is that exhibit's beat.
+ */
+function stepsAbout(title: string, labels: readonly string[][], words: readonly Set<string>[]): number {
+  const named = exhibitLabels(title);
+  if (named.length > 0) return labels.findIndex((l) => named.some((n) => l.includes(n)));
+  const mine = subjectWords(title);
+  return words.findIndex((w) => sameSubject(mine, w));
+}
 
 /**
  * Some of a write-up's tables are the interviewer's own: guidance, solutions, a sample approach, "calculation to be performed by the candidate",
@@ -172,15 +239,80 @@ function planTimes(beats: number): { exhibitMs: number; limitMs: number } {
   return { exhibitMs, limitMs: exhibitMs + AROUND_EXHIBITS_MS };
 }
 
+/**
+ * What the member works through, in the book's own order: every exhibit meant for the candidate, and every step of the book's analysis
+ * that has no exhibit of its own.
+ *
+ * The two lists are ordered but nothing in a write-up says how they interleave, so the steps that name their exhibit are the sync
+ * points: an exhibit comes out where the step that discusses it sits, and that step is not a beat of its own (the exhibit's beat is
+ * its discussion). Three rules keep the result predictable:
+ *
+ *  - The exhibits come out in the write-up's order, always, and so do the steps; neither list is ever shuffled.
+ *  - An exhibit no step claims is handed over before the step beats that would otherwise come between it and the next exhibit a step
+ *    does claim — so in a case where nothing names anything (there is no link in the data to read), the exhibits are worked through
+ *    first, exactly as they are today, and the steps that used to be dropped follow them.
+ *  - A step whose work another stage does is left out: the framework, the brainstorm and the closing recommendation.
+ */
+function planBeats(solution: PlanSource): Beat[] {
+  const candidates = solution.exhibits.flatMap((e, index) => (isInterviewerSideExhibit(e) ? [] : [{ index, title: e.title ?? '' }]));
+  const labels = candidates.map((c) => exhibitLabels(c.title));
+  const words = candidates.map((c) => subjectWords(c.title));
+
+  // Which step discusses which exhibit, and which steps are a beat of their own.
+  const claims = new Map<number, number>(); // step -> place in `candidates`
+  const taken = new Set<number>();
+  const ownBeat = new Set<number>();
+  solution.steps.forEach((s, index) => {
+    const title = s.title ?? '';
+    if (BRAINSTORM.test(title) || FRAMEWORK_STEP.test(title) || isRecommendationStep(title)) return;
+    const about = stepsAbout(title, labels, words);
+    if (about >= 0) {
+      // Two steps on one exhibit (reading it, then its implication) are still that exhibit's single beat: the second adds nothing new
+      // to work through, and a beat the member meets twice is worse than one they never meet.
+      if (!taken.has(about)) {
+        claims.set(index, about);
+        taken.add(about);
+      }
+      return;
+    }
+    ownBeat.add(index);
+  });
+
+  // The next exhibit a later step claims, read backwards over the steps: everything before it that nobody claimed comes out first.
+  const nextClaim: number[] = [];
+  let soonest = candidates.length;
+  for (let i = solution.steps.length - 1; i >= 0; i -= 1) {
+    nextClaim[i] = soonest;
+    const claimed = claims.get(i);
+    if (claimed !== undefined) soonest = Math.min(soonest, claimed);
+  }
+
+  const beats: Beat[] = [];
+  let next = 0;
+  const handOverUpTo = (stop: number): void => {
+    while (next < stop) {
+      beats.push({ kind: 'exhibit', index: candidates[next].index });
+      next += 1;
+    }
+  };
+  solution.steps.forEach((_s, index) => {
+    const claimed = claims.get(index);
+    if (claimed !== undefined) {
+      handOverUpTo(claimed + 1);
+      return;
+    }
+    if (!ownBeat.has(index)) return;
+    handOverUpTo(nextClaim[index]);
+    beats.push({ kind: 'step', index });
+  });
+  handOverUpTo(candidates.length);
+  return beats;
+}
+
 export function buildPlan(solution: PlanSource): CasePlan {
   const brainstormStep = solution.steps.find((s) => BRAINSTORM.test(s.title));
   const brainstormTable = solution.exhibits.find((e) => BRAINSTORM.test(e.title ?? ''));
-  // Only the exhibits meant for the candidate are brought out.
-  const exhibitBeats: Beat[] = solution.exhibits.flatMap((e, index) => (isInterviewerSideExhibit(e) ? [] : [{ kind: 'exhibit' as const, index }]));
-  // A case with no exhibits for the candidate is worked through the book's own steps instead (the brainstorm has its own stages).
-  // (The framework is done in its own stages, so a step that is just the framework is not discussed again.)
-  const stepBeats: Beat[] = solution.steps.flatMap((s, index) => (BRAINSTORM.test(s.title) || FRAMEWORK_STEP.test(s.title) ? [] : [{ kind: 'step' as const, index }]));
-  const beats = exhibitBeats.length > 0 ? exhibitBeats : stepBeats;
+  const beats = planBeats(solution);
   // More to cover, more time: the case is as long as there is to work through, up to the 25-in-40 the busiest cases always had.
   return {
     ...planTimes(beats.length),

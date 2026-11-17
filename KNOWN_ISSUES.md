@@ -267,6 +267,35 @@ assistant saw a claim (for example a build session's report) but did not check i
   student has tried.
 - The durable fix the issue names is still open: an `audience` field per exhibit in `private-data/`, which needs a seed reload.
 
+## Exhibits and steps in one plan (issue #128, 2026-11-17)
+
+- **Nothing of this is verified against a real model or a real member.** `buildPlan` now mixes the two kinds of beat, and the unit
+  tests, `npm run audit:live` and `npm run dryrun:live` all agree the cases run; the dry run stubs the model, so whether Bucket's reply
+  on a part that hands over no exhibit reads like an interviewer putting a question is unknown. Like every change under
+  `supabase/functions/**` it does nothing until `npx supabase functions deploy live-case`.
+- **The clock grew, by design and by a lot.** Beats per case went from 2.98 to 4.94 and the median planned case from 31 to 39 minutes;
+  285 of the 847 eligible cases now plan the full 25-in-40 ceiling, against 57 before. Nothing runs longer than the ceiling, but a
+  14-beat case shares 25 minutes between 14 parts (about 1:45 each before the budget is reshared). Whether a 39-minute case is one a
+  member will sit through is a product question the pilot and real use will answer.
+- **The order between an exhibit and a step is a guess wherever no step names an exhibit.** 230 of the 847 write-ups have at least one
+  step that names its exhibit; in the rest the exhibits are handed over first and the steps follow, which is the order those cases
+  already had. Nothing in the data says where the book meant a step to sit, so a case can work through an exhibit before the sizing step
+  the book put first. The durable fix is a field in `private-data/` that says the order, which needs a seed reload.
+- **The duplicate test is a title test, and 218 steps sit in its uncertain band.** A step is taken as an exhibit's own discussion when
+  it carries the book's label for it ("Exhibit 2: ...", "Financial analysis: Exhibit 1") or shares at least 80% of the shorter title's
+  content words: 297 steps match by label and 117 by words over the library. 218 steps in 164 cases share between half and 80% of their
+  words with an exhibit and are kept as parts of their own; some of those may be a second run at an exhibit, and a step whose title says
+  nothing of what it is about would be missed by both tests.
+- **A step headed "Framework and ..." is still a part of its own.** `FRAMEWORK_STEP` is unchanged (the issue said to keep it as it is),
+  so "Framework and hypothesis", "Framework and market growth" and 95 others like them (75 distinct titles over the library) now become
+  parts in cases that have exhibits, where they would have been dropped before. Part of that work belongs to the framework stage, which
+  the member has already done. Whether to widen the rule is a question for the PM: widening it would also drop the analysis that such a
+  title carries.
+- **The recommendation rule reads the head of a title.** "Recommendation", "Final recommendation", "Synthesis", "Conclusion to the CEO",
+  "Wrap-up", "Summary for the CEO", "Closing the case" and "Answer" (alone) are left to the recommendation stage; 61 conversation-only
+  cases lost exactly one beat that way. A closing step the books head some other way ("What should the client do about pricing?") is
+  still a part of its own, and a genuine analysis step headed "Summary of profitability" is dropped.
+
 ## Unverified user-side checks left open
 
 - Whether the "someone said yes" notification email arrives (the owner confirmed the sign-up email flow; whether the "asked you" request email was checked is not known).

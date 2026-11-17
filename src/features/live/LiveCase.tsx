@@ -20,7 +20,7 @@ const OUTLINE: [string, string][] = [
   ['3 min', 'Read the prompt and ask your clarifying questions'],
   ['1:30', 'Think about your framework (no interruptions)'],
   ['3 min', 'Write it, then say where you would start'],
-  ['20-25 min', 'Work through the exhibits with Bucket, who keeps the case moving'],
+  ['20-25 min', 'Work through the exhibits and the rest of the analysis with Bucket, who keeps the case moving'],
   ['0:30 + 1:30', 'Brainstorm, if the case has one'],
   ['0:30 + 1:30', 'Think, then write your recommendation'],
 ];
