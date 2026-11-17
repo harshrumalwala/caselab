@@ -169,7 +169,7 @@ export const SHARING_OPTIONS: {
     key: 'sharpening',
     label: "What I'm sharpening",
     short: "what they're sharpening",
-    hint: 'A short summary of up to three skills you are sharpening and up to three you are strong at, worked out from the skill scores you share. Names the skills only: no numbers, no ranking. Needs Skill scores to have anything to work from.',
+    hint: "Whether CaseLab sums up the skill scores you already share: up to three skills you're sharpening and up to three you're strong at, named at the top of your profile link. The summary names skills and no figures; the scores themselves stay with Skill scores, which it needs switched on to have anything to work from.",
     needsCases: true,
   },
   {

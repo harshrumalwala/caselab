@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Rating, SkillKey } from './constants';
-import type { SharedCase } from './community';
+import { NO_SHARING, publicSharingSummary, sharingSummary, type SharedCase, type SharingPrefs } from './community';
 import { MIN_CASES_FOR_SKILL_INSIGHTS } from './improvement';
-import { MAX_SHARPENING, publicSharpening } from './sharpening';
+import { MAX_SHARPENING, publicSharpening, sharingShown, sharpeningShown } from './sharpening';
 
 /** One shared case, as `public_person_cases(id)` hands it over, with whichever skill scores we want. */
 const shared = (id: number, skills: Partial<Record<SkillKey, Rating>> | null, over: Partial<SharedCase> = {}): SharedCase => ({
@@ -112,5 +112,56 @@ describe('what a member is sharpening, from the scores they share', () => {
 
   it('is empty for a member who shares nothing', () => {
     expect(publicSharpening([])).toEqual({ rated: 0, sharpen: [], strengths: [] });
+  });
+});
+
+describe('the line at the top of a profile, worded from what the page carries', () => {
+  /** Someone sharing their case history, their overall scores, their skill scores and the summary. */
+  const SHARER: SharingPrefs = { ...NO_SHARING, cases: true, overall: true, skills: true, sharpening: true };
+  /** Four rated cases: enough for the summary to name Quant and Framework. */
+  const ENOUGH = run(4, { quant: 2, framework: 5 });
+  /** Two of the same: under MIN_CASES_FOR_SKILL_INSIGHTS, so the card names nothing and renders nothing. */
+  const TOO_FEW = ENOUGH.slice(0, 2);
+
+  it('claims the summary to a link holder who has it in front of them', () => {
+    expect(sharpeningShown(SHARER, ENOUGH, 'visitor')).toBe(true);
+    expect(publicSharingSummary(sharingShown(SHARER, ENOUGH, 'visitor'))).toBe("case history, overall scores, skill scores and what they're sharpening");
+  });
+
+  it('says nothing of it below the minimum, where the switch is on and the card is not there', () => {
+    expect(publicSharpening(TOO_FEW).rated).toBeLessThan(MIN_CASES_FOR_SKILL_INSIGHTS);
+    expect(sharpeningShown(SHARER, TOO_FEW, 'visitor')).toBe(false);
+    expect(publicSharingSummary(sharingShown(SHARER, TOO_FEW, 'visitor'))).toBe('case history, overall scores and skill scores');
+  });
+
+  it('says nothing of it when every shared score sits in the middle and no skill stands out', () => {
+    const middling = [3, 4, 3, 4].map((rating, i) => shared(i + 1, { framework: rating as Rating }));
+    expect(publicSharpening(middling)).toMatchObject({ sharpen: [], strengths: [] });
+    expect(sharpeningShown(SHARER, middling, 'visitor')).toBe(false);
+  });
+
+  it('says nothing of it when the member shares no skill scores for it to read', () => {
+    const unrated = ENOUGH.map((c) => ({ ...c, skillScores: null }));
+    expect(sharpeningShown({ ...SHARER, skills: false }, unrated, 'visitor')).toBe(false);
+    expect(publicSharingSummary(sharingShown({ ...SHARER, skills: false }, unrated, 'visitor'))).toBe('case history and overall scores');
+  });
+
+  it('says nothing of it with the switch off, however many scores there are', () => {
+    const off = { ...SHARER, sharpening: false };
+    expect(sharpeningShown(off, ENOUGH, 'visitor')).toBe(false);
+    expect(publicSharingSummary(sharingShown(off, ENOUGH, 'visitor'))).toBe('case history, overall scores and skill scores');
+  });
+
+  it('says nothing of it to another member, whose page carries the card in no case', () => {
+    expect(sharpeningShown(SHARER, ENOUGH, 'member')).toBe(false);
+    expect(sharingSummary(sharingShown(SHARER, ENOUGH, 'member'))).toBe('case history, overall scores and skill scores');
+  });
+
+  it('leaves every other switch exactly as it was, and the prefs untouched when nothing changes', () => {
+    const everything: SharingPrefs = { ...SHARER, feedback: true, notes: true, improvement: true, partner: true, level: true, interviewed: true, burned: true };
+    expect(sharingShown(everything, TOO_FEW, 'visitor')).toEqual({ ...everything, sharpening: false });
+    expect(sharingShown(everything, ENOUGH, 'visitor')).toBe(everything); // nothing to correct: the same object back
+    const off = { ...everything, sharpening: false };
+    expect(sharingShown(off, ENOUGH, 'member')).toBe(off);
   });
 });

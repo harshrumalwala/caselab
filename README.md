@@ -141,7 +141,7 @@ need no account.
 | **Case history** | Case name, source (casebook), industry, case type and date |
 | **Overall scores** | The overall 1-5 rating of each shared case |
 | **Skill scores** | The framework, quant, exhibits, brainstorm and other skill ratings |
-| **What I'm sharpening** | On your profile link only: a short summary naming up to three skills you're sharpening and up to three you're strong in, worked out from the skill scores above (see below) |
+| **What I'm sharpening** | On your profile link only: whether CaseLab sums up the skill scores above, naming up to three skills you're sharpening and up to three you're strong in. The summary itself carries no figures; the scores beside each case stay with **Skill scores** (see below) |
 | **Written feedback** | Feedback you received (overall and per skill) |
 | **Improvement focus** | The "main thing to improve" tag on each shared case |
 | **Learning notes** | What went well, what you struggled with, concepts learned, next focus |
@@ -270,7 +270,13 @@ up-to-five ratings) for the second — worked out in the browser from the `skill
   separately, and nobody is summarised until they ask. Existing members all start off. The switch is a flag on the profile
   (`profiles.share_sharpening`, carried to the link-visible copy and returned by `public_person(id)`); no summary is stored anywhere.
 - **Names only.** The skills are named and nothing else: no average, no position, no ranking of all eight, and no superlative. A skill
-  is on one list, the other, or neither.
+  is on one list, the other, or neither. The switch decides whether CaseLab writes that summary, not whether figures are on the page:
+  the per-case scores and the **Shared performance** averages under the card belong to **Skill scores**, which the member switched on
+  separately, and the switch's own words say so.
+- **The line at the top says what the page carries.** The "Shares ..." sentence under a member's name reads the summary the same way
+  the card does (`sharingShown` in `src/domain/sharpening.ts`), so it offers "what they're sharpening" only where the summary is
+  really there: not below the minimum, not without shared skill scores, and not on the page another member sees, which never carries
+  the card. Every other switch speaks for itself the moment it is on and is untouched.
 - **Silent below the minimum.** A skill needs scores on at least three shared cases before it is named at all, and a member needs three
   rated shared cases before there is a card (`MIN_CASES_FOR_SKILL_INSIGHTS`, the same minimum the Improvement Areas screen uses). Below
   it there is no card and no explanation: "not enough data yet" would itself be a sentence about the person. A member who does not share
@@ -795,10 +801,13 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **Community logic**: loose case-title matching, pairing (what to offer, what to avoid, thin areas) and the filters
 - **What I'm sharpening** (the link holder's skill summary): the rules (`sharpening.test.ts`: weak and strong sides, the middle on
   neither, at most three a side, names with no number in them, silence below the minimum rated cases and for a skill scored on too few,
-  nothing without shared skill scores, the behavioral fields read as one, a skill they tagged themselves kept on the sharpening side) and
+  nothing without shared skill scores, the behavioral fields read as one, a skill they tagged themselves kept on the sharpening side,
+  and the "Shares ..." line offering the summary only where it is rendered: claimed above the minimum, dropped below it, dropped
+  without skill scores, dropped with the switch off and dropped for another member, with every other switch left alone) and
   the screens (the card for someone holding the link, absent until the switch is on, absent without skill scores, silent below the
-  minimum with no placeholder, no new request or network call, the switch saving like the others, and the member's own preview showing
-  the same card with a line saying where it stands). The database side is `sharpeningShare.db.test.ts`: off by default and for every
+  minimum with no placeholder, no new request or network call, the switch saving like the others, the member's own preview showing
+  the same card with a line saying where it stands, and the header line on the profile, in the preview and on a member's view of
+  another member never promising a summary that is not on the page). The database side is `sharpeningShare.db.test.ts`: off by default and for every
   profile that existed before the migration, a flag and nothing else stored, another member able to read the switch but not set it and
   getting no extra case data, both tables refusing `anon` and the signed-out caller with any filter, and `public_person(id)` the only way
   the flag reaches a link holder

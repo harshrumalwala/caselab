@@ -524,6 +524,8 @@ describe('what this member is sharpening (their own switch, off until they ask)'
     row({ caseId: `r${i}`, title: `Rated case ${i}`, skillScores: { quant: 2, framework: 5, exhibits: 3 } }),
   );
   const section = async () => within(await screen.findByRole('region', { name: /What Bob is sharpening/ }));
+  /** The sentence under their name, which tells a visitor what this page holds. */
+  const header = async () => (await screen.findByRole('heading', { name: 'Bob Brown' })).parentElement as HTMLElement;
   const skills = (where: ReturnType<typeof within>, label: string) =>
     within(where.getByRole('list', { name: label }))
       .getAllByRole('listitem')
@@ -571,6 +573,39 @@ describe('what this member is sharpening (their own switch, off until they ask)'
     await screen.findByText('Rated case 0');
     expect(screen.queryByRole('region', { name: /What Bob is sharpening/ })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/not enough data|too few rated|once they have rated/i);
+  });
+
+  it('is announced at the top of the page, where it is on the page', async () => {
+    const env = visitor({ members: [SHARPENER], shared: RATED });
+    await openLink(env, 'bob');
+    await section();
+    expect(await header()).toHaveTextContent(/Shares case history, overall scores, skill scores and what they're sharpening/);
+  });
+
+  it('is not announced below the minimum: the switch is on, and the page carries no summary to read', async () => {
+    const env = visitor({ members: [SHARPENER], shared: RATED.slice(0, 2) });
+    await openLink(env, 'bob');
+    await screen.findByText('Rated case 0');
+    expect(await header()).toHaveTextContent(/Shares case history, overall scores and skill scores/);
+    expect((await header()).textContent).not.toMatch(/sharpening/i);
+    // And the card's own silence stands: no card, and nothing said about having too little.
+    expect(screen.queryByRole('region', { name: /What Bob is sharpening/ })).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/not enough data|too few rated|once they have rated/i);
+  });
+
+  it('is not announced when their shared cases carry no skill scores for it to read', async () => {
+    const env = visitor({ members: [SHARPENER], shared: RATED.map((c) => ({ ...c, skillScores: null })) });
+    await openLink(env, 'bob');
+    await screen.findByText('Rated case 0');
+    expect((await header()).textContent).not.toMatch(/sharpening/i);
+  });
+
+  it('is not announced with the switch off, however many scores they share', async () => {
+    const env = visitor({ members: [{ ...SHARPENER, sharing: { ...SHARPENER.sharing, sharpening: false } }], shared: RATED });
+    await openLink(env, 'bob');
+    await screen.findByText('Rated case 0');
+    expect(await header()).toHaveTextContent(/Shares case history, overall scores and skill scores/);
+    expect((await header()).textContent).not.toMatch(/sharpening/i);
   });
 
   it('counts only shared practice cases, and asks for nothing a visitor did not already ask for', async () => {
@@ -651,12 +686,26 @@ describe('deciding whether to be summarised on your link', () => {
     expect(preview.queryByRole('region', { name: /is sharpening/ })).not.toBeInTheDocument();
   });
 
-  it('is kept to the visitors the link reaches: the members preview does not show it', async () => {
+  it('is kept to the visitors the link reaches: the members preview does not show it, or claim it', async () => {
     const env = createFakeEnv({ profile: { ...ME, sharing: { ...ME.sharing, sharpening: true } }, shared: MY_CASES });
     const { dialog } = await openProfile(env);
     const preview = within(within(dialog).getByRole('region', { name: /What others see/ }));
     await preview.findByText(/My case 0/);
     expect(preview.queryByRole('region', { name: /is sharpening/ })).not.toBeInTheDocument();
+    expect(preview.getByText(/· Shares/)).toHaveTextContent('Shares case history and skill scores');
+  });
+
+  it('tells the member their preview holds the summary once it does', async () => {
+    const preview = await emptyPreview(MY_CASES);
+    await preview.findByRole('region', { name: /What Test is sharpening/ });
+    expect(preview.getByText(/· Shares/)).toHaveTextContent("Shares case history, skill scores and what they're sharpening");
+  });
+
+  it('does not claim the summary in the preview header while the preview has none to show', async () => {
+    const preview = await emptyPreview(MY_CASES.slice(0, 2)); // the switch is on, one rated case short of the minimum
+    expect(await preview.findByText(/joins your link once you share skill scores on 3 cases/)).toBeInTheDocument();
+    expect(preview.getByText(/· Shares/)).toHaveTextContent('Shares case history and skill scores');
+    expect(preview.getByText(/· Shares/).textContent).not.toMatch(/sharpening/i);
   });
 });
 

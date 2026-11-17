@@ -260,6 +260,20 @@ describe('People', () => {
     expect(screen.queryByRole('region', { name: /What to give Bob next/ })).not.toBeInTheDocument();
   }, 20000); // may pay for loading the whole app when the full suite is running
 
+  it("says what their page holds: a member's page carries no sharpening summary, so the line never offers one", async () => {
+    // Bob has the summary switched on and four rated cases: it rides on his link, and a member's page is not his link.
+    const sharpener: Profile = { ...BOB, sharing: { ...BOB.sharing, skills: true, sharpening: true } };
+    const rated = Array.from({ length: 4 }, (_, i) => shared({ caseId: `r${i}`, title: `Rated case ${i}`, skillScores: { quant: 2, framework: 5 } }));
+    const env = createFakeEnv({ members: [sharpener], shared: rated });
+    await openApp(env);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await goTo('#/people/bob');
+    const heading = await screen.findByRole('heading', { name: 'Bob Brown' });
+    expect(heading.parentElement).toHaveTextContent(/Shares case history, overall scores, skill scores and written feedback/);
+    expect(heading.parentElement?.textContent).not.toMatch(/sharpening/i);
+    expect(screen.queryByRole('region', { name: /is sharpening/ })).not.toBeInTheDocument();
+  }, 20000); // may pay for loading the whole app when the full suite is running
+
   it('shows nothing about a member who is not visible, or does not exist', async () => {
     const env = createFakeEnv(people);
     await openApp(env);

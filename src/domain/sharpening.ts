@@ -1,5 +1,5 @@
 import { SKILL_GROUPS, STRONG_AT, type SkillGroupKey } from './constants';
-import { sharedToRecords, type SharedCase } from './community';
+import { sharedToRecords, type SharedCase, type SharingPrefs } from './community';
 import { MIN_CASES_FOR_SKILL_INSIGHTS, skillsToImprove } from './improvement';
 import { skillStats } from './stats';
 import type { CaseRecord } from './types';
@@ -67,4 +67,27 @@ export function publicSharpening(shared: SharedCase[]): Sharpening {
     .map(({ key, label }) => ({ key, label }));
 
   return { rated, sharpen, strengths };
+}
+
+/** Whether the summary has a skill to name. One rule, read by the card that draws it and by the line that announces it. */
+export function hasSharpening(view: Sharpening): boolean {
+  return view.sharpen.length > 0 || view.strengths.length > 0;
+}
+
+/** Who is reading a profile. The summary is part of a member's link; members have the fuller picture on their own screens. */
+export type ProfileAudience = 'visitor' | 'member';
+
+/** Whether this reader has the sharpening summary in front of them: their audience, the member's switch, and enough shared scores to name a skill. */
+export function sharpeningShown(sharing: SharingPrefs, shared: SharedCase[], audience: ProfileAudience): boolean {
+  return audience === 'visitor' && sharing.sharpening && hasSharpening(publicSharpening(shared));
+}
+
+/**
+ * The switches as this page can honour them, for the "Shares ..." line at the top of a profile. Every other
+ * switch speaks for itself the moment it is on; the sharpening summary also needs scores it can read and a
+ * reader whose page carries it, so the line reads it the same way the card does and promises only what is there.
+ */
+export function sharingShown(sharing: SharingPrefs, shared: SharedCase[], audience: ProfileAudience): SharingPrefs {
+  const sharpening = sharpeningShown(sharing, shared, audience);
+  return sharpening === sharing.sharpening ? sharing : { ...sharing, sharpening };
 }

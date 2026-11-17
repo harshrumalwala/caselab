@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { SharedCase } from '../../domain/community';
 import { MIN_CASES_FOR_SKILL_INSIGHTS } from '../../domain/improvement';
-import { publicSharpening } from '../../domain/sharpening';
+import { hasSharpening, publicSharpening } from '../../domain/sharpening';
 import { Card, CardHeader } from '../../components/ui/Card';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -34,7 +34,7 @@ function Skills({ label, names }: { label: string; names: string[] }) {
  */
 export function SharpeningCard({ name, shared, note }: { name: string; shared: SharedCase[]; note?: ReactNode }) {
   const view = useMemo(() => publicSharpening(shared), [shared]);
-  if (view.sharpen.length === 0 && view.strengths.length === 0) return null;
+  if (!hasSharpening(view)) return null;
 
   return (
     <Card strip="teal" aria-labelledby="sharpening-title">
@@ -67,7 +67,7 @@ export function SharpeningCard({ name, shared, note }: { name: string; shared: S
 export function SharpeningPreview({ name, shared, on }: { name: string; shared: SharedCase[]; on: boolean }) {
   const view = useMemo(() => publicSharpening(shared), [shared]);
 
-  if (view.sharpen.length === 0 && view.strengths.length === 0) {
+  if (!hasSharpening(view)) {
     // Only you see this: your link stays silent either way, because "not enough yet" is itself a statement about you.
     return on ? (
       <p className="rounded-xl bg-surface px-4 py-3 text-sm text-ink-2">

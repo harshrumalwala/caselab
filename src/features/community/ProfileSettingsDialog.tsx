@@ -17,6 +17,7 @@ import { BurnedCases } from './BurnedCases';
 import { BurnedLine } from './BurnedLine';
 import { SharedCaseRow } from './SharedCaseRow';
 import { SharingSwitches } from './SharingSwitches';
+import { sharingShown } from '../../domain/sharpening';
 import { SharpeningPreview } from '../people/SharpeningCard';
 
 type Audience = 'members' | 'visitors';
@@ -47,6 +48,10 @@ function Preview({ profile }: { profile: Profile }) {
       current = false;
     };
   }, [community, profile, audience]);
+
+  // The preview's own "Shares ..." line, like the profile's, says what this audience has in front of them: the
+  // sharpening summary joins it once the link carries it and the shared scores name a skill.
+  const onThePage = sharingShown(profile.sharing, state.status === 'ready' ? state.shared : [], audience === 'visitors' ? 'visitor' : 'member');
 
   const hidden =
     audience === 'members'
@@ -88,7 +93,7 @@ function Preview({ profile }: { profile: Profile }) {
             <p className="font-semibold text-ink">{profile.displayName}</p>
             <p className="text-xs text-muted">
               {profile.mbaClass || 'MBA class not shown'} · Shares{' '}
-              {audience === 'members' ? sharingSummary(profile.sharing) : publicSharingSummary(profile.sharing)}
+              {audience === 'members' ? sharingSummary(onThePage) : publicSharingSummary(onThePage)}
             </p>
             {/* Members always see what you've burned; visitors only if you switched that on. */}
             <BurnedLine

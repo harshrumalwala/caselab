@@ -312,7 +312,18 @@ move whenever the file does, so the quoted words are the reliable part):
   link holder can still average those per-case scores by hand — that was the PM's original argument against the switch. What the
   switch buys is that *CaseLab* does not do it for them or put the result at the top of the page, which is the framing the owner
   chose to protect. If that ever needs enforcing in the database, the only way is to stop releasing per-case skill scores to
-  visitors, which is a different (and larger) decision.
+  visitors, which is a different (and larger) decision. **The switch's copy was rewritten on 2026-11-17** (issue #177) to say that
+  much: it used to promise skills "named only: no numbers, no ranking", which is true of the card and false of the page, because
+  **Shared performance** sits under it with the same skills as averages. The owner's ruling was to change the copy and leave the
+  page: hiding a block `share_skills` already releases would take back a separate, earlier consent.
+- **The "Shares ..." line now reads what rendered, and only for the sharpening summary** (issue #177, 2026-11-17). Every other switch
+  shows something the moment it is on, so `sharingShown` (`src/domain/sharpening.ts`) corrects exactly one key and leaves the rest as
+  the switches set them. Two small consequences: in the member's own preview the line is computed from an empty list while the rows are
+  loading, so "and what they're sharpening" appears a moment after the rest of the sentence; and a reader who is a member never sees
+  the summary offered, which is right today but would need revisiting if members were ever given the card.
+- **The two lists in the sharpening card wrap differently inside the preview** (noted by issue #173, out of scope for #177). The card's
+  `sm:grid-cols-2` keys off the viewport, not the container, so in the narrow **What others see** panel "SHARPENING NOW" can wrap to two
+  rows while "STRONG ALREADY" stays on one. Ragged, legible, and only in the preview.
 - **The public directory is gone (issue #96) and the migration that enforces it is applied.** The app shipped in that PR has no
   front-page list or search, and `src/data/supabaseCommunity.ts` no longer reads the public tables;
   `supabase/migrations/20261124120000_link_only_profiles.sql` was applied with the owner's approval on 2026-11-17. Checked against
