@@ -34,7 +34,7 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **`buildLibrarySeed.mjs` reads every `private-data/casebooks/*.json` except `*.index.json`** and every `private-data/solutions/*.json`;
   a file with the wrong name or shape is either picked up wrongly or ignored. The new-analysis files are named `solutions-waveN.json`.
 - **The parser's caps, and what they still cut** (issue #95 made every cut visible; no cap takes content out of the library today, and
-  the four labels cut to length are the two bullets below). `src/domain/bookSolution.ts` caps: exhibits 12, columns 16, rows 70, chart
+  nothing is cut to length either since the four labels of issue #157 were rewritten). `src/domain/bookSolution.ts` caps: exhibits 12, columns 16, rows 70, chart
   points/categories 70, structure buckets 8, clarifying questions 5, takeaways 3, chart series 16, panels 8, and the character caps in
   `EXHIBIT_CAPS` (a cell or column heading 800, a title 400, a caption 3,000 — the live case's own numbers). Empty-string chart
   categories are dropped, so a single unlabelled bar needs a non-empty label or the chart disappears. **Content over a cap is no longer
@@ -46,7 +46,8 @@ assistant saw a claim (for example a build session's report) but did not check i
   content gone, and the fix is a shorter line in the write-up (a content change, the owner's call). **The 9 exhibits that had one were
   rewritten on 2026-11-17** (issue #139, across Avalon, Cosmetics Company, Grad-U-Date, Kellogg Capital, LabCo, Orange Yoga Studio and
   Take Your Pills!), so `npm run audit:live` reported 0 `exhibit_text_shortened` until #143 taught it to read the row labels as well and
-  #151 the reference-line labels; it is 4 now, and those four are the next two bullets. One side-note line that could not hold its two
+  #151 the reference-line labels; it went to 4; issue #157 rewrote those four write-ups on 2026-11-17 and it is 0 again (the next two
+  bullets). One side-note line that could not hold its two
   figures in 60 characters was split into further list items rather than shortened, which is why that chart now carries more side notes
   than before. The write-ups are fixed; **production only changes when the regenerated `supabase/seeds/library.sql` is loaded**. The
   per-exhibit caps are `SOLUTION_EXHIBIT_LIMITS` and `LIVE_EXHIBIT_LIMITS` (40 columns / 400 rows / 400 chart points), both in that file;
@@ -58,19 +59,22 @@ assistant saw a claim (for example a build session's report) but did not check i
   with nothing recorded anywhere. It compares the label now, and the whole library was measured with it: **3 exhibits in 3 cases, out of
   1,792 compared** — News Co. (Darden 2023-24) Exhibit 1, FLC Sports League (Ross 2022) Exhibit 2 and Dealer Jack's (Fuqua 2017) Exhibit
   #1, the same three a person had found by reading, and no others. `npm run audit:live` therefore reports them as
-  `exhibit_text_shortened` again (it was 0 after #139; it is 4 with #151's reference line); each is one label too long for its row, every
-  figure is still on screen, and the command still exits 0 on them. **The content is not fixed**: shortening those three labels is a
-  change to `private-data/solutions/*.json` and only reaches members when the regenerated seed is loaded, so they belong in the next
-  reload batch with the #132 and #139 rewrites.
+  `exhibit_text_shortened` again (it was 0 after #139; it went to 4 with #151's reference line); each was one label too long for its
+  row, every figure was still on screen, and the command still exited 0 on them. **The three labels were rewritten on 2026-11-17**
+  (issue #157, in `private-data/solutions/*.json`): each is inside the 40-character cap with every figure and the meaning kept, and the
+  wording that had to go is still on screen in the same exhibit's caption, footnote or column heading, none of which is near a cap.
+  Production only changes when the regenerated seed is loaded, so they are in the next reload batch with the #132, #139, #149 and #151
+  rewrites.
 - **One reference line's label is cut to length, and the audit now says so** (issue #151, 2026-11-17). `chartLoss` compared how many
   reference lines a chart has and never read their labels, so a label over the parser's 30-character cap was shortened with nothing
   recorded anywhere — the same defect #143 fixed for the row label, one field along. It compares the label now, matching the lines as the
   parser draws them (a line the write-up gives no number for is never drawn, and the count already reported that one), and the whole
   library was measured with it: **1 exhibit in 1 case, out of 1,792 compared** — Soap Co. (Booth MCG 2026-2027) Exhibit A, the one the
-  field walk had named, and no others. `npm run audit:live` reports 4 `exhibit_text_shortened` as a result and still exits 0: every
-  figure is on screen, one label does not fit the chart. **The content is not fixed**: shortening that label is a change to
-  `private-data/solutions/*.json` and only reaches members when the regenerated seed is loaded, so it belongs in the next reload batch
-  with the #132, #139 and #143 rewrites.
+  field walk had named, and no others. `npm run audit:live` reported 4 `exhibit_text_shortened` as a result and still exited 0: every
+  figure was on screen, one label did not fit the chart. **The label was rewritten on 2026-11-17** (issue #157, in
+  `private-data/solutions/*.json`): it is inside the 30-character cap, keeps the band the book prints, and the whole sentence is still
+  on screen in the exhibit's caption. Production only changes when the regenerated seed is loaded, so it is in the next reload batch
+  with the #132, #139, #143 and #149 rewrites. `exhibit_text_shortened` is 0 again.
 - **Fields of an exhibit that `exhibitLoss` still does not compare** (walked field by field for issue #143; the full list with a yes or
   no on each is in that PR). The one of them that bit — a reference line's label — is compared since issue #151 and is the bullet above.
   The rest have nothing over a cap today: the chart's unit (12), a point label on a series (40), a series or reference-line colour (20),
@@ -86,10 +90,13 @@ assistant saw a claim (for example a build session's report) but did not check i
   untouched, the meta sentence dropped; every piece of it that matters to running the case was already held in `facts` or in the step
   notes, so nothing had to be moved). `npm run audit:live` now fails on a prompt that names the book or notes a printing oddity, so the
   next batch cannot reintroduce one. **The write-ups are fixed; production only changes when the regenerated `supabase/seeds/library.sql`
-  is loaded** (the owner's call; not done). Two things are left: the audit also reports, without failing, **13 prompts that describe the
-  case as a case** (how it is run, how the interviewer behaves, what kind it is) — each needs a person to judge, because an interviewer
-  can be a character in the story; and the interviewer's side of a write-up still speaks of the book (**50 write-ups have a fact that
-  mentions it**, plus 18 clarifying answers; steps and recommendations mention it in hundreds, which is right for the Full solution
+  is loaded** (the owner's call; not done). Two things were left. The first is closed: the audit also reported, without failing,
+  **13 prompts that describe the case as a case** (how it is run, how the interviewer behaves, what kind it is), each needing a person
+  to judge because an interviewer can be a character in the story. The PM judged all 13 for issue #157 on 2026-11-17 — 11 sentences
+  dropped and 2 reworded, the two role plays being the ones kept, because a role play is the business situation the member is in while
+  a stage direction is not. Every dropped sentence was checked against `facts` and the step notes first, and nothing had to be moved;
+  `prompt_talks_about_the_case` is 0. The second is still open: the interviewer's side of a write-up speaks of the book
+  (**50 write-ups have a fact that mentions it**, plus 18 clarifying answers; steps and recommendations mention it in hundreds, which is right for the Full solution
   screen but not for something a coach may read out mid-case). Neither was in scope for #132; the interviewer's side was measured and
   fixed by #149, the bullet below.
 - **The interviewer's own facts named the book, and 44 sentences of them would have reached a member** (issue #149, 2026-11-17). A fact
