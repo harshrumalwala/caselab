@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Feedback } from '../data/liveCase';
 import type { LiveCatalogCase } from '../data/liveCase';
-import { bucketLine, COACH_PARTNER, formatClock, groupLanes, liveCaseToInput, searchCases } from './liveCase';
+import { bucketLine, caseSteps, COACH_PARTNER, formatClock, groupLanes, liveCaseToInput, searchCases, stageHeading } from './liveCase';
 
 const SKILLS = ['behavioral1', 'behavioral2', 'prompt', 'framework', 'quant', 'exhibits', 'brainstorm', 'recommendation'] as const;
 const blank = () => Object.fromEntries(SKILLS.map((k) => [k, { rating: null, feedback: '', evidence: '' }])) as Feedback['skills'];
@@ -123,5 +123,41 @@ describe('what Bucket says, and how Bucket looks', () => {
     expect(at('prompt').text).toBe(at('prompt').text);
     const texts = new Set(['a', 'b', 'c', 'd', 'e', 'f'].map((id) => at('prompt', { sessionId: id }).text));
     expect(texts.size).toBeGreaterThan(1);
+  });
+});
+
+describe('the steps of the case, as the strip reads them', () => {
+  type Steps = Parameters<typeof caseSteps>[0];
+  const steps = (over: Partial<Steps> = {}) => caseSteps({ stage: 'exhibits', hasBrainstorm: false, exhibitsTotal: 3, submissions: [], ...over });
+  const marked = (over: Partial<Steps> = {}) => steps(over).find((s) => s.state === 'current')?.id ?? null;
+
+  it('reads the step the member is in out of the very list it draws, whatever shape the case has', () => {
+    expect(steps().map((s) => s.id)).toEqual(['prompt', 'framework', 'exhibits', 'recommend']);
+    expect(steps({ hasBrainstorm: true }).map((s) => s.id)).toEqual(['prompt', 'framework', 'exhibits', 'brainstorm', 'recommend']);
+    expect(marked({ stage: 'recommend_think' })).toBe('recommend');
+    expect(marked({ stage: 'recommend_write' })).toBe('recommend');
+    expect(marked({ stage: 'recommend_write', hasBrainstorm: true })).toBe('recommend');
+    expect(marked({ stage: 'prompt' })).toBe('prompt');
+    expect(marked({ stage: 'framework_think' })).toBe('framework');
+    expect(marked({ stage: 'brainstorm_write', hasBrainstorm: true })).toBe('brainstorm');
+  });
+
+  it('keeps a brainstorm the member has handed in behind them while the case goes back to the discussion', () => {
+    const handedIn = [{ kind: 'brainstorm' as const, text: 'Four ideas', timedOut: false }];
+    const before = steps({ hasBrainstorm: true, stage: 'exhibits' });
+    expect(before.find((s) => s.id === 'brainstorm')?.state).toBe('ahead');
+    const after = steps({ hasBrainstorm: true, stage: 'exhibits', submissions: handedIn });
+    expect(after.find((s) => s.id === 'brainstorm')?.state).toBe('done');
+    expect(after.find((s) => s.id === 'exhibits')?.state).toBe('current');
+    expect(after.find((s) => s.id === 'recommend')?.state).toBe('ahead');
+  });
+
+  it('calls the middle of a case what that case has in it, and shows the whole of a finished case as behind', () => {
+    expect(steps().map((s) => s.label)).toContain('Exhibits');
+    expect(steps({ exhibitsTotal: 0 }).map((s) => s.label)).toEqual(['Prompt', 'Framework', 'Discussion', 'Recommendation']);
+    expect(stageHeading({ stage: 'exhibits', exhibitsTotal: 0 })).toBe('Discussion');
+    expect(stageHeading({ stage: 'exhibits', exhibitsTotal: 2 })).toBe('Exhibits and discussion');
+    expect(stageHeading({ stage: 'recommend_write', exhibitsTotal: 0 })).toBe('Recommendation: write');
+    expect(steps({ stage: 'done' }).map((s) => s.state)).toEqual(['done', 'done', 'done', 'done']);
   });
 });

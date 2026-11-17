@@ -33,44 +33,52 @@ assistant saw a claim (for example a build session's report) but did not check i
   Re-assembling from the reader outputs would silently undo them.
 - **`buildLibrarySeed.mjs` reads every `private-data/casebooks/*.json` except `*.index.json`** and every `private-data/solutions/*.json`;
   a file with the wrong name or shape is either picked up wrongly or ignored. The new-analysis files are named `solutions-waveN.json`.
-- **The parser's caps, and what they still cut** (issue #95 made every cut visible; no cap takes content out of the library today,
-  and the three labels cut to length are the bullet below).
-  `src/domain/bookSolution.ts` caps: exhibits 12, columns 16, rows 70, chart points/categories 70, structure buckets 8, clarifying
-  questions 5, takeaways 3, chart series 16, panels 8, and the character caps in `EXHIBIT_CAPS` (a cell or column heading 800, a title
-  400, a caption 3,000 — the live case's own numbers). Empty-string chart categories are dropped, so a single unlabelled bar needs a
-  non-empty label or the chart disappears. **Content over a cap is no longer cut in silence**: `parseSolutionExhibit` records what it
-  left behind on the exhibit's `cut` and `shortened` lists (`exhibitLoss` in `src/domain/exhibitFidelity.ts`), the screen says so on the
-  exhibit, and `npm run audit:live` exits non-zero on any exhibit that cannot be shown whole. What is *still* cut, and cannot be
-  helped by a bigger number: a chart heading (60 characters), an axis title (80), a footnote (240), a side note (60) and the label of a
-  row under the axis (40, issue #143) are single lines inside a panel, so a line longer than that is cut to length. Those are counted
-  as `shortened`, not as content gone, and the fix is a shorter line in the write-up (a content change, the owner's call). **The 9
-  exhibits that had one were rewritten on 2026-11-17** (issue #139, across Avalon, Cosmetics Company, Grad-U-Date, Kellogg Capital,
-  LabCo, Orange Yoga Studio and Take Your Pills!), so `npm run audit:live` reported 0 `exhibit_text_shortened` until #143 taught it to
-  read the row labels as well; it is 3 now, and those three are the next bullet. One side-note line that could not hold its two
-  figures in 60 characters was split into further list items rather than shortened, which is why that chart now carries more side
-  notes than before. The write-ups are fixed; **production only changes when the regenerated `supabase/seeds/library.sql` is loaded**.
-  The per-exhibit caps are `SOLUTION_EXHIBIT_LIMITS` and `LIVE_EXHIBIT_LIMITS` (40 columns / 400 rows / 400 chart points), both in that
-  file; the live case passes the second to match `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts`. **They are no longer
-  kept in step by hand**: `src/data/liveExhibitCaps.test.ts` sends an oversized exhibit through the real `readExhibits` and then through
-  the screen's parser and fails if the screen cuts anything the Edge Function let through.
+- **The parser's caps, and what they still cut** (issue #95 made every cut visible; no cap takes content out of the library today, and
+  the four labels cut to length are the two bullets below). `src/domain/bookSolution.ts` caps: exhibits 12, columns 16, rows 70, chart
+  points/categories 70, structure buckets 8, clarifying questions 5, takeaways 3, chart series 16, panels 8, and the character caps in
+  `EXHIBIT_CAPS` (a cell or column heading 800, a title 400, a caption 3,000 — the live case's own numbers). Empty-string chart
+  categories are dropped, so a single unlabelled bar needs a non-empty label or the chart disappears. **Content over a cap is no longer
+  cut in silence**: `parseSolutionExhibit` records what it left behind on the exhibit's `cut` and `shortened` lists (`exhibitLoss` in
+  `src/domain/exhibitFidelity.ts`), the screen says so on the exhibit, and `npm run audit:live` exits non-zero on any exhibit that cannot
+  be shown whole. What is *still* cut, and cannot be helped by a bigger number: a chart heading (60 characters), an axis title (80), a
+  footnote (240), a side note (60), the label of a row under the axis (40, issue #143) and a reference line's label (30, issue #151) are
+  single lines inside a panel or on the chart, so a line longer than that is cut to length. Those are counted as `shortened`, not as
+  content gone, and the fix is a shorter line in the write-up (a content change, the owner's call). **The 9 exhibits that had one were
+  rewritten on 2026-11-17** (issue #139, across Avalon, Cosmetics Company, Grad-U-Date, Kellogg Capital, LabCo, Orange Yoga Studio and
+  Take Your Pills!), so `npm run audit:live` reported 0 `exhibit_text_shortened` until #143 taught it to read the row labels as well and
+  #151 the reference-line labels; it is 4 now, and those four are the next two bullets. One side-note line that could not hold its two
+  figures in 60 characters was split into further list items rather than shortened, which is why that chart now carries more side notes
+  than before. The write-ups are fixed; **production only changes when the regenerated `supabase/seeds/library.sql` is loaded**. The
+  per-exhibit caps are `SOLUTION_EXHIBIT_LIMITS` and `LIVE_EXHIBIT_LIMITS` (40 columns / 400 rows / 400 chart points), both in that file;
+  the live case passes the second to match `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts`. **They are no longer kept in
+  step by hand**: `src/data/liveExhibitCaps.test.ts` sends an oversized exhibit through the real `readExhibits` and then through the
+  screen's parser and fails if the screen cuts anything the Edge Function let through.
 - **Three labels under a chart's axis are cut to length, and the audit now says so** (issue #143, 2026-11-17). `exhibitLoss` used to
   compare a `belowRows` row by how many values it has and never its label, so a label over the parser's 40-character cap was shortened
   with nothing recorded anywhere. It compares the label now, and the whole library was measured with it: **3 exhibits in 3 cases, out of
-  1,792 compared** — News Co. (Darden 2023-24) Exhibit 1, FLC Sports League (Ross 2022) Exhibit 2 and Dealer Jack's (Fuqua 2017)
-  Exhibit #1, the same three a person had found by reading, and no others. `npm run audit:live` therefore reports 3
-  `exhibit_text_shortened` again (it was 0 after #139); each is one label too long for its row, every figure is still on screen, and
-  the command still exits 0 on them. **The content is not fixed**: shortening those three labels is a change to
-  `private-data/solutions/*.json` and only reaches members when the regenerated seed is loaded, so they belong in the next reload batch
-  with the #132 and #139 rewrites.
+  1,792 compared** — News Co. (Darden 2023-24) Exhibit 1, FLC Sports League (Ross 2022) Exhibit 2 and Dealer Jack's (Fuqua 2017) Exhibit
+  #1, the same three a person had found by reading, and no others. `npm run audit:live` therefore reports them as
+  `exhibit_text_shortened` again (it was 0 after #139; it is 4 with #151's reference line); each is one label too long for its row, every
+  figure is still on screen, and the command still exits 0 on them. **The content is not fixed**: shortening those three labels is a
+  change to `private-data/solutions/*.json` and only reaches members when the regenerated seed is loaded, so they belong in the next
+  reload batch with the #132 and #139 rewrites.
+- **One reference line's label is cut to length, and the audit now says so** (issue #151, 2026-11-17). `chartLoss` compared how many
+  reference lines a chart has and never read their labels, so a label over the parser's 30-character cap was shortened with nothing
+  recorded anywhere — the same defect #143 fixed for the row label, one field along. It compares the label now, matching the lines as the
+  parser draws them (a line the write-up gives no number for is never drawn, and the count already reported that one), and the whole
+  library was measured with it: **1 exhibit in 1 case, out of 1,792 compared** — Soap Co. (Booth MCG 2026-2027) Exhibit A, the one the
+  field walk had named, and no others. `npm run audit:live` reports 4 `exhibit_text_shortened` as a result and still exits 0: every
+  figure is on screen, one label does not fit the chart. **The content is not fixed**: shortening that label is a change to
+  `private-data/solutions/*.json` and only reaches members when the regenerated seed is loaded, so it belongs in the next reload batch
+  with the #132, #139 and #143 rewrites.
 - **Fields of an exhibit that `exhibitLoss` still does not compare** (walked field by field for issue #143; the full list with a yes or
-  no on each is in that PR). Every one of them is measured over the library and only one bites today: **a reference line's label is cut
-  at 30 characters, and Soap Co. (Booth MCG 2026-2027) Exhibit A has one of 41** — the same silent shortening #143 fixed for the row
-  label, one field along, and the fix would be the same one line in `chartLoss`. The others with nothing over a cap today: the chart's
-  unit (12), a point label on a series (40), a series or reference-line colour (20), a value in a row under the axis (30, the count is
-  compared but not the text), a side-note heading (60), an axis-end word (40), the exhibit's `howToRead` (700) and its takeaways (5 of
-  400). Dropped-outright cases nothing reports either: a row under the axis that has a label and no values, a highlight index outside
-  the categories, an `xValue` that is not a number, and a `yMin`/`yMax`/`yStep` that is not a number. Booleans and `approx` cannot be
-  cut at all, and a panel inside a panel (which the parser also drops) is already reported as a cut.
+  no on each is in that PR). The one of them that bit — a reference line's label — is compared since issue #151 and is the bullet above.
+  The rest have nothing over a cap today: the chart's unit (12), a point label on a series (40), a series or reference-line colour (20),
+  a value in a row under the axis (30, the count is compared but not the text), a side-note heading (60), an axis-end word (40), the
+  exhibit's `howToRead` (700) and its takeaways (5 of 400). Dropped-outright cases nothing reports either: a row under the axis that has
+  a label and no values, a highlight index outside the categories, an `xValue` that is not a number, and a `yMin`/`yMax`/`yStep` that is
+  not a number. Booleans and `approx` cannot be cut at all, and a panel inside a panel (which the parser also drops) is already reported
+  as a cut.
 - **17 prompts talked about the book instead of to the candidate, and the rest of a write-up still does** (issue #132). The prompt is
   read to the member word for word as the opening of a live case, and 17 of the 872 ended with a sentence about the case rather than
   about the business: how hard or open-ended it is, what method to use, how the interviewer should behave, and two notes about a name
@@ -391,11 +399,13 @@ assistant saw a claim (for example a build session's report) but did not check i
   issue #82). It bites in 21 cases of 847, one of which (BankCo, Stern 2018) has three and loses four minutes of discussion. The first
   arrangement tried — letting the case run to 42 or 43 minutes — was dropped because it broke a case that used to complete: BankCo's
   passive dry run then ended at the time limit instead of finishing.
-- **The progress strip can show a step twice and, in a case with no brainstorm, highlights nothing at the end.** `ClockBar` in
-  `src/features/live/liveParts.tsx` marks the current step by the stage, so a mid-case brainstorm moves the marker to Brainstorm and
-  then back to Exhibits, which is accurate but reads oddly. Separately — and this is older than #133 — `stepIndex` is found in the
-  unfiltered `STEPS` list and compared against the index of the *filtered* one, so in a case with no brainstorm the Recommendation
-  pill is never marked current and every pill before it looks finished. Neither was in scope for #133.
+- **The progress strip was fixed in issue #150** (2026-11-17). It used to find the current step in the unfiltered `STEPS` list and
+  compare that against the index of the *filtered* one, so in a case with no brainstorm (670 of the 847 eligible) the Recommendation
+  pill was never marked and every pill before it looked finished. `caseSteps` in `src/domain/liveCase.ts` now builds the one list that
+  is drawn and read, and a brainstorm the member has handed in stays filled in while the case goes back to the discussion. What is
+  left: that "already handed in" test reads `view.submissions`, and a brainstorm the clock took with **nothing written** leaves no
+  submission (`captureTimedOut` saves only non-empty text), so in that one case the Brainstorm pill shows as still to come while the
+  discussion carries on. Telling it apart needs something the Edge Function does not send today.
 
 ## Asking outright for the answer (issue #142, 2026-11-17)
 
@@ -493,6 +503,9 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   own **What others see** preview in Profile & privacy does not include the section, so a member can only see what a link holder is
   told by opening their own link; and the card names at most three case types and three industries before "+ n more", with no way to
   see the rest.
+- **The live case's progress strip has been read by tests, not by eyes** (issue #150, 2026-11-17). Screen tests assert which pill is
+  marked in each shape of case, but nobody has opened a live case in a browser since the change, and phone width — where five pills
+  wrap onto two rows — is unchecked, the same gap the rest of the live-case screens have.
 - **No end-to-end coverage of Live case** (PR #79 says so: "E2E untouched (no live case coverage there)"). The live-case logic, handler and
   screens are covered by unit tests with a fake model and an in-memory backend, and `live_case_sessions` by PGlite tests, but nothing in
   `e2e/` starts a case against the real function. The Learning-mode screen was not exercised in a browser by its author.
