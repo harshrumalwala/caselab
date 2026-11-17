@@ -46,6 +46,7 @@ export interface ProfileRow {
   share_cases: boolean;
   share_overall: boolean;
   share_skills: boolean;
+  share_sharpening: boolean;
   share_feedback: boolean;
   share_improvement: boolean;
   share_notes: boolean;
@@ -82,6 +83,7 @@ export function rowToProfile(r: ProfileRow): Profile {
       cases: r.share_cases,
       overall: r.share_overall,
       skills: r.share_skills,
+      sharpening: r.share_sharpening ?? false,
       feedback: r.share_feedback,
       improvement: r.share_improvement,
       notes: r.share_notes,
@@ -109,6 +111,7 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
     share_cases: input.sharing.cases,
     share_overall: input.sharing.overall,
     share_skills: input.sharing.skills,
+    share_sharpening: input.sharing.sharpening,
     share_feedback: input.sharing.feedback,
     share_improvement: input.sharing.improvement,
     share_notes: input.sharing.notes,
@@ -135,6 +138,7 @@ export interface PublicProfileRow {
   share_cases: boolean;
   share_overall: boolean;
   share_skills: boolean;
+  share_sharpening?: boolean;
   share_improvement: boolean;
   share_partner: boolean;
   share_details: boolean;
@@ -158,6 +162,7 @@ export function rowToPublicProfile(r: PublicProfileRow): Profile {
       cases: r.share_cases,
       overall: r.share_overall,
       skills: r.share_skills,
+      sharpening: r.share_sharpening ?? false,
       // Written feedback and notes reach visitors only when the member opened everything.
       feedback: r.share_details ?? false,
       improvement: r.share_improvement,

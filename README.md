@@ -141,6 +141,7 @@ need no account.
 | **Case history** | Case name, source (casebook), industry, case type and date |
 | **Overall scores** | The overall 1-5 rating of each shared case |
 | **Skill scores** | The framework, quant, exhibits, brainstorm and other skill ratings |
+| **What I'm sharpening** | On your profile link only: a short summary naming up to three skills you're sharpening and up to three you're strong in, worked out from the skill scores above (see below) |
 | **Written feedback** | Feedback you received (overall and per skill) |
 | **Improvement focus** | The "main thing to improve" tag on each shared case |
 | **Learning notes** | What went well, what you struggled with, concepts learned, next focus |
@@ -214,7 +215,8 @@ characters in the public copy.
 
 **Your profile link.** The address is `…/#/people/<your member ID>`; the ID is a random 128-bit value nobody can guess. While the
 switch is on, anyone who has the address opens your profile without signing in and sees exactly what the preview shows, plus a short
-**What to give them next** summary worked out in their browser from those same shared cases (see below). The ID is
+**What to give them next** summary worked out in their browser from those same shared cases, and — if you switched that on too — **What
+*you* are sharpening** (both below). The ID is
 permanent and a link can be passed on, so the only way to cut it off is to switch the link off again. This is enforced in the
 database: no API role can read the public tables at all, with any filter, order, count or range, and the only way in is two functions
 that answer on one exact ID.
@@ -255,6 +257,30 @@ didn't already make.
 Signed-in members are unchanged: **Find a case for them** stays their first tab, because overlap with a real log is the better
 answer, and they don't see this section. The rules are plain functions in `src/domain/giveNext.ts` with unit tests, and like every
 other number in CaseLab they are worked out deterministically: no AI is involved.
+
+### What I'm sharpening (a switch of its own, off by default)
+
+A profile link can also carry a short **What *name* is sharpening** card: up to three skills they are sharpening, up to three they are
+strong in, and nothing else. It is the product's own reading of their skill scores — the same rule the Improvement Areas screen applies
+to a member's own log (`skillsToImprove`) for the first list, and the Dashboard's strong band (an average of 4 or better over the last
+up-to-five ratings) for the second — worked out in the browser from the `skill_scores` the link already hands out.
+
+- **Its own switch, off by default.** **Profile & privacy → What I'm sharpening**. Sharing a score beside each case and having a
+  sentence about what you are weaker at on a page anyone with your link can open are two different things, so they are asked
+  separately, and nobody is summarised until they ask. Existing members all start off. The switch is a flag on the profile
+  (`profiles.share_sharpening`, carried to the link-visible copy and returned by `public_person(id)`); no summary is stored anywhere.
+- **Names only.** The skills are named and nothing else: no average, no position, no ranking of all eight, and no superlative. A skill
+  is on one list, the other, or neither.
+- **Silent below the minimum.** A skill needs scores on at least three shared cases before it is named at all, and a member needs three
+  rated shared cases before there is a card (`MIN_CASES_FOR_SKILL_INSIGHTS`, the same minimum the Improvement Areas screen uses). Below
+  it there is no card and no explanation: "not enough data yet" would itself be a sentence about the person. A member who does not share
+  **Skill scores** has nothing here either.
+- **See it before you show it.** The **What others see → Visitors without an account** preview renders the same card from the same rows
+  the link hands out, whether the switch is on or off, with a line saying which. Deciding whether to be summarised means reading the
+  summary first.
+- **The usual exclusions.** Burned and interviewed cases are not part of a case log, so they reach none of it; the two behavioral fields
+  are read as one skill, as everywhere else; nothing is read out of written feedback; and no model is involved. The rules are plain
+  functions in `src/domain/sharpening.ts` with unit tests.
 
 ### How privacy is enforced
 
@@ -766,6 +792,15 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **People without an account**: the `anon` role tried as a scraper would, and the `authenticated` role tried the same way: the two public tables refuse every direct read (select, column select, count, order, limit, offset, filter and planner estimate), hold no column grant for either role and have no policy left, so nothing can be listed, searched, counted or paged; the only way in is `public_person(id)` / `public_person_cases(id)` with an exact member ID, which returns the same fields as before, nothing for an unknown ID, nothing for a member who never switched their link on and nothing the moment one switches it off; every old visibility combination keeps the meaning it had and nobody becomes more visible; nothing public by default, opt-in only, free text only for members who opened everything (cut to 2000 characters), private cases hidden, no access to any member or personal table, no writes or function calls, length and skill-name limits, and former members removed by `revoke_nonmembers()`
 - **Privacy**: three verified members and one unverified, tried as an attacker would with direct queries: nothing shared by default; each switch reveals only its own field; scores need case history; per-case overrides (private, name only, full); changes apply immediately and leave no stale data; unlisted members vanish; `other_notes` never appears and the partner only with its own switch; another member can't read, edit or delete your cases or profile, write the shared table, or call the internal functions; filters, sorting and counts can't reveal hidden values; unverified and anonymous users get nothing; least-privilege table grants
 - **Community logic**: loose case-title matching, pairing (what to offer, what to avoid, thin areas) and the filters
+- **What I'm sharpening** (the link holder's skill summary): the rules (`sharpening.test.ts`: weak and strong sides, the middle on
+  neither, at most three a side, names with no number in them, silence below the minimum rated cases and for a skill scored on too few,
+  nothing without shared skill scores, the behavioral fields read as one, a skill they tagged themselves kept on the sharpening side) and
+  the screens (the card for someone holding the link, absent until the switch is on, absent without skill scores, silent below the
+  minimum with no placeholder, no new request or network call, the switch saving like the others, and the member's own preview showing
+  the same card with a line saying where it stands). The database side is `sharpeningShare.db.test.ts`: off by default and for every
+  profile that existed before the migration, a flag and nothing else stored, another member able to read the switch but not set it and
+  getting no extra case data, both tables refusing `anon` and the signed-out caller with any filter, and `public_person(id)` the only way
+  the flag reaches a link holder
 - **What to give someone next** (the link holder's summary): the rules (never shared / shared once in interview order, "Other" never
   named, industries they typed themselves counted but never called a gap, their own focus tag with ties broken by the app's skill
   order, coverage only below five shared cases, nothing at all with no shared history) and the visitor's screen (the two lanes and

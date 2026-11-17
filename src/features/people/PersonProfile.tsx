@@ -25,6 +25,7 @@ import { CaseFilterBar } from '../community/CaseFilterBar';
 import { SharedCaseRow } from '../community/SharedCaseRow';
 import { FindCase } from './FindCase';
 import { GiveThemNext } from './GiveThemNext';
+import { SharpeningCard } from './SharpeningCard';
 import { LevelTag } from '../progress/LevelTag';
 
 type Tab = 'cases' | 'find';
@@ -257,6 +258,11 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
           and it goes first because it is the reason someone opens a link five minutes before casing them. Members keep
           "Find a case for them", which is the better answer once there is a log to compare with. */}
       {visitor && <GiveThemNext person={person} shared={shared} />}
+
+      {/* The skill summary is its own choice: sharing a score beside each case is one thing, a line about what someone
+          is weaker at, on a page anyone with the link can open, is another. It appears only while the member's own
+          "What I'm sharpening" switch is on, and they see the same card in their preview before they choose. */}
+      {visitor && person.sharing.sharpening && <SharpeningCard name={firstName(person.displayName)} shared={shared} />}
 
       <SharedPerformance shared={shared} />
       <InterviewedCard name={firstName(person.displayName)} items={interviewed} />

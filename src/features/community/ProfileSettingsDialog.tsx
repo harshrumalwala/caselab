@@ -17,6 +17,7 @@ import { BurnedCases } from './BurnedCases';
 import { BurnedLine } from './BurnedLine';
 import { SharedCaseRow } from './SharedCaseRow';
 import { SharingSwitches } from './SharingSwitches';
+import { SharpeningPreview } from '../people/SharpeningCard';
 
 type Audience = 'members' | 'visitors';
 
@@ -96,6 +97,16 @@ function Preview({ profile }: { profile: Profile }) {
               name={profile.displayName.trim().split(/\s+/)[0] || profile.displayName}
             />
           </div>
+
+          {/* The skill summary, read from the same rows a link holder gets, whether or not the switch is on yet:
+              deciding whether to be summarised means seeing the summary first. */}
+          {audience === 'visitors' && state.status === 'ready' && (
+            <SharpeningPreview
+              name={profile.displayName.trim().split(/\s+/)[0] || profile.displayName}
+              shared={state.shared}
+              on={profile.sharing.sharpening}
+            />
+          )}
 
           {state.status === 'loading' && (
             <p className="flex items-center gap-2 text-sm text-muted" role="status">

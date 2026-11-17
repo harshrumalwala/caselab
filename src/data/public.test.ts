@@ -363,6 +363,9 @@ describe('the public tables answer nobody directly: the link is the only way in'
         'user_id', 'display_name', 'mba_class',
         'share_cases', 'share_overall', 'share_skills', 'share_improvement', 'share_partner', 'share_details',
         'share_burned', 'burned_books', 'burned_cases',
+        // Added deliberately by 20261125120000_share_sharpening.sql: whether this member asked for the skill
+        // summary on their link. A flag, not a summary; the wording is worked out in the browser.
+        'share_sharpening',
       ].sort(),
     );
     const [one] = (await db.query<Row>('select * from public.public_person_cases($1)', [ALICE])).rows;
