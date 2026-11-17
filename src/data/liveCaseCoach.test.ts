@@ -417,7 +417,7 @@ describe('the exhibit discussion', () => {
     expect(stored.plan.beats).toEqual([
       { kind: 'exhibit', index: 0 },
       { kind: 'exhibit', index: 1 },
-      { kind: 'step', index: 0 },
+      { kind: 'step', index: 0, topic: 'Size peak demand' },
       { kind: 'brainstorm', index: 1, topic: 'ways to grow revenue' },
     ]);
   });
@@ -1186,6 +1186,13 @@ describe('an interview does not tell them whether they are right (issue #130)', 
     expect(reply('The occupancy number decides this one.', 'I think the occupancy number is what decides it')).toBe('The occupancy number decides this one.');
     // ...and a plain question is never caught by this.
     expect(reply('What would you compare first?', 'I am not sure where to start')).toBe('What would you compare first?');
+  });
+
+  it('hands the question back to something the member can see, rather than to "that" (issue #163)', () => {
+    // The rung that gives nothing can land on a part of the analysis, which puts no exhibit on the table for a pronoun to point at.
+    // The part itself always has a referent: the engine opens every part by saying what it is.
+    expect(OVER_TO_YOU).toContain('this part');
+    expect(OVER_TO_YOU).not.toMatch(/\bof that\b/);
   });
 
   it('strips the verdict from what the member reads in an interview, and leaves practice alone', async () => {

@@ -74,7 +74,11 @@ export interface Beat {
   kind: 'exhibit' | 'step' | 'brainstorm';
   /** Where it is in the write-up: an exhibit's place among the exhibits, a step's (or a brainstorm's) place among the steps. */
   index: number;
-  /** A brainstorm: what it is about, from the book's own step title (never its ideas). */
+  /**
+   * What this part is about, from the book's own step title (never its working, and never its ideas): what a brainstorm asks for, and
+   * what a step of the analysis is about, so the member is told which part they are on before they are asked to work on it. Missing on
+   * an exhibit beat, on a step whose title is its own answer, and in plans saved before a step carried one.
+   */
   topic?: string;
 }
 
@@ -113,6 +117,39 @@ const tableTopic = (title: string): string => {
   if (head !== title.trim()) return head;
   return title.includes(':') ? title.slice(title.indexOf(':') + 1).trim() : '';
 };
+
+/**
+ * The book's own numbering of a step in print — "Question 3B:", "Q2.", "Part C -", "Step 1:", "Prompt #2, Question 1:", "Exhibit 2,
+ * question 3:" — which tells the member nothing about the part they are on. As with a brainstorm's head, the number comes off only
+ * when something separates it from the subject, so a title that is a phrase of its own ("Question 4 and recommendation", "Parts and
+ * labour") keeps its own words.
+ */
+const STEP_HEAD =
+  // The noun is followed by a lookahead rather than a word boundary, because "Q2" runs the two together.
+  /^\s*(?:(?:questions?|q|parts?|steps?|sections?|prompts?|exhibits?|figures?|tables?|follow[-\s]?ups?)(?![a-z])[\s#]*(?:\d{1,2}[a-z]?|[a-z](?=\s*[:.,)\]\-–—]))?\s*[:.,)\]\-–—]\s*)+/i;
+/**
+ * A title that answers the part instead of naming it. The books head a step both ways: most say what is to be worked out ("Break-even
+ * volume", "Should the client invest?"), and some say what the working found ("Why the suburban shops lag", "Demand is driven by end
+ * users"). The second kind is the member's own conclusion to reach, so it is never put on screen — the part keeps the opening line
+ * that asks the question without naming it.
+ */
+const TITLE_IS_THE_ANSWER =
+  /\bwhy\b|\bbecause\b|\bdue to\b|\b(?:driven|caused) by\b|\bexplain(?:s|ed)\b|\bconfirm\w*\b|\bturns out\b|\bin fact\b|\b(?:lacks?|lags?|lagging|underperform\w*|outperform\w*)\b/i;
+/** The longest topic a member reads in one breath at the top of a part. Past this a title is a sentence rather than a subject. */
+const MAX_TOPIC_CHARS = 80;
+/** One title made comparable with another: lower case, one space between words. */
+const normTitle = (title: string): string => title.toLowerCase().replace(/\s+/g, ' ').trim();
+
+/**
+ * What a part of the analysis is about, in words the member can read: the book's own step title with its numbering taken off — and
+ * nothing at all when that title holds the answer, or is too long or too thin to be a subject. Only the title is ever used: a step's
+ * `body`, `calc`, `whatToNotice`, `commonMiss` and `checkYourself` stay on the interviewer's side.
+ */
+export function stepTopic(title: string): string {
+  if (TITLE_IS_THE_ANSWER.test(title)) return '';
+  const topic = title.replace(STEP_HEAD, '').trim().replace(/\s+/g, ' ');
+  return topic.length < 3 || topic.length > MAX_TOPIC_CHARS ? '' : topic;
+}
 // A step that is only about building the framework ("Framework", "Framework for revenue growth", "Framework: what to weigh", "Structure the problem"): the framework
 // has its own stages, so it is not discussed again. ("Framework and Exhibit 1" has more in it, so it stays.)
 const FRAMEWORK_STEP = /^\s*(framework|structure|structuring|clarifying questions?)(\s+for\b.*|\s*[:/].*|\s+the\s+(problem|approach|project)\b.*)?\s*$/i;
@@ -306,6 +343,17 @@ function planBeats(solution: PlanSource): Beat[] {
   const candidates = solution.exhibits.flatMap((e, index) => (isInterviewerSideExhibit(e) ? [] : [{ index, title: e.title ?? '' }]));
   const labels = candidates.map((c) => exhibitLabels(c.title));
   const words = candidates.map((c) => subjectWords(c.title));
+  // What the member is never told the name of: the interviewer's own tables (issue #95). Some books head a step with the title of the
+  // table the interviewer works it from, so a topic that names one is dropped and the part keeps the line that names nothing.
+  const hiddenNames = solution.exhibits
+    .filter((e) => isInterviewerSideExhibit(e))
+    .flatMap((e) => [e.title ?? '', e.caption ?? ''])
+    .map(normTitle)
+    .filter(Boolean);
+  const namesAHiddenTable = (topic: string): boolean => {
+    const t = normTitle(topic);
+    return hiddenNames.some((h) => h.includes(t) || t.includes(h));
+  };
 
   // Which step discusses which exhibit, and which steps are a beat of their own.
   const claims = new Map<number, number>(); // step -> place in `candidates`
@@ -362,7 +410,8 @@ function planBeats(solution: PlanSource): Beat[] {
     }
     if (!ownBeat.has(index)) return;
     handOverUpTo(nextClaim[index]);
-    beats.push({ kind: 'step', index });
+    const topic = stepTopic(s.title ?? '');
+    beats.push(topic && !namesAHiddenTable(topic) ? { kind: 'step', index, topic } : { kind: 'step', index });
   });
   handOverUpTo(candidates.length);
   return beats;
@@ -986,21 +1035,37 @@ function beatBudget(s: SessionState, at: number): number {
   return Math.max(MIN_BEAT_MS, Math.floor((d.hard - at) / left));
 }
 
-/** Brings out the next part of the discussion. A brainstorm is not one of them: it is answered in its own two stages. */
+/** A topic read out as its own sentence, keeping the question mark of a title the book wrote as a question. */
+const asSentence = (topic: string): string => (/[.?!]$/.test(topic) ? topic : `${topic}.`);
+
+/**
+ * Brings out the next part of the discussion. A brainstorm is not one of them: it is answered in its own two stages.
+ *
+ * **A part that is talked through says what it is about before it asks for anything** (issue #163). An exhibit names its own subject
+ * on the table; a step of the analysis hands over nothing, so without this the member is asked what they would look at next about a
+ * part they cannot identify. The topic comes from the engine, out of the book's step title and nothing else (`stepTopic`), because the
+ * interview register rightly forbids the model to volunteer a subject the member has not raised. A step whose title is its own answer
+ * has no topic, and keeps the opening line that asks the question without naming it.
+ */
 function revealBeat(s: SessionState, at: number): boolean {
   const index = beatPointer(s);
   const beat = s.plan.beats[index];
   if (!beat || beat.kind === 'brainstorm') return false;
   const first = !s.beats.some((b) => s.plan.beats[b.index]?.kind !== 'brainstorm');
   s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastUserAt: at, lastNudgeAt: 0, budgetMs: beatBudget(s, at), hints: 0, userMessages: 0, asked: 0, outcome: 'open' });
+  const topic = beat.kind === 'step' ? (beat.topic ?? '') : '';
   const text =
     beat.kind === 'exhibit'
       ? first
         ? 'Here is the first exhibit. Take a moment, then tell me what you notice.'
         : 'Here is the next exhibit. What do you notice?'
-      : first
-        ? 'Let us dig in. What would you analyse first, and how?'
-        : 'Good. What would you look at next, and how?';
+      : topic
+        ? first
+          ? `Let us dig in. First part: ${asSentence(topic)} What would you analyse first, and how?`
+          : `Good. Next part: ${asSentence(topic)} What would you look at, and how?`
+        : first
+          ? 'Let us dig in. What would you analyse first, and how?'
+          : 'Good. What would you look at next, and how?';
   say(s, at, text, 'exhibit', s.beats.length - 1);
   return true;
 }
