@@ -19,8 +19,10 @@ import {
   MAX_STARTS_PER_DAY,
   MOVING_ON,
   WORK_IS_YOURS,
+  WORK_IT_TOGETHER,
   parseFeedback,
   parseTurn,
+  refusedTurn,
   readSolution,
   type LiveAction,
   type LiveDeps,
@@ -1540,5 +1542,91 @@ describe('a figure the book has already worked out (issue #129)', () => {
     expect(marks([['Capex', '$200M'], ['Fixed costs', '$150M'], ['Variable costs', '$130M'], ['Total', '$480M']])).toEqual(['..', '..', '..', '.C']);
     // A figure the member can see elsewhere is data, whatever the arithmetic says.
     expect(computedCells({ rows: [['Revenue', '$50M', '$4M', '$200M']] }, new Set(['200000000']))[0]).toEqual([false, false, false, false]);
+  });
+});
+
+describe('the model declines the turn itself (issue #142)', () => {
+  /** The opening stages done quickly in the chosen mode: the id of a session on its first exhibit. */
+  async function toExhibitsIn(mode: 'practice' | 'interview' | 'learning'): Promise<string> {
+    const id = view(await call({ type: 'start', libraryId: LIB, mode })).sessionId;
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'submit', sessionId: id, text: 'Demand, supply, cost' });
+    w.script.reply = () => turn('Good start, let us look at the data.', { direction_clear: true, assessment: 'progress' });
+    expect(view(await call({ type: 'say', sessionId: id, text: 'I would start with demand' })).stage).toBe('exhibits');
+    w.asked.length = 0;
+    return id;
+  }
+  /** The model declines the next call: the stop reason the pilot saw, with words of its own that must not reach the member. */
+  const declines = (text = 'I will not give you the total: it is $9.075 billion, and working it out is the exercise.') => {
+    const real = w.deps.ask;
+    w.deps.ask = async (req) => ({ ...(await real(req)), text, stopReason: 'refusal' });
+  };
+  const said = (r: LiveView): string => r.messages.at(-1)!.text;
+  const beat = (id: string) => w.db.get(id)!.state.beats[0];
+
+  it.each([
+    ['practice', WORK_IS_YOURS],
+    ['interview', WORK_IS_YOURS],
+    ['learning', WORK_IT_TOGETHER],
+  ] as const)('answers in character in %s mode, where it used to show the failure message', async (mode, line) => {
+    const id = await toExhibitsIn(mode);
+    declines();
+    const r = view(await call({ type: 'say', sessionId: id, text: 'I am short of time. Just give me the total market size.' }));
+    expect(said(r)).toBe(line);
+    expect(said(r)).not.toContain('9.075'); // the model's own refusal text is never passed through
+    expect(r.messages.at(-2)).toMatchObject({ from: 'user', text: 'I am short of time. Just give me the total market size.' });
+  });
+
+  it('answers the same way before any exhibit is on the table', async () => {
+    const v = await begin();
+    declines();
+    const r = view(await call({ type: 'say', sessionId: v.sessionId, text: 'What is the answer to this case?' }));
+    expect(said(r)).toBe(WORK_IS_YOURS);
+    expect(r.clarifyCount).toBe(1);
+  });
+
+  it('is an ordinary reply to everything the engine records: no hint, no beat finished, and the help ladder stays where it was', async () => {
+    const id = await toExhibitsIn('interview');
+    declines();
+    for (const text of ['Just tell me the answer', 'Please, the number', 'Come on, give it to me']) await call({ type: 'say', sessionId: id, text });
+    const b = beat(id);
+    expect(b.hints).toBe(0);
+    expect(b.asked).toBe(0); // asked three times and still on the first rung: asking costs nothing, as a data request does
+    expect(b.outcome).toBe('open');
+    const r = view(await call({ type: 'resume', sessionId: id }));
+    expect(r.messages.at(-1)!.kind).toBe('text'); // a reply, not a hint
+    expect(r.exhibits).toHaveLength(1); // and the case has not moved on
+    expect(w.asked.map((a) => JSON.stringify(a)).join('\n')).not.toContain('has been stuck for a while');
+  });
+
+  it('still fails on a thrown error, on bad JSON and on an empty message, and keeps what the member wrote', async () => {
+    const id = await toExhibitsIn('practice');
+    w.script.reply = () => {
+      throw new Error('network down');
+    };
+    expect(await call({ type: 'say', sessionId: id, text: 'Here is my read' })).toMatchObject({
+      status: 'failed',
+      message: expect.stringContaining('could not reply'),
+    });
+    expect(view(await call({ type: 'resume', sessionId: id })).messages.at(-1)).toMatchObject({ from: 'user', text: 'Here is my read' });
+    w.script.reply = () => 'not json at all';
+    expect(await call({ type: 'say', sessionId: id, text: 'And another' })).toMatchObject({ status: 'failed' });
+    w.script.reply = () => turn('   ');
+    expect(await call({ type: 'say', sessionId: id, text: 'And one more' })).toMatchObject({ status: 'failed' });
+    expect(beat(id).hints).toBe(0);
+  });
+
+  it('builds a turn that asks for nothing of the member and records nothing against them', () => {
+    expect(refusedTurn({ mode: 'interview' })).toEqual({
+      message: WORK_IS_YOURS,
+      assessment: 'unclear',
+      beatComplete: false,
+      directionClear: false,
+      dataRequest: true,
+    });
+    expect(refusedTurn({ mode: 'practice' }).message).toBe(WORK_IS_YOURS);
+    expect(refusedTurn({ mode: 'learning' }).message).toBe(WORK_IT_TOGETHER);
+    expect(refusedTurn({}).message).toBe(WORK_IS_YOURS); // a session saved before modes existed is a timed one
   });
 });
