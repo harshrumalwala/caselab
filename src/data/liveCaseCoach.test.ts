@@ -1054,6 +1054,54 @@ describe("Bucket's voice: the three tells the pilot found (issue #131)", () => {
   });
 });
 
+// Issue #156: the write-ups name the member too, because that is how an interviewer's note puts a condition on a fact — "given once
+// the candidate asks for it: ...". Measured over the 872 write-ups by putting every fact and clarifying answer through the real
+// filter: 286 of its sentences in 201 write-ups were dropped, 198 of them the whole of a fact or an answer, so a member who asked for
+// one of those figures was handed the stand-in line instead. The sentences below are those measured shapes, in this fixture's own case.
+describe('a fact that happens to mention the member still reaches them (issue #156)', () => {
+  const CONDITION_FIRST = 'Only if the candidate asks: the base houses 20,000 soldiers, and 400 of them travel each week.';
+  const HANDED_OVER = 'Running costs, given only once the candidate asks for them: $40,000 a month of fixed cost and $25 a room night.';
+  const IN_BRACKETS = 'The nightly rate is $120 (given when the candidate asks about pricing).';
+  const said = (r: LiveView): string => r.messages.at(-1)!.text;
+
+  it('tells a fact that names them apart from Bucket talking about them', () => {
+    // The member is in the condition on the fact, and the figures are the point of the sentence: it is read out as written.
+    for (const fact of [CONDITION_FIRST, HANDED_OVER, IN_BRACKETS]) {
+      expect(hasTell(fact), fact).toBe(false);
+      expect(interviewerVoice(fact), fact).toBe(fact);
+    }
+    // Bucket's own talk about them is still dropped, whether or not there is a figure in it: its own voice in the same breath, an
+    // instruction aimed at them, or nothing of the case in the sentence at all.
+    for (const tell of [
+      'The candidate has asked me for the per diem, so I will hold it back.',
+      'The candidate should start with the revenue side.',
+      'The candidate should see that off-peak occupancy of 31% is what decides this one.',
+      'The candidate needs to work out the cost per room night of $25 first.',
+      'The candidate is doing well on the cost side.',
+      'Exhibit 1 is handed over once the candidate asks about occupancy.', // a pointer to the page is not a figure of the case
+    ]) {
+      expect(hasTell(tell), tell).toBe(true);
+    }
+  });
+
+  it('reads the fact out to the member who asked for it, instead of the stand-in line', async () => {
+    const real = w.deps.loadCase;
+    w.deps.loadCase = async (id) => (id === LIB ? { info: INFO, solution: { ...SOLUTION, facts: [...SOLUTION.facts, HANDED_OVER] } } : real(id));
+    const v = await begin();
+    w.script.reply = () => turn(HANDED_OVER, { assessment: 'progress', data_request: true });
+    const r = view(await call({ type: 'say', sessionId: v.sessionId, text: 'What are the running costs?' }));
+    expect(said(r)).not.toBe(FALLBACK);
+    expect(said(r)).toBe(HANDED_OVER); // the figures they asked for, word for word
+  });
+
+  it('still answers with the stand-in when the reply is only about the member', async () => {
+    const v = await begin();
+    w.script.reply = () => turn('The candidate should work this one out for themselves.', { assessment: 'unclear', data_request: true });
+    const r = view(await call({ type: 'say', sessionId: v.sessionId, text: 'What are the running costs?' }));
+    expect(said(r)).toBe(FALLBACK);
+  });
+});
+
 describe('an interview does not tell them whether they are right (issue #130)', () => {
   // The replies are the real-model pilot's own, quoted in the issue, so what these guard against is the register it really had.
   const CONFIRMS = "You're right that profit is flat while revenue and store count climb, which is the core signal. What do you think is driving that?";
