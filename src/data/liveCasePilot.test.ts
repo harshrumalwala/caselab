@@ -55,6 +55,7 @@ import {
   usd,
   type PilotResponse,
   type SessionRow,
+  type Step,
   type StepState,
   type Transcript,
   type TurnRecord,
@@ -441,9 +442,21 @@ describe('one step against the function', () => {
     view: view({ messages: [message({ id: 1 }), message({ id: 2, text: 'Good. What next?' })], exhibits: [exhibit()], ...over }),
   });
 
+  /**
+   * What the reader hands back after the call: the session's usage now, the session rows, and the transcripts on disk — which hold
+   * the earlier turn that accounts for the $0.10 spent before this step, so the total comes out as $0.10 plus this turn.
+   */
+  const spendRead = (now: Usage) => ({
+    usage: now,
+    sessions: [{ id: sessionId, libraryId: 'lib-1', status: 'active', mode: 'interview', usage: now, createdAt: 0 }] as SessionRow[],
+    transcripts: [
+      { sessionId, turns: [{ cost: { usd: 0.1 }, usage: { delta: usage({ calls: 1, inputTokens: 100 }) } }] },
+    ] as unknown as Transcript[],
+  });
+
   it('sends the action, records what arrived and prices the turn from the usage read back', async () => {
     const send = vi.fn(async () => okResponse());
-    const readSpend = vi.fn(async () => ({ usage: usage({ calls: 2, inputTokens: 1100, outputTokens: 200 }), totalUsd: 0.2 }));
+    const readSpend = vi.fn(async () => spendRead(usage({ calls: 2, inputTokens: 1100, outputTokens: 200 })));
     const result = await runStep({ do: 'say', text: 'The north is bigger.', from: 1 }, state(), { send, readSpend });
 
     expect(send).toHaveBeenCalledWith({ type: 'say', sessionId, text: 'The north is bigger.' });
@@ -455,14 +468,14 @@ describe('one step against the function', () => {
     ]);
     expect(result.record?.usage.delta).toEqual(usage({ calls: 1, inputTokens: 1000, outputTokens: 200 }));
     expect(result.cost?.usd).toBeCloseTo(0.0002, 10); // 1000 x $0.10 + 200 x $0.50 per million
-    expect(result.state.spentUsd).toBe(0.2);
+    expect(result.state.spentUsd).toBeCloseTo(0.1002, 10); // the $0.10 of the earlier turn, plus this one at its own rates
     expect(result.state.n).toBe(4);
     expect(result.state.largestTurnUsd).toBe(0.02); // this turn was cheaper than the dearest so far
   });
 
   it('never makes the call that would cross the cap', async () => {
     const send = vi.fn(async () => okResponse());
-    const readSpend = vi.fn(async () => ({ usage: EMPTY_USAGE, totalUsd: 0 }));
+    const readSpend = vi.fn(async () => spendRead(EMPTY_USAGE));
     const result = await runStep({ do: 'say', text: 'hello', from: 1 }, state({ spentUsd: 1.99 }), { send, readSpend });
 
     expect(send).not.toHaveBeenCalled();
@@ -474,16 +487,18 @@ describe('one step against the function', () => {
 
   it('prices a finish at the feedback model', async () => {
     const send = vi.fn(async () => okResponse({ stage: 'done', status: 'done' }));
-    const readSpend = vi.fn(async () => ({ usage: usage({ calls: 2, inputTokens: 20_100, outputTokens: 1500 }), totalUsd: 0.3 }));
+    const readSpend = vi.fn(async () => spendRead(usage({ calls: 2, inputTokens: 20_100, outputTokens: 1500 })));
     const result = await runStep({ do: 'finish', from: 1 }, state(), { send, readSpend });
     expect(result.cost?.model).toBe('claude-sonnet-5-5');
     expect(result.cost?.usd).toBeCloseTo(0.055, 10);
     expect(result.state.largestTurnUsd).toBeCloseTo(0.055, 10);
+    // The running total carries the finish at those same feedback rates, not at the coach's.
+    expect(result.state.spentUsd).toBeCloseTo(0.155, 10);
   });
 
   it('reads no usage for an action that calls no model, and still records the turn', async () => {
     const send = vi.fn(async () => okResponse());
-    const readSpend = vi.fn(async () => ({ usage: EMPTY_USAGE, totalUsd: 0 }));
+    const readSpend = vi.fn(async () => spendRead(EMPTY_USAGE));
     const result = await runStep({ do: 'next', from: 1 }, state(), { send, readSpend });
     expect(readSpend).not.toHaveBeenCalled();
     expect(result.record?.cost).toBeNull();
@@ -492,7 +507,7 @@ describe('one step against the function', () => {
 
   it('stops on a refusal instead of carrying on', async () => {
     const send = vi.fn(async (): Promise<PilotResponse> => ({ status: 'refused', message: 'There is nothing to answer right now.', view: view() }));
-    const readSpend = vi.fn(async () => ({ usage: usage({ calls: 1, inputTokens: 100 }), totalUsd: 0.1 }));
+    const readSpend = vi.fn(async () => spendRead(usage({ calls: 1, inputTokens: 100 })));
     const result = await runStep({ do: 'say', text: 'hello', from: 2 }, state(), { send, readSpend });
     expect(result.stopped).toBe('refused');
     expect(result.why).toContain('step 2');
@@ -502,7 +517,7 @@ describe('one step against the function', () => {
 
   it('stops an unattended run when the step does not belong where the case stands', async () => {
     const send = vi.fn(async () => okResponse());
-    const readSpend = vi.fn(async () => ({ usage: EMPTY_USAGE, totalUsd: 0 }));
+    const readSpend = vi.fn(async () => spendRead(EMPTY_USAGE));
     const result = await runStep({ do: 'submit', text: 'my framework', from: 5 }, state({ strict: true }), { send, readSpend });
     expect(send).not.toHaveBeenCalled();
     expect(result.stopped).toBe('stage');
@@ -511,6 +526,91 @@ describe('one step against the function', () => {
     const byHand = await runStep({ do: 'submit', text: 'my framework', from: 5 }, state(), { send, readSpend });
     expect(send).toHaveBeenCalled();
     expect(byHand.misfit).toMatch(/belongs at/);
+  });
+});
+
+describe('the running total after a turn, and what `spend` reports next', () => {
+  // The figures are the pilot's own, from the run that found this (issue #134): $0.0033 spent before the turn, a `finish` that cost
+  // $0.0308 at the feedback model, a running total that printed $0.0048 — $0.0033 plus the finish's tokens at the coach's rates — and
+  // `spend` reporting $0.0341 a moment later.
+  const sessionId = 'f3b0a3d1-0000-4000-8000-000000000002';
+  const afterSay = usage({ calls: 1, inputTokens: 28_000, outputTokens: 1000 }); // 28,000 x $0.10 + 1,000 x $0.50 per million = $0.0033
+  const afterFinish = usage({ calls: 2, inputTokens: 33_400, outputTokens: 3000 }); // the finish added 5,400 in and 2,000 out: $0.0308 at
+  // the feedback rates, $0.0015 at the coach's.
+
+  /** A run of the pilot in miniature: the session's usage grows with every call, and the transcript is rewritten after every turn. */
+  const run = async (steps: Step[], cap = 2) => {
+    const transcript = newTranscript({
+      account: 'a',
+      userId: 'u',
+      sessionId,
+      libraryId: 'lib-1',
+      caseName: 'Sample Co.',
+      book: 'Booth MCG 2026-2027',
+      mode: 'interview',
+      cap,
+      startedAt: 0,
+    });
+    let sessionUsage: Usage = EMPTY_USAGE;
+    const session = (): SessionRow => ({ id: sessionId, libraryId: 'lib-1', status: 'active', mode: 'interview', usage: sessionUsage, createdAt: 0 });
+    const send = vi.fn(async (action: { type: string }): Promise<PilotResponse> => {
+      sessionUsage = action.type === 'finish' ? afterFinish : afterSay;
+      return { status: 'ok', view: view(action.type === 'finish' ? { stage: 'done', status: 'done' } : {}) };
+    });
+    // What the runner reads back: the session row as the database now holds it, and the transcripts already on disk — which do not
+    // hold the turn just taken.
+    const readSpend = async () => ({ usage: sessionUsage, sessions: [session()], transcripts: [transcript] });
+    let state: StepState = { sessionId, view: view(), usage: EMPTY_USAGE, spentUsd: 0, largestTurnUsd: 0, cap, n: 1 };
+    const results = [];
+    for (const step of steps) {
+      const result = await runStep(step, state, { send, readSpend });
+      if (result.record) transcript.turns.push(result.record); // `takeSteps` writes the transcript after every step
+      state = result.state;
+      results.push(result);
+      if (result.stopped) break;
+    }
+    return { results, state, transcript, session };
+  };
+
+  const wholeCase = (): Step[] => [
+    { do: 'say', text: 'Revenue is the place to start.', from: 1 },
+    { do: 'finish', from: 2 },
+  ];
+
+  it('counts the finish at the feedback rates, so the turn total is the total `spend` gives for the same sessions', async () => {
+    const { results, state, transcript, session } = await run(wholeCase());
+    const [say, finish] = results;
+
+    expect(say.cost?.model).toBe('claude-haiku-5-5');
+    expect(say.state.spentUsd).toBeCloseTo(0.0033, 10);
+    expect(finish.cost?.model).toBe('claude-sonnet-5-5');
+    expect(finish.cost?.usd).toBeCloseTo(0.0308, 10);
+    // $0.0033 + $0.0308. The bug added the finish's tokens at the coach's rates instead and printed $0.0048.
+    expect(state.spentUsd).toBeCloseTo(0.0341, 10);
+    expect(finish.printed).toContain('this turn $0.0308 at claude-sonnet-5-5 rates');
+    expect(finish.printed).toContain('$0.0341 of the $2.00 cap');
+    expect(finish.printed).not.toContain('$0.0048');
+    expect(finish.record?.spentAfterUsd).toBeCloseTo(0.0341, 10);
+
+    // The same number again through `spend`, now that the turn is in the transcript the folder holds.
+    const report = spendReport([session()], [transcript]);
+    expect(report.totalUsd).toBeCloseTo(state.spentUsd, 12);
+    expect(report.unattributedUsd).toBe(0);
+    expect(formatSpend(report, { cap: 2 })).toContain('Spent so far: $0.0341');
+  });
+
+  it('checks the cap against that total, not against the understated one', async () => {
+    const { state } = await run(wholeCase());
+    const send = vi.fn(async (): Promise<PilotResponse> => ({ status: 'ok', view: view() }));
+    const readSpend = vi.fn(async () => ({ usage: EMPTY_USAGE, sessions: [], transcripts: [] }));
+
+    // $0.0341 spent plus $0.05 reserved for the next reply is over a $0.06 cap, so the call is never made. The figure the bug printed
+    // ($0.0048) would have left room for it.
+    const stopped = await runStep({ do: 'say', text: 'And the costs?', from: 3 }, { ...state, cap: 0.06 }, { send, readSpend });
+    expect(stopped.stopped).toBe('cap');
+    expect(stopped.why).toContain('$0.0341 spent');
+    expect(send).not.toHaveBeenCalled();
+    expect(capDecision({ action: 'say', spentUsd: 0.0048, largestTurnUsd: state.largestTurnUsd, cap: 0.06 }).allowed).toBe(true);
   });
 });
 
