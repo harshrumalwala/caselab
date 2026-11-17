@@ -1,5 +1,24 @@
 # ROADMAP.md
 
+## Waiting for the owner (as of 2026-11-17, after the $2 pilot)
+
+Four things need the owner and nothing has been started on any of them. Everything else from the pilot is shipped. Tick these off in
+any order; none blocks another.
+
+| # | What | Why it needs you | What happens when you say yes |
+|---|---|---|---|
+| 1 | **A second library seed reload** | A reload rewrites production content and is your call every time | The content is already fixed and waiting in `private-data/`: #132's 17 case prompts that talk about the book, #143's three row labels, #151's one reference-line label (Soap Co.), #149's 44 interviewer facts that name the book, and 13 further prompts that describe the case without naming the book. None of it reaches a member until a reload. The first reload (2026-11-17) ran clean in 20 parts, counts back at 872 / 872 / 872, `npm run test:e2e` 60 passed / 10 skipped |
+| 2 | **The #98, #99 and #121 migrations** | `npx supabase db push` is your call every time | You approved the *shapes* to be written on 2026-11-17 and they queued behind the engine work, which is now done. A developer builds each up to its migration and stops; applying it is a separate yes, after the SQL exists and is tested |
+| 3 | **A third throwaway test account** | It is a Supabase dashboard action, not something an agent can do | Dashboard → Authentication → Users → Add user with Auto Confirm, then `CASELAB_E2E_EMAIL_C` / `CASELAB_E2E_PASSWORD_C` in the git-ignored `.env.e2e.local`. Buys 4 more live-case starts a day. Not urgent, but it is the only thing between us and proving #130 on the same day rather than the next one |
+| 4 | **#149's remaining 28 sentences** — a decision, not an approval | A judgement about how far to go | 44 of the 72 interviewer facts that named the book are fixed. The other 28 are left because the engine's voice filter already strips them before the member sees anything. Leaving them is defensible and is what the issue asked for; rewriting them too is 28 more sentences on the same reload. Your call |
+
+**The one thing that is shipped but unproven: #130.** An interview reply no longer confirms the member's guess — deployed on 2026-11-17 on
+unit tests, the dry-run harness and CI, with **no real-model check**, because both throwaway accounts hit the function's own limit of 4
+starts per rolling 24 hours. The honest position until a start frees (2026-11-18 03:05 UTC) is: the half that can be measured
+deterministically is fixed; whether a plausible-sounding stuck member now climbs the ladder is unknown. The developer's prediction for the
+A/B is recorded in PR #145 and will be reported against line by line. #133, #142 and #150 are shipped and unproven for the same reason.
+
+
 Written 2026-11-15. **Every item below is "proposed". The order is not a priority; the owner sets priorities.** Each item says where it
 came from: **Owner** (the owner asked for it or said "later"), **Docs** (the README or code comments call it a possible later addition),
 or **Assistant** (a logical next step the assistant noticed; the owner has not asked for it). Nothing here is built unless it says so.
