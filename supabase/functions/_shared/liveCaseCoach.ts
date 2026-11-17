@@ -376,9 +376,186 @@ ${qa || '(none)'}
 </case>`;
 }
 
-const tableText = (e: LiveExhibit): string => {
-  const rows = [e.columns.join(' | '), ...e.rows.map((r) => r.join(' | '))].join('\n');
+// ---------------------------------------------------------------------------------------------------------------------------
+// The figures the book has already worked out (issue #129)
+// ---------------------------------------------------------------------------------------------------------------------------
+// The rubric's line (DECISIONS.md, "The interview rubric", section 2): a figure on the interviewer's side that the member could derive
+// from what they already hold is an answer, not data — however input-shaped the row looks, and whoever wrote it down. The directives say
+// so in words; these functions find the cells a machine can be sure of, so the model is told which ones they are instead of being left to
+// judge, and so a reply that states one can be caught. Everything they do NOT mark is an input, and an input is always read out (#83).
+
+interface Figure {
+  /** Scaled: "$7.2 M" is 7200000. A percentage keeps the number as written (15% is 15, with the flag). */
+  value: number;
+  percent: boolean;
+}
+
+const SCALE: Record<string, number> = { k: 1e3, thousand: 1e3, m: 1e6, mm: 1e6, million: 1e6, b: 1e9, bn: 1e9, billion: 1e9, tn: 1e12, trillion: 1e12 };
+// The minus sign only counts when it starts a word, so a hyphen inside "GUIDE-70,000" is not read as one.
+const FIGURE = /(?:(?<![\w.])(-))?\s*[$€£]?\s*(\d[\d,]*(?:\.\d+)?)\s*(%|(?:k|mm|m|bn|b|tn|thousand|million|billion|trillion)\b)?/gi;
+
+/** Every number in a piece of text, with its units resolved, so "$8 billion", "$8B" and "8,000,000,000" are one figure. */
+export function figuresIn(text: string): Figure[] {
+  const out: Figure[] = [];
+  for (const m of text.matchAll(FIGURE)) {
+    const n = Number(m[2].replace(/,/g, ''));
+    if (!Number.isFinite(n)) continue;
+    const suffix = (m[3] ?? '').toLowerCase();
+    const percent = suffix === '%';
+    out.push({ value: (m[1] ? -1 : 1) * n * (percent ? 1 : (SCALE[suffix] ?? 1)), percent });
+  }
+  return out;
+}
+
+const figureKey = (f: Figure): string => `${f.value}${f.percent ? '%' : ''}`;
+const magnitude = (f: Figure): number => (f.percent ? f.value / 100 : f.value);
+/** Under this, two figures meeting is a coincidence ("3 options", "5 years"), so nothing smaller is ever called a result. */
+const MIN_RESULT = 10;
+/** The arithmetic has to be inferred rather than read, so it takes a bigger figure to be sure of it: 3 times 4 is 12 by accident. */
+const MIN_RECONCILED = 100;
+const isYear = (v: number): boolean => Number.isInteger(v) && v >= 1900 && v <= 2100;
+/** The book rounds its own arithmetic, so a figure within half a percent of the product or the sum is that product or sum. */
+const ROUNDING = 0.005;
+const near = (a: number, b: number): boolean => Math.abs(a - b) <= ROUNDING * Math.max(Math.abs(a), Math.abs(b));
+/** A cell that shows its own arithmetic: "24,000/120 = 200", "$300*24,000 = $7.2 M", "$150M x 5". */
+const ARITHMETIC_CELL = /=\s*[$€£]?\s*\d|\d[\d,.]*\s*(?:[*×÷/]|\bx\b)\s*[$€£]?\s*\d/i;
+/** The pair search is quadratic, and a line of a dozen figures is a series, not a two-factor calculation. */
+const MAX_FACTORS = 12;
+/** How far down a table the arithmetic is checked. A long table is a list; its columns are not a calculation. */
+const MAX_RECONCILED_ROWS = 60;
+
+/** Does this figure follow from the others on the same line: the product of two of them, or the sum of all of them? */
+function follows(target: Figure, line: readonly Figure[]): boolean {
+  const others = line.filter((f) => f !== target);
+  if (others.length < 2) return false;
+  const t = Math.abs(magnitude(target));
+  if (others.length <= MAX_FACTORS) {
+    for (let i = 0; i < others.length; i++) {
+      for (let j = i + 1; j < others.length; j++) {
+        const a = magnitude(others[i]);
+        const b = magnitude(others[j]);
+        if (Math.abs(others[i].value) < 2 || Math.abs(others[j].value) < 2) continue;
+        if (near(t, Math.abs(a * b))) return true;
+      }
+    }
+  }
+  const plain = others.filter((f) => !f.percent);
+  return plain.length >= 2 && near(t, Math.abs(plain.reduce((s, f) => s + f.value, 0)));
+}
+
+/**
+ * Which cells of a table are the book's own results, as a grid over its rows. Two mechanical signals, and nothing else:
+ *
+ * 1. the cell shows the arithmetic itself ("24,000/120 = 200");
+ * 2. its figure is the product of two figures on the same row or down the same column, or the sum of the rest of them — the rubric's
+ *    test ("could they have produced this from what they hold?") in the only form code can apply.
+ *
+ * A figure the member can see elsewhere (`known`) is data whatever the arithmetic says: reading that one out is never the leak, and
+ * holding an input back would be the worse defect (#83). Years and anything under `MIN_RESULT` are never marked.
+ */
+export function computedCells(e: { columns?: readonly string[]; rows: readonly (readonly string[])[] }, known: ReadonlySet<string> = new Set()): boolean[][] {
+  const figures = e.rows.slice(0, MAX_RECONCILED_ROWS).map((r) => r.map((c) => figuresIn(c)[0] ?? null));
+  const width = figures.reduce((w, r) => Math.max(w, r.length), 0);
+  const columns = Array.from({ length: width }, (_, ci) => figures.map((r) => r[ci]).filter((f): f is Figure => Boolean(f)));
+  return e.rows.map((r, ri) =>
+    r.map((text, ci) => {
+      if (ARITHMETIC_CELL.test(text)) return true;
+      const f = figures[ri]?.[ci];
+      if (!f || Math.abs(f.value) < MIN_RECONCILED || isYear(f.value) || known.has(figureKey(f))) return false;
+      return follows(f, figures[ri].filter((x): x is Figure => Boolean(x))) || follows(f, columns[ci] ?? []);
+    }),
+  );
+}
+
+/** What a marked cell actually asserts: what follows the last "=", or the cell's own figure. "$150M x 5" shows the working and no answer. */
+function resultFigures(text: string): Figure[] {
+  const eq = text.lastIndexOf('=');
+  if (eq >= 0) return figuresIn(text.slice(eq + 1));
+  return ARITHMETIC_CELL.test(text) ? [] : figuresIn(text).slice(0, 1);
+}
+
+/** The figures the member can see for themselves, or may have read out to them at any time: everything but the interviewer's own tables. */
+function shownFigures(sol: LiveSolution): Set<string> {
+  const out = new Set<string>();
+  const add = (t: string): void => {
+    for (const f of figuresIn(t)) out.add(figureKey(f));
+  };
+  add(sol.prompt);
+  sol.facts.forEach(add);
+  for (const q of sol.clarifying) {
+    add(q.question);
+    add(q.answer);
+  }
+  for (const e of sol.exhibits) {
+    if (sol.reference.includes(e) || sol.onRequest.includes(e)) continue;
+    add(e.title);
+    add(e.caption);
+    e.columns.forEach(add);
+    for (const r of e.rows) r.forEach(add);
+  }
+  return out;
+}
+
+/**
+ * The figures a reply must not state: the book's own results, in tables the member cannot see, that appear nowhere they can see them —
+ * not in the case, not in their own exhibits, not among the inputs of those same tables, and not already in the conversation. Learning
+ * mode holds none of them back: it is there to teach the answer once the student has tried.
+ */
+export function heldResults(sol: LiveSolution, state: SessionState): string[] {
+  if (isUntimed(state)) return [];
+  const known = shownFigures(sol);
+  const held = new Set<string>();
+  const inputs = new Set<string>();
+  for (const e of [...sol.reference, ...sol.onRequest]) {
+    const flags = computedCells(e, known);
+    e.rows.forEach((r, ri) =>
+      r.forEach((text, ci) => {
+        // Only an unmarked cell holds inputs. The operands inside a worked cell are the book's own working, and in a chain of them
+        // ("24,000/120 = 200", then "200 x $30") the step the member has to take turns up as an operand of the next line.
+        if (!flags[ri]?.[ci]) {
+          for (const f of figuresIn(text)) inputs.add(figureKey(f));
+          return;
+        }
+        for (const f of resultFigures(text)) if (Math.abs(f.value) >= MIN_RESULT && !isYear(f.value)) held.add(figureKey(f));
+      }),
+    );
+  }
+  const said = new Set<string>();
+  for (const t of [...state.messages.map((m) => m.text), ...state.submissions.map((s) => s.text)]) for (const f of figuresIn(t)) said.add(figureKey(f));
+  return [...held].filter((k) => !known.has(k) && !inputs.has(k) && !said.has(k));
+}
+
+/** True when a reply states one of them. Numbers only: a figure put into words, rounded or worked out afresh goes straight through. */
+export function statesHeldResult(message: string, held: readonly string[]): boolean {
+  if (held.length === 0) return false;
+  const set = new Set(held);
+  return figuresIn(message).some((f) => set.has(figureKey(f)));
+}
+
+/** How a result is pointed out to the model inside a table. */
+const COMPUTED_MARK = '[computed]';
+
+const tableText = (e: LiveExhibit, known?: ReadonlySet<string>): string => {
+  const flags = known ? computedCells(e, known) : null;
+  const rows = [
+    e.columns.join(' | '),
+    ...e.rows.map((r, ri) => r.map((c, ci) => (flags?.[ri]?.[ci] ? `${c} ${COMPUTED_MARK}` : c)).join(' | ')),
+  ].join('\n');
   return rows.length > 3000 ? `${rows.slice(0, 3000)}\n...` : rows;
+};
+
+/** A table with nothing in it but the book's own arithmetic: there is no input in it to read out, and the model is told so. */
+const allComputed = (e: LiveExhibit, flags: boolean[][]): boolean => {
+  let figures = 0;
+  let marked = 0;
+  e.rows.forEach((r, ri) =>
+    r.forEach((text, ci) => {
+      if (figuresIn(text).length === 0) return;
+      figures++;
+      if (flags[ri]?.[ci]) marked++;
+    }),
+  );
+  return figures > 0 && figures === marked;
 };
 
 /** How much of the interviewer's own tables each kind of turn may carry. The early stages get less: see `earlyDataContext`. */
@@ -388,16 +565,22 @@ const REFERENCE_CHARS = 6000;
 const MIN_TABLE_CHARS = 300;
 
 /** The interviewer's tables as text, inside a character budget (what does not fit is cut, as the prompt cannot grow without limit). */
-const tablesText = (list: readonly LiveExhibit[], max: number): string => {
+const tablesText = (list: readonly LiveExhibit[], max: number, known?: ReadonlySet<string>): string => {
   if (list.length === 0 || max < MIN_TABLE_CHARS) return '';
-  const text = list.map((e) => `${e.title}\n${tableText(e)}`).join('\n\n');
+  const text = list
+    .map((e) => {
+      const whole = known && allComputed(e, computedCells(e, known)) ? ' (all of it is the book\'s own working: there is no input in this one to read out)' : '';
+      return `${e.title}${whole}\n${tableText(e, known)}`;
+    })
+    .join('\n\n');
   return text.length > max ? `${text.slice(0, max)}\n...` : text;
 };
 
 /** What the model may know about the exhibit on the table: what the student sees, plus private notes to steer by. */
 function beatContext(sol: LiveSolution, beat: Beat | undefined, learning = false): string {
   if (!beat) return '';
-  const held = `${onRequestNotes(tablesText(sol.onRequest, ON_REQUEST_CHARS))}${referenceNotes(tablesText(sol.reference, REFERENCE_CHARS), learning)}`;
+  const known = shownFigures(sol);
+  const held = `${onRequestNotes(tablesText(sol.onRequest, ON_REQUEST_CHARS, known))}${referenceNotes(tablesText(sol.reference, REFERENCE_CHARS, known), learning)}`;
   const notes = learning
     ? "Notes for you, the coach: the book's own reading of this. Use them to teach, in your own words, once the student has tried or asks for help (never paste them word for word):"
     : 'Private notes for you only. Never quote or reveal them, and never state these conclusions for the student:';
@@ -424,19 +607,31 @@ Common misses: ${st.commonMiss.join(' / ') || '(none)'}${held}
 </exhibit>`;
 }
 
+/**
+ * What the mark on a cell means, said once per set of tables and only when there is a mark in them. The model is told which figures the
+ * book worked out rather than being left to judge it row by row (issue #129); everything unmarked is an input and is read out in full.
+ */
+const computedLegend = (tables: string, learning = false): string => {
+  if (!tables.includes(COMPUTED_MARK)) return '';
+  const held = learning
+    ? 'it is an answer, so ask for their attempt at it first; once they have tried you may work it through with them, in your own words.'
+    : 'it is an answer, so it is never read out, never stated, never confirmed and never slipped into the end of a sentence, however input-shaped its row looks and whoever wrote it down. Read out the figures it was worked out from instead.';
+  return ` A figure marked ${COMPUTED_MARK} is one the book worked out from other figures in the case, so the student could produce it themselves from what they hold: ${held}`;
+};
+
 /** The data the interviewer gives out when asked: shown to the model so it can answer "what are the market sizes?" with the numbers, instead of asking what the member thinks. */
 function onRequestNotes(tables: string): string {
   if (!tables) return '';
-  return `\nData you hold and read out when the student asks for it or asks for the numbers (inputs for their own calculation, not answers). Read ALL of it out, every row and every figure, in plain spoken sentences exactly as written, the way an interviewer would read a table aloud to a candidate — except a row that is itself the figure they have been asked to work out right now: however input-shaped that row looks, it is the answer, so leave it out and read the inputs beside it. Then ask what they make of it, or what they would work out from it. Never do the calculation for them and never say what it means:\n${tables}`;
+  return `\nData you hold and read out when the student asks for it or asks for the numbers (inputs for their own calculation, not answers). Read ALL of it out, every row and every figure, in plain spoken sentences exactly as written, the way an interviewer would read a table aloud to a candidate — except a row that is itself the figure they have been asked to work out right now, and any figure marked ${COMPUTED_MARK}: however input-shaped that row looks, it is the answer, so leave it out and read the inputs beside it. Then ask what they make of it, or what they would work out from it. Never do the calculation for them and never say what it means.${computedLegend(tables)}\n${tables}`;
 }
 
 /** The interviewer's own tables, as private reference: the answers a strong candidate reaches, to judge by and never to hand over. */
 function referenceNotes(tables: string, learning = false): string {
   if (!tables) return '';
   if (learning) {
-    return `\nThe book's own working tables, for you to teach from (the student has not seen them). When the student asks for the data, or you are leading them, read out the INPUT figures from them, all of them, in plain spoken sentences, and ask what they would calculate. Once they have tried, you may show how a strong answer reaches its result, in your own words; do not paste the table:\n${tables}`;
+    return `\nThe book's own working tables, for you to teach from (the student has not seen them). When the student asks for the data, or you are leading them, read out the INPUT figures from them, all of them, in plain spoken sentences, and ask what they would calculate. Once they have tried, you may show how a strong answer reaches its result, in your own words; do not paste the table.${computedLegend(tables, true)}\n${tables}`;
   }
-  return `\nInterviewer reference tables (private; they may hold the answers, so never state a result, total, ratio or conclusion from one, and never say a figure that is marked private or is itself the answer — including a row that simply prints the figure the student has been asked to work out, which is an answer however input-shaped it looks. But when the student asks for the data, or you are leading them, read out the INPUT figures from it, all of them, in plain spoken sentences, and ask what they would calculate; do not paste the table):\n${tables}`;
+  return `\nInterviewer reference tables (private; they may hold the answers, so never state a result, total, ratio or conclusion from one, and never say a figure that is marked private or is itself the answer — including a row that simply prints the figure the student has been asked to work out, which is an answer however input-shaped it looks. But when the student asks for the data, or you are leading them, read out the INPUT figures from it, all of them, in plain spoken sentences, and ask what they would calculate; do not paste the table).${computedLegend(tables)}\n${tables}`;
 }
 
 /**
@@ -448,8 +643,9 @@ function referenceNotes(tables: string, learning = false): string {
 const EARLY_DATA_CHARS = 2500;
 
 function earlyDataContext(sol: LiveSolution, learning = false): string {
-  const onRequest = tablesText(sol.onRequest, EARLY_DATA_CHARS);
-  const reference = tablesText(sol.reference, EARLY_DATA_CHARS - onRequest.length);
+  const known = shownFigures(sol);
+  const onRequest = tablesText(sol.onRequest, EARLY_DATA_CHARS, known);
+  const reference = tablesText(sol.reference, EARLY_DATA_CHARS - onRequest.length, known);
   const notes = `${onRequestNotes(onRequest)}${referenceNotes(reference, learning)}`;
   if (!notes) return '';
   return `<data>
@@ -464,7 +660,7 @@ export type TurnKind = 'clarify' | 'direction' | 'exhibit' | 'nudge_process' | '
  * on request, in full, at any stage; anything the student could work out from those inputs is theirs to produce.
  */
 const NOT_THE_ANSWER =
-  ' One figure is never read out, wherever it is written down: the very thing they have been asked to work out. A table can print it as a row of its own (a "profit per customer" row while they are working out profit per customer); that row is an answer, however input-shaped it looks, so leave it out and read the inputs beside it.';
+  ' One figure is never read out, wherever it is written down: the very thing they have been asked to work out. A table can print it as a row of its own (a "profit per customer" row while they are working out profit per customer); that row is an answer, however input-shaped it looks, so leave it out and read the inputs beside it. The test is always the same one: could they have produced this figure themselves from what they already hold? If they could, it is theirs to produce, whoever wrote it down — a figure is not data just because it is printed on your sheet, and the arithmetic having been done for you in the book does not make it yours to pass on. Never volunteer one either: not unasked, not before any exhibit is on the table, not tacked onto the inputs you have just read out ("...which comes to $40 million"), and not inside a refusal — handing them the subtotal, the per-unit figure or the middle step of the method while you say you cannot give them the total is handing them the answer. Give the figures it was worked out from, and ask what they would do with them.';
 /** What to do when the student asks for a number: hand over the inputs, never the result. The same for every mode. */
 const DATA_REQUESTS =
   ` If the student asks to see data or an exhibit, or for a number they need for their calculation, and it is in the case information, in the exhibit shown to them or in the data you hold for them (listed below), give it instead of answering with a question. Data you hold for them is read out in full, every figure, in plain spoken sentences exactly as written (as an interviewer reads a table aloud), and then you ask what they make of it or what they would calculate. Never say a result, a total, a ratio or what it means.${NOT_THE_ANSWER} Asking for the right data is part of doing the case well: give it without treating it as being stuck. Set data_request to true when their message asks you for something — data, an exhibit, a figure, a fact, or the answer itself — instead of working on the case; it costs them nothing either way. The case must keep moving: if the information really is not there, say so briefly and ask them to state an assumption and carry on. Give what you give in your own voice: state the fact or the figure itself and never where it is written ("the case says", "the exhibit states", "according to the prompt").`;
@@ -681,7 +877,14 @@ export function movingOnOnly(message: string, notes: readonly string[]): string 
   return !first || first.length > MOVING_ON_CHARS || sharesSubstance(first, notes) ? MOVING_ON : first;
 }
 
-export function parseTurn(text: string, privateText: readonly string[], fallback: string = FALLBACK, maxChars = 700, rung: NudgeLevel = 'none'): Turn | null {
+export function parseTurn(
+  text: string,
+  privateText: readonly string[],
+  fallback: string = FALLBACK,
+  maxChars = 700,
+  rung: NudgeLevel = 'none',
+  held: readonly string[] = [],
+): Turn | null {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -700,7 +903,8 @@ export function parseTurn(text: string, privateText: readonly string[], fallback
   const voiced = interviewerVoice(message);
   const said = moving ? movingOnOnly(voiced, privateText) : voiced;
   return {
-    message: !said || leaks(said, privateText) ? fallback : said,
+    // A reply that states a figure the book worked out goes the way a reply that quotes a private note goes: it is replaced whole.
+    message: !said || leaks(said, privateText) || statesHeldResult(said, held) ? fallback : said,
     assessment,
     beatComplete,
     directionClear: o.direction_clear === true,
@@ -1115,7 +1319,7 @@ async function converse(deps: LiveDeps, userId: string, sessionId: string, text:
     const answer = await deps.ask(turnRequest(sol, saved.state, kind, help));
     used = answer.usage;
     if (answer.stopReason !== 'refusal')
-      turn = parseTurn(answer.text, privateNotes(sol, saved.state, help === 'lead'), help === 'lead' ? LEAD_FALLBACK : FALLBACK, isUntimed(saved.state) ? 1000 : 700, help);
+      turn = parseTurn(answer.text, privateNotes(sol, saved.state, help === 'lead'), help === 'lead' ? LEAD_FALLBACK : FALLBACK, isUntimed(saved.state) ? 1000 : 700, help, heldResults(sol, saved.state));
   } catch {
     turn = null;
   }
@@ -1161,7 +1365,7 @@ async function nudge(deps: LiveDeps, userId: string, sessionId: string, mutate: 
   let turn: Turn | null = null;
   try {
     const answer = await deps.ask(turnRequest(sol, marked.state, kind));
-    if (answer.stopReason !== 'refusal') turn = parseTurn(answer.text, privateNotes(sol, marked.state), FALLBACK, isUntimed(marked.state) ? 1000 : 700);
+    if (answer.stopReason !== 'refusal') turn = parseTurn(answer.text, privateNotes(sol, marked.state), FALLBACK, isUntimed(marked.state) ? 1000 : 700, 'none', heldResults(sol, marked.state));
   } catch {
     turn = null;
   }
