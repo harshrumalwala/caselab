@@ -323,6 +323,9 @@ export function auditCase(raw, rules, caps) {
       total: plan.beats.length,
       exhibits: plan.beats.filter((b) => b.kind === 'exhibit').length,
       steps: plan.beats.filter((b) => b.kind === 'step').length,
+      brainstorms: plan.beats.filter((b) => b.kind === 'brainstorm').length,
+      // A brainstorm with a part of the case after it: it is asked in the middle, where the book asks for it (issue #133).
+      brainstormsBeforeAPart: plan.beats.filter((b, i) => b.kind === 'brainstorm' && plan.beats.slice(i + 1).some((x) => x.kind !== 'brainstorm')).length,
       hasBrainstorm: Boolean(plan.hasBrainstorm),
     },
     exhibits: { inWriteUp: readCount, read: exhibits.length, shown: shown.length, hidden: hidden.length },
@@ -426,6 +429,11 @@ export function summarise({ cases, folded, caps, read }) {
     beats: tally(eligible.map((c) => Math.min(c.beats.total, 8))),
     beatsExhibit: sum(eligible.map((c) => c.beats.exhibits)),
     beatsStep: sum(eligible.map((c) => c.beats.steps)),
+    beatsBrainstorm: sum(eligible.map((c) => c.beats.brainstorms)),
+    casesWithBrainstorm: eligible.filter((c) => c.beats.hasBrainstorm).length,
+    casesWithTwoBrainstorms: eligible.filter((c) => c.beats.brainstorms > 1).length,
+    // Today's order against the book's: a brainstorm with a part of the case after it is one the engine used to run too late.
+    brainstormsBeforeAPart: sum(eligible.map((c) => c.beats.brainstormsBeforeAPart)),
     bothKinds: eligible.filter((c) => c.beats.exhibits > 0 && c.beats.steps > 0).length,
     promptsNamingTheBook: cases.filter((c) => c.flags.includes(PROMPT_BREACH)).length,
     promptsAboutTheCase: cases.filter((c) => c.flags.includes('prompt_talks_about_the_case')).length,
@@ -489,6 +497,10 @@ export function formatSummary(s) {
     pad('cases with no candidate exhibit', s.noCandidateExhibit),
     pad('beats that hand over an exhibit', s.beatsExhibit),
     pad('beats talked through (a step with no exhibit)', s.beatsStep),
+    pad('beats that are a brainstorm', s.beatsBrainstorm),
+    pad('  cases with a brainstorm', s.casesWithBrainstorm),
+    pad('  cases with more than one', s.casesWithTwoBrainstorms),
+    pad('  brainstorms asked before a later part', s.brainstormsBeforeAPart),
     pad('cases that work through both kinds', s.bothKinds),
     'Beats per case',
     ...[1, 2, 3, 4, 5, 6, 7, 8].map(beat),
@@ -522,8 +534,11 @@ const fidelityLines = (f) => [...cutLines(f), ...shortenedLines(f)];
 function caseLines(c) {
   const lines = [`### ${c.name}${c.book ? ` — ${c.book}` : ''}`];
   lines.push(`live-eligible: ${c.eligible ? 'yes' : `no (${c.reasons.join('; ')})`}`);
-  const kinds = [c.beats.exhibits > 0 ? `${c.beats.exhibits} exhibit` : '', c.beats.steps > 0 ? `${c.beats.steps} step` : ''].filter(Boolean).join(' + ') || 'none';
-  lines.push(`beats: ${c.beats.total} (${kinds})${c.beats.hasBrainstorm ? ', brainstorm stage' : ''}`);
+  const kinds =
+    [c.beats.exhibits > 0 ? `${c.beats.exhibits} exhibit` : '', c.beats.steps > 0 ? `${c.beats.steps} step` : '', c.beats.brainstorms > 0 ? `${c.beats.brainstorms} brainstorm` : '']
+      .filter(Boolean)
+      .join(' + ') || 'none';
+  lines.push(`beats: ${c.beats.total} (${kinds})${c.beats.hasBrainstorm ? ', brainstorm stage' : ''}${c.beats.brainstormsBeforeAPart > 0 ? `, ${c.beats.brainstormsBeforeAPart} asked before a later part` : ''}`);
   lines.push(`exhibits: ${c.exhibits.inWriteUp} in the write-up, ${c.exhibits.shown} to the candidate, ${c.exhibits.hidden} hidden`);
   for (const e of c.shown) {
     const chart = e.chart ? `chart ${e.chart}` : e.chartInWriteUp ? 'chart in the write-up, not drawable' : 'no chart';

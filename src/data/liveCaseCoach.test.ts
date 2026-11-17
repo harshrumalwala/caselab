@@ -413,8 +413,13 @@ describe('the exhibit discussion', () => {
     const id = await toExhibits();
     const stored = [...w.db.values()].find((s) => s.id === id)!.state;
     expect(stored.beats[0].budgetMs).toBeGreaterThan(0);
-    // The two exhibits the member is given, and the step of the analysis that has no exhibit of its own.
-    expect(stored.plan.beats).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'exhibit', index: 1 }, { kind: 'step', index: 0 }]);
+    // The two exhibits the member is given, the step of the analysis that has no exhibit of its own, and the brainstorm in its place.
+    expect(stored.plan.beats).toEqual([
+      { kind: 'exhibit', index: 0 },
+      { kind: 'exhibit', index: 1 },
+      { kind: 'step', index: 0 },
+      { kind: 'brainstorm', index: 1, topic: 'ways to grow revenue' },
+    ]);
   });
 });
 
@@ -484,6 +489,20 @@ describe('drafts, the scratchpad and the end of the case', () => {
     expect(v.endReason).toBe('completed');
     expect(await call({ type: 'say', sessionId: id, text: 'too late' })).toMatchObject({ status: 'refused' });
     expect(await call({ type: 'submit', sessionId: id, text: 'too late' })).toMatchObject({ status: 'refused' });
+  });
+
+  it('asks the brainstorm and nothing else: the book\'s own ideas never reach the member', async () => {
+    const id = await toExhibits();
+    w.script.reply = () => turn('Good', { assessment: 'progress', beat_complete: true });
+    await call({ type: 'say', sessionId: id, text: 'First implication and next step' });
+    await call({ type: 'say', sessionId: id, text: 'Second implication and next step' });
+    await call({ type: 'say', sessionId: id, text: 'And how I would work the last part' });
+    const v = view(await call({ type: 'resume', sessionId: id }));
+    expect(v.stage).toBe('brainstorm_think');
+    expect(v.messages.at(-1)?.text).toContain('Brainstorm: ways to grow revenue.'); // the question, from the book's own title
+    expect(JSON.stringify(v)).not.toContain('SECRET-BRAINSTORM'); // and nothing the book holds under it
+    const asked = JSON.stringify(w.asked);
+    expect(asked).not.toContain('SECRET-BRAINSTORM'); // the model is not asked to write anything here either
   });
 
   it('marks a case as logged once', async () => {
@@ -681,7 +700,7 @@ describe("the interviewer's own tables", () => {
       const v = view(await call({ type: 'say', sessionId: id, text: `My view ${i}` }));
       expect(JSON.stringify(v)).not.toContain('SECRET-GUIDE');
       expect(JSON.stringify(v)).not.toContain('Interviewer Guidance');
-      expect(v.beatsTotal).toBe(3); // the two exhibits meant for the candidate, and the step that has no exhibit
+      expect(v.beatsTotal).toBe(4); // the two exhibits meant for the candidate, the step that has no exhibit, and the brainstorm
     }
   });
 
@@ -1253,7 +1272,7 @@ describe("the interviewer's sheets, found by what they say", () => {
     expect(JSON.stringify(v)).not.toContain('Keep Private');
     expect(JSON.stringify(v)).not.toContain('$80,000,000');
     expect(v.exhibits.map((e) => e.title)).toEqual(['Exhibit 1: Occupancy by season']);
-    expect(v.beatsTotal).toBe(2); // the one exhibit the member is given, and the step of the analysis that has none
+    expect(v.beatsTotal).toBe(3); // the one exhibit the member is given, the step of the analysis that has none, and the brainstorm
   });
 
   it('are given to the model as private reference instead', async () => {
@@ -1528,9 +1547,13 @@ describe('a part of the case that hands over no exhibit', () => {
       await call({ type: 'say', sessionId: id, text: `Reading number ${i}` });
       await call({ type: 'next', sessionId: id });
     }
+    // The book puts its brainstorm before this part, so the case stops for it and picks the discussion up again afterwards (issue #133).
+    await call({ type: 'ready', sessionId: id });
+    await call({ type: 'submit', sessionId: id, text: 'More rooms, more events, better pricing' });
     const v = view(await call({ type: 'resume', sessionId: id }));
-    expect(v.beatsTotal).toBe(4); // two exhibits, the sizing step and this one
-    expect(v.beatsShown).toBe(4);
+    expect(v.stage).toBe('exhibits');
+    expect(v.beatsTotal).toBe(5); // two exhibits, the sizing step, the brainstorm and this one
+    expect(v.beatsShown).toBe(5);
     expect(v.exhibits).toHaveLength(2); // nothing new is handed over: this part is talked through
     w.asked.length = 0;
     return id;

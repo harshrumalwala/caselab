@@ -85,6 +85,18 @@ describe('what the report says about one case', () => {
     expect(withExhibits.beats.total).toBe(planFor(readSolution(writeUp({ exhibits: [exhibit(), exhibit({ title: 'Exhibit 2: Costs' })] }))!).beats.length);
   });
 
+  it('counts the brainstorms, and the ones asked before a later part of the case', () => {
+    const steps = [{ title: 'Exhibit 1: Revenue by region', body: 'a' }, { title: 'Brainstorm #1: ways to grow', body: 'b' }, { title: 'Size the market', body: 'c' }];
+    const middle = one({ steps });
+    expect(middle.beats).toMatchObject({ total: 3, exhibits: 1, steps: 1, brainstorms: 1, brainstormsBeforeAPart: 1 });
+    // The same case with the brainstorm last: it is still a part, and it is not asked before anything.
+    const last = one({ steps: [steps[0], steps[2], steps[1]] });
+    expect(last.beats).toMatchObject({ total: 3, brainstorms: 1, brainstormsBeforeAPart: 0 });
+    const report = formatReport(audit([writeUp({ steps })], rules, caps), { dir: 'x', files: 1, at: 'now' });
+    expect(report).toContain('beats: 3 (1 exhibit + 1 step + 1 brainstorm), brainstorm stage, 1 asked before a later part');
+    expect(report).toContain('beats that are a brainstorm');
+  });
+
   it('says both kinds in the case line when a case works through exhibits and steps', () => {
     const report = formatReport(audit([writeUp({ exhibits: [exhibit(), exhibit({ title: 'Exhibit 2: Costs' })] })], rules, caps), { dir: 'x', files: 1, at: 'now' });
     expect(report).toContain('beats: 3 (2 exhibit + 1 step)');

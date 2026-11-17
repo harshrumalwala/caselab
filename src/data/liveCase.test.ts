@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assessmentOf,
+  brainstormTopic,
   buildPlan,
   coachSays,
   continueCase,
@@ -73,14 +74,19 @@ function toExhibits(p: CasePlan, now: number): SessionState {
 describe('the plan from a case', () => {
   it('works through the exhibits and the steps that have none, and finds a brainstorm among the steps', () => {
     const p = buildPlan({ exhibits: [{}, {}], steps: [{ title: 'Size demand' }, { title: 'Brainstorm: ways to grow' }] });
-    expect(p.beats).toEqual([{ kind: 'exhibit', index: 0 }, { kind: 'exhibit', index: 1 }, { kind: 'step', index: 0 }]);
+    expect(p.beats).toEqual([
+      { kind: 'exhibit', index: 0 },
+      { kind: 'exhibit', index: 1 },
+      { kind: 'step', index: 0 },
+      { kind: 'brainstorm', index: 1, topic: 'ways to grow' },
+    ]);
     expect(p.hasBrainstorm).toBe(true);
     expect(p.brainstormTopic).toBe('ways to grow');
   });
 
-  it('works through the steps (without the brainstorm) when a case has no exhibits', () => {
+  it('keeps the brainstorm where the book put it when a case has no exhibits', () => {
     const p = buildPlan({ exhibits: [], steps: [{ title: 'Size demand' }, { title: 'Brainstorming ideas' }, { title: 'Check break-even' }] });
-    expect(p.beats).toEqual([{ kind: 'step', index: 0 }, { kind: 'step', index: 2 }]);
+    expect(p.beats).toEqual([{ kind: 'step', index: 0 }, { kind: 'brainstorm', index: 1, topic: 'ideas' }, { kind: 'step', index: 2 }]);
     expect(p.hasBrainstorm).toBe(true);
   });
 
@@ -94,7 +100,8 @@ describe('the plan from a case', () => {
 
   it('works through the steps when every table is the interviewer\'s (as in a case whose only table is a guide)', () => {
     const p = buildPlan({ exhibits: [{ title: 'Interviewer Guidance: Revenue' }], steps: [{ title: 'Framework' }, { title: 'Pricing analysis' }, { title: 'Brainstorm: costs' }] });
-    expect(p.beats).toEqual([{ kind: 'step', index: 1 }]); // the "Framework" step is not discussed again, and the brainstorm has its own stages
+    // The "Framework" step is not discussed again; the brainstorm keeps its place in the case and is answered in its own two stages.
+    expect(p.beats).toEqual([{ kind: 'step', index: 1 }, { kind: 'brainstorm', index: 2, topic: 'costs' }]);
     expect(p.hasBrainstorm).toBe(true);
   });
 
@@ -185,6 +192,7 @@ describe('the exhibits and the steps of one case, together', () => {
     ]);
     expect(beats([], ['Framework', 'Size the market', 'Brainstorm: ways to grow', 'Check the break-even'])).toEqual([
       { kind: 'step', index: 1 },
+      { kind: 'brainstorm', index: 2, topic: 'ways to grow' },
       { kind: 'step', index: 3 },
     ]);
   });
@@ -247,6 +255,130 @@ describe('the exhibits and the steps of one case, together', () => {
     expect(planned(2, ['Size the market'])).toEqual([3, 16, 31]); // the step the case used to drop is four minutes more
     expect(planned(3, ['Size the market', 'Check the break-even', 'Pick the plant'])).toEqual([6, 25, 40]);
     expect(planned(6, ['Size the market', 'Check the break-even', 'Pick the plant', 'Work the payback'])).toEqual([10, 25, 40]); // the ceiling holds
+  });
+});
+
+/**
+ * A brainstorm is a part of the case where the book put it (issue #133). The books often ask for the ideas before the exhibit that
+ * shows which of them the client chose, and a case can ask for more than one.
+ */
+describe('the brainstorm, in the book\'s own place', () => {
+  const beats = (exhibits: { title: string }[], steps: string[]) => buildPlan({ exhibits, steps: steps.map((title) => ({ title })) }).beats;
+  const E = (n: number) => ({ title: `Exhibit ${n}: the numbers` });
+
+  it('reads the topic out of the book\'s title, numbering and all, so the member is asked a question', () => {
+    const shapes: [string, string][] = [
+      ['Brainstorm: ways to categorize the new shops', 'ways to categorize the new shops'],
+      ['Brainstorm #1: Revenue factors', 'Revenue factors'],
+      ['Brainstorm #2: Switching factors', 'Switching factors'],
+      ['Brainstorm 2 - US versus Brazil', 'US versus Brazil'],
+      ['Brainstorms: ideas to grow', 'ideas to grow'],
+      ['Brainstorming (optional)', '(optional)'],
+      ['Brainstorm ways to raise revenue', 'ways to raise revenue'],
+      ['Brainstorm', ''],
+      ['Brainstorm 3 ways to cut cost', '3 ways to cut cost'], // a number that is part of the question keeps its place
+    ];
+    for (const [title, topic] of shapes) expect(brainstormTopic(title), title).toBe(topic);
+    // What the member reads, with the screen's own word in front of it.
+    const p = buildPlan({ exhibits: [E(1)], steps: [{ title: 'Exhibit 1: the numbers' }, { title: 'Brainstorm #1: Revenue factors' }] });
+    const s = toExhibits(p, 100);
+    expect(nextBeat(s, at(200), 'independent').messages.at(-1)?.text).toContain('Brainstorm: Revenue factors.');
+  });
+
+  it('asks the brainstorm before the exhibit the book puts after it', () => {
+    // Boothbucks Coffee (Booth MCG 2026-2027): the ideas are asked for before the exhibit that shows how the client groups the shops.
+    expect(beats([E(1), E(2)], ['Framework', 'Exhibit 1: the numbers', 'Brainstorm: ways to categorize the new shops', 'Exhibit 2: the numbers', 'Close or invest'])).toEqual([
+      { kind: 'exhibit', index: 0 },
+      { kind: 'brainstorm', index: 2, topic: 'ways to categorize the new shops' },
+      { kind: 'exhibit', index: 1 },
+      { kind: 'step', index: 4 },
+    ]);
+  });
+
+  it('keeps every brainstorm a case has, in the book\'s order', () => {
+    expect(beats([E(1), E(2)], ['Exhibit 1: the numbers', 'Brainstorm #1: Revenue factors', 'Exhibit 2: the numbers', 'Brainstorm #2: Switching factors'])).toEqual([
+      { kind: 'exhibit', index: 0 },
+      { kind: 'brainstorm', index: 1, topic: 'Revenue factors' },
+      { kind: 'exhibit', index: 1 },
+      { kind: 'brainstorm', index: 3, topic: 'Switching factors' },
+    ]);
+  });
+
+  it('stops the discussion for the brainstorm and picks it up again afterwards', () => {
+    const p = buildPlan({
+      exhibits: [{ title: 'Exhibit 1: the numbers' }, { title: 'Exhibit 2: the numbers' }],
+      steps: [{ title: 'Exhibit 1: the numbers' }, { title: 'Brainstorm: ways to categorize the new shops' }, { title: 'Exhibit 2: the numbers' }],
+    });
+    let s = toExhibits(p, 100);
+    expect(s.messages.at(-1)?.text).toContain('first exhibit');
+    s = nextBeat(s, at(200), 'independent'); // done with the first exhibit: the brainstorm is next, not the second exhibit
+    expect(s.stage).toBe('brainstorm_think');
+    expect(s.messages.at(-1)?.text).toContain('ways to categorize the new shops');
+    expect(s.beats).toHaveLength(2);
+    s = ok(ready(s, at(210)));
+    s = ok(submit(s, 'By location, by size, by opening year', at(240)));
+    // Back to the case: the second exhibit is handed over now, with the time the discussion had left.
+    expect(s.stage).toBe('exhibits');
+    expect(s.messages.at(-1)).toMatchObject({ kind: 'exhibit', beat: 2 });
+    expect(s.beats.map((b) => b.index)).toEqual([0, 1, 2]);
+    expect(s.submissions).toHaveLength(3); // framework, direction, brainstorm
+    s = nextBeat(s, at(300), 'independent');
+    expect(s.stage).toBe('recommend_think');
+    expect(stages(s)).toEqual(['prompt', 'framework_think', 'framework_write', 'exhibits', 'brainstorm_think', 'brainstorm_write', 'exhibits', 'recommend_think']);
+  });
+
+  it('hands in both answers when a case asks for two brainstorms', () => {
+    const p = buildPlan({
+      exhibits: [{ title: 'Exhibit 1: the numbers' }],
+      steps: [{ title: 'Exhibit 1: the numbers' }, { title: 'Brainstorm #1: Revenue factors' }, { title: 'Brainstorm #2: Switching factors' }],
+    });
+    let s = toExhibits(p, 100);
+    s = nextBeat(s, at(200), 'independent');
+    expect(s.stage).toBe('brainstorm_think');
+    s = ok(ready(s, at(205)));
+    s = ok(submit(s, 'Price, volume, mix', at(230)));
+    // The second one follows the first: nothing of the case is left between them.
+    expect(s.stage).toBe('brainstorm_think');
+    expect(s.messages.at(-1)?.text).toContain('Brainstorm: Switching factors.');
+    s = ok(ready(s, at(235)));
+    s = ok(submit(s, 'Contract length, habit, switching cost', at(260)));
+    expect(s.stage).toBe('recommend_think');
+    expect(s.submissions.filter((x) => x.kind === 'brainstorm').map((x) => x.text)).toEqual(['Price, volume, mix', 'Contract length, habit, switching cost']);
+  });
+
+  it('keeps the time the closing stages need, with two brainstorms as with one', () => {
+    const two = buildPlan({
+      exhibits: [{ title: 'Exhibit 1: the numbers' }],
+      steps: [{ title: 'Exhibit 1: the numbers' }, { title: 'Brainstorm #1: Revenue factors' }, { title: 'Brainstorm #2: Switching factors' }],
+    });
+    const s = newSession(two, T0, 'Prompt');
+    const brainstorming = PLANNED_MS.brainstorm_think + PLANNED_MS.brainstorm_write;
+    const needed = 2 * brainstorming + PLANNED_MS.recommend_think + PLANNED_MS.recommend_write;
+    const d = deadlines(s, 'exhibits', T0 + 7.5 * 60_000);
+    expect(hardEnd(s) - d.hard).toBe(needed); // both brainstorms and the recommendation are safe
+    expect(d.hard).toBeGreaterThan(T0 + 7.5 * 60_000);
+    // The second brainstorm comes out of the discussion, not out of the length of the case.
+    const one = buildPlan({ exhibits: [{ title: 'Exhibit 1: the numbers' }], steps: [{ title: 'Exhibit 1: the numbers' }, { title: 'Brainstorm: ways to grow' }] });
+    expect(two.limitMs).toBe(one.limitMs);
+    expect(one.exhibitMs! - two.exhibitMs!).toBe(brainstorming);
+    // Which keeps the same flexible time in a case with two as in a case with one.
+    const planned = (p: CasePlan, n: number) =>
+      PLANNED_MS.prompt + PLANNED_MS.framework_think + PLANNED_MS.framework_write + (p.exhibitMs ?? 0) + n * brainstorming + PLANNED_MS.recommend_think + PLANNED_MS.recommend_write;
+    expect(two.limitMs! - planned(two, 2)).toBe(one.limitMs! - planned(one, 1));
+  });
+
+  it('still runs the brainstorm when the clock ends the discussion first, and lets the rest of it go', () => {
+    const p = buildPlan({
+      exhibits: [{ title: 'Exhibit 1: the numbers' }, { title: 'Exhibit 2: the numbers' }],
+      steps: [{ title: 'Exhibit 1: the numbers' }, { title: 'Pick the cheaper plant' }, { title: 'Brainstorm: ways to grow' }, { title: 'Exhibit 2: the numbers' }],
+    });
+    let s = toExhibits(p, 100);
+    s = settle(s, at(60 * 60)); // long gone: the clock takes the discussion and then everything else
+    expect(stages(s)).toContain('brainstorm_think');
+    expect(s.stage).toBe('done');
+    // The plan is exhibit, step, brainstorm, exhibit: the first exhibit was reached, then the brainstorm the closing time was kept for.
+    expect(p.beats.map((b) => b.kind)).toEqual(['exhibit', 'step', 'brainstorm', 'exhibit']);
+    expect(s.beats.map((b) => b.index)).toEqual([0, 2]);
   });
 });
 
@@ -403,7 +535,8 @@ describe('time saved and flexible time', () => {
         const built = buildPlan({ exhibits: exhibits(n), steps: hasBrainstorm ? [{ title: 'Brainstorm: ways to grow' }] : [] });
         const p: CasePlan = { ...built, hasBrainstorm };
         const needed = closing + (hasBrainstorm ? brainstorming : 0);
-        expect(p.beats).toHaveLength(n);
+        expect(p.beats).toHaveLength(n + (hasBrainstorm ? 1 : 0)); // the brainstorm is a part of the case too, with two stages of its own
+        expect(p.beats.filter((b) => b.kind !== 'brainstorm')).toHaveLength(n);
         // Everything the case is planned to do fits inside the limit, however much there is to work through.
         expect(p.limitMs).toBeGreaterThanOrEqual(opening + (p.exhibitMs ?? 0) + needed);
         const s = newSession(p, T0, 'Prompt');
@@ -629,6 +762,19 @@ describe('the exhibit discussion', () => {
     const inFlight = settle(newSession({ ...before, exhibitMs: 20 * 60_000, limitMs: 35 * 60_000 }, T0, 'Prompt'), at(450));
     expect(hardEnd(inFlight)).toBe(T0 + 35 * 60_000); // a case started under the old rule runs to the end it was promised
     expect(deadlines(inFlight, 'exhibits', inFlight.stageStartedAt).soft - inFlight.stageStartedAt).toBe(20 * 60_000);
+  });
+
+  it('runs the brainstorm of a case that was already going when the plan learned where to put one', () => {
+    // A session saved before issue #133: the plan says the case has a brainstorm but holds no part for it, so it runs where it always did.
+    const before: CasePlan = { beats: [{ kind: 'exhibit', index: 0 }], hasBrainstorm: true, brainstormTopic: 'ways to grow', exhibitMs: 8 * 60_000, limitMs: 23 * 60_000 };
+    let s = toExhibits(before, 450);
+    s = nextBeat(s, at(500), 'independent');
+    expect(s.stage).toBe('brainstorm_think');
+    expect(s.messages.at(-1)?.text).toContain('Brainstorm: ways to grow.');
+    s = ok(ready(s, at(510)));
+    s = ok(submit(s, 'Pricing, new segments', at(540)));
+    expect(s.stage).toBe('recommend_think'); // and only once
+    expect(stages(s).filter((x) => x === 'brainstorm_think')).toHaveLength(1);
   });
 
   it('ends the discussion at its planned time, or later only while the member keeps making progress, and never past the closing reserve', () => {

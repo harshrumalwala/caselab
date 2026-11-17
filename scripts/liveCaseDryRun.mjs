@@ -258,6 +258,8 @@ export async function playCase(raw, mode, candidate, engine, startAt = START_AT)
     feedback: false,
     beatsTotal: 0,
     beats: [],
+    /** The brainstorms the case plans, the ones the member was asked, and the ones they handed in (issue #133). */
+    brainstorms: { planned: 0, asked: 0, answered: 0 },
     stages: [],
     seconds: 0,
     limitSeconds: 0,
@@ -422,8 +424,16 @@ export async function playCase(raw, mode, candidate, engine, startAt = START_AT)
     run.stage = state.stage;
     run.endReason = state.endReason;
     run.reachedRecommendWrite = state.stageLog.some((e) => e.stage === 'recommend_write');
-    run.beatsTotal = state.plan.beats.length;
-    run.beats = state.beats.map((b) => ({ outcome: b.outcome, hints: b.hints }));
+    // The parts of the discussion. A brainstorm is a part of the case too (issue #133), but it is answered in its own two stages and
+    // has no outcome worth reporting here, so it is counted on its own line below.
+    const isBrainstorm = (i) => state.plan.beats[i]?.kind === 'brainstorm';
+    run.beatsTotal = state.plan.beats.filter((b) => b.kind !== 'brainstorm').length;
+    run.beats = state.beats.filter((b) => !isBrainstorm(b.index)).map((b) => ({ outcome: b.outcome, hints: b.hints }));
+    run.brainstorms = {
+      planned: state.plan.beats.filter((b) => b.kind === 'brainstorm').length,
+      asked: state.beats.filter((b) => isBrainstorm(b.index)).length,
+      answered: state.submissions.filter((x) => x.kind === 'brainstorm').length,
+    };
     run.stages = stageTimes(engine, state);
     run.seconds = Math.round(((state.endedAt ?? clock.t) - state.startedAt) / SECOND);
     run.limitSeconds = Math.round((state.plan.limitMs ?? 30 * 60 * SECOND) / SECOND);
@@ -525,7 +535,8 @@ export function summarise(result) {
       cells.set(`${mode}/${candidate}`, { of: cell.length, done: cell.filter(reachedEnd).length });
     }
   }
-  const over = runs.flatMap((r) => r.stages.filter((s) => s.planned > 0 && s.seconds > s.planned).map((s) => s.stage));
+  // A learning case has no clock, so a stage of one cannot run over: the planned times are not applied to it at all.
+  const over = runs.flatMap((r) => (r.mode === 'learning' ? [] : r.stages.filter((s) => s.planned > 0 && s.seconds > s.planned).map((s) => s.stage)));
   return {
     read: result.read,
     folded: result.folded.length,
@@ -546,6 +557,11 @@ export function summarise(result) {
     byDesignCauses: tally(byDesign.map(failureCause)),
     beatsPlanned: sum(runs.map((r) => r.beatsTotal)),
     beatsReached: beats.length,
+    brainstormsPlanned: sum(runs.map((r) => r.brainstorms.planned)),
+    brainstormsAsked: sum(runs.map((r) => r.brainstorms.asked)),
+    brainstormsAnswered: sum(runs.map((r) => r.brainstorms.answered)),
+    everyBrainstorm: runs.filter((r) => r.brainstorms.planned > 0 && r.brainstorms.asked === r.brainstorms.planned).length,
+    withBrainstorms: runs.filter((r) => r.brainstorms.planned > 0).length,
     outcomes: tally(beats.map((b) => b.outcome)),
     everyBeat: runs.filter((r) => r.beatsTotal > 0 && r.beats.length === r.beatsTotal && r.beats.every((b) => b.outcome !== 'open')).length,
     withBeats: runs.filter((r) => r.beatsTotal > 0).length,
@@ -620,6 +636,11 @@ export function formatSummary(s, result) {
     pad('beats in the plans', s.beatsPlanned),
     pad('beats the member reached', s.beatsReached),
     pad('runs that reached every beat of their case', `${s.everyBeat} of ${s.withBeats}`),
+    'Brainstorms (a part of the case with two stages of its own, not a beat of the discussion)',
+    pad('  brainstorms in the plans', s.brainstormsPlanned),
+    pad('  brainstorms the member was asked', s.brainstormsAsked),
+    pad('  brainstorms the member handed in', s.brainstormsAnswered),
+    pad('  runs asked every brainstorm of their case', `${s.everyBrainstorm} of ${s.withBrainstorms}`),
     'Beat outcomes',
     ...counted(s.outcomes, BEAT_OUTCOMES),
     '',
@@ -634,7 +655,7 @@ export function formatSummary(s, result) {
     pad('runs that reached the recommendation stage', s.recommendReached),
     pad('  and finished inside the case limit', s.recommendInTime),
     pad('runs that ran out of time', s.hitLimit),
-    'Stages that ran over their planned time',
+    'Stages that ran over their planned time (the timed modes: a learning case has no clock)',
     ...(s.overPlan.size === 0 ? [pad('  none', 0)] : counted(s.overPlan, sortedKeys(s.overPlan))),
     '',
     'The engine refused the member',

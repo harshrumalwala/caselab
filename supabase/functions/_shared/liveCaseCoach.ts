@@ -1171,7 +1171,8 @@ export function writtenRecord(state: SessionState): string {
   for (const m of state.messages) {
     if (m.from === 'user') lines.push(`[${STAGE_LABEL[m.stage] ?? m.stage}] Student: ${m.text}`);
     else if (m.kind === 'text' || m.kind === 'hint') lines.push(`[${STAGE_LABEL[m.stage] ?? m.stage}] Interviewer${m.kind === 'hint' ? ' (hint)' : ''}: ${m.text}`);
-    else if (m.kind === 'exhibit') lines.push(`[${STAGE_LABEL[m.stage] ?? m.stage}] Interviewer showed ${state.plan.beats[m.beat ?? 0]?.kind === 'step' ? 'the next topic' : 'an exhibit'}.`);
+    // The message points at the part of the case it brought out (its place in `beats`), which the plan says what kind it was.
+    else if (m.kind === 'exhibit') lines.push(`[${STAGE_LABEL[m.stage] ?? m.stage}] Interviewer showed ${state.plan.beats[state.beats[m.beat ?? 0]?.index ?? -1]?.kind === 'step' ? 'the next topic' : 'an exhibit'}.`);
   }
   for (const sub of state.submissions) {
     lines.push(`[${sub.kind}] Student ${sub.timedOut ? '(unfinished draft captured when the case ended)' : 'handed in'}: ${sub.text}`);
@@ -1185,7 +1186,11 @@ function studentText(state: SessionState): string {
 
 export function feedbackRequest(sol: LiveSolution, state: SessionState): TurnRequest {
   const stats = timeInStages(state).map((t) => `${STAGE_LABEL[t.stage] ?? t.stage}: ${t.seconds}s${t.endedBy ? ` (ended by ${t.endedBy})` : ''}`).join('; ');
-  const beats = state.beats.map((b, i) => `Exhibit/topic ${i + 1}: ${b.outcome === 'member_moved' ? 'the student chose to move on' : b.outcome}${b.hints ? `, ${b.hints} hint(s)` : ''}`).join('; ');
+  // A brainstorm is one of the parts of a case, but how it ended says nothing: what the student wrote is in the record below.
+  const beats = state.beats
+    .filter((b) => state.plan.beats[b.index]?.kind !== 'brainstorm')
+    .map((b, i) => `Exhibit/topic ${i + 1}: ${b.outcome === 'member_moved' ? 'the student chose to move on' : b.outcome}${b.hints ? `, ${b.hints} hint(s)` : ''}`)
+    .join('; ');
   const reference = `Reference solution (a yardstick only):
 Hypothesis: ${sol.hypothesis || '(none)'}
 Strong structure: ${sol.structure.map((b) => `${b.heading} (${b.points.join(', ')})`).join('; ') || '(none)'}
