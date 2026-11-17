@@ -302,6 +302,15 @@ function pills(over: Partial<LiveView> = {}): [string, string][] {
     .map((p) => [p.textContent?.trim() ?? '', p.dataset.state ?? '']);
 }
 
+/** The pills on screen now, in order. */
+const items = (): HTMLElement[] => within(screen.getByRole('list', { name: 'Steps of the case' })).getAllByRole('listitem');
+
+/** Each pill as a screen reader meets it: the words on it, and the name it is given (the state word, or nothing for the part at hand). */
+const named = (): [string, string | null][] => items().map((p) => [p.textContent?.trim() ?? '', p.getAttribute('aria-label')]);
+
+/** The pills on screen now, by the state they are drawn in. */
+const byState = (): Record<string, HTMLElement> => Object.fromEntries(items().map((p) => [p.dataset.state ?? '', p]));
+
 describe('the progress strip of a live case', () => {
   it('marks the recommendation in a case whose book asks for no brainstorm', () => {
     const think = strip({ stage: 'recommend_think' });
@@ -472,6 +481,64 @@ describe('the progress strip of a live case', () => {
     }
     // and by the end every part of the case is behind the member
     expect(before).toEqual({ Prompt: 2, Framework: 2, Exhibits: 2, Brainstorm: 2, Recommendation: 2 });
+  });
+
+  // Issue #176: the strip was read in a browser for the first time, and what it says at a glance (and to a screen reader) is what
+  // these three tests hold. The fixture is the mid-case brainstorm, which is the one shape that puts all four states on screen at once.
+  const FOUR_STATES = { ...MID_CASE_PLAN, stage: 'brainstorm_think' as const, beatsShown: 2 };
+
+  it('draws the four states four different ways, and marks three of them with a shape as well as a fill', () => {
+    expect(pills(FOUR_STATES)).toEqual([
+      ['Prompt', 'done'],
+      ['Framework', 'done'],
+      ['Exhibits', 'open'],
+      ['Brainstorm', 'current'],
+      ['Recommendation', 'ahead'],
+    ]);
+    const pill = byState();
+    // no two states are drawn alike: whatever the four looks are, they are four
+    expect(new Set(Object.values(pill).map((p) => p.className)).size).toBe(4);
+    // and the difference is not only colour: a part behind the member is ticked, a part standing open carries a continuation,
+    // the part at hand carries the mini Bucket, and a part still to come carries nothing at all
+    expect(pill.done.querySelector('[data-mark="finished"]')).not.toBeNull();
+    expect(pill.open.querySelector('[data-mark="open"]')).not.toBeNull();
+    expect(pill.current.querySelector('svg')).not.toBeNull();
+    expect(pill.ahead.querySelector('svg')).toBeNull();
+  });
+
+  it('says which state each part is in to a screen reader, in the words the strip already means', () => {
+    pills(FOUR_STATES);
+    expect(named()).toEqual([
+      ['Prompt', 'Prompt, finished'],
+      ['Framework', 'Framework, finished'],
+      ['Exhibits', 'Exhibits, still open'],
+      ['Brainstorm', null], // the part at hand is the one aria-current marks, so it needs no word of its own
+      ['Recommendation', 'Recommendation, still to come'],
+    ]);
+    const current = byState().current;
+    expect(current).toHaveAttribute('aria-current', 'step');
+    expect(current.textContent?.trim()).toBe('Brainstorm');
+  });
+
+  it('still says which part is finished and which is still to come once the case is over and nothing is at hand', () => {
+    pills({ ...MID_CASE_PLAN, stage: 'recommend_write', beatsShown: 5, submissions: handedIn });
+    expect(named()).toEqual([
+      ['Prompt', 'Prompt, finished'],
+      ['Framework', 'Framework, finished'],
+      ['Exhibits', 'Exhibits, finished'],
+      ['Brainstorm', 'Brainstorm, finished'],
+      ['Recommendation', null],
+    ]);
+
+    pills({ ...MID_CASE_PLAN, stage: 'done', beatsShown: 5, submissions: handedIn, status: 'done', endReason: 'completed' });
+    expect(named().map(([, name]) => name)).toEqual([
+      'Prompt, finished',
+      'Framework, finished',
+      'Exhibits, finished',
+      'Brainstorm, finished',
+      'Recommendation, finished',
+    ]);
+    expect(items().filter((p) => p.getAttribute('aria-current') === 'step')).toEqual([]);
   });
 
   it('shows the whole case behind the member once it is over', () => {

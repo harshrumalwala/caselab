@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Feedback } from '../data/liveCase';
 import type { LiveCatalogCase } from '../data/liveCase';
-import { bucketLine, caseSteps, COACH_PARTNER, formatClock, groupLanes, liveCaseToInput, searchCases, stageHeading } from './liveCase';
+import { bucketLine, caseSteps, COACH_PARTNER, formatClock, groupLanes, liveCaseToInput, searchCases, stageHeading, STEP_STATE_WORD } from './liveCase';
 
 const SKILLS = ['behavioral1', 'behavioral2', 'prompt', 'framework', 'quant', 'exhibits', 'brainstorm', 'recommendation'] as const;
 const blank = () => Object.fromEntries(SKILLS.map((k) => [k, { rating: null, feedback: '', evidence: '' }])) as Feedback['skills'];
@@ -175,6 +175,27 @@ describe('the steps of the case, as the strip reads them', () => {
 
   it('takes the careful reading, and calls no part finished, when the caller cannot say how much of the case is left', () => {
     expect(steps({ hasBrainstorm: true, stage: 'brainstorm_write' }).find((s) => s.id === 'exhibits')?.state).toBe('open');
+  });
+
+  // Issue #176: the state has to reach a member who is not reading the strip's fills, so every state a case can be in has a word.
+  it('has a word for every state a part can stand in, except the one the marker is already on', () => {
+    const everyState = new Set(
+      [
+        steps({ stage: 'prompt' }),
+        steps({ hasBrainstorm: true, stage: 'brainstorm_think', beatsShown: 2, beatsTotal: 5 }),
+        steps({ stage: 'done' }),
+      ]
+        .flat()
+        .map((s) => s.state),
+    );
+    expect([...everyState].sort()).toEqual(['ahead', 'current', 'done', 'open']);
+    for (const state of everyState) {
+      if (state === 'current') expect(STEP_STATE_WORD[state]).toBeUndefined();
+      else expect(STEP_STATE_WORD[state]).toBeTruthy();
+    }
+    // a part standing open is not called "underway": the view says how many parts the case has reached, not which, so a part the
+    // member has not started yet is drawn and read the same as one they are part way through, and neither word may claim the other.
+    expect(STEP_STATE_WORD.open).toBe('still open');
   });
 
   it('calls the middle of a case what that case has in it, and shows the whole of a finished case as behind', () => {
