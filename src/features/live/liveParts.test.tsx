@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { LiveView, PublicExhibit } from '../../data/liveCase';
 import { ClockBar, ExhibitView } from './liveParts';
@@ -293,6 +293,15 @@ function strip(over: Partial<LiveView> = {}) {
   return result;
 }
 
+/** Each pill and the state it is drawn in, in order: which part of the case is finished, open, at hand or still to come. */
+function pills(over: Partial<LiveView> = {}): [string, string][] {
+  cleanup(); // one strip on screen at a time, so several readings can be taken in one test
+  render(<ClockBar view={liveView(over)} now={NOW} />);
+  return within(screen.getByRole('list', { name: 'Steps of the case' }))
+    .getAllByRole('listitem')
+    .map((p) => [p.textContent?.trim() ?? '', p.dataset.state ?? '']);
+}
+
 describe('the progress strip of a live case', () => {
   it('marks the recommendation in a case whose book asks for no brainstorm', () => {
     const think = strip({ stage: 'recommend_think' });
@@ -372,6 +381,97 @@ describe('the progress strip of a live case', () => {
     const brainstorming = strip({ mode: 'learning', hasBrainstorm: true, stage: 'brainstorm_think' });
     expect(brainstorming.current).toEqual(['Brainstorm']);
     expect(brainstorming.ahead).toEqual(['Recommendation']);
+  });
+
+  // Issue #166: the shape the books ask for since #148 - a brainstorm in the middle of the plan, with more of the case after it.
+  // The fixture is one plan throughout: exhibit, brainstorm, exhibit, step, exhibit.
+  const MID_CASE_PLAN = { hasBrainstorm: true, exhibitsTotal: 3, beatsTotal: 5 } as const;
+  const handedIn = [{ kind: 'brainstorm' as const, text: 'Four ways to group the shops', timedOut: false }];
+
+  it('leaves the discussion open while a mid-case brainstorm runs, with parts of the case still to work', () => {
+    const working = pills({ ...MID_CASE_PLAN, stage: 'exhibits', beatsShown: 1 });
+    expect(working).toEqual([
+      ['Prompt', 'done'],
+      ['Framework', 'done'],
+      ['Exhibits', 'current'],
+      ['Brainstorm', 'ahead'],
+      ['Recommendation', 'ahead'],
+    ]);
+
+    const brainstorming = pills({ ...MID_CASE_PLAN, stage: 'brainstorm_think', beatsShown: 2 });
+    expect(brainstorming).toEqual([
+      ['Prompt', 'done'],
+      ['Framework', 'done'],
+      ['Exhibits', 'open'],
+      ['Brainstorm', 'current'],
+      ['Recommendation', 'ahead'],
+    ]);
+    // the mini Bucket and the marker stay on the part at hand, and the exhibits the member has not worked are not called finished
+    expect(screen.getAllByRole('listitem').filter((p) => p.getAttribute('aria-current') === 'step').map((p) => p.textContent?.trim())).toEqual(['Brainstorm']);
+
+    const back = pills({ ...MID_CASE_PLAN, stage: 'exhibits', beatsShown: 3, submissions: handedIn });
+    expect(back).toEqual([
+      ['Prompt', 'done'],
+      ['Framework', 'done'],
+      ['Exhibits', 'current'],
+      ['Brainstorm', 'done'],
+      ['Recommendation', 'ahead'],
+    ]);
+  });
+
+  it('fills the discussion in once the case reaches a brainstorm with every part of it worked', () => {
+    const closing = pills({ ...MID_CASE_PLAN, stage: 'brainstorm_write', beatsShown: 5, submissions: [] });
+    expect(closing).toEqual([
+      ['Prompt', 'done'],
+      ['Framework', 'done'],
+      ['Exhibits', 'done'],
+      ['Brainstorm', 'current'],
+      ['Recommendation', 'ahead'],
+    ]);
+  });
+
+  it('marks nothing finished while a brainstorm the book asks for first runs, before the member has worked a part', () => {
+    // 20 of the 844 live-eligible cases put the brainstorm before any part of the discussion: plan brainstorm, exhibit, step.
+    const first = pills({ hasBrainstorm: true, exhibitsTotal: 1, beatsTotal: 3, beatsShown: 1, stage: 'brainstorm_think' });
+    expect(first).toEqual([
+      ['Prompt', 'done'],
+      ['Framework', 'done'],
+      ['Exhibits', 'open'],
+      ['Brainstorm', 'current'],
+      ['Recommendation', 'ahead'],
+    ]);
+    expect(first.filter(([, state]) => state === 'done').map(([label]) => label)).toEqual(['Prompt', 'Framework']);
+  });
+
+  // The guarantee #152 stated: nothing the member has finished is ever un-done, and the strip only ever gains ground. A part goes
+  // from still to come, to underway, to finished, and never back - which of the underway parts carries the marker is not ground.
+  it('only ever gains ground, part by part, through a case whose brainstorm runs in the middle', () => {
+    const ground = { ahead: 0, open: 1, current: 1, done: 2 } as const;
+    // The plan exhibit, brainstorm, exhibit, step, exhibit, as the case works through it.
+    const walk: Partial<LiveView>[] = [
+      { stage: 'prompt', beatsShown: 0 },
+      { stage: 'framework_think', beatsShown: 0 },
+      { stage: 'framework_write', beatsShown: 0 },
+      { stage: 'exhibits', beatsShown: 1 },
+      { stage: 'brainstorm_think', beatsShown: 2 },
+      { stage: 'brainstorm_write', beatsShown: 2 },
+      { stage: 'exhibits', beatsShown: 3, submissions: handedIn },
+      { stage: 'exhibits', beatsShown: 4, submissions: handedIn },
+      { stage: 'exhibits', beatsShown: 5, submissions: handedIn },
+      { stage: 'recommend_think', beatsShown: 5, submissions: handedIn },
+      { stage: 'recommend_write', beatsShown: 5, submissions: handedIn },
+      { stage: 'done', beatsShown: 5, submissions: handedIn, status: 'done', endReason: 'completed' },
+    ];
+    let before: Record<string, number> = {};
+    for (const step of walk) {
+      const now = Object.fromEntries(pills({ ...MID_CASE_PLAN, ...step }).map(([label, state]) => [label, ground[state as keyof typeof ground]]));
+      for (const [label, reached] of Object.entries(before)) {
+        expect(now[label], `${label} lost ground at ${step.stage}`).toBeGreaterThanOrEqual(reached);
+      }
+      before = now;
+    }
+    // and by the end every part of the case is behind the member
+    expect(before).toEqual({ Prompt: 2, Framework: 2, Exhibits: 2, Brainstorm: 2, Recommendation: 2 });
   });
 
   it('shows the whole case behind the member once it is over', () => {

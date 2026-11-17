@@ -152,6 +152,31 @@ describe('the steps of the case, as the strip reads them', () => {
     expect(after.find((s) => s.id === 'recommend')?.state).toBe('ahead');
   });
 
+  // Issue #166: a brainstorm the book puts in the middle of the case. "Earlier in the list" is not the same as "finished" any more,
+  // so the discussion stands open while the brainstorm runs and the parts after it are still to be worked.
+  it('leaves the discussion open while a brainstorm runs with parts of the case still to work', () => {
+    const mid = steps({ hasBrainstorm: true, stage: 'brainstorm_think', beatsShown: 2, beatsTotal: 5 });
+    expect(mid.map((s) => [s.id, s.state])).toEqual([
+      ['prompt', 'done'],
+      ['framework', 'done'],
+      ['exhibits', 'open'],
+      ['brainstorm', 'current'],
+      ['recommend', 'ahead'],
+    ]);
+    // and the same while the ideas are being written
+    expect(steps({ hasBrainstorm: true, stage: 'brainstorm_write', beatsShown: 2, beatsTotal: 5 }).find((s) => s.id === 'exhibits')?.state).toBe('open');
+  });
+
+  it('fills the discussion in for a brainstorm the case reaches with every part of it worked', () => {
+    const closing = steps({ hasBrainstorm: true, stage: 'brainstorm_think', beatsShown: 5, beatsTotal: 5 });
+    expect(closing.find((s) => s.id === 'exhibits')?.state).toBe('done');
+    expect(closing.find((s) => s.id === 'brainstorm')?.state).toBe('current');
+  });
+
+  it('takes the careful reading, and calls no part finished, when the caller cannot say how much of the case is left', () => {
+    expect(steps({ hasBrainstorm: true, stage: 'brainstorm_write' }).find((s) => s.id === 'exhibits')?.state).toBe('open');
+  });
+
   it('calls the middle of a case what that case has in it, and shows the whole of a finished case as behind', () => {
     expect(steps().map((s) => s.label)).toContain('Exhibits');
     expect(steps({ exhibitsTotal: 0 }).map((s) => s.label)).toEqual(['Prompt', 'Framework', 'Discussion', 'Recommendation']);
