@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Feedback } from '../data/liveCase';
 import type { LiveCatalogCase } from '../data/liveCase';
-import { bucketLine, COACH_PARTNER, formatClock, groupLanes, liveCaseToInput, searchCases } from './liveCase';
+import { bucketLine, COACH_PARTNER, filterByExhibits, formatClock, groupLanes, liveCaseToInput, searchCases, surpriseFrom, withExhibitSignal } from './liveCase';
 
 const SKILLS = ['behavioral1', 'behavioral2', 'prompt', 'framework', 'quant', 'exhibits', 'brainstorm', 'recommendation'] as const;
 const blank = () => Object.fromEntries(SKILLS.map((k) => [k, { rating: null, feedback: '', evidence: '' }])) as Feedback['skills'];
@@ -97,6 +97,44 @@ describe('the lanes of the case picker', () => {
     expect(searchCases(cases, 'MARKET').map((c) => c.id)).toEqual(['3']);
     expect(searchCases(cases, '   ')).toEqual([]);
     expect(searchCases(cases, 'zzz')).toEqual([]);
+  });
+});
+
+describe('cases with exhibits, and cases that are all discussion', () => {
+  const cases = [
+    aCase({ id: '1', name: 'A', caseType: 'Profitability' }),
+    aCase({ id: '2', name: 'B', caseType: 'Market Sizing' }),
+    aCase({ id: '3', name: 'C', caseType: 'Market Sizing', done: true }),
+  ];
+  const signal = { '1': true, '2': false, '3': false };
+
+  it('folds the live case\'s own answer into the list, and says nothing about a case it did not answer for', () => {
+    expect(withExhibitSignal(cases, signal).map((c) => c.exhibits)).toEqual([true, false, false]);
+    expect(withExhibitSignal(cases, { '1': true }).map((c) => c.exhibits)).toEqual([true, undefined, undefined]);
+    expect(withExhibitSignal(cases, null).every((c) => c.exhibits === undefined)).toBe(true); // no signal, no labels
+  });
+
+  it('keeps to the kind of case the member asked for, and leaves out one it has no answer for', () => {
+    const labelled = withExhibitSignal(cases, signal);
+    expect(filterByExhibits(labelled, 'any').map((c) => c.id)).toEqual(['1', '2', '3']);
+    expect(filterByExhibits(labelled, 'exhibits').map((c) => c.id)).toEqual(['1']);
+    expect(filterByExhibits(labelled, 'discussion').map((c) => c.id)).toEqual(['2', '3']);
+    expect(filterByExhibits(cases, 'exhibits')).toEqual([]); // nothing is known, so nothing is claimed
+    expect(filterByExhibits(cases, 'discussion')).toEqual([]);
+  });
+
+  it('groups and searches whatever is left after the filter', () => {
+    const only = filterByExhibits(withExhibitSignal(cases, signal), 'discussion');
+    expect(groupLanes(only, 'type').map((l) => [l.name, l.cases.length, l.done])).toEqual([['Market Sizing', 2, 1]]);
+    expect(searchCases(only, 'market sizing').map((c) => c.id)).toEqual(['2', '3']);
+    expect(searchCases(only, 'profitability')).toEqual([]); // the case with exhibits is not found while the filter is on
+  });
+
+  it('surprises the member with a case they have not logged, from whatever they are looking at', () => {
+    const only = filterByExhibits(withExhibitSignal(cases, signal), 'discussion');
+    expect(surpriseFrom(only, () => 0.99)?.id).toBe('2'); // '3' is done, so only '2' is in the hat
+    expect(surpriseFrom([cases[2]], () => 0)?.id).toBe('3'); // nothing fresh left: a done case rather than nothing
+    expect(surpriseFrom([], () => 0)).toBeNull();
   });
 });
 

@@ -189,6 +189,17 @@ assistant saw a claim (for example a build session's report) but did not check i
 - **Edits on two devices at once**: last save wins. The tour is remembered per browser. No offline mode.
 - **Live-case and Bucket costs are estimates** (README: under 10 cents a live case, about 3 cents per Bucket read). Real usage is
   stored per live case but no one has reported reading it back.
+- **The picker's exhibit signal reads every write-up on a cold function instance** (issue #87). `hasExhibitBeats` runs the real
+  `readSolution` and `buildPlan`, which need the write-ups, so working the answer out costs about 10 MB from the database and a sixth of
+  a second for 872 cases (measured on the write-ups, 2026-11-16). It is kept in the instance's memory for 30 minutes
+  (`EXHIBIT_SIGNAL_MS`), so the cost is per cold instance, and the picker shows its list before the signal arrives — but **how often an
+  instance is cold has not been measured**, so how often a member waits for the labels is unknown. Two things would cut it if it ever
+  matters: asking PostgREST for only the parts of the JSON the plan reads (`solution->exhibits`, `solution->steps`: 6.2 MB of the 10.4,
+  but the json-arrow select cannot be tested in PGlite and would only show up in production), or a stored value, which needs a migration
+  (ruled out in DECISIONS.md).
+- **The kept signal is module-level state in `liveCaseCoach.ts`.** It is the only mutable module state in the shared Edge code, so tests
+  must call `forgetExhibitSignal()` between worlds (`createMemoryLiveDeps` does it for them). A test that builds its own `LiveDeps` and
+  forgets to reset would read the previous test's library.
 - **Supabase CLI deprecation warnings**: `--linked` is deprecated (use `--remote`), and `supabase/config.toml` still uses
   `auth.email.enable_signup` and `auth.sms.enable_signup`, which the CLI says will be removed in v4.
 - **Windows PowerShell blocks `npm`/`npx` scripts** by default execution policy (the owner hit this); use `cmd.exe` or change the policy.

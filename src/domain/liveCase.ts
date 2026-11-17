@@ -151,6 +151,31 @@ export function groupLanes(cases: readonly LiveCatalogCase[], by: 'type' | 'indu
     .sort((a, b) => b.cases.length - a.cases.length || a.name.localeCompare(b.name));
 }
 
+/** What the member asked to see in the picker: every case, only the ones with exhibits, or only the ones that are all discussion. */
+export type ExhibitFilter = 'any' | 'exhibits' | 'discussion';
+
+/**
+ * The catalogue with the live case's own answer to "has this one got exhibits to work through?" folded in by case id. A case the signal
+ * says nothing about keeps no answer, so it is labelled with nothing rather than with a guess.
+ */
+export function withExhibitSignal(cases: readonly LiveCatalogCase[], signal: Record<string, boolean> | null): LiveCatalogCase[] {
+  if (!signal) return [...cases];
+  return cases.map((c) => (c.id in signal ? { ...c, exhibits: signal[c.id] } : c));
+}
+
+/** Only the cases the member asked for. One we have no answer for is left out of both narrower choices: we do not know, so we do not claim. */
+export function filterByExhibits(cases: readonly LiveCatalogCase[], filter: ExhibitFilter): LiveCatalogCase[] {
+  if (filter === 'any') return [...cases];
+  return cases.filter((c) => c.exhibits === (filter === 'exhibits'));
+}
+
+/** A case at random for "surprise me", preferring one the member has not logged yet. Null when there is nothing to pick from. */
+export function surpriseFrom(cases: readonly LiveCatalogCase[], random: () => number = Math.random): LiveCatalogCase | null {
+  const fresh = cases.filter((c) => !c.done);
+  const from = fresh.length > 0 ? fresh : cases;
+  return from.length === 0 ? null : from[Math.floor(random() * from.length)];
+}
+
 /** Cases whose name, book, type or industry contain every word typed. */
 export function searchCases(cases: readonly LiveCatalogCase[], query: string): LiveCatalogCase[] {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
