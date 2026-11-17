@@ -213,7 +213,8 @@ account read. "Name only" and private cases stay as they were, "Who cased me" st
 characters in the public copy.
 
 **Your profile link.** The address is `…/#/people/<your member ID>`; the ID is a random 128-bit value nobody can guess. While the
-switch is on, anyone who has the address opens your profile without signing in and sees exactly what the preview shows. The ID is
+switch is on, anyone who has the address opens your profile without signing in and sees exactly what the preview shows, plus a short
+**What to give them next** summary worked out in their browser from those same shared cases (see below). The ID is
 permanent and a link can be passed on, so the only way to cut it off is to switch the link off again. This is enforced in the
 database: no API role can read the public tables at all, with any filter, order, count or range, and the only way in is two functions
 that answer on one exact ID.
@@ -233,6 +234,27 @@ You can filter by name, casebook, industry and case type. It uses **only** your 
 never claims a case is definitely new to them: cases they keep private or haven't logged don't appear, and the page says so.
 If someone shares no case history, it says it can't tell what they've done. CaseLab stores case metadata only (names,
 sources, industry, type); it doesn't host casebook content, exhibits or answer keys.
+
+### What to give someone next (opening a profile by its link)
+
+"Find a case for them" is built from **your own** log, so it is no use to someone without an account. A profile opened by its link
+therefore leads with **What to give *name* next**, a short section above the case list, worked out in the browser from the rows the
+link already hands out. Nothing new is released: no extra column, function, grant or switch, and no request that opening the profile
+didn't already make.
+
+- **Coverage.** The case types and industries they have **never shared**, and those they have **shared once**, the ones interviews
+  use most first, at most three names each and then "+ n more". The catch-all "Other" is never named as something to practise.
+- **Their own focus.** If they share the **Improvement focus** tag, the one they tagged most often, with the count behind it and
+  labelled as theirs. It is the only judgment of the person on the page, and it is their own: skill scores are not read here.
+- **Silence when the rows can't support it.** A member who shares no case history gets no section at all. Below five shared cases
+  (`MIN_CASES_FOR_TRENDS`, the same minimum the Dashboard's suggestions use) it shows only what is in those cases and suggests nothing.
+- **Unpracticed is neutral.** A case type nobody has shared is new ground, not a weakness — the same stance as the Dashboard's grey
+  unpracticed industries — and the section says so in as many words. Burned cases and interviewed cases are not part of a case log, so
+  they can't reach any of these counts.
+
+Signed-in members are unchanged: **Find a case for them** stays their first tab, because overlap with a real log is the better
+answer, and they don't see this section. The rules are plain functions in `src/domain/giveNext.ts` with unit tests, and like every
+other number in CaseLab they are worked out deterministically: no AI is involved.
 
 ### How privacy is enforced
 
@@ -732,6 +754,11 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **People without an account**: the `anon` role tried as a scraper would, and the `authenticated` role tried the same way: the two public tables refuse every direct read (select, column select, count, order, limit, offset, filter and planner estimate), hold no column grant for either role and have no policy left, so nothing can be listed, searched, counted or paged; the only way in is `public_person(id)` / `public_person_cases(id)` with an exact member ID, which returns the same fields as before, nothing for an unknown ID, nothing for a member who never switched their link on and nothing the moment one switches it off; every old visibility combination keeps the meaning it had and nobody becomes more visible; nothing public by default, opt-in only, free text only for members who opened everything (cut to 2000 characters), private cases hidden, no access to any member or personal table, no writes or function calls, length and skill-name limits, and former members removed by `revoke_nonmembers()`
 - **Privacy**: three verified members and one unverified, tried as an attacker would with direct queries: nothing shared by default; each switch reveals only its own field; scores need case history; per-case overrides (private, name only, full); changes apply immediately and leave no stale data; unlisted members vanish; `other_notes` never appears and the partner only with its own switch; another member can't read, edit or delete your cases or profile, write the shared table, or call the internal functions; filters, sorting and counts can't reveal hidden values; unverified and anonymous users get nothing; least-privilege table grants
 - **Community logic**: loose case-title matching, pairing (what to offer, what to avoid, thin areas) and the filters
+- **What to give someone next** (the link holder's summary): the rules (never shared / shared once in interview order, "Other" never
+  named, industries they typed themselves counted but never called a gap, their own focus tag with ties broken by the app's skill
+  order, coverage only below five shared cases, nothing at all with no shared history) and the visitor's screen (the two lanes and
+  their "+ n more", the focus line, the quiet state, nothing for a member who shares nothing, burned cases out of the numbers, the
+  member's own profile unchanged, and no request or network call that the page didn't already make)
 - **Accounts**: sign-up, verification, resend, expired links, password reset, onboarding with everything off by default
 - **Supabase layer**: row mapping that round-trips every field, a repository run against a fake Supabase (paging past 1000 rows, chunked upserts, replace-without-data-loss, errors surfaced), friendly error messages, configuration checks
 - **Calculations**: week boundaries, averages that ignore missing ratings, behavioral combining, trend windows, coverage, matrix, weekly history

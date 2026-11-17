@@ -249,6 +249,17 @@ describe('People', () => {
     expect(screen.queryByText('Airline profitability')).not.toBeInTheDocument();
   });
 
+  it('still leads with "Find a case for them" for a signed-in member, not with the visitor\'s summary', async () => {
+    const env = createFakeEnv(people);
+    await openApp(env);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await goTo('#/people/bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    // Overlap with your own log is the better answer once you have one, so it stays the open tab.
+    expect(screen.getByRole('tab', { name: /Find a case for them/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('region', { name: /What to give Bob next/ })).not.toBeInTheDocument();
+  }, 20000); // may pay for loading the whole app when the full suite is running
+
   it('shows nothing about a member who is not visible, or does not exist', async () => {
     const env = createFakeEnv(people);
     await openApp(env);

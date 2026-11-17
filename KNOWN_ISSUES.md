@@ -292,6 +292,12 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
 
 ## Missing tests
 
+- **The link holder's "What to give them next" section (issue #120) has been read by tests, not by eyes.** `src/domain/giveNext.ts`
+  and the visitor's screen are covered by unit and screen tests, but nobody has opened the card in a browser, and phone width is
+  unchecked (the same gap the live-case screens have). Two product edges were left deliberately and are worth revisiting: the member's
+  own **What others see** preview in Profile & privacy does not include the section, so a member can only see what a link holder is
+  told by opening their own link; and the card names at most three case types and three industries before "+ n more", with no way to
+  see the rest.
 - **No end-to-end coverage of Live case** (PR #79 says so: "E2E untouched (no live case coverage there)"). The live-case logic, handler and
   screens are covered by unit tests with a fake model and an in-memory backend, and `live_case_sessions` by PGlite tests, but nothing in
   `e2e/` starts a case against the real function. The Learning-mode screen was not exercised in a browser by its author.
