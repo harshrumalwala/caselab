@@ -282,6 +282,29 @@ up-to-five ratings) for the second — worked out in the browser from the `skill
   are read as one skill, as everywhere else; nothing is read out of written feedback; and no model is involved. The rules are plain
   functions in `src/domain/sharpening.ts` with unit tests.
 
+### How I like to meet (your own, not a sharing switch)
+
+**Profile & privacy → How I like to meet** holds two optional details: one **meeting link or phone number** (a Zoom personal room,
+Google Meet, Teams, a school or firm tool, or a phone number) and one **time zone**. They are groundwork for scheduling a case
+inside CaseLab (issue #98); nothing in the app reads them yet, and when scheduling arrives the link goes to the one person a case
+is scheduled with.
+
+- **Readable by exactly one person: you.** This is not a sharing switch. The link is in no profile, in no projection another member
+  or a link holder reads, in no message or email, and in nobody else's backup. `meeting_prefs` has **no API access at all** for
+  `anon` or `authenticated`: `my_meeting_prefs()` and `save_my_meeting_prefs(link, zone)` are `SECURITY DEFINER` functions that act
+  on the caller's own row and take no user id. It goes with the account when you delete it.
+- **What a link may be.** An address starting with `https://`, or a phone number (digits, spaces and dashes, with an optional `+`),
+  up to 300 characters. `javascript:`, `data:`, `http:`, a relative path and plain text are refused with a sentence saying what to do
+  instead. Any `https` address is fine — school and firm tools vary — and the common rooms are named back to you (Zoom, Google Meet,
+  Microsoft Teams, Phone) so you can see the right one was pasted. The rule is `parseMeetingLink` in `src/domain/meeting.ts` and the
+  database enforces the same rule again in `is_meeting_link()`.
+- **The time zone** is a real IANA name (`America/Chicago`), offered from your browser's own list the first time and chosen from a
+  list after that. The database checks it against the zones Postgres itself knows.
+- **Saving is honest**, like everywhere else: nothing shows as saved until the database confirms it, a failure keeps what you typed,
+  and the fields show what was stored rather than what was sent. At most 20 changes a day.
+- **Your own backup carries them** and a restore puts them back; see "Download, import and demo mode". In demo mode the section is
+  not shown, because there is nothing to save it to.
+
 ### How privacy is enforced
 
 Privacy is enforced in the database, not in the screens:
@@ -316,6 +339,7 @@ These rules are tested directly against a real Postgres (see Tests), including a
 | `practice_requests`, `practice_blocks` | Requests between two members (a proposed case, a time, a note and a reply, each short) and who you've stopped asking. No direct table access at all: only functions that act on your own requests | Only the two people involved |
 | `conversations`, `conversation_members`, `messages` | A private conversation between two members (it starts when a request is accepted), each person's read marker, mute and archive, and the messages (1 to 1000 characters). No direct table access at all: only functions that act on your own conversations | Only the two people involved |
 | `message_reports` | A report (a reason and a snapshot of the last 30 messages). Kept even if the people involved leave | Only the database owner |
+| `meeting_prefs` | How you like to meet: a meeting link or phone number and a time zone, with the count behind the 20-a-day save limit. No direct table access at all: only `my_meeting_prefs()` and `save_my_meeting_prefs()`, which act on your own row | Only you |
 | `warmup_best` | Your best Warm-up score and streak for each round length (one row per member and length: 30, 60 or 120 seconds). Read-only for you; changed only by `record_warmup_best()`, which can only raise it | Only you |
 | `interviewed_cases` | Cases you ran as the interviewer: date, title, book, type, industry, who you interviewed, what you told them and what you learned. Same case-type list as `cases`, with length limits. Never joined to `cases`, so it can't reach a total, rating, trend or the weekly goal | Only you |
 | `weekly_goal` | Your weekly goal in cases (one row per member, 1 to 14; no row means no goal). Progress and streak are worked out from your cases, so nothing else is stored | Only you |
@@ -341,7 +365,7 @@ half-written Log Case draft, a copy of your Warm-up record, and Supabase's own s
 
 | Action | Where | Notes |
 | --- | --- | --- |
-| Extra copy of everything | Settings → Download backup (JSON) | Every case, rating, feedback note, learning and list item, and each case's sharing setting |
+| Extra copy of everything | Settings → Download backup (JSON) | Every case, rating, feedback note, learning and list item, each case's sharing setting, and your own meeting link and time zone (never another member's: nobody else's is readable) |
 | Restore a backup | Settings → Import backup (JSON) | **Merge** (adds cases, newer edit wins, deletes nothing) or **Replace everything**. Replace writes the file first and removes leftovers second, so a failure can't leave you with less than you started with |
 | Excel file | Case Log (top right) or Settings → Export to Excel | Your cases filled into the real MCG workbook, ready to open in Excel and to import again. See "Exporting to Excel" below. Sharing choices and burned cases are not in it; the JSON backup is the complete copy |
 | Spreadsheet view | Settings → Export cases (CSV) | One row per case, MCG column order plus CaseLab's additions |
@@ -807,6 +831,20 @@ There is no group administration, group chat or social feed: members, profiles, 
   order, coverage only below five shared cases, nothing at all with no shared history) and the visitor's screen (the two lanes and
   their "+ n more", the focus line, the quiet state, nothing for a member who shares nothing, burned cases out of the numbers, the
   member's own profile unchanged, and no request or network call that the page didn't already make)
+- **How I like to meet** (the meeting link and time zone, issue #98): the rule (`meeting.test.ts`: an https address kept exactly as
+  it will be passed on, the three rooms named and everything else called a link, a phone number with spaces, dashes and an optional
+  `+`, both fields optional, and a refusal with a sentence worth showing for `javascript:`, `data:`, `vbscript:`, `file:`, `tel:`,
+  `mailto:`, `http:`, `//host`, a relative path, a bare host, plain text, a link with a space or a newline in it, an HTML anchor and
+  a number too short or too long to be a phone number; a zone that must be a real IANA name); the database
+  (`meetingPrefs.db.test.ts`: no access at all for `anon` or `authenticated` however the read is shaped, both functions acting only
+  on the caller's own row and taking no user id, another member — including a blocked one — a visitor holding a link, a signed-out
+  caller and an unverified member all refused, the value absent from every column, projection, profile row and member-facing
+  function, with the same search finding it when the reader is allowed to, the 20-a-day limit that clearing the fields does not
+  reset, the row gone with the account, and **the same inputs run through the plain function and through the database so the two
+  cannot drift apart**); the Supabase wrapper and its in-memory twin; and the screen (the section and its one line about who sees
+  it, saving only what the database confirmed, the room named back, hostile input refused without asking the database, a failed save
+  keeping what was typed, the browser's zone offered but not stored, hidden in demo mode, and the backup carrying it and putting it
+  back)
 - **Accounts**: sign-up, verification, resend, expired links, password reset, onboarding with everything off by default
 - **Supabase layer**: row mapping that round-trips every field, a repository run against a fake Supabase (paging past 1000 rows, chunked upserts, replace-without-data-loss, errors surfaced), friendly error messages, configuration checks
 - **Calculations**: week boundaries, averages that ignore missing ratings, behavioral combining, trend windows, coverage, matrix, weekly history

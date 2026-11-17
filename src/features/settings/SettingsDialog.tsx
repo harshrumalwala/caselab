@@ -26,6 +26,7 @@ import { Button } from '../../components/ui/Button';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Dialog } from '../../components/ui/Dialog';
 import { useAuth, useSession } from '../../state/AuthProvider';
+import { useMeetingPrefs } from '../../state/meeting';
 import { useData } from '../../state/DataProvider';
 import { useUI } from '../../state/ui';
 import { useToast } from '../../state/ToastProvider';
@@ -50,6 +51,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const toast = useToast();
   const { openImport, openShortcuts } = useUI();
   const install = useInstall();
+  const meeting = useMeetingPrefs();
   const game = useGame();
   const jsonInput = useRef<HTMLInputElement>(null);
   const [pendingBackup, setPendingBackup] = useState<ParsedBackup | null>(null);
@@ -60,9 +62,18 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const demo = mode === 'demo';
   const { exportExcel, busy: exporting } = useExportExcel();
 
-  const exportJSON = () => {
-    downloadText(backupFilename('caselab-backup', 'json'), backupToJSON(data), 'application/json');
-    toast({ title: 'Backup downloaded', body: `${plural(cases.length, 'case', 'cases')} saved to a JSON file.` });
+  // Your own meeting details are part of your own backup, so the file is written once they have been read back.
+  const exportJSON = async () => {
+    setBusy(true);
+    try {
+      const mine = demo || !meeting ? null : await meeting.load();
+      downloadText(backupFilename('caselab-backup', 'json'), backupToJSON(data, new Date(), mine), 'application/json');
+      toast({ title: 'Backup downloaded', body: `${plural(cases.length, 'case', 'cases')} saved to a JSON file.` });
+    } catch (e) {
+      toast({ kind: 'error', title: "Couldn't download the backup", body: describeError(e) });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const exportCSV = () => {
@@ -93,6 +104,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         title: how === 'merge' ? 'Backup merged' : 'Backup restored',
         body: `${plural(pendingBackup.caseCount, 'case', 'cases')} from the file.`,
       });
+      // The cases are in. How you like to meet goes back separately, and says so on its own if it cannot.
+      if (pendingBackup.meeting && meeting && !demo) {
+        try {
+          await meeting.save(pendingBackup.meeting);
+        } catch (e) {
+          toast({ kind: 'error', title: "Your cases are back, but how you like to meet isn't", body: describeError(e) });
+        }
+      }
     } catch (e) {
       toast({ kind: 'error', title: 'Restore failed', body: describeError(e) });
     } finally {
@@ -202,7 +221,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
           <Section title="Download and import" icon={<FileJson className="size-4" />}>
             <div className="grid gap-2 sm:grid-cols-2">
-              <Button onClick={exportJSON} disabled={demo}>
+              <Button onClick={() => void exportJSON()} disabled={demo || busy}>
                 <Download className="size-4" /> Download backup (JSON)
               </Button>
               <Button onClick={() => jsonInput.current?.click()} disabled={demo || busy}>

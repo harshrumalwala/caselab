@@ -58,10 +58,18 @@ export interface AppData {
   customIndustries: string[];
 }
 
+/** How you like to meet, in your own backup. Only ever your own: nobody else's is readable to put in it. */
+export interface BackupMeeting {
+  link: string;
+  timeZone: string;
+}
+
 /** The JSON backup file wraps AppData with a little provenance. */
 export interface BackupFile {
   app: 'caselab';
   schemaVersion: number;
   exportedAt: string;
   data: AppData;
+  /** Left out when there is nothing to put in it, and absent from every file written before it existed. */
+  meeting?: BackupMeeting;
 }
