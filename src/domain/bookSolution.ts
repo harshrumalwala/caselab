@@ -1,3 +1,6 @@
+// The extension is deliberate: `scripts/liveCaseAudit.mjs` loads this file with Node's type stripping, which resolves no extension for it.
+import { DRAWN_KINDS, exhibitLoss, type DrawnKind } from './exhibitFidelity.ts';
+
 /** The book's own solution to a casebook case, written up in our own words, with each exhibit rebuilt as a table of figures. */
 export interface SolutionStep {
   title: string;
@@ -29,7 +32,7 @@ export interface ChartSeries {
  * (when one exhibit shows several charts side by side) the panels.
  */
 export interface ExhibitChart {
-  kind: 'bar' | 'stacked' | 'line' | 'pie' | 'scatter';
+  kind: DrawnKind;
   /** A heading over this chart when the exhibit has several, such as "VARIABLE". */
   heading: string;
   /** What the vertical axis measures, as printed, such as "Total revenue". */
@@ -114,6 +117,14 @@ export interface SolutionExhibit {
   /** The conclusions the exhibit supports, with the figures. */
   takeaways: string[];
   chart: ExhibitChart | null;
+  /**
+   * What a cap took out of this exhibit on the way to the screen (a column, a row, a chart panel), as counts. Empty means the member is
+   * seeing the whole of what the write-up holds; anything in here is said on screen, because a shortened book exhibit must never be shown
+   * as if it were the whole one. See `exhibitLoss` in `src/domain/exhibitFidelity.ts`.
+   */
+  cut: string[];
+  /** Text a drawing cap cut to length (a panel heading, a footnote). The exhibit is whole, so this is for us, not for the member. */
+  shortened: string[];
 }
 
 export interface ClarifyingQuestion {
@@ -171,6 +182,16 @@ export interface BookSolution {
 
 const str = (v: unknown, max = 2000): string => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 const strs = (v: unknown, max = 600, cap = 20): string[] => (Array.isArray(v) ? v.map((x) => str(x, max)).filter(Boolean).slice(0, cap) : []);
+/**
+ * A list a chart reads by position: the label above the third bar, the row of text under the third category, the note beside the third
+ * segment. A blank entry means the book prints nothing there and is kept, because dropping it would move every later entry onto the wrong
+ * bar (it did: the "Booty Revenues" chart printed its two growth figures one bar to the left). Trailing blanks say nothing and go.
+ */
+const slots = (v: unknown, max: number, cap: number): string[] => {
+  const out = (Array.isArray(v) ? v : []).map((x) => str(x, max)).slice(0, cap);
+  while (out.length > 0 && out[out.length - 1] === '') out.pop();
+  return out;
+};
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 
 /** A number read from a cell of an exhibit such as "$1.2M", "95%", "(300)" or "1,200"; null when it is not a plain figure. */
@@ -183,7 +204,6 @@ export function parseFigure(cell: string): number | null {
   return Number(m[1]) * scale;
 }
 
-const KINDS = ['bar', 'stacked', 'line', 'pie', 'scatter'] as const;
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 /**
@@ -208,13 +228,33 @@ export const SOLUTION_EXHIBIT_LIMITS: ExhibitLimits = { columns: 16, rows: 70, p
 export const LIVE_EXHIBIT_LIMITS: ExhibitLimits = { columns: 40, rows: 400, points: 400 };
 
 /**
+ * Caps that do not depend on which screen is drawing, so they are one number rather than two. How much of an exhibit survives is the same
+ * in a live case and on the Full solution screen; only how many columns, rows and points the caller may send differs (above).
+ *
+ * The text caps match what `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts` sends, so a live exhibit is never cut a second
+ * time on its way to the screen. The chart's own text (a panel heading, an axis title, a footnote, a side note) is capped by what the
+ * drawing can hold instead: those are single lines inside a panel, and a longer one would run outside it. When one of them is cut, the
+ * exhibit still holds every figure, and `exhibitLoss` reports it as shortened rather than cut.
+ */
+const EXHIBIT_CAPS = {
+  /** Series on one chart, which for a stack is its segments: the library's biggest stack has 13. */
+  series: 16,
+  /** Charts side by side in one exhibit: the library's biggest has 6, and the drawing lays them out two to a row. */
+  panels: 8,
+  /** Characters in a cell, a column heading, the exhibit's title and its caption: the live case's own caps, to the character. */
+  cellChars: 800,
+  titleChars: 400,
+  captionChars: 3000,
+} as const;
+
+/**
  * Reads a chart. A chart either names the table columns it plots (the earlier form: `labelColumn` and `seriesColumns`), or carries the figures
  * the book plots (`categories` and `series`). Anything that cannot be drawn is dropped, so the screen shows the table alone rather than a
  * half-drawn chart.
  */
 function parseChart(v: unknown, columns: string[], rows: string[][], limits: ExhibitLimits, depth = 0): ExhibitChart | null {
   const o = obj(v);
-  const kind = KINDS.find((k) => k === o.kind);
+  const kind = DRAWN_KINDS.find((k) => k === o.kind);
   if (!kind) return null;
 
   let categories = strs(o.categories, 80, limits.points);
@@ -232,7 +272,7 @@ function parseChart(v: unknown, columns: string[], rows: string[][], limits: Exh
       };
     })
     .filter((x) => x.values.length > 0 && x.values.every((n) => Number.isFinite(n)))
-    .slice(0, 6);
+    .slice(0, EXHIBIT_CAPS.series);
 
   // The earlier form: plot columns of the exhibit's own table.
   if (series.length === 0 && Array.isArray(o.seriesColumns)) {
@@ -246,13 +286,13 @@ function parseChart(v: unknown, columns: string[], rows: string[][], limits: Exh
     series = cols.map((c) => ({ name: columns[c] ?? '', values: rows.map((r) => parseFigure(r[c] ?? '') ?? 0), labels: [], type: 'bar' as const, color: '' }));
   }
 
-  const panels = depth === 0 ? (Array.isArray(o.panels) ? o.panels : []).map((p) => parseChart(p, columns, rows, limits, 1)).filter((p): p is ExhibitChart => p !== null).slice(0, 4) : [];
+  const panels = depth === 0 ? (Array.isArray(o.panels) ? o.panels : []).map((p) => parseChart(p, columns, rows, limits, 1)).filter((p): p is ExhibitChart => p !== null).slice(0, EXHIBIT_CAPS.panels) : [];
   if (series.length === 0 && panels.length === 0) return null;
   // every series must line up with the categories, or it cannot be drawn
   if (series.some((x) => x.values.length !== categories.length)) return null;
 
   const sn = obj(o.sideNotes);
-  const sideItems = strs(sn.items, 60, 12);
+  const sideItems = slots(sn.items, 60, 12);
   return {
     kind,
     heading: str(o.heading, 60),
@@ -260,9 +300,9 @@ function parseChart(v: unknown, columns: string[], rows: string[][], limits: Exh
     unit: str(o.unit, 12),
     categories,
     series,
-    totals: strs(o.totals, 30, limits.points),
+    totals: slots(o.totals, 30, limits.points),
     belowRows: (Array.isArray(o.belowRows) ? o.belowRows : [])
-      .map((r) => ({ label: str(obj(r).label, 40), values: strs(obj(r).values, 30, limits.points) }))
+      .map((r) => ({ label: str(obj(r).label, 40), values: slots(obj(r).values, 30, limits.points) }))
       .filter((r) => r.values.length > 0)
       .slice(0, 4),
     sideNotes: sideItems.length > 0 ? { heading: str(sn.heading, 60), items: sideItems } : null,
@@ -295,21 +335,28 @@ function parseChart(v: unknown, columns: string[], rows: string[][], limits: Exh
 export function parseSolutionExhibit(raw: unknown, limits: ExhibitLimits = SOLUTION_EXHIBIT_LIMITS): SolutionExhibit {
   const o = obj(raw);
   // A heading can be blank in the book itself: keep it, so the columns still line up with the rows.
-  const columns = (Array.isArray(o.columns) ? o.columns : []).map((c) => str(c, 80)).slice(0, limits.columns);
+  const columns = (Array.isArray(o.columns) ? o.columns : []).map((c) => str(c, EXHIBIT_CAPS.cellChars)).slice(0, limits.columns);
   const rows = (Array.isArray(o.rows) ? o.rows : [])
-    .map((r) => (Array.isArray(r) ? r.map((c) => str(c, 120)).slice(0, columns.length || limits.columns) : []))
+    .map((r) => (Array.isArray(r) ? r.map((c) => str(c, EXHIBIT_CAPS.cellChars)).slice(0, columns.length || limits.columns) : []))
     .filter((r) => r.some((c) => c !== ''))
     .slice(0, limits.rows);
-  return {
-    title: str(o.title, 200),
-    caption: str(o.caption, 300),
+  const exhibit: SolutionExhibit = {
+    title: str(o.title, EXHIBIT_CAPS.titleChars),
+    caption: str(o.caption, EXHIBIT_CAPS.captionChars),
     columns,
     rows,
     approx: o.approx === true,
     howToRead: str(o.howToRead, 700),
     takeaways: strs(o.takeaways, 400, 5),
     chart: parseChart(o.chart, columns, rows, limits),
+    cut: [],
+    shortened: [],
   };
+  // Last: what this reading left behind, measured against the write-up it was read from, so nothing is ever cut without a record of it.
+  const loss = exhibitLoss(raw, exhibit);
+  exhibit.cut = loss.cut;
+  exhibit.shortened = loss.shortened;
+  return exhibit;
 }
 
 /**

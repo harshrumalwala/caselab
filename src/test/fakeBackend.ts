@@ -104,6 +104,8 @@ export const SAMPLE_LIBRARY_SOLUTIONS: Record<string, BookSolution> = {
         howToRead: 'Compare the two seasons first, then ask which one carries the year.',
         takeaways: ['Off-peak occupancy of 40% is the number that decides the case.'],
         chart: { ...blankChart, kind: 'bar', unit: '%', categories: ['Peak', 'Off-peak'], series: [{ name: 'Occupancy', values: [95, 40], labels: ['95%', '40%'], type: 'bar', color: '' }] },
+        cut: [],
+        shortened: [],
       },
     ],
     recommendation: 'Open the hotel only if off-peak occupancy clears the break-even.',

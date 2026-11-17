@@ -104,6 +104,34 @@ describe('the full solution, in a case you did', () => {
     }
   });
 
+  // Issue #95. It should never be seen (`npm run audit:live` fails on an exhibit that cannot be shown whole, before anything is loaded),
+  // but if a cap ever does cut one, the member is told rather than shown a short exhibit as if it were the book's.
+  it('says nothing about an exhibit that reaches the screen whole', async () => {
+    const env = await envWith({ title: 'Army Hotel', libraryId: HOTEL.id });
+    const { user, drawer } = await openCase('Army Hotel', env);
+    const section = within(await drawer.findByRole('region', { name: 'Full solution' }));
+    await user.click(section.getByRole('button', { name: /Full solution/ }));
+    expect(section.getByRole('table')).toBeInTheDocument();
+    expect(section.queryByText(/Not the whole exhibit/)).not.toBeInTheDocument();
+  });
+
+  it('says on an exhibit when a cap could not fit the whole of it', async () => {
+    // What `parseSolutionExhibit` records when a cap cuts an exhibit (its own tests cover the measuring; this is what the screen does with it).
+    const exhibit = SAMPLE_LIBRARY_SOLUTIONS[HOTEL.id].exhibits[0];
+    exhibit.cut = ['columns: 20 in the write-up, 16 on screen'];
+    try {
+      const env = await envWith({ title: 'Army Hotel', libraryId: HOTEL.id });
+      const { user, drawer } = await openCase('Army Hotel', env);
+      const section = within(await drawer.findByRole('region', { name: 'Full solution' }));
+      await user.click(section.getByRole('button', { name: /Full solution/ }));
+      expect(section.getByText(/Not the whole exhibit/)).toBeInTheDocument();
+      // It says that something is missing and nothing else: what was cut is for the report, not for the member mid-case.
+      expect(section.queryByText(/columns: 20/)).not.toBeInTheDocument();
+    } finally {
+      exhibit.cut = [];
+    }
+  });
+
   it('lets you tick what you did at each step, and lists what you did not as where your attempt differed', async () => {
     const env = await envWith({ title: 'Army Hotel', libraryId: HOTEL.id });
     const { user, drawer } = await openCase('Army Hotel', env);
@@ -268,6 +296,39 @@ describe('a write-up read from the database', () => {
     expect(s?.exhibits[0].rows).toHaveLength(n);
     expect(s?.exhibits[0].chart?.categories).toHaveLength(n);
     expect(s?.exhibits[0].chart?.series[0].values).toHaveLength(n);
+  });
+
+  // Issue #95. The library's biggest stack has thirteen segments and its biggest exhibit six charts side by side; both used to be cut
+  // (at six series and four panels) without a word, so the member saw part of a book exhibit and was told it was the whole of it.
+  it('keeps every segment of a stack and every chart of a multi-panel exhibit: up to sixteen series and eight panels', () => {
+    const segments = Array.from({ length: 13 }, (_, i) => ({ name: `Segment ${i + 1}`, values: [i + 1, i + 2] }));
+    const chart = { kind: 'stacked', categories: ['2025', '2026'], series: segments };
+    const stack = parseBookSolution({ ...good, exhibits: [{ title: 'Cost stack', columns: ['A'], rows: [['1']], chart }] })?.exhibits[0];
+    expect(stack?.chart?.series.map((s) => s.name)).toEqual(segments.map((s) => s.name));
+    expect(stack?.cut).toEqual([]);
+
+    const panel = (i: number) => ({ kind: 'bar', heading: `Panel ${i + 1}`, categories: ['a'], series: [{ name: 's', values: [i] }] });
+    const six = Array.from({ length: 6 }, (_, i) => panel(i));
+    const drawn = parseBookSolution({ ...good, exhibits: [{ title: 'Six charts', columns: ['A'], rows: [['1']], chart: { kind: 'bar', panels: six } }] })?.exhibits[0];
+    expect(drawn?.chart?.panels).toHaveLength(6);
+    expect(drawn?.cut).toEqual([]);
+  });
+
+  it('keeps a long cell whole, to the same 800 characters the live case sends', () => {
+    const long = `A note the book prints in one cell ${'x'.repeat(700)}`;
+    const s = parseBookSolution({ ...good, exhibits: [{ title: 'Notes', columns: ['Note'], rows: [[long]] }] });
+    expect(s?.exhibits[0].rows[0][0]).toBe(long);
+    expect(s?.exhibits[0].cut).toEqual([]);
+    expect(s?.exhibits[0].shortened).toEqual([]);
+  });
+
+  it('records what a cap did take out, so the screen can say it and the audit can fail on it', () => {
+    const columns = Array.from({ length: 20 }, (_, i) => `Product ${i + 1}`);
+    const s = parseBookSolution({ ...good, exhibits: [{ title: 'Too wide', columns, rows: [columns.map((_, i) => String(i))] }] });
+    expect(s?.exhibits[0].cut).toContain('columns: 20 in the write-up, 16 on screen');
+    const panels = Array.from({ length: 10 }, (_, i) => ({ kind: 'bar', heading: `P${i}`, categories: ['a'], series: [{ name: 's', values: [1] }] }));
+    const many = parseBookSolution({ ...good, exhibits: [{ title: 'Too many charts', columns: ['A'], rows: [['1']], chart: { kind: 'bar', panels } }] });
+    expect(many?.exhibits[0].cut).toContain('chart panels: 10 in the write-up, 8 on screen');
   });
 
   it('tolerates missing lists and an odd confidence, and cuts rows to the columns', () => {
