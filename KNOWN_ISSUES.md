@@ -47,16 +47,16 @@ assistant saw a claim (for example a build session's report) but did not check i
   `npm run audit:live` now reports 0 `exhibit_text_shortened`. One side-note line that could not hold its two figures in 60 characters
   was split into further list items rather than shortened, which is why that chart now carries more side notes than before. The write-ups
   are fixed; **production only changes when the regenerated `supabase/seeds/library.sql` is loaded**.
+  The per-exhibit caps are `SOLUTION_EXHIBIT_LIMITS` and `LIVE_EXHIBIT_LIMITS` (40 columns / 400 rows / 400 chart points), both in that
+  file; the live case passes the second to match `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts`. **They are no longer
+  kept in step by hand**: `src/data/liveExhibitCaps.test.ts` sends an oversized exhibit through the real `readExhibits` and then through
+  the screen's parser and fails if the screen cuts anything the Edge Function let through.
 - **Three labels under a chart's axis are cut to length and nothing reports it.** `exhibitLoss` compares a `belowRows` row by how many
   values it has, never its label, so a label over the parser's 40-character cap is shortened in silence: News Co. (Darden 2023-24)
   Exhibit 1, FLC Sports League (Ross 2022) Exhibit 2 and Dealer Jack's (Fuqua 2017) Exhibit #1, measured 2026-11-17. The audit cannot
   see them, so they were left alone (issue #139 covered the seven cases the audit flags). Either shorten those three labels in
   `private-data/solutions/*.json` at the next reload, or compare `belowRows` labels in `exhibitFidelity.ts` first so the audit finds any
   others.
-  The per-exhibit caps are `SOLUTION_EXHIBIT_LIMITS` and `LIVE_EXHIBIT_LIMITS` (40 columns / 400 rows / 400 chart points), both in that
-  file; the live case passes the second to match `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts`. **They are no longer
-  kept in step by hand**: `src/data/liveExhibitCaps.test.ts` sends an oversized exhibit through the real `readExhibits` and then through
-  the screen's parser and fails if the screen cuts anything the Edge Function let through.
 - **A chart kind we do not draw is not counted as a loss.** `exhibitLoss` ignores a chart whose kind is outside `DRAWN_KINDS` (marimekko,
   waterfall, bubble, dual axis, maps): the exhibit stays the book's own table, which is the settled trade (ROADMAP R15). No write-up
   carries such a chart today (measured: 0 of 1,792 exhibits on 2026-11-16), so the rule costs nothing; if one is ever added, the member
