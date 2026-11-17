@@ -33,30 +33,44 @@ assistant saw a claim (for example a build session's report) but did not check i
   Re-assembling from the reader outputs would silently undo them.
 - **`buildLibrarySeed.mjs` reads every `private-data/casebooks/*.json` except `*.index.json`** and every `private-data/solutions/*.json`;
   a file with the wrong name or shape is either picked up wrongly or ignored. The new-analysis files are named `solutions-waveN.json`.
-- **The parser's caps, and what they still cut** (issue #95 made every cut visible; none of them bites the library today).
+- **The parser's caps, and what they still cut** (issue #95 made every cut visible; no cap takes content out of the library today,
+  and the three labels cut to length are the bullet below).
   `src/domain/bookSolution.ts` caps: exhibits 12, columns 16, rows 70, chart points/categories 70, structure buckets 8, clarifying
   questions 5, takeaways 3, chart series 16, panels 8, and the character caps in `EXHIBIT_CAPS` (a cell or column heading 800, a title
   400, a caption 3,000 — the live case's own numbers). Empty-string chart categories are dropped, so a single unlabelled bar needs a
   non-empty label or the chart disappears. **Content over a cap is no longer cut in silence**: `parseSolutionExhibit` records what it
   left behind on the exhibit's `cut` and `shortened` lists (`exhibitLoss` in `src/domain/exhibitFidelity.ts`), the screen says so on the
   exhibit, and `npm run audit:live` exits non-zero on any exhibit that cannot be shown whole. What is *still* cut, and cannot be
-  helped by a bigger number: a chart heading (60 characters), an axis title (80), a footnote (240) and a side note (60) are single lines
-  inside a panel, so a line longer than that is cut to length. Those are counted as `shortened`, not as content gone, and the fix is a
-  shorter line in the write-up (a content change, the owner's call). **The 9 exhibits that had one were rewritten on 2026-11-17**
-  (issue #139, across Avalon, Cosmetics Company, Grad-U-Date, Kellogg Capital, LabCo, Orange Yoga Studio and Take Your Pills!), so
-  `npm run audit:live` now reports 0 `exhibit_text_shortened`. One side-note line that could not hold its two figures in 60 characters
-  was split into further list items rather than shortened, which is why that chart now carries more side notes than before. The write-ups
-  are fixed; **production only changes when the regenerated `supabase/seeds/library.sql` is loaded**.
+  helped by a bigger number: a chart heading (60 characters), an axis title (80), a footnote (240), a side note (60) and the label of a
+  row under the axis (40, issue #143) are single lines inside a panel, so a line longer than that is cut to length. Those are counted
+  as `shortened`, not as content gone, and the fix is a shorter line in the write-up (a content change, the owner's call). **The 9
+  exhibits that had one were rewritten on 2026-11-17** (issue #139, across Avalon, Cosmetics Company, Grad-U-Date, Kellogg Capital,
+  LabCo, Orange Yoga Studio and Take Your Pills!), so `npm run audit:live` reported 0 `exhibit_text_shortened` until #143 taught it to
+  read the row labels as well; it is 3 now, and those three are the next bullet. One side-note line that could not hold its two
+  figures in 60 characters was split into further list items rather than shortened, which is why that chart now carries more side
+  notes than before. The write-ups are fixed; **production only changes when the regenerated `supabase/seeds/library.sql` is loaded**.
   The per-exhibit caps are `SOLUTION_EXHIBIT_LIMITS` and `LIVE_EXHIBIT_LIMITS` (40 columns / 400 rows / 400 chart points), both in that
   file; the live case passes the second to match `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts`. **They are no longer
   kept in step by hand**: `src/data/liveExhibitCaps.test.ts` sends an oversized exhibit through the real `readExhibits` and then through
   the screen's parser and fails if the screen cuts anything the Edge Function let through.
-- **Three labels under a chart's axis are cut to length and nothing reports it.** `exhibitLoss` compares a `belowRows` row by how many
-  values it has, never its label, so a label over the parser's 40-character cap is shortened in silence: News Co. (Darden 2023-24)
-  Exhibit 1, FLC Sports League (Ross 2022) Exhibit 2 and Dealer Jack's (Fuqua 2017) Exhibit #1, measured 2026-11-17. The audit cannot
-  see them, so they were left alone (issue #139 covered the seven cases the audit flags). Either shorten those three labels in
-  `private-data/solutions/*.json` at the next reload, or compare `belowRows` labels in `exhibitFidelity.ts` first so the audit finds any
-  others.
+- **Three labels under a chart's axis are cut to length, and the audit now says so** (issue #143, 2026-11-17). `exhibitLoss` used to
+  compare a `belowRows` row by how many values it has and never its label, so a label over the parser's 40-character cap was shortened
+  with nothing recorded anywhere. It compares the label now, and the whole library was measured with it: **3 exhibits in 3 cases, out of
+  1,792 compared** — News Co. (Darden 2023-24) Exhibit 1, FLC Sports League (Ross 2022) Exhibit 2 and Dealer Jack's (Fuqua 2017)
+  Exhibit #1, the same three a person had found by reading, and no others. `npm run audit:live` therefore reports 3
+  `exhibit_text_shortened` again (it was 0 after #139); each is one label too long for its row, every figure is still on screen, and
+  the command still exits 0 on them. **The content is not fixed**: shortening those three labels is a change to
+  `private-data/solutions/*.json` and only reaches members when the regenerated seed is loaded, so they belong in the next reload batch
+  with the #132 and #139 rewrites.
+- **Fields of an exhibit that `exhibitLoss` still does not compare** (walked field by field for issue #143; the full list with a yes or
+  no on each is in that PR). Every one of them is measured over the library and only one bites today: **a reference line's label is cut
+  at 30 characters, and Soap Co. (Booth MCG 2026-2027) Exhibit A has one of 41** — the same silent shortening #143 fixed for the row
+  label, one field along, and the fix would be the same one line in `chartLoss`. The others with nothing over a cap today: the chart's
+  unit (12), a point label on a series (40), a series or reference-line colour (20), a value in a row under the axis (30, the count is
+  compared but not the text), a side-note heading (60), an axis-end word (40), the exhibit's `howToRead` (700) and its takeaways (5 of
+  400). Dropped-outright cases nothing reports either: a row under the axis that has a label and no values, a highlight index outside
+  the categories, an `xValue` that is not a number, and a `yMin`/`yMax`/`yStep` that is not a number. Booleans and `approx` cannot be
+  cut at all, and a panel inside a panel (which the parser also drops) is already reported as a cut.
 - **17 prompts talked about the book instead of to the candidate, and the rest of a write-up still does** (issue #132). The prompt is
   read to the member word for word as the opening of a live case, and 17 of the 872 ended with a sentence about the case rather than
   about the business: how hard or open-ended it is, what method to use, how the interviewer should behave, and two notes about a name
