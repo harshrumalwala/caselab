@@ -66,12 +66,16 @@ export type LiveMode = 'practice' | 'interview' | 'learning';
 export type NudgeLevel = 'none' | 'process_hint' | 'directional_hint' | 'lead' | 'advance';
 
 /**
- * One thing to work through in the main section: an exhibit the member is handed, or a step of the book's analysis that has no exhibit
- * of its own and is put to them in conversation. A case has whichever of the two it holds, and most hold both.
+ * One part of the case to work through, in the book's own order: an exhibit the member is handed, a step of the book's analysis that has
+ * no exhibit of its own and is put to them in conversation, or a brainstorm the book asks for, which is answered in its own two stages.
+ * A case has whichever of the three it holds, and most hold more than one kind.
  */
 export interface Beat {
-  kind: 'exhibit' | 'step';
+  kind: 'exhibit' | 'step' | 'brainstorm';
+  /** Where it is in the write-up: an exhibit's place among the exhibits, a step's (or a brainstorm's) place among the steps. */
   index: number;
+  /** A brainstorm: what it is about, from the book's own step title (never its ideas). */
+  topic?: string;
 }
 
 export interface CasePlan {
@@ -81,7 +85,7 @@ export interface CasePlan {
   limitMs?: number;
   beats: Beat[];
   hasBrainstorm: boolean;
-  /** What the brainstorm is about, from the book's own step (never its ideas). */
+  /** What the first brainstorm is about. Each brainstorm beat carries its own topic; this is what a brainstorm with no beat of its own uses. */
   brainstormTopic: string;
 }
 
@@ -92,6 +96,23 @@ export interface PlanSource {
 }
 
 const BRAINSTORM = /brainstorm/i;
+/**
+ * The head of a brainstorm's title: the word itself, the book's numbering of it, and whatever separates that from the subject. The
+ * screen puts "Brainstorm:" in front of the topic, so all of this has to come off, numbering included — "Brainstorm #1: Revenue
+ * factors" is the book's way of telling two of them apart in print, and means nothing to the member being asked the question.
+ *
+ * The number comes off only when something separates it from the subject ("Brainstorm #1: ...", "Brainstorm 2 - ..."), so a title that
+ * counts what it is asking for ("Brainstorm 3 ways to cut cost") keeps its own words.
+ */
+const BRAINSTORM_HEAD = /^\s*brainstorms?(?:ing)?\b[\s:.)\]\-–—]*(?:#\s*)?(?:\d{1,2}(?=\s*[:.)\]\-–—]|\s*$))?[\s:.)\]\-–—]*/i;
+/** What a brainstorm asks for, in words a member can read: the book's own step title with its heading and numbering taken off. */
+export const brainstormTopic = (title: string): string => title.replace(BRAINSTORM_HEAD, '').trim();
+/** The same, for a brainstorm the write-up holds only as a table of ideas, whose title may name the exhibit first ("Exhibit 3: brainstorm ideas"). */
+const tableTopic = (title: string): string => {
+  const head = brainstormTopic(title);
+  if (head !== title.trim()) return head;
+  return title.includes(':') ? title.slice(title.indexOf(':') + 1).trim() : '';
+};
 // A step that is only about building the framework ("Framework", "Framework for revenue growth", "Framework: what to weigh", "Structure the problem"): the framework
 // has its own stages, so it is not discussed again. ("Framework and Exhibit 1" has more in it, so it stays.)
 const FRAMEWORK_STEP = /^\s*(framework|structure|structuring|clarifying questions?)(\s+for\b.*|\s*[:/].*|\s+the\s+(problem|approach|project)\b.*)?\s*$/i;
@@ -242,17 +263,24 @@ const EXHIBIT_PER_BEAT_MS = 4 * 60 * SECOND;
 /** A case with something to work through never gets less than this (the formula's own value at one beat), nor more than the ceiling. */
 const EXHIBIT_MIN_MS = 8 * 60 * SECOND;
 const EXHIBIT_MAX_MS = 25 * 60 * SECOND;
-/** Everything around the discussion: 7:30 of prompt and framework, 4:00 the closing stages need, 3:30 of flexible time. */
+/** Everything around the discussion: 7:30 of prompt and framework, 4:00 the closing stages need (one brainstorm and the recommendation), 3:30 of flexible time. */
 const AROUND_EXHIBITS_MS = 15 * 60 * SECOND;
+/** One brainstorm, thinking and writing. */
+const BRAINSTORM_MS = PLANNED_MS.brainstorm_think + PLANNED_MS.brainstorm_write;
 
 /**
- * The time a case is planned for, from how much it has in it. A case with nothing to work through has no exhibit stage at all, so it is
- * given no exhibit time; the opening, the closing and the flexible time are the same for every case, which is what keeps the closing
- * stages safe at any size.
+ * The time a case is planned for, from how much it has in it: the parts of the discussion, which a brainstorm is not one of (it has two
+ * stages of its own). A case with nothing to work through has no exhibit stage at all, so it is given no exhibit time; the opening, the
+ * closing and the flexible time are the same for every case, which is what keeps the closing stages safe at any size.
+ *
+ * **A second brainstorm does not make the case longer** (issue #133). The whole case is the same length it has always been for its size,
+ * and every brainstorm after the first takes its two minutes out of the discussion instead: 40 minutes is the ceiling issue #82 set, and
+ * the 21 cases of 847 that ask for two brainstorms are not a reason to raise it. Written this way the plan always leaves the same 3:30 of
+ * flexible time, whatever a case holds.
  */
-function planTimes(beats: number): { exhibitMs: number; limitMs: number } {
-  const exhibitMs = beats <= 0 ? 0 : Math.min(Math.max(EXHIBIT_SETUP_MS + beats * EXHIBIT_PER_BEAT_MS, EXHIBIT_MIN_MS), EXHIBIT_MAX_MS);
-  return { exhibitMs, limitMs: exhibitMs + AROUND_EXHIBITS_MS };
+function planTimes(beats: number, brainstorms: number): { exhibitMs: number; limitMs: number } {
+  const planned = beats <= 0 ? 0 : Math.min(Math.max(EXHIBIT_SETUP_MS + beats * EXHIBIT_PER_BEAT_MS, EXHIBIT_MIN_MS), EXHIBIT_MAX_MS);
+  return { exhibitMs: Math.max(0, planned - Math.max(0, brainstorms - 1) * BRAINSTORM_MS), limitMs: planned + AROUND_EXHIBITS_MS };
 }
 
 /**
@@ -267,7 +295,12 @@ function planTimes(beats: number): { exhibitMs: number; limitMs: number } {
  *  - An exhibit no step claims is handed over before the step beats that would otherwise come between it and the next exhibit a step
  *    does claim — so in a case where nothing names anything (there is no link in the data to read), the exhibits are worked through
  *    first, exactly as they are today, and the steps that used to be dropped follow them.
- *  - A step whose work another stage does is left out: the framework, the brainstorm and the closing recommendation.
+ *  - A step whose work another stage does is left out: the framework and the closing recommendation.
+ *
+ * A brainstorm the book asks for is a part like any other and keeps its place in that order (issue #133): the books often ask for the
+ * ideas *before* the exhibit that shows which of them the client chose, and a brainstorm run after it has nothing left to brainstorm.
+ * It is answered in its own two stages rather than in the discussion, so it is marked as its own kind of beat and never claims an
+ * exhibit.
  */
 function planBeats(solution: PlanSource): Beat[] {
   const candidates = solution.exhibits.flatMap((e, index) => (isInterviewerSideExhibit(e) ? [] : [{ index, title: e.title ?? '' }]));
@@ -278,9 +311,14 @@ function planBeats(solution: PlanSource): Beat[] {
   const claims = new Map<number, number>(); // step -> place in `candidates`
   const taken = new Set<number>();
   const ownBeat = new Set<number>();
+  const brainstorms = new Set<number>();
   solution.steps.forEach((s, index) => {
     const title = s.title ?? '';
-    if (BRAINSTORM.test(title) || isFrameworkStep(title) || isRecommendationStep(title)) return;
+    if (BRAINSTORM.test(title)) {
+      brainstorms.add(index);
+      return;
+    }
+    if (isFrameworkStep(title) || isRecommendationStep(title)) return;
     const about = stepsAbout(title, labels, words);
     if (about >= 0) {
       // Two steps on one exhibit (reading it, then its implication) are still that exhibit's single beat: the second adds nothing new
@@ -311,10 +349,15 @@ function planBeats(solution: PlanSource): Beat[] {
       next += 1;
     }
   };
-  solution.steps.forEach((_s, index) => {
+  solution.steps.forEach((s, index) => {
     const claimed = claims.get(index);
     if (claimed !== undefined) {
       handOverUpTo(claimed + 1);
+      return;
+    }
+    if (brainstorms.has(index)) {
+      handOverUpTo(nextClaim[index]);
+      beats.push({ kind: 'brainstorm', index, topic: brainstormTopic(s.title ?? '') });
       return;
     }
     if (!ownBeat.has(index)) return;
@@ -326,19 +369,18 @@ function planBeats(solution: PlanSource): Beat[] {
 }
 
 export function buildPlan(solution: PlanSource): CasePlan {
-  const brainstormStep = solution.steps.find((s) => BRAINSTORM.test(s.title));
   const brainstormTable = solution.exhibits.find((e) => BRAINSTORM.test(e.title ?? ''));
   const beats = planBeats(solution);
+  const brainstorms = beats.filter((b) => b.kind === 'brainstorm');
+  // A brainstorm the write-up holds only as a table of ideas has no step to place it, so it stays where it has always been: at the end,
+  // after the discussion.
+  const trailing = brainstorms.length === 0 && Boolean(brainstormTable);
   // More to cover, more time: the case is as long as there is to work through, up to the 25-in-40 the busiest cases always had.
   return {
-    ...planTimes(beats.length),
+    ...planTimes(beats.length - brainstorms.length, brainstorms.length + (trailing ? 1 : 0)),
     beats,
-    hasBrainstorm: Boolean(brainstormStep || brainstormTable),
-    brainstormTopic: brainstormStep
-      ? brainstormStep.title.replace(/^\s*brainstorm(?:s|ing)?\s*[:\-–]?\s*/i, '').trim()
-      : brainstormTable && brainstormTable.title?.includes(':')
-        ? brainstormTable.title.slice(brainstormTable.title.indexOf(':') + 1).trim()
-        : '',
+    hasBrainstorm: brainstorms.length > 0 || trailing,
+    brainstormTopic: brainstorms[0]?.topic ?? (trailing ? tableTopic(brainstormTable?.title ?? '') : ''),
   };
 }
 
@@ -483,22 +525,62 @@ function say(s: SessionState, at: number, text: string, kind: Message['kind'], b
 // Time
 // ---------------------------------------------------------------------------------------------------------------------------
 
+/**
+ * The part of the plan the case has reached: every beat before it has been worked through, or passed over when the clock took it. The
+ * beats are worked through in order, so the last one started says where the case is.
+ */
+const beatPointer = (s: SessionState): number => (s.beats.length === 0 ? 0 : s.beats[s.beats.length - 1].index + 1);
+
+/**
+ * The brainstorms the case has still to run. A plan with no brainstorm beat of its own and a brainstorm all the same (a write-up whose
+ * brainstorm is only a table of ideas, or a case saved before the brainstorm had a place in the plan) has the one it always had, at
+ * the end, until it has been run.
+ */
+function brainstormsLeft(s: SessionState): number {
+  if (!s.plan.beats.some((b) => b.kind === 'brainstorm')) {
+    return s.plan.hasBrainstorm && !s.stageLog.some((e) => e.stage === 'brainstorm_think') ? 1 : 0;
+  }
+  const from = beatPointer(s);
+  return s.plan.beats.filter((b, i) => i >= from && b.kind === 'brainstorm').length;
+}
+
+/** How much of the discussion's time has already been used. A brainstorm in the middle splits it in two, and both halves come out of it. */
+const exhibitSpent = (s: SessionState): number =>
+  s.stageLog.reduce((total, e) => (e.stage === 'exhibits' && e.endedAt !== null ? total + Math.max(0, e.endedAt - e.startedAt) : total), 0);
+
 /** What is still to come after this stage, in the planned time (the writing and thinking stages that have not happened yet). */
 function laterPlanned(s: SessionState, stage: Stage): number {
   let total = 0;
   for (const next of ORDER.slice(stageIndex(stage) + 1)) {
     if (next === 'done') continue;
-    if (next === 'exhibits' && s.plan.beats.length === 0) continue;
-    if ((next === 'brainstorm_think' || next === 'brainstorm_write') && !s.plan.hasBrainstorm) continue;
-    total += next === 'exhibits' ? exhibitPlanned(s) : PLANNED_MS[next];
+    if (next === 'exhibits') {
+      if (s.plan.beats.length === 0) continue;
+      total += Math.max(0, exhibitPlanned(s) - exhibitSpent(s));
+      continue;
+    }
+    if (next === 'brainstorm_think' || next === 'brainstorm_write') {
+      total += PLANNED_MS[next] * brainstormsLeft(s);
+      continue;
+    }
+    total += PLANNED_MS[next];
   }
   return total;
 }
 
-/** The time the closing stages need at the least: the brainstorm (if the case has one) and the recommendation. */
+/** The time the closing stages need at the least: every brainstorm the case has not run yet, and the recommendation. */
 function closingNeeded(s: SessionState): number {
   return laterPlanned(s, 'exhibits');
 }
+
+/**
+ * What is left of the discussion at `at`: its own planned time, less what it has already used, and never the time the closing stages
+ * need. A learning case has no clock, so there is always more.
+ */
+const exhibitLeft = (s: SessionState, at: number): number =>
+  isUntimed(s) ? Number.POSITIVE_INFINITY : Math.min(exhibitPlanned(s) - exhibitSpent(s), hardEnd(s) - closingNeeded(s) - at);
+
+/** Less than this left is not worth picking the discussion up again for: it is the least a beat is ever given. */
+const MIN_BEAT_MS = 30 * SECOND;
 
 export interface Deadlines {
   /** The planned end. */
@@ -512,7 +594,8 @@ export function deadlines(s: SessionState, stage: Stage, startAt: number): Deadl
   if (stage === 'done') return { soft: end, hard: end };
   if (stage === 'exhibits') {
     const latest = Math.max(startAt, end - closingNeeded(s));
-    return { soft: Math.min(startAt + exhibitPlanned(s), latest), hard: latest };
+    // What the discussion has left, not its whole planned time: a brainstorm in the middle of a case splits it into two sittings.
+    return { soft: Math.min(startAt + Math.max(0, exhibitPlanned(s) - exhibitSpent(s)), latest), hard: latest };
   }
   const soft = Math.min(startAt + PLANNED_MS[stage], end);
   const writing = stage === 'framework_write' || stage === 'brainstorm_write' || stage === 'recommend_write';
@@ -586,11 +669,25 @@ function startStage(s: SessionState, stage: Stage, at: number): void {
   s.stageLog.push({ stage, startedAt: at, endedAt: null, endedBy: null });
   if (stage === 'framework_think') say(s, at, line(s, 'prompt_ready'), 'notice');
   else if (stage === 'framework_write') say(s, at, LINES.framework_write, 'notice');
-  else if (stage === 'brainstorm_think') say(s, at, line(s, 'brainstorm_think')(s.plan.brainstormTopic), 'notice');
+  else if (stage === 'brainstorm_think') say(s, at, line(s, 'brainstorm_think')(openBrainstorm(s, at)), 'notice');
   else if (stage === 'brainstorm_write') say(s, at, line(s, 'brainstorm_write'), 'notice');
   else if (stage === 'recommend_think') say(s, at, line(s, 'recommend_think'), 'notice');
   else if (stage === 'recommend_write') say(s, at, line(s, 'recommend_write'), 'notice');
   else if (stage === 'exhibits') revealBeat(s, at);
+}
+
+/**
+ * The brainstorm stages have started: the plan's brainstorm becomes the part of the case that is open, so that the case picks up
+ * where it left off afterwards. Returns what this one is about (the plan's own topic for a brainstorm with no beat to place it).
+ */
+function openBrainstorm(s: SessionState, at: number): string {
+  const from = beatPointer(s);
+  // The next one the case has not reached yet. It is usually the part on the table; when the clock ended the discussion early, the
+  // parts it did not reach are let go and the brainstorm after them is still run, because the closing time was kept for it.
+  const index = s.plan.beats.findIndex((b, i) => i >= from && b.kind === 'brainstorm');
+  if (index < 0) return s.plan.brainstormTopic;
+  s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastUserAt: at, lastNudgeAt: 0, budgetMs: BRAINSTORM_MS, hints: 0, userMessages: 0, asked: 0, outcome: 'open' });
+  return s.plan.beats[index].topic ?? s.plan.brainstormTopic;
 }
 
 /** Saves what is typed in the box of a writing stage as a response handed in by the clock, not by the member. */
@@ -598,16 +695,27 @@ function captureTimedOut(s: SessionState, at: number): void {
   const key = writingKey(s);
   if (!key) return;
   const text = clip(s.drafts[key] ?? '');
-  if (text && !s.submissions.some((x) => x.kind === key)) s.submissions.push({ kind: key as SubmissionKind, text, at, timedOut: true });
+  // The same words are never saved twice; a case with two brainstorms hands in two answers of the same kind, which is not the same thing.
+  if (text && !s.submissions.some((x) => x.kind === key && x.text === text)) s.submissions.push({ kind: key as SubmissionKind, text, at, timedOut: true });
 }
 
-function nextStage(s: SessionState, from: Stage): Stage {
-  for (const next of ORDER.slice(stageIndex(from) + 1)) {
-    if (next === 'exhibits' && s.plan.beats.length === 0) continue;
-    if ((next === 'brainstorm_think' || next === 'brainstorm_write') && !s.plan.hasBrainstorm) continue;
-    return next;
-  }
-  return 'done';
+/**
+ * Where the case goes when a stage ends. The opening and the closing are the same for every case; in between, the plan decides. A
+ * brainstorm the book puts in the middle has two stages of its own, so the discussion stops for it and is picked up again after it,
+ * as long as a part of it is left and there is time worth spending on it. When the clock ends the discussion, the parts still in the
+ * plan are let go — but a brainstorm never is: the closing time was reserved for it.
+ */
+function nextStage(s: SessionState, from: Stage, at: number): Stage {
+  if (from === 'prompt') return 'framework_think';
+  if (from === 'framework_think') return 'framework_write';
+  if (from === 'brainstorm_think') return 'brainstorm_write';
+  if (from === 'recommend_think') return 'recommend_write';
+  if (from === 'recommend_write') return 'done';
+  // From the framework, the discussion, or a brainstorm that has just been handed in.
+  const upcoming = s.plan.beats[beatPointer(s)];
+  if (upcoming?.kind === 'brainstorm') return 'brainstorm_think';
+  if (upcoming && from !== 'exhibits' && exhibitLeft(s, at) > MIN_BEAT_MS) return 'exhibits';
+  return brainstormsLeft(s) > 0 ? 'brainstorm_think' : 'recommend_think';
 }
 
 function finish(s: SessionState, at: number, reason: 'completed' | 'time_limit' | 'ended_early'): void {
@@ -617,19 +725,27 @@ function finish(s: SessionState, at: number, reason: 'completed' | 'time_limit' 
   s.stageStartedAt = at;
 }
 
+/** What is said as the discussion is left: where the case goes next decides it. */
+const leavingDiscussion = (s: SessionState, at: number): string => (nextStage(s, 'exhibits', at) === 'brainstorm_think' ? LINES.to_brainstorm : LINES.wrap_up);
+
 /** Ends the current stage and starts the next one (or finishes the case). */
 function endStage(s: SessionState, at: number, by: StageLogEntry['endedBy']): void {
   const from = s.stage;
   if (from === 'framework_write' || from === 'brainstorm_write' || from === 'recommend_write') {
     if (by === 'timer' || by === 'limit') captureTimedOut(s, at);
   }
+  if (from === 'brainstorm_write') {
+    // The brainstorm is over: the part of the plan it took is closed, so the case knows where to pick up.
+    const b = openBeat(s);
+    if (b && s.plan.beats[b.index]?.kind === 'brainstorm') b.outcome = by === 'user' ? 'member_moved' : by === 'coach' ? 'coach_moved' : 'timed_out';
+  }
   if (from === 'exhibits') {
     const b = openBeat(s);
     if (b && (by === 'timer' || by === 'limit')) b.outcome = 'timed_out';
-    if (by === 'timer') say(s, at, s.plan.hasBrainstorm ? LINES.to_brainstorm : LINES.wrap_up, 'notice');
+    if (by === 'timer') say(s, at, leavingDiscussion(s, at), 'notice');
   }
   logEnd(s, at, by);
-  const next = nextStage(s, from);
+  const next = nextStage(s, from, at);
   if (next === 'done') finish(s, at, 'completed');
   else startStage(s, next, at);
 }
@@ -643,7 +759,9 @@ export function settle(input: SessionState, now: number): SessionState {
   if (isUntimed(input)) return input; // learning mode has no clock: a stage ends only when the member (or Bucket, on the member's work) moves the case on
   const s = structuredClone(input);
   let guard = 0;
-  while (s.stage !== 'done' && guard++ < 16) {
+  // Eight stages, and three more for every brainstorm after the first (its two, and the discussion picked up again after it).
+  const stages = 16 + 3 * s.plan.beats.filter((b) => b.kind === 'brainstorm').length;
+  while (s.stage !== 'done' && guard++ < stages) {
     const limit = hardEnd(s);
     const end = stageEndsAt(s);
     // A stage that ended on its own clock before the 30 minutes is not a timeout, even if the member was away past it.
@@ -850,19 +968,21 @@ export function saveScratchpad(settled: SessionState, text: string): SessionStat
 // The exhibit discussion
 // ---------------------------------------------------------------------------------------------------------------------------
 
-/** The time the next beat is worth: what is left of the planned discussion, shared out by how many beats remain. */
+/** The time the next beat is worth: what is left of the planned discussion, shared out by how many of its beats remain (a brainstorm has its own time). */
 function beatBudget(s: SessionState, at: number): number {
   const d = deadlines(s, 'exhibits', s.stageStartedAt);
-  const left = Math.max(1, s.plan.beats.length - s.beats.length);
-  return Math.max(30 * SECOND, Math.floor((d.soft - at) / left));
+  const from = beatPointer(s);
+  const left = Math.max(1, s.plan.beats.filter((b, i) => i >= from && b.kind !== 'brainstorm').length);
+  return Math.max(MIN_BEAT_MS, Math.floor((d.soft - at) / left));
 }
 
+/** Brings out the next part of the discussion. A brainstorm is not one of them: it is answered in its own two stages. */
 function revealBeat(s: SessionState, at: number): boolean {
-  const index = s.beats.length;
+  const index = beatPointer(s);
   const beat = s.plan.beats[index];
-  if (!beat) return false;
+  if (!beat || beat.kind === 'brainstorm') return false;
+  const first = !s.beats.some((b) => s.plan.beats[b.index]?.kind !== 'brainstorm');
   s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastUserAt: at, lastNudgeAt: 0, budgetMs: beatBudget(s, at), hints: 0, userMessages: 0, asked: 0, outcome: 'open' });
-  const first = index === 0;
   const text =
     beat.kind === 'exhibit'
       ? first
@@ -871,7 +991,7 @@ function revealBeat(s: SessionState, at: number): boolean {
       : first
         ? 'Let us dig in. What would you analyse first, and how?'
         : 'Good. What would you look at next, and how?';
-  say(s, at, text, 'exhibit', index);
+  say(s, at, text, 'exhibit', s.beats.length - 1);
   return true;
 }
 
@@ -881,7 +1001,7 @@ export function nextBeat(settled: SessionState, now: number, how: 'independent' 
   const b = openBeat(s);
   if (b) b.outcome = how === 'coach_moved' ? 'coach_moved' : how === 'member_moved' ? 'member_moved' : b.hints > 0 ? 'hinted' : 'independent';
   if (!revealBeat(s, now)) {
-    say(s, now, s.plan.hasBrainstorm ? LINES.to_brainstorm : LINES.wrap_up, 'notice');
+    say(s, now, leavingDiscussion(s, now), 'notice');
     endStage(s, now, 'coach');
   }
   return bump(s);

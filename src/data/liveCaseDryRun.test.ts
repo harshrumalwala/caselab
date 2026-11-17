@@ -185,6 +185,22 @@ describe('the candidates, and the one piece of pretending', () => {
     expect(run.stage).toBe('done');
   });
 
+  it('asks and counts every brainstorm the case has, wherever the book put them', async () => {
+    const two = {
+      steps: [
+        { title: 'Brainstorm #1: ways to grow', body: 'Ideas.', calc: [], whatToNotice: '', commonMiss: [] },
+        { title: 'Size the market', body: 'Work out the market size.', calc: [], whatToNotice: 'The south is small.', commonMiss: [] },
+        { title: 'Brainstorm #2: ways to cut cost', body: 'More ideas.', calc: [], whatToNotice: '', commonMiss: [] },
+      ],
+    };
+    const run = await play('practice', 'brisk', two);
+    expect(run.brainstorms).toEqual({ planned: 2, asked: 2, answered: 2 });
+    expect(run.beatsTotal).toBe(3); // the discussion is still the two exhibits and the sizing step
+    expect(run.stage).toBe('done');
+    // The default case has one, and the member is asked it.
+    expect((await play('practice', 'brisk')).brainstorms).toEqual({ planned: 1, asked: 1, answered: 1 });
+  });
+
   it('the stub decides only assessment, beat_complete and direction_clear, from the candidate alone', () => {
     expect(Object.keys(CANDIDATE_SPECS)).toEqual([...CANDIDATES]);
     for (const name of CANDIDATES) {

@@ -361,6 +361,42 @@ assistant saw a claim (for example a build session's report) but did not check i
   lost one. A closing step the books head some other way ("What should the client do about pricing?") is
   still a part of its own, and a genuine analysis step headed "Summary of profitability" is dropped.
 
+## The brainstorm, where the book puts it (issue #133, 2026-11-17)
+
+- **Nothing of this is verified against a real model or a real member.** `planBeats` now places a brainstorm among the parts of the
+  case, the stage machine stops the discussion for it and picks the discussion up again afterwards, and the unit tests,
+  `npm run audit:live` and `npm run dryrun:live` all agree the cases run (10,164 of 12,705 runs reach the end, exactly as before; the
+  rest are the learning-mode stalls that are open by design). The dry run stubs the model, so whether a mid-case brainstorm *reads*
+  right to a member — Bucket asking for ideas, then going back to an exhibit — is unknown. Like every change under
+  `supabase/functions/**` it does nothing until `npx supabase functions deploy live-case`.
+- **Where a brainstorm sits is a guess wherever no step names an exhibit**, exactly as it is for an analytical step (issue #128). The
+  brainstorm is placed by the same rule, so a write-up with no step naming an exhibit hands the exhibits over first and the brainstorm
+  follows them, which is where it already was. Measured over the 847 eligible write-ups: 177 cases have a brainstorm, 196 brainstorm
+  beats in all, and **118 of them in 110 cases now come before a later part of the case** (35 immediately before an exhibit). Swift
+  Business (Fuqua 2025-26), one of the two cases in the issue, is a case in point: its steps name "Exhibit #1 ... #2 ... #3" but its
+  exhibits are titled by subject and carry no label, so nothing links the two lists and both its brainstorms still run after all six
+  exhibits. They do both run now, in the book's order; their position did not move. The durable fix is the same field in
+  `private-data/` the #128 entry asks for.
+- **A brainstorm is matched by the word anywhere in the step's title.** "Framework and brainstorm: leveraged versus decentralized",
+  "Calculate NPV of each career and brainstorm other considerations" and "Sample answers to brainstorm X" (about 25 of the 196) become
+  brainstorm beats whose topic is the whole title, because `brainstormTopic` only takes a heading off the front. Those steps were
+  already treated as the case's brainstorm before this change (they set `hasBrainstorm`); what is new is that they are now asked in
+  place, and that a step with analysis in it as well as a brainstorm is asked as a brainstorm only. Reading more of those titles means
+  judging which part of a double-barrelled step is which, which the data does not say.
+- **The brainstorm's own `BeatRecord` is bookkeeping.** It is what makes the case pick up where it left off, and it carries an outcome
+  (`member_moved` when it is handed in, `timed_out` when the clock takes it) that means nothing about how the member did. It is left
+  out of the feedback's "how each exhibit ended" line and out of the dry run's beat counts for that reason; anything else reading
+  `state.beats` has to know it is there.
+- **A second brainstorm shortens the discussion by two minutes** rather than making the case longer (40 minutes stays the ceiling of
+  issue #82). It bites in 21 cases of 847, one of which (BankCo, Stern 2018) has three and loses four minutes of discussion. The first
+  arrangement tried — letting the case run to 42 or 43 minutes — was dropped because it broke a case that used to complete: BankCo's
+  passive dry run then ended at the time limit instead of finishing.
+- **The progress strip can show a step twice and, in a case with no brainstorm, highlights nothing at the end.** `ClockBar` in
+  `src/features/live/liveParts.tsx` marks the current step by the stage, so a mid-case brainstorm moves the marker to Brainstorm and
+  then back to Exhibits, which is accurate but reads oddly. Separately — and this is older than #133 — `stepIndex` is found in the
+  unfiltered `STEPS` list and compared against the index of the *filtered* one, so in a case with no brainstorm the Recommendation
+  pill is never marked current and every pill before it looks finished. Neither was in scope for #133.
+
 ## Asking outright for the answer (issue #142, 2026-11-17)
 
 - **Unverified against a real model.** `refusedTurn` in `supabase/functions/_shared/liveCaseCoach.ts` turns a `refusal` stop reason

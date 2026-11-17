@@ -71,8 +71,11 @@ export interface DryRun {
   unprompted: number;
   reachedRecommendWrite: boolean;
   feedback: boolean;
+  /** The parts of the discussion: a brainstorm is counted on its own, below. */
   beatsTotal: number;
   beats: { outcome: BeatOutcome; hints: number }[];
+  /** The brainstorms the case plans, the ones the member was asked, and the ones they handed in. */
+  brainstorms: { planned: number; asked: number; answered: number };
   stages: StageTime[];
   seconds: number;
   limitSeconds: number;
@@ -118,6 +121,11 @@ export interface DryRunSummary {
   byDesignCauses: Map<string, number>;
   beatsPlanned: number;
   beatsReached: number;
+  brainstormsPlanned: number;
+  brainstormsAsked: number;
+  brainstormsAnswered: number;
+  everyBrainstorm: number;
+  withBrainstorms: number;
   outcomes: Map<BeatOutcome, number>;
   everyBeat: number;
   withBeats: number;
