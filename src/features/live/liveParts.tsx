@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEven
 import { Send } from 'lucide-react';
 import type { DraftKey, LiveView, Message, PublicExhibit } from '../../data/liveCase';
 import { LIVE_EXHIBIT_LIMITS, parseSolutionExhibit } from '../../domain/bookSolution';
-import { formatClock, STAGE_LABEL, STEPS } from '../../domain/liveCase';
+import { caseSteps, formatClock, stageHeading } from '../../domain/liveCase';
 import { tableRepeatsChart } from '../../domain/liveExhibit';
 import { Button } from '../../components/ui/Button';
 import { ExhibitChart } from '../caselog/ExhibitChart';
@@ -82,26 +82,27 @@ export function ExhibitView({ exhibit }: { exhibit: PublicExhibit }) {
   );
 }
 
-/** The two clocks, the stage, and the steps of the case. */
+/** The two clocks, the stage, and the steps of the case (`caseSteps` decides which of them the member is in). */
 export function ClockBar({ view, now }: { view: LiveView; now: number }) {
   const overall = view.endsAt - now;
   const stage = view.stageEndsAt - now;
   const untimed = view.mode === 'learning';
   const closing = !untimed && overall <= 120_000;
-  const stepIndex = STEPS.findIndex((s) => s.stages.includes(view.stage));
+  const steps = caseSteps(view);
   return (
     <div className="sticky top-0 z-30 -mx-4 border-b border-line bg-bg/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
         <div className="min-w-0">
-          <p className="eyebrow">{STAGE_LABEL[view.stage]}</p>
+          <p className="eyebrow">{stageHeading(view)}</p>
           <ol className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Steps of the case">
-            {STEPS.filter((s) => s.id !== 'brainstorm' || view.hasBrainstorm).map((s, i) => (
+            {steps.map((s) => (
               <li
                 key={s.id}
-                aria-current={i === stepIndex ? 'step' : undefined}
-                className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${i === stepIndex ? 'border-accent bg-accent text-accent-ink' : i < stepIndex ? 'border-line bg-surface-2 text-ink-2' : 'border-line text-muted'}`}
+                data-state={s.state}
+                aria-current={s.state === 'current' ? 'step' : undefined}
+                className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${s.state === 'current' ? 'border-accent bg-accent text-accent-ink' : s.state === 'done' ? 'border-line bg-surface-2 text-ink-2' : 'border-line text-muted'}`}
               >
-                {i === stepIndex && <BucketAvatar className="mr-1 inline size-4 -translate-y-px" />}
+                {s.state === 'current' && <BucketAvatar className="mr-1 inline size-4 -translate-y-px" />}
                 {s.label}
               </li>
             ))}

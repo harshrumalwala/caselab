@@ -35,6 +35,41 @@ export const STEPS: { id: string; label: string; stages: Stage[] }[] = [
   { id: 'recommend', label: 'Recommendation', stages: ['recommend_think', 'recommend_write'] },
 ];
 
+/** What the parts of a case that hands over no exhibit are called: the book's steps, put to the member in conversation. */
+const DISCUSSION = 'Discussion';
+
+/** A step of the case as the strip draws it: the one the member is in, the ones behind them, and the ones still to come. */
+export type CaseStep = { id: string; label: string; state: 'done' | 'current' | 'ahead' };
+
+/**
+ * The steps of this case, in order, with the one the member is in marked.
+ *
+ * The list that is drawn and the list that is read are this one list, so the shape of a case cannot move the marker off the step it
+ * belongs to: a case whose book asks for no brainstorm has four steps, and its recommendation is the fourth of the four.
+ *
+ * A case works through its parts in the order the book puts them, and a brainstorm in the middle is followed by more of the discussion.
+ * The marker sits on the part at hand, so it comes back to the discussion with the case; a step the member has already handed in keeps
+ * its finished look while they are away from it, because handing it in is what finishes it. The strip counts nothing and scores
+ * nothing: it says where the member is.
+ */
+export function caseSteps(view: Pick<LiveView, 'stage' | 'hasBrainstorm' | 'exhibitsTotal' | 'submissions'>): CaseStep[] {
+  // The brainstorm is drawn for a case whose book asks for one, and for a case standing in one whatever its plan says.
+  const steps = STEPS.filter((s) => s.id !== 'brainstorm' || view.hasBrainstorm || s.stages.includes(view.stage));
+  const at = steps.findIndex((s) => s.stages.includes(view.stage));
+  const brainstormed = view.submissions.some((s) => s.kind === 'brainstorm');
+  return steps.map((s, i) => ({
+    id: s.id,
+    label: s.id === 'exhibits' && view.exhibitsTotal === 0 ? DISCUSSION : s.label,
+    // Nothing is at hand once the case is over, and all of it is behind the member.
+    state: at < 0 ? 'done' : i === at ? 'current' : i < at || (s.id === 'brainstorm' && brainstormed) ? 'done' : 'ahead',
+  }));
+}
+
+/** The stage above the strip, in the words this case's parts are in: a case that hands over no exhibit is talked through. */
+export function stageHeading(view: Pick<LiveView, 'stage' | 'exhibitsTotal'>): string {
+  return view.stage === 'exhibits' && view.exhibitsTotal === 0 ? DISCUSSION : STAGE_LABEL[view.stage];
+}
+
 export const isThinking = (stage: Stage): boolean => stage === 'framework_think' || stage === 'brainstorm_think' || stage === 'recommend_think';
 export const isWriting = (stage: Stage): boolean => stage === 'brainstorm_write' || stage === 'recommend_write' || stage === 'framework_write';
 

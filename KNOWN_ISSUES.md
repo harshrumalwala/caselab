@@ -391,11 +391,13 @@ assistant saw a claim (for example a build session's report) but did not check i
   issue #82). It bites in 21 cases of 847, one of which (BankCo, Stern 2018) has three and loses four minutes of discussion. The first
   arrangement tried — letting the case run to 42 or 43 minutes — was dropped because it broke a case that used to complete: BankCo's
   passive dry run then ended at the time limit instead of finishing.
-- **The progress strip can show a step twice and, in a case with no brainstorm, highlights nothing at the end.** `ClockBar` in
-  `src/features/live/liveParts.tsx` marks the current step by the stage, so a mid-case brainstorm moves the marker to Brainstorm and
-  then back to Exhibits, which is accurate but reads oddly. Separately — and this is older than #133 — `stepIndex` is found in the
-  unfiltered `STEPS` list and compared against the index of the *filtered* one, so in a case with no brainstorm the Recommendation
-  pill is never marked current and every pill before it looks finished. Neither was in scope for #133.
+- **The progress strip was fixed in issue #150** (2026-11-17). It used to find the current step in the unfiltered `STEPS` list and
+  compare that against the index of the *filtered* one, so in a case with no brainstorm (670 of the 847 eligible) the Recommendation
+  pill was never marked and every pill before it looked finished. `caseSteps` in `src/domain/liveCase.ts` now builds the one list that
+  is drawn and read, and a brainstorm the member has handed in stays filled in while the case goes back to the discussion. What is
+  left: that "already handed in" test reads `view.submissions`, and a brainstorm the clock took with **nothing written** leaves no
+  submission (`captureTimedOut` saves only non-empty text), so in that one case the Brainstorm pill shows as still to come while the
+  discussion carries on. Telling it apart needs something the Edge Function does not send today.
 
 ## Asking outright for the answer (issue #142, 2026-11-17)
 
@@ -493,6 +495,9 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   own **What others see** preview in Profile & privacy does not include the section, so a member can only see what a link holder is
   told by opening their own link; and the card names at most three case types and three industries before "+ n more", with no way to
   see the rest.
+- **The live case's progress strip has been read by tests, not by eyes** (issue #150, 2026-11-17). Screen tests assert which pill is
+  marked in each shape of case, but nobody has opened a live case in a browser since the change, and phone width — where five pills
+  wrap onto two rows — is unchecked, the same gap the rest of the live-case screens have.
 - **No end-to-end coverage of Live case** (PR #79 says so: "E2E untouched (no live case coverage there)"). The live-case logic, handler and
   screens are covered by unit tests with a fake model and an in-memory backend, and `live_case_sessions` by PGlite tests, but nothing in
   `e2e/` starts a case against the real function. The Learning-mode screen was not exercised in a browser by its author.
