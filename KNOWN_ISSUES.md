@@ -422,6 +422,20 @@ assistant saw a claim (for example a build session's report) but did not check i
   272 of the 847 eligible cases now plan the full 25-in-40 ceiling, against 57 before. Nothing runs longer than the ceiling, but a
   14-beat case shares 25 minutes between 14 parts (about 1:45 each before the budget is reshared). Whether a 39-minute case is one a
   member will sit through is a product question the pilot and real use will answer.
+- **What the clock does to the help ladder, not only to the length** (issue #164, found by the interaction pass of 2026-11-17 over the
+  nine live-case PRs of that day, with the pre-#141 engine as the control, and fixed the same day). The entry above records the 1:45-a-beat
+  arithmetic but not what a beat's budget is actually *for*: it is the only thing `behindSchedule` measures a beat against, and that
+  decides whether the ladder skips its second-to-last rung — `lead` in practice (the one rung where Bucket stops asking open questions
+  and says plainly where to look) and `directional_hint` in interview. `beatBudget` shared out the time to the discussion's **planned**
+  end (`d.soft`), so once cases were long enough to reach it with beats still to come, every beat brought out in the flexible time was
+  born with the 30-second floor and was behind schedule 30 seconds in. Measured the same way on both engines (844 live-eligible
+  write-ups, practice and interview, 1,688 runs, a member message every 75 s, never completing a beat and never pressing "move on"):
+  `advance` reached by the skip went from **412 of 4,894 `advance` decisions (8.4%)** before #141 to **2,354 of 7,358 (32.0%)** after it,
+  548 of 1,688 runs and 274 of 844 cases. The fix shares out the time to the discussion's **latest** end (`d.hard`) instead, which is
+  the time it really has: **354 of 7,080 (5.0%)**, 96 runs, 48 cases, 6 beats under a 2:00 budget (was 352) and none at the floor (was
+  20, in 10 cases). The budget moves no stage end, so the 25-in-40 ceiling and the closing reserve are untouched; a stuck member now
+  covers slightly fewer parts in the same time (7,614 beats revealed against 7,908), which is the rung being given back to them.
+  **It takes effect only after `npx supabase functions deploy live-case`.**
 - **The order between an exhibit and a step is a guess wherever no step names an exhibit.** 230 of the 847 write-ups have at least one
   step that names its exhibit; in the rest the exhibits are handed over first and the steps follow, which is the order those cases
   already had. Nothing in the data says where the book meant a step to sit, so a case can work through an exhibit before the sizing step
