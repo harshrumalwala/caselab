@@ -79,7 +79,9 @@ Key mechanics worth knowing:
   `supabase/seeds/library.sql` (one transaction, safe to rerun; it folds duplicate case names, Booth MCG copy wins, then newest book;
   refuses a solution with no question, recommendation or steps). `src/domain/bookSolution.ts` is the parser/validator the app applies
   when it reads a solution; its caps (exhibits 12, columns 16, rows 70, chart points 70, structure buckets 8, clarifying questions 5,
-  takeaways 3, panels 4) silently truncate anything larger, so keep content inside them.
+  takeaways 3, chart series 16, panels 8, plus the character caps in `EXHIBIT_CAPS`) truncate anything larger, so keep content inside
+  them. Truncation is no longer silent: `parseSolutionExhibit` records it on the exhibit (`cut` and `shortened`, measured by
+  `src/domain/exhibitFidelity.ts`), the screen tells the member, and `npm run audit:live` fails on an exhibit that cannot be shown whole.
 - **Edge Function auth.** `notify-request` and `live-case` have `verify_jwt = false` in `supabase/config.toml` because the gateway
   check cannot read this project's ES256 tokens; each function checks the caller itself with `auth.getUser`. Keep that check in place.
 - **Live case.** `supabase/functions/_shared/liveCase.ts` holds the clock, stages, modes (`practice | interview | learning`), hint
