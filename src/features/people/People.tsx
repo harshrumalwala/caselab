@@ -35,17 +35,8 @@ function SharedChips({ sharing }: { sharing: SharingPrefs }) {
   );
 }
 
-/** Search box and member list. Used for signed-in members and for visitors without an account. */
-export function Directory({
-  reader,
-  onOpen,
-  publicView = false,
-}: {
-  reader: CommunityReader;
-  onOpen: (userId: string) => void;
-  /** Visitors without an account: only the shared parts they can actually see are summarised. */
-  publicView?: boolean;
-}) {
+/** Search box and member list. Signed-in members only: there is no member list for visitors without an account. */
+export function Directory({ reader, onOpen }: { reader: CommunityReader; onOpen: (userId: string) => void }) {
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<
     { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; people: Profile[] }
@@ -108,9 +99,7 @@ export function Directory({
             <EmptyState icon={<Users className="size-6" />} title={query ? 'No members found' : 'No members to show yet'} compact>
               {query
                 ? "Try a different spelling. Members who chose not to appear here can't be found."
-                : publicView
-                  ? 'Members choose whether to appear here. When someone does, they show up in this list.'
-                  : "When classmates join and appear in People, they'll show up here."}
+                : "When classmates join and appear in People, they'll show up here."}
             </EmptyState>
           </Card>
         ) : (
@@ -129,10 +118,10 @@ export function Directory({
                     <span className="min-w-0">
                       <span className="flex items-center gap-2">
                         <span className="truncate font-semibold text-ink">{p.displayName}</span>
-                        {!publicView && <LevelTag person={p} className="shrink-0" />}
+                        <LevelTag person={p} className="shrink-0" />
                       </span>
                       <span className="block truncate text-xs text-muted">{p.mbaClass || 'Member'}</span>
-                      {!publicView && <SharedChips sharing={p.sharing} />}
+                      <SharedChips sharing={p.sharing} />
                     </span>
                   </span>
                   <ChevronRight className="size-4 shrink-0 text-muted" />
@@ -178,8 +167,8 @@ export function People() {
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Community</h1>
         <p className="text-sm text-muted">
-          Find a fellow member, see what they've chosen to share, and pick a case to give them. Members can choose to share with
-          other members only, or with anyone.
+          Find a fellow member, see what they've chosen to share, and pick a case to give them. Members share with each other here,
+          and can hand out a personal link that works without an account.
         </p>
       </div>
       <CommunityTabs current="members" />

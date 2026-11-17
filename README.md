@@ -9,7 +9,7 @@ Everything else (ratings, notes, sharing) is optional and one tap away.
 - **Live case with Bucket**: the headline feature, with a tab of its own (and the banner at the top of the Dashboard). Practise a whole casebook case in writing against one clock, as long as the case has in it (23 to 40 minutes), with Bucket (an AI interviewer) giving the prompt, answering clarifying questions, showing the exhibits and keeping the case moving; feedback at the end, and the case is logged for you
 - **Dashboard**: totals, skill averages, trends, case-type and industry coverage, next-practice suggestions, weekly history, milestones
 - **My Case Log**: searchable, filterable list of your cases with full-detail view, edit and delete. It has a second view, **Improvement Areas** (thin spots in your coverage, skills to sharpen, and a searchable history of what you've learned), so the top bar needs one tab for both
-- **A public front page**: leads with Bucket (the headline, a "Meet Bucket" section with a picture of a case in progress, and a Live case link in the top bar), and anyone, with no account, can search the members who chose to be visible and read what they share
+- **A public front page**: leads with Bucket (the headline, a "Meet Bucket" section with a picture of a case in progress, and a Live case link in the top bar). There is nobody to browse out there: no member list and no search. The only profile anyone can open without an account is one whose owner gave them their personal link
 - **Warm-up**: an optional mental-math sprint of 30, 60 or 120 seconds for a break between cases, across fifteen kinds of quant question (your best score and streak for each length follow your account)
 - **Community**: one tab with two views. **Members**: find a fellow member, see only what they've chosen to share, and work out which case to give them. **Inbox**: practice requests and your conversations together
 - **Practice requests**: ask a member to case (with a proposed case and time), and answer when someone asks you. Open to every member, and short notes only
@@ -110,8 +110,10 @@ Press **N** anywhere in the app (outside a text field) to open the Log Case form
 
 ## Accounts
 
-**Browsing needs no account.** The front page shows the People search to anyone who isn't signed in, but only for members who
-chose to be visible (see below). **Creating an account** takes four steps: email and password, verify the emailed link, choose a name (and optionally your MBA
+**A profile link needs no account.** The front page itself shows nothing about anybody: there is no member list and no search for
+people who aren't signed in. A member who switches their link on can hand it out, and anyone holding it opens that one profile and
+sees what that member shares (see below). Finding people, and being found by them, happens inside Community, which needs an account.
+**Creating an account** takes four steps: email and password, verify the emailed link, choose a name (and optionally your MBA
 class) and sharing preferences, then start logging. **Signing in** is unchanged. **Forgot password?** emails a reset link that
 asks for a new password. The forms never reveal whether an email already has an account.
 
@@ -130,7 +132,8 @@ only the caller's own login; everything else follows through "on delete cascade"
 
 Everything is **private by default**. Other members can only see what you explicitly share, and only if they are signed in
 with a verified email. Open **Profile & privacy** (the person icon in the header). There are two audiences: **signed-in
-members** (the default once you appear in People) and, only if you switch it on, **visitors without an account**.
+members** (the default once you appear in People) and, only if you switch it on, **people you give your profile link to**, who
+need no account.
 
 | Setting | Shares |
 | --- | --- |
@@ -147,13 +150,15 @@ members** (the default once you appear in People) and, only if you switch it on,
 
 Scores, feedback and notes only apply to cases that are shared, so they switch on after **Case history**.
 
-**Visible without an account** is a separate, extra switch under "Who can see me", **off by default** (nobody who joined before
-this existed is public). Turning it on asks you to confirm, because anyone on the internet could then see your name, class
-and the case history, scores and improvement focus you've chosen to share. The same switches decide what: **written feedback,
-learning notes and other notes are not shown to visitors unless you turn on Open everything** (below). A case set to "keep this case
-private" is hidden from everyone; a case set to "share the case name only" or "share this case in full" is shown to visitors
-too once your profile is public (a "full" case shows its scores and improvement focus, and its text only if you opened everything). Profile & privacy
-previews each audience separately. Turning it off, or no longer appearing in People, withdraws you from the public page at once. Each switch saves the
+**People with my link can see my profile** is a separate, extra switch under "Who can see me", **off by default**. Turning it on
+asks you to confirm, because anyone you hand the address to — and anyone they pass it on to — can then see your name, class and the
+case history, scores and improvement focus you've chosen to share, with no account. Nobody can find you any other way: there is no
+public list, search or count, and that is enforced in the database, not just left off the page (see "How privacy is enforced").
+The same switches decide what is shown: **written feedback, learning notes and other notes are not shown unless you turn on Open
+everything** (below). A case set to "keep this case private" is hidden from everyone; a case set to "share the case name only" or
+"share this case in full" is shown through your link too (a "full" case shows its scores and improvement focus, and its text only if
+you opened everything). Profile & privacy previews each audience separately and shows the address with a **Copy link** button while
+the switch is on. Turning it off, or no longer appearing in People, closes the link at once. Each switch saves the
 moment you flip it, and **"What other members see"** at the bottom shows exactly what the database is serving about you.
 
 **One-click private.** Any case can be hidden from every other member, whatever your profile shares: switch on **Keep this case
@@ -176,7 +181,7 @@ to members who can see your profile and never to visitors. Use **I've finished t
 only when you really did the entire book.
 
 **Burned books and cases for visitors.** Members can always see what you've burned (on your profile, and in the "What others see"
-preview). If you're visible without an account you can also switch on **Show burned books and cases to visitors**: it is off by default, and
+preview). If your profile link is on you can also switch on **Show burned books and cases to visitors**: it is off by default, and
 while it is off the public copy is empty, so there is nothing to read. Visitors can't use "find a case for them", so for them it is display
 only. They never count in your totals either way.
 
@@ -185,7 +190,7 @@ use your profile settings (the default), keep this case private, share only its 
 feedback and notes, even if your profile shares none of those). Nobody has to touch it when logging.
 
 **Who cased me** is its own switch, **off by default**, because it names a third person who hasn't agreed to be listed. When on, the
-partner name appears on every one of your cases that is shared at all, to members and (if your profile is public) to visitors; a case set to
+partner name appears on every one of your cases that is shared at all, to members and (if your profile link is on) to anyone holding it; a case set to
 "keep this case private" never shows it. The casebook or source of each case is part of **Case history**, so it is shown with it.
 
 **Typing a name.** The "Interviewer / practice partner" box on a case, and "Who you interviewed" on an interviewed case, suggest the names you
@@ -202,17 +207,16 @@ there is no copy of the data to go stale.
 
 **Open everything** is one switch for people who want to show their whole log: every case you share (one that follows your profile,
 or is set to "share in full") shows its scores, improvement focus, written feedback, learning notes and Other notes, to members and, if
-your profile is visible without an account, to visitors. Visitors see the usual card first; a case that has detail gets a **See more
-details** button that opens it. Turning it on while you are visible without an account asks you to confirm, because it changes what
-visitors read. "Name only" and private cases stay as they were, "Who cased me" stays its own switch, and long text is cut to 2000
+your profile link is on, to anyone holding it. They see the usual card first; a case that has detail gets a **See more
+details** button that opens it. Turning it on while your link is on asks you to confirm, because it changes what people without an
+account read. "Name only" and private cases stay as they were, "Who cased me" stays its own switch, and long text is cut to 2000
 characters in the public copy.
 
-**Only people with my link.** When you are visible without an account you can choose where visitors find you: **on the front page and in
-search** (the default), or **only people with my link**. A link-only profile is not on the front page, in search, in "Cased recently" or in
-any count, but anyone who has your profile address (it contains your member ID) can open it and sees exactly what visitors see. Profile &
-privacy shows the address with a Copy link button. The ID is permanent, so the only way to cut off someone who has the link is to switch
-visibility off. This is enforced in the database: visitors can read only the directory from the public tables, and open a single member
-through two functions that need the exact ID.
+**Your profile link.** The address is `…/#/people/<your member ID>`; the ID is a random 128-bit value nobody can guess. While the
+switch is on, anyone who has the address opens your profile without signing in and sees exactly what the preview shows. The ID is
+permanent and a link can be passed on, so the only way to cut it off is to switch the link off again. This is enforced in the
+database: no API role can read the public tables at all, with any filter, order, count or range, and the only way in is two functions
+that answer on one exact ID.
 
 **Never shared, whatever you choose:** your email address. Your Other notes stay private unless you turn on Open everything.
 
@@ -241,11 +245,13 @@ Privacy is enforced in the database, not in the screens:
   at all, so no query, filter, sort or count can leak them. Turning a switch off removes the data immediately.
 - It's read-only for members, internal functions can't be called through the API, and signed-in users get only the privileges
   they need.
-- **Visitors without an account** (the database's `anon` role) have **no privilege at all** on `cases`, `profiles` or
-  `shared_cases`. They read two separate tables, `public_profiles` and `public_shared_cases`, which hold only members who
-  switched public on and only the fields visitors may see (written feedback and notes only if the member opened everything, and never the private case id). Link-only members are left out of what these tables return: visitors reach one only through functions that take the exact ID. Because
-  those are the only tables they can touch, they can't filter, sort, count or even estimate their way to anything that isn't
-  public, and the tables are filled by the same triggers, so changes apply at once.
+- **People without an account** (the database's `anon` role) have **no privilege at all** on `cases`, `profiles`,
+  `shared_cases` — or on `public_profiles` and `public_shared_cases`. Those two tables still exist and are still filled by the
+  same triggers for members who switched their link on (with free text only if the member opened everything, and never the private
+  case id), but no API role may read them: every direct request is refused, whatever the filter, order, count or range, so there is
+  no list to page through and nothing to enumerate. The only way out is `public_person(id)` and `public_person_cases(id)`,
+  `SECURITY DEFINER` functions granted to `anon` that answer on one exact member ID — the value in that member's own profile link —
+  and return nothing for anyone who has not switched their link on. Changes apply at once, as before.
 - Membership (`is_member_id()`) requires a verified email and is the single place to change who counts as a member.
 
 These rules are tested directly against a real Postgres (see Tests), including attempts to bypass the interface.
@@ -266,7 +272,7 @@ These rules are tested directly against a real Postgres (see Tests), including a
 | `interviewed_cases` | Cases you ran as the interviewer: date, title, book, type, industry, who you interviewed, what you told them and what you learned. Same case-type list as `cases`, with length limits. Never joined to `cases`, so it can't reach a total, rating, trend or the weekly goal | Only you |
 | `weekly_goal` | Your weekly goal in cases (one row per member, 1 to 14; no row means no goal). Progress and streak are worked out from your cases, so nothing else is stored | Only you |
 | `shared_cases` | The owner-approved projection of cases (see above). Written only by triggers | Verified members |
-| `public_profiles`, `public_shared_cases` | Copies for members who chose to be public (free text only if they opened everything; link-only members are excluded from table reads). Written only by triggers | Anyone, including visitors without an account |
+| `public_profiles`, `public_shared_cases` | Copies for members who switched their profile link on (free text only if they opened everything). Written only by triggers | No API role at all: only `public_person(id)` / `public_person_cases(id)`, by exact member ID |
 
 Averages, coverage, trends, suggestions, learning history and custom industries are calculated in the browser from your own
 rows, so they need no tables, and your personal dashboard can never include other members' records. Fields that are optional
@@ -722,7 +728,7 @@ There is no group administration, group chat or social feed: members, profiles, 
 `npm test` runs the whole fast suite (about 170 tests) covering:
 
 - **Database**: the real migrations run in Postgres (PGlite): required vs optional columns, rating and case-type rules, and row level security for personal data (own rows only, no cross-user read/update/delete/insert, no anonymous access, signed-out writes refused, cascade on user delete)
-- **Public visitors**: the `anon` role tried as a scraper would: nothing public by default, opt-in only, free text only for members who opened everything (cut to 2000 characters), link-only members unlistable and unsearchable but reachable by exact id, private cases hidden, no access to any member or personal table (so no filters, counts or planner estimates over hidden data), no writes or function calls, length and skill-name limits, and former members removed by `revoke_nonmembers()`
+- **People without an account**: the `anon` role tried as a scraper would, and the `authenticated` role tried the same way: the two public tables refuse every direct read (select, column select, count, order, limit, offset, filter and planner estimate), hold no column grant for either role and have no policy left, so nothing can be listed, searched, counted or paged; the only way in is `public_person(id)` / `public_person_cases(id)` with an exact member ID, which returns the same fields as before, nothing for an unknown ID, nothing for a member who never switched their link on and nothing the moment one switches it off; every old visibility combination keeps the meaning it had and nobody becomes more visible; nothing public by default, opt-in only, free text only for members who opened everything (cut to 2000 characters), private cases hidden, no access to any member or personal table, no writes or function calls, length and skill-name limits, and former members removed by `revoke_nonmembers()`
 - **Privacy**: three verified members and one unverified, tried as an attacker would with direct queries: nothing shared by default; each switch reveals only its own field; scores need case history; per-case overrides (private, name only, full); changes apply immediately and leave no stale data; unlisted members vanish; `other_notes` never appears and the partner only with its own switch; another member can't read, edit or delete your cases or profile, write the shared table, or call the internal functions; filters, sorting and counts can't reveal hidden values; unverified and anonymous users get nothing; least-privilege table grants
 - **Community logic**: loose case-title matching, pairing (what to offer, what to avoid, thin areas) and the filters
 - **Accounts**: sign-up, verification, resend, expired links, password reset, onboarding with everything off by default
@@ -778,7 +784,7 @@ private to its owner, and account deletion refuses anything but the exact word. 
 
 Use throwaway accounts for A and B: the tests create their profiles and flip their sharing switches, then leave them **unlisted** with
 nothing shared, so they never appear in the Community list or search for real members. They are listed only while the suite runs (the
-directory checks need that), which is a few minutes. (A member can delete their whole account from Settings; the live checks don't use that,
+member-search checks need that), which is a few minutes. (A member can delete their whole account from Settings; the live checks don't use that,
 so the throwaway accounts stay.)
 
 To create a throwaway account without sending any email: Supabase dashboard → Authentication → Users → Add user → Create new user, with an
@@ -796,7 +802,7 @@ for names starting "E2E".
 - Case matching is by title only, so very different spellings of the same case can be missed, and different cases that share
   most of their words can be flagged as "might overlap". It never decides for you.
 - Member names aren't verified: anyone with a verified email can choose any display name, and no email is shown to check it. Restricting sign-up to Booth addresses (see Set it up, step 2) is the fix if impersonation becomes a concern.
-- Anything a member makes public can be read, copied and scraped by anyone, and can't be recalled once copied. That is why it is opt-in, off by default, confirmed, and excludes written text. Visitors can page through the public members and their cases; there is no rate limit beyond Supabase's own.
-- Per-case settings other than "private" (name only, full) also apply to visitors once a profile is public; "private" is the only per-case way to hide a case from everyone.
+- Anything a member shows through their profile link can be read, copied and scraped by whoever holds the link, and can't be recalled once copied. That is why it is opt-in, off by default, confirmed, and excludes written text. Nobody can page through members any more (the tables are closed to every API role), but a link can be passed on, and the member ID in it is permanent: switching the link off is the only way to cut it.
+- Per-case settings other than "private" (name only, full) also apply to anyone with the link once it is on; "private" is the only per-case way to hide a case from everyone.
 - The People directory shows listed members alphabetically (first 50 per search); there is no pagination or profile photo.
 - CAPTCHA is recommended for public sign-up but isn't wired in yet (see Set it up, step 2).

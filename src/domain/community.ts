@@ -94,10 +94,11 @@ export interface Profile {
   mbaClass: string;
   /** Appear in People search (members). */
   listed: boolean;
-  /** Also visible to people without an account. Needs `listed`. Free-text fields are never shown to them. */
+  /**
+   * People with this member's profile link can open it without an account. Needs `listed`. Nobody can find them
+   * any other way: there is no public list or search. Free-text fields are never shown unless they open everything.
+   */
   publicProfile: boolean;
-  /** Visible without an account, but only to people who have this member's profile address. Needs `publicProfile`. */
-  publicLinkOnly: boolean;
   /** Casebooks this member has already burned (for example solo). Others picking a case for them skip these. */
   burnedBooks: string[];
   /** Individual cases they've burned. Not practice cases: kept apart from the case log, so they never count in any total. */

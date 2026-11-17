@@ -512,8 +512,8 @@ describe('burned books', () => {
     await db.query('update public.profiles set public_profile = true where user_id = $1', [ALICE]);
     await as(db, 'anon');
     expect(await fails('select burned_books from public.profiles')).toMatch(/permission denied/);
-    // Public, but without the switch: there is a public row, and its burned list is empty.
-    expect((await db.query('select burned_books, share_burned from public.public_profiles')).rows).toEqual([{ burned_books: [], share_burned: false }]);
+    // Visible by link, but without the switch: their link opens a row whose burned list is empty.
+    expect((await db.query('select burned_books, share_burned from public.public_person($1)', [ALICE])).rows).toEqual([{ burned_books: [], share_burned: false }]);
   });
 
   it("does not let another member change someone's list", async () => {
@@ -577,7 +577,7 @@ describe('burned cases', () => {
     await db.query('update public.profiles set public_profile = true where user_id = $1', [ALICE]);
     await as(db, 'anon');
     expect(await fails('select burned_cases from public.profiles')).toMatch(/permission denied/);
-    expect((await db.query('select burned_cases from public.public_profiles')).rows).toEqual([{ burned_cases: [] }]);
+    expect((await db.query('select burned_cases from public.public_person($1)', [ALICE])).rows).toEqual([{ burned_cases: [] }]);
   });
 
   it('is not a practice case: it never creates a case or a shared case', async () => {

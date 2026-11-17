@@ -129,7 +129,7 @@ export const MY_PROFILE: Profile = {
   displayName: 'Test User',
   mbaClass: 'Class of 2027',
   listed: true,
-  publicProfile: false, publicLinkOnly: false, burnedBooks: [], burnedCases: [],
+  publicProfile: false, burnedBooks: [], burnedCases: [],
   sharing: NO_SHARING,
 };
 

@@ -165,6 +165,10 @@ assistant saw a claim (for example a build session's report) but did not check i
   load-related timeouts are suspected, not confirmed. Heavy work running at the same time (a render test, other test runs) may have
   contributed. Use `npx vitest run <file>` for single files.
 - **No linter** exists (`package.json` has no `lint` script); CI (`.github/workflows/ci.yml`) runs typecheck, tests and build only.
+- **Two live checks fail until the #96 migration is applied** (they are the check that the live database matches the code, so this is
+  the intended failure, not a bug): "cannot list, search, count or page through members at all" in `e2e/community.e2e.test.ts` and
+  "are closed to visitors and to members, however the read is shaped" in `e2e/deployed.e2e.test.ts`. Both have a NOTE saying so.
+  `npm run test:e2e` is not part of CI, so CI stays green either way.
 - **`npm run test:e2e` talks to the real (production) Supabase project** in `.env.local` using accounts in the git-ignored
   `.env.e2e.local`. It creates and removes rows titled `ZZ CaseLab e2e ...`. It is not part of CI. It broke once because
   `e2e/app.e2e.test.tsx` looked for the old front-page headline ("Case smarter"); fixed in PR #78 to look for "Case with Bucket".
@@ -183,7 +187,16 @@ assistant saw a claim (for example a build session's report) but did not check i
   said it had not started a Learning case on the live site and had not confirmed that Vercel deployed the merge. This documentation
   pass did not see the owner's approval for that merge and deploy (the report did not mention it). Not verified.
 - **CAPTCHA is not wired in** for public sign-up; abuse protection is Supabase's built-in rate limits (README step 2 and Limitations).
-- **Public directory has no rate limit** beyond Supabase's own; anything a member makes public can be scraped.
+- **The public directory is gone (issue #96), but the migration that enforces it is not applied yet.** The app shipped in that PR has no
+  front-page list or search, and `src/data/supabaseCommunity.ts` no longer reads the public tables. Until the owner runs
+  `npx supabase db push` for `supabase/migrations/20261124120000_link_only_profiles.sql`, **production `anon` still holds `SELECT` on
+  `public_profiles` and `public_shared_cases`**, so every member who switched visibility on is still listable and scrapeable straight
+  through the API. Two e2e tests are written for the post-migration world and fail until then (see Tests and CI). Once applied, a
+  member's own link is still passable to anyone and the member ID in it is permanent: "reset my link" is issue #97.
+- **Two historical columns stay in the schema with nothing reading them**: `profiles.public_link_only` (and its
+  `profiles_link_only_requires_public` check) and `public_profiles.in_directory`. The migration leaves them, and the app keeps writing
+  `public_link_only = public_profile` so the old check still holds for a browser running either version. Dropping them is a separate
+  tidy-up that would have to re-create `sync_public_profile()` and `revoke_nonmembers()`.
 - **Messages are not end-to-end encrypted**; reports sit in a table that only the Supabase dashboard can read, with no in-app admin.
 - **Display names are not verified.**
 - **Edits on two devices at once**: last save wins. The tour is remembered per browser. No offline mode.

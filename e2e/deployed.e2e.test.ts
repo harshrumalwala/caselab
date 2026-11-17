@@ -116,6 +116,39 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
     });
   });
 
+  describe('the tables behind a profile link', () => {
+    // These two are read ONLY through public_person(id) / public_person_cases(id) (checked above). A direct read by
+    // anyone, with any filter, count, order or range, must come back empty or refused.
+    // NOTE: this fails until the owner applies 20261124120000_link_only_profiles.sql, which is the point: it is the
+    // check that the live database matches the code.
+    const tables = ['public_profiles', 'public_shared_cases'] as const;
+
+    it('are closed to visitors and to members, however the read is shaped', async () => {
+      for (const table of tables) {
+        for (const who of [anon, a.client]) {
+          const shapes = [
+            who.from(table).select('*'),
+            who.from(table).select('user_id'),
+            who.from(table).select('*', { count: 'exact', head: true }),
+            who.from(table).select('*').order('case_date', { ascending: false }).range(0, 99),
+          ];
+          for (const shape of shapes) {
+            const { data, error, count } = await shape;
+            expect(error === null ? { rows: data ?? [], count: count ?? 0 } : { rows: [], count: 0 }, table).toEqual({ rows: [], count: 0 });
+          }
+        }
+      }
+    });
+
+    it('cannot be written to either', async () => {
+      for (const table of tables) {
+        for (const who of [anon, a.client]) {
+          expect((await who.from(table).insert({ user_id: a.userId })).error, `${table} write`).not.toBeNull();
+        }
+      }
+    });
+  });
+
   describe('tables that hold requests, conversations and messages', () => {
     const closed = ['practice_requests', 'practice_blocks', 'conversations', 'conversation_members', 'messages', 'message_reports'];
 

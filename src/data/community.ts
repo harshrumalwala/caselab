@@ -2,10 +2,11 @@ import type { Rating, SkillGroupKey, SkillKey, CaseType } from '../domain/consta
 import type { SharedInterviewed } from '../domain/interviewed';
 import { normalizeBurnedBooks, normalizeBurnedCases, type BurnedCase, type Profile, type ProfileInput, type SharedCase } from '../domain/community';
 
-/** Read-only access to member profiles and shared cases. Visitors without an account only ever get this. */
-export interface CommunityReader {
-  /** Listed members whose name contains the text (empty text lists members alphabetically). */
-  searchPeople(query: string): Promise<Profile[]>;
+/**
+ * What someone WITHOUT an account can read: one member at a time, and only if they have that member's exact
+ * profile link. There is no list, search or count for visitors; the id in the link is the only key.
+ */
+export interface PublicReader {
   getPerson(userId: string): Promise<Profile | null>;
   /** The cases that person has chosen to share with this audience. */
   getSharedCases(ownerId: string): Promise<SharedCase[]>;
@@ -13,17 +14,10 @@ export interface CommunityReader {
   getInterviewed(ownerId: string): Promise<SharedInterviewed[]>;
 }
 
-/** A member who has cased lately, with the date of their most recent shared case. */
-export interface RecentCaser {
-  person: Profile;
-  /** yyyy-mm-dd: the date of the newest case they share with this audience. */
-  lastCased: string;
-}
-
-/** What visitors without an account can read: the member list plus who has cased most recently. */
-export interface PublicReader extends CommunityReader {
-  /** Up to `limit` members, newest case first. Only cases that are visible to visitors count, never private ones. */
-  recentPeople(limit: number): Promise<RecentCaser[]>;
+/** Read-only access for a signed-in member: the same reads, plus finding other members by name. */
+export interface CommunityReader extends PublicReader {
+  /** Listed members whose name contains the text (empty text lists members alphabetically). */
+  searchPeople(query: string): Promise<Profile[]>;
 }
 
 /** What the app needs from the community side of the database for a signed-in member. */
@@ -81,7 +75,6 @@ export function rowToProfile(r: ProfileRow): Profile {
     mbaClass: r.mba_class ?? '',
     listed: r.listed,
     publicProfile: r.public_profile ?? false,
-    publicLinkOnly: r.public_link_only ?? false,
     burnedBooks: r.burned_books ?? [],
     burnedCases: parseBurnedCases(r.burned_cases),
     level: r.share_level && typeof r.level === 'number' ? r.level : null,
@@ -106,8 +99,11 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
     display_name: input.displayName.trim(),
     mba_class: input.mbaClass.trim() === '' ? null : input.mbaClass.trim(),
     listed: input.listed,
-    public_profile: input.listed && input.publicProfile, // public needs listed (also a database rule)
-    public_link_only: input.listed && input.publicProfile && input.publicLinkOnly, // link only needs public (also a database rule)
+    public_profile: input.listed && input.publicProfile, // visible without an account needs listed (also a database rule)
+    // Everyone visible without an account is now reachable by their link alone: never listed, searched or counted.
+    // The column is history (nothing reads it), but it is still written so the database's own rule
+    // "link only needs public" holds whichever version of the schema this app is talking to.
+    public_link_only: input.listed && input.publicProfile,
     burned_books: normalizeBurnedBooks(input.burnedBooks),
     burned_cases: normalizeBurnedCases(input.burnedCases),
     share_cases: input.sharing.cases,
@@ -131,9 +127,7 @@ export function profileToRow(input: ProfileInput): Omit<ProfileRow, 'user_id'> {
 export const SHARED_COLUMNS =
   'share_id, owner_id, case_date, title, source, partner, case_type, industry, overall, skill_scores, feedback, improvement_area, notes, other_notes';
 
-/** The public tables hold only public members and fields; these are the columns visitors without an account may read. */
-export const PUBLIC_PROFILE_COLUMNS = 'user_id, display_name, mba_class, share_cases, share_overall, share_skills, share_improvement, share_partner, share_details, share_burned';
-
+/** One row of `public_person(id)`: a member as someone with their link knows them. */
 export interface PublicProfileRow {
   user_id: string;
   display_name: string;
@@ -157,7 +151,6 @@ export function rowToPublicProfile(r: PublicProfileRow): Profile {
     mbaClass: r.mba_class ?? '',
     listed: true,
     publicProfile: true,
-    publicLinkOnly: false,
     // Empty unless the member also switched on showing them to visitors.
     burnedBooks: r.burned_books ?? [],
     burnedCases: parseBurnedCases(r.burned_cases),
@@ -177,9 +170,6 @@ export function rowToPublicProfile(r: PublicProfileRow): Profile {
     },
   };
 }
-export const PUBLIC_SHARED_COLUMNS =
-  'share_id, owner_id, case_date, title, source, partner, case_type, industry, overall, skill_scores, improvement_area, feedback, notes, other_notes';
-
 export interface SharedRow {
   share_id: string;
   owner_id: string;

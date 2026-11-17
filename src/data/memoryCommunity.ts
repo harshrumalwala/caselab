@@ -23,40 +23,20 @@ const forVisitors = (s: SharedCase, owner: Profile | undefined): SharedCase =>
   owner?.sharing.details ? s : { ...s, feedback: null, notes: null, otherNotes: '' };
 
 /**
- * In-memory read access for people without an account: only members who are listed AND public, and no free text.
+ * In-memory read access for people without an account: one member at a time, by exact id (the id in that member's
+ * profile link), only if they are listed AND visible without an account, and no free text. There is no search or
+ * list, exactly as the database has none for them.
  * `profiles` is read live so tests can change a member's settings after creating the reader.
  */
 export function createMemoryPublic(opts: { profiles: () => Profile[]; shared?: SharedCase[] }): PublicReader & { calls: string[] } {
   const calls: string[] = [];
   const isPublic = (p: Profile) => p.listed && p.publicProfile;
-  // Link-only members aren't in any list, search or "recent" result; they can still be opened by exact id.
-  const inDirectory = (p: Profile) => isPublic(p) && !p.publicLinkOnly;
   return {
     calls,
-    async searchPeople(query: string) {
-      calls.push('searchPeople');
-      const q = query.trim().toLowerCase();
-      return opts
-        .profiles()
-        .filter((p) => inDirectory(p) && p.displayName.toLowerCase().includes(q))
-        .map(asVisitorsSee)
-        .sort((a, b) => a.displayName.localeCompare(b.displayName));
-    },
     async getPerson(userId: string) {
       calls.push('getPerson');
       const found = opts.profiles().find((p) => p.userId === userId && isPublic(p));
       return found ? asVisitorsSee(found) : null;
-    },
-    async recentPeople(limit: number) {
-      calls.push('recentPeople');
-      const people = opts.profiles().filter(inDirectory);
-      return people
-        .flatMap((person) => {
-          const dates = (opts.shared ?? []).filter((s) => s.ownerId === person.userId).map((s) => s.date);
-          return dates.length ? [{ person: asVisitorsSee(person), lastCased: dates.reduce((a, b) => (a > b ? a : b)) }] : [];
-        })
-        .sort((a, b) => b.lastCased.localeCompare(a.lastCased))
-        .slice(0, limit);
     },
     async getSharedCases(ownerId: string) {
       calls.push('getSharedCases');
@@ -113,7 +93,7 @@ export function createMemoryCommunity(opts: {
       const i = profiles.findIndex((p) => p.userId === opts.me);
       // As in the database: no level once sharing is off, and an existing one is kept while it stays on.
       const level = input.sharing.level ? (profiles[i]?.level ?? null) : null;
-      const saved: Profile = { userId: opts.me, ...input, level, publicProfile, publicLinkOnly: publicProfile && input.publicLinkOnly };
+      const saved: Profile = { userId: opts.me, ...input, level, publicProfile };
       if (i === -1) profiles.push(saved);
       else profiles[i] = saved;
       return saved;
