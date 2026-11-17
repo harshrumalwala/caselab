@@ -29,7 +29,8 @@ assistant saw a claim (for example a build session's report) but did not check i
   loaded part by part; the README does not say so. Ordering matters: non-solution statements first, solution inserts after.
 - **Manual data patches exist only in the assembled files.** For example `pointLabels: false` was set by hand on the Copier Co. scatter and
   on the Paterno Mutual "Figure 2" scatter, and one Part B takeaway in Electric Battery Manufacturer was reworded, directly in
-  `private-data/solutions/*.json`. Re-assembling from the reader outputs would silently undo them.
+  `private-data/solutions/*.json`. The two captions and nine labels of issue #139 (2026-11-17) were edited the same way.
+  Re-assembling from the reader outputs would silently undo them.
 - **`buildLibrarySeed.mjs` reads every `private-data/casebooks/*.json` except `*.index.json`** and every `private-data/solutions/*.json`;
   a file with the wrong name or shape is either picked up wrongly or ignored. The new-analysis files are named `solutions-waveN.json`.
 - **The parser's caps, and what they still cut** (issue #95 made every cut visible; none of them bites the library today).
@@ -40,12 +41,22 @@ assistant saw a claim (for example a build session's report) but did not check i
   left behind on the exhibit's `cut` and `shortened` lists (`exhibitLoss` in `src/domain/exhibitFidelity.ts`), the screen says so on the
   exhibit, and `npm run audit:live` exits non-zero on any exhibit that cannot be shown whole. What is *still* cut, and cannot be
   helped by a bigger number: a chart heading (60 characters), an axis title (80), a footnote (240) and a side note (60) are single lines
-  inside a panel, so 9 exhibits in the library have one cut to length. Those are counted as `shortened`, not as content gone, and the fix
-  is a shorter line in the write-up (a content change, the owner's call).
+  inside a panel, so a line longer than that is cut to length. Those are counted as `shortened`, not as content gone, and the fix is a
+  shorter line in the write-up (a content change, the owner's call). **The 9 exhibits that had one were rewritten on 2026-11-17**
+  (issue #139, across Avalon, Cosmetics Company, Grad-U-Date, Kellogg Capital, LabCo, Orange Yoga Studio and Take Your Pills!), so
+  `npm run audit:live` now reports 0 `exhibit_text_shortened`. One side-note line that could not hold its two figures in 60 characters
+  was split into further list items rather than shortened, which is why that chart now carries more side notes than before. The write-ups
+  are fixed; **production only changes when the regenerated `supabase/seeds/library.sql` is loaded**.
   The per-exhibit caps are `SOLUTION_EXHIBIT_LIMITS` and `LIVE_EXHIBIT_LIMITS` (40 columns / 400 rows / 400 chart points), both in that
   file; the live case passes the second to match `readExhibits` in `supabase/functions/_shared/liveCaseCoach.ts`. **They are no longer
   kept in step by hand**: `src/data/liveExhibitCaps.test.ts` sends an oversized exhibit through the real `readExhibits` and then through
   the screen's parser and fails if the screen cuts anything the Edge Function let through.
+- **Three labels under a chart's axis are cut to length and nothing reports it.** `exhibitLoss` compares a `belowRows` row by how many
+  values it has, never its label, so a label over the parser's 40-character cap is shortened in silence: News Co. (Darden 2023-24)
+  Exhibit 1, FLC Sports League (Ross 2022) Exhibit 2 and Dealer Jack's (Fuqua 2017) Exhibit #1, measured 2026-11-17. The audit cannot
+  see them, so they were left alone (issue #139 covered the seven cases the audit flags). Either shorten those three labels in
+  `private-data/solutions/*.json` at the next reload, or compare `belowRows` labels in `exhibitFidelity.ts` first so the audit finds any
+  others.
 - **A chart kind we do not draw is not counted as a loss.** `exhibitLoss` ignores a chart whose kind is outside `DRAWN_KINDS` (marimekko,
   waterfall, bubble, dual axis, maps): the exhibit stays the book's own table, which is the settled trade (ROADMAP R15). No write-up
   carries such a chart today (measured: 0 of 1,792 exhibits on 2026-11-16), so the rule costs nothing; if one is ever added, the member
@@ -128,11 +139,17 @@ assistant saw a claim (for example a build session's report) but did not check i
     National Park Service "Question 2 - Math: figures", whose caption says the figures are given to the candidate but whose title is not
     the book's numbering of an exhibit. A title that starts "Question 2" cannot be exempted without exempting the many workings filed
     under the same wording.
-  - **Two cases need a content change, not a rule change** (`private-data/solutions/*.json`, so a seed reload and the owner's approval):
-    Contagion Containment (Darden 2020) "Exhibit 1: IOC Revenues for Upcoming Olympics", a candidate exhibit whose caption mentions the
-    book's "guidance for Question 1" and so trips the solution-caption rule; and Bumpers R Us (Fuqua 2025-26) "Exhibit #2: Strategic
-    initiatives", whose caption says the interviewer reads the initiatives out without handing the exhibit over — real data the member
-    should get, but as read-out data (issue #83), not as an exhibit. Bumpers R Us is one of the one-beat cases because of it.
+  - **Two cases needed a content change, not a rule change, and both captions were rewritten on 2026-11-17** (issue #139, in
+    `private-data/solutions/*.json`, so it reaches members only when the regenerated seed is loaded): Contagion Containment (Darden 2020)
+    "Exhibit 1: IOC Revenues for Upcoming Olympics", whose caption tripped the solution-caption rule while saying where the amounts came
+    from; and Bumpers R Us (Fuqua 2025-26) "Exhibit #2: Strategic initiatives", whose caption described what the interviewer does with the
+    exhibit rather than what is in it. Both exhibits now reach the candidate and Bumpers R Us plans two beats. **Contagion Containment is
+    now a one-beat case**: it has a single candidate exhibit, and `buildPlan` uses the book's steps as beats only when no exhibit reaches
+    the candidate, so its three step beats gave way to one exhibit beat. That is the rule working as written (#81, #82); whether a case
+    with one exhibit and several worked steps should keep both is an open product question. The sentence about how the interviewer hands
+    the Bumpers exhibit over was dropped rather than moved to the interviewer-side table beside it: that table holds the book's chosen
+    initiatives (the answer), and a caption about reading things out when asked would have flipped it from `reference` to `onRequest`
+    under `givenOnRequest`, which is exactly the table that must never be read out.
   - **The durable fix is still an explicit `audience` field on each exhibit** in `private-data/` (same ask as the `givenOnRequest`
     entry below), with the regexes as the fallback for older content.
 - **Whether a Live case table is "our transcription" is judged by reading the table** (`tableRepeatsChart`, `src/domain/liveExhibit.ts`, issue #105), because no exhibit in the data is flagged as a transcription or a book table. Measured on 2026-11-16 over the 450 charted exhibits a candidate sees: 354 lose their table, 96 keep it. The rule errs toward keeping, so some of the 96 are our own transcription left on screen (about 20 approximate exhibits with a cell the chart does not print, such as a derived total, and 4 that differ by a word) and 35 are kept only because the chart's rows of text under its axis (`belowRows`) do not count as the chart showing a figure. Hiding those 35 as well is one line (count `belowRows` in `collect`), but it would hide DigiBooks "Exhibit A: Market segments", which the owner asked to protect. The reverse error (a book table hidden) was looked for in the hidden set and not found, but the check is by reading figures, not against the books. Run it again after new write-ups are loaded.
