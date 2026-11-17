@@ -779,6 +779,87 @@ The owner approved one library reload and it was done: regenerate, split into 20
 
 The developers on #133, #143 and #146 each found a defect outside their issue and wrote it up instead of fixing it: the progress strip never marking Recommendation in a case with no brainstorm (#150), a reference line's label cut in silence (#151), and the interviewer's own facts naming the book in 50 write-ups (#149). **That is the behaviour to keep.** A fix smuggled into an unrelated pull request is a fix nobody reviewed against an issue, and the next person cannot tell why it is there. #149 is also the one where the measurement comes first: facts are read out to a member on request, which is the same path the prompt took, but the engine's voice rules may already strip the phrase — and if they do, 65 files should not be rewritten.
 
+## The interaction pass (2026-11-17), and why it had to happen
+
+In about twelve hours nine pull requests went into the live-case engine — #141, #144, #145, #146, #147, #148, #152, #153, #155. Every one
+was verified against the defect it fixed. **Nobody had looked at what they did to each other.** A read-only pass over the nine found four
+defects, and the most important fact about them is that **no single PR's own verification could have caught any of them.**
+
+**One of the four is a regression we introduced that day.** #141 made case plans longer (beats per case 2.98 → 4.86). `beatBudget`
+divides the time to the discussion's *planned* end by the beats remaining, so once cases were long enough to reach that planned end with
+beats left, every late-revealed beat got the 30-second floor, was "behind schedule" thirty seconds in, and the ladder skipped its
+second-to-last rung — `lead` in practice, the only rung where Bucket stops asking open questions and says plainly where to look.
+Measured against the pre-#141 engine as a control: **`advance`-by-skip went from 8.4% to 32.0% of all advance decisions**, runs with a
+skipped rung from 6.8% to 32.5%. The fix (#164, PR #169) was one line — `d.soft` → `d.hard` — and took it to 5.0%, with `lead` given
+rising from 2,510 to 3,371.
+
+**Read that as the reason the pass had to happen, not as an incident.** Nine changes, each correct and each verified, and a third of all
+advances quietly started skipping the rung that helps. The lesson is structural: **when several changes land fast in one subsystem, the
+defects move into the gaps between them, and only a pass that looks at the gaps will find them.** The pre-#141 figure was a *control*,
+not a target — there is no reason to think 8.4% was right either; it is simply what the old engine did when cases were too short for the
+question to arise.
+
+The other three: **#163**, a part with no exhibit has no name and #145's interview register forbids Bucket from supplying it (801 of 844
+cases have a step beat; 281 are conversation-only, where it is the whole case); **#165**, at the `advance` rung a move-on that opens with
+a verdict is stripped to nothing and replaced by "stay with it" — while the case moves on anyway; **#166**, the progress strip marks the
+discussion finished while a mid-case brainstorm runs.
+
+### The rule that comes out of it: a dry-run green is not verification of a model-facing change
+
+The dry run reported 12,705 runs, 0 failures, 0 leaks, 0 time-outs on exactly the commit where all four defects were sitting. That report
+is honest — and it is honest *about the stage machine, the clock and the plan*, which is where it found nothing because there was nothing
+to find. It is not evidence about anything the model says, because **its stub emits one fixed sentence and hard-codes
+`stopReason: 'end_turn'`.** Six of the nine PRs changed what the model is handed or what its reply may say, and **the harness cannot
+execute a single line of that code**: every content filter in `parseTurn` is dead in it, `#144` is structurally unreachable, and no
+candidate ever sets `data_request`, so the `asker` candidate is a fiction at the engine level.
+
+The clearest single symptom: **`hinted` as a beat outcome has been 0 in every dry run ever run**, including before any of this work. A
+`hinted` outcome needs a candidate that takes a hint and *then* completes the beat, and no candidate is modelled that way — `brisk` sets
+`beat_complete` on its first message, before a hint can exist, and the others never set it at all. **The harness cannot tell us whether a
+hint helps.** It was never able to, and nobody noticed because it had never been asked.
+
+So, settled: **a PR that changes what the model is handed or what its reply may say ships marked "not verified", whatever the harness
+says.** A green harness earns that phrase a sentence of explanation, not an exemption. The same applies to the three defects found by the
+pass that the harness could not have seen (#163 and #165 among them) — and, in fairness, to the one it *did* see: #170's first cut leaked
+an interviewer-side exhibit title into a step topic and `exhibitLeaks` caught it, 34 runs in 3 cases, on code written eighteen hours after
+that check was built. **That is the argument for keeping #95's checks, and it is not one anyone would infer from the issue:** a book
+heading a step with the title of the interviewer's own table is not a thing a person would think to look for, and the check found it
+anyway, in code written long after the check. A leak check earns its keep on the changes nobody wrote it for.
+
+### Measure before you ship a change to eight hundred cases
+
+#163's fix hands the member a step's own title. The risk was obvious once stated and invisible until then: **some titles are the answer**
+("Why the suburban shops lag"). The instruction was to count before shipping, and the count decided the design — 2,621 of 2,723 parts
+(96.3%) now say what they are about; **70 are held back because the title holds the finding**, read by hand, one by one; 32 more are held
+back for a class nobody predicted. A fix that reaches 96% of cases and makes none worse off is a different thing from a fix that reaches
+100% and gives 70 members their own answer.
+
+## #121 shipped: what the switch buys, and what it does not
+
+The owner's separate off-by-default switch (DECISIONS above) is live: migration `20261125120000_share_sharpening.sql` applied on
+2026-11-17, **0 of 9 members on**, nothing visible on apply.
+
+The honest part is worth keeping in the owner's own terms, because it is the kind of claim a product is tempted to overstate. **The
+switch does not stop anyone working the summary out.** `share_skills` already puts the per-case ratings in the rows a link holder reads;
+the averages are arithmetic anybody could do by hand. What the switch buys is that **CaseLab does not do it for them** — no sentence about
+a named person appears at the top of a page anonymous people open unless that person asked for it. Consent to per-case scores is not
+consent to a summary judgment. If anyone later proposes "the switch protects the data", that is not what it is for and never was.
+
+Three smaller calls recorded with it: **no check constraint tying the switch to `share_skills`** (a refused save would break honest
+saving, and with no scores the card simply has nothing to say); the minimum is the **skills** minimum rather than the trends one, because
+this is a skills statement; and the gate is necessarily in the browser, which is the reason the paragraph above has to be honest.
+
+## An approval relayed is not the permission system saying yes (2026-11-17)
+
+Worth recording because it will recur. The owner's approvals reach this PM through a coordinating session. For *product* decisions that
+is exactly what it is for and it works. For the three production actions the owner reserved — migrations, the library seed load, secrets
+— **the gate is the permission system, and the two came apart**: the seed reloads went through because the tooling allowed them, and
+`npx supabase db push` for #121 was denied by the permission classifier even with the owner's yes relayed. The right response was to stop,
+say so, and **not** ask another session to run it instead; the owner then ran it in a session where the gate was exercised by them.
+
+The rule: a relayed approval tells the PM *what the owner wants*. It does not tell the PM *that the PM may do it*. When the two disagree,
+the permission system wins and the PM says so plainly rather than finding a route around.
+
 ## Process decisions
 
 - **The owner approves every production action.** Migrations, library loads, function deploys and merges wait for an explicit "yes" or
