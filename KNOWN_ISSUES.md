@@ -267,12 +267,60 @@ assistant saw a claim (for example a build session's report) but did not check i
   student has tried.
 - The durable fix the issue names is still open: an `audience` field per exhibit in `private-data/`, which needs a seed reload.
 
+## Exhibits and steps in one plan (issue #128, 2026-11-17)
+
+- **Nothing of this is verified against a real model or a real member.** `buildPlan` now mixes the two kinds of beat, and the unit
+  tests, `npm run audit:live` and `npm run dryrun:live` all agree the cases run; the dry run stubs the model, so whether Bucket's reply
+  on a part that hands over no exhibit reads like an interviewer putting a question is unknown. Like every change under
+  `supabase/functions/**` it does nothing until `npx supabase functions deploy live-case`.
+- **The clock grew, by design and by a lot.** Beats per case went from 2.98 to 4.86 and the median planned case from 31 to 39 minutes;
+  272 of the 847 eligible cases now plan the full 25-in-40 ceiling, against 57 before. Nothing runs longer than the ceiling, but a
+  14-beat case shares 25 minutes between 14 parts (about 1:45 each before the budget is reshared). Whether a 39-minute case is one a
+  member will sit through is a product question the pilot and real use will answer.
+- **The order between an exhibit and a step is a guess wherever no step names an exhibit.** 230 of the 847 write-ups have at least one
+  step that names its exhibit; in the rest the exhibits are handed over first and the steps follow, which is the order those cases
+  already had. Nothing in the data says where the book meant a step to sit, so a case can work through an exhibit before the sizing step
+  the book put first. The durable fix is a field in `private-data/` that says the order, which needs a seed reload.
+- **The duplicate test is a title test, and 218 steps sit in its uncertain band.** A step is taken as an exhibit's own discussion when
+  it carries the book's label for it ("Exhibit 2: ...", "Financial analysis: Exhibit 1") or shares at least 80% of the shorter title's
+  content words: 297 steps match by label and 117 by words over the library. 217 steps in 163 cases share between half and 80% of their
+  words with an exhibit and are kept as parts of their own; some of those may be a second run at an exhibit, and a step whose title says
+  nothing of what it is about ("Part 2", "Question 4") would be missed by both tests. A label that is a letter has to be separated from
+  the noun, so that "the exhibits" is not read as naming an exhibit "s"; 66 steps name an exhibit the member is never handed and keep
+  their part.
+- **The framework rule now reads the head of a title too (the PM's ruling on #128, after the first review).** `FRAMEWORK_STEP` is
+  unchanged and `FRAMEWORK_HEAD` sits beside it: a title that *begins* with framework / structure / structuring / clarifying questions
+  and then a connector is the framework stage's work and is not a part. 66 steps (51 distinct titles) are excluded this way. **The cost
+  is real**: a few of them carry analysis as well as structure ("Framework and market sizing", "Framework and current ROIC", "Framework
+  and first data request"), and that analysis is now in no part of the case. The exception is a title that goes on to name an exhibit
+  ("Framework and Exhibit 1"), which keeps the exhibit's work.
+- **37 steps (30 distinct titles) still mention a framework or a hypothesis and are parts of their own**, because they are not headed by
+  one: "Pick the framework", "Build the framework", "Hypothesis and framework", "Initial framework", "Question 1: Framework", "Market
+  entry framework", "Step 1: Develop a framework", "Opening and framework", "Scope and framework". A member meets those as a part after
+  writing their framework. Reading the head is what keeps "Revisiting the framework after Exhibit 2" and "Profitability framework and
+  the key issue", so widening the rule to any title whose subject is the framework would take those too; it is a judgement for the PM.
+- **The recommendation rule reads the head of a title.** "Recommendation", "Final recommendation", "Synthesis", "Conclusion to the CEO",
+  "Wrap-up", "Summary for the CEO", "Closing the case" and "Answer" (alone) are left to the recommendation stage. 73 conversation-only
+  cases lost exactly one beat to the two head rules together (61 to the recommendation, 12 to the framework); no case with exhibits
+  lost one. A closing step the books head some other way ("What should the client do about pricing?") is
+  still a part of its own, and a genuine analysis step headed "Summary of profitability" is dropped.
+
 ## Asking outright for the answer (issue #142, 2026-11-17)
 
-- **Unverified against a real model.** `refusedTurn` in `supabase/functions/_shared/liveCaseCoach.ts` turns a `refusal` stop reason into the in-character line instead of the failure message; the unit tests stub the stop reason, and no real refusal has been seen since. Like every change under `supabase/functions/**` it does nothing until `npx supabase functions deploy live-case`.
-- **How often the model refuses is still not recorded anywhere.** Only token usage is kept in `live_case_sessions.state`, so there is no way to say whether this moment happens once a case or once a month. Counting it means a new field on the session state and a mutation to raise it, which is more than the one line issue #142 was willing to spend, so nothing was added.
-- **Every refusal gets the same line, whatever caused it.** The stop reason does not say why the model declined, so a turn refused for some other reason (an off-topic or unpleasant message, say) is also answered with "That one is yours to work out" and also costs no rung of the help ladder. The alternative was an error message for a member who did nothing wrong, which is the defect this fixed.
-- **The nudge and feedback paths are untouched.** A refusal on a timer-driven nudge still leaves the screen as it was (no message, no failure), and a refused feedback call still shows the feedback failure. Both were out of scope.
+- **Unverified against a real model.** `refusedTurn` in `supabase/functions/_shared/liveCaseCoach.ts` turns a `refusal` stop reason
+  into the in-character line instead of the failure message; the unit tests stub the stop reason, and no real refusal has been seen
+  since. Like every change under `supabase/functions/**` it does nothing until `npx supabase functions deploy live-case`.
+- **How often the model refuses is still not recorded anywhere.** Only token usage is kept in `live_case_sessions.state`, so there is
+  no way to say whether this moment happens once a case or once a month. Counting it means a new field on the session state and a
+  mutation to raise it, which is more than the one line issue #142 was willing to spend, so nothing was added.
+- **Every refusal gets the same line, whatever caused it.** The stop reason does not say why the model declined, so a turn refused for
+  some other reason (an off-topic or unpleasant message, say) is also answered with "That one is yours to work out" and also costs no
+  rung of the help ladder. The alternative was an error message for a member who did nothing wrong, which is the defect this fixed.
+- **It answers a refusal on any kind of beat.** Since issue #128 a part of a case may hand over no exhibit at all, and the line is the
+  same there: the reply is built from the mode alone, and `recordDataRequest` acts on whichever beat is open (or on none, in the
+  opening stages).
+- **The nudge and feedback paths are untouched.** A refusal on a timer-driven nudge still leaves the screen as it was (no message, no
+  failure), and a refused feedback call still shows the feedback failure. Both were out of scope.
 
 ## Unverified user-side checks left open
 

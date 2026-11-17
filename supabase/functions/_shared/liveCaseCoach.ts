@@ -82,9 +82,12 @@ export interface LiveExhibit {
 export interface LiveStep {
   title: string;
   body: string;
+  /** Private, every one of them: the book's own working, what a strong candidate sees, where candidates go wrong, and the questions
+   * the book tells them to ask themselves. The member reaches them only through their own answer, never through Bucket's words. */
   calc: string[];
   whatToNotice: string;
   commonMiss: string[];
+  checkYourself: string[];
 }
 
 export interface LiveSolution {
@@ -169,6 +172,7 @@ export function readSolution(raw: unknown): LiveSolution | null {
       calc: strs(obj(s).calc, 300, 12),
       whatToNotice: str(obj(s).whatToNotice, 600),
       commonMiss: strs(obj(s).commonMiss, 300, 8),
+      checkYourself: strs(obj(s).checkYourself, 300, 5),
     })).slice(0, 30),
     exhibits,
     reference: exhibits.filter((e) => isInterviewerSideExhibit(e) && !givenOnRequest(e)),
@@ -281,6 +285,8 @@ export interface LiveView {
   clarifyCount: number;
   beatsTotal: number;
   beatsShown: number;
+  /** How many of the parts hand over an exhibit, so the screen can number the one on the table ("Exhibit 2 of 3"). */
+  exhibitsTotal: number;
   hasBrainstorm: boolean;
   status: 'active' | 'done';
   endReason: SessionState['endReason'];
@@ -320,6 +326,7 @@ export function toView(stored: StoredSession, solution: LiveSolution | null, inf
     clarifyCount: s.clarifyCount,
     beatsTotal: s.plan.beats.length,
     beatsShown: s.beats.length,
+    exhibitsTotal: s.plan.beats.filter((b) => b.kind === 'exhibit').length,
     hasBrainstorm: s.plan.hasBrainstorm,
     status: stored.status,
     endReason: s.endReason,
@@ -947,7 +954,9 @@ function privateNotes(sol: LiveSolution, state: SessionState, leading = false): 
     if (e) out.push(...(leading ? [] : [e.howToRead]), ...e.takeaways);
   } else if (b) {
     const st = sol.steps[b.index];
-    if (st) out.push(...(leading ? [] : [st.body]), st.whatToNotice);
+    // A step's notes are the interviewer's exactly as an exhibit's are: the book's working, what a strong candidate sees, the common
+    // miss and the questions the book hands the candidate afterwards. Only the topic's body is a fact Bucket may draw on while leading.
+    if (st) out.push(...(leading ? [] : [st.body]), st.whatToNotice, ...st.calc, ...st.commonMiss, ...st.checkYourself);
   }
   return out.filter(Boolean);
 }

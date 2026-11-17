@@ -141,8 +141,8 @@ describe('the bar: every case reaches the end', () => {
 describe('the candidates, and the one piece of pretending', () => {
   it('a brisk candidate completes every beat on its own', async () => {
     const run = await play('interview', 'brisk');
-    expect(run.beatsTotal).toBe(2);
-    expect(outcomes(run)).toEqual(['independent', 'independent']);
+    expect(run.beatsTotal).toBe(3); // the two exhibits, and the step of the analysis that has none
+    expect(outcomes(run)).toEqual(['independent', 'independent', 'independent']);
     expect(hints(run)).toBe(0);
   });
 
@@ -153,14 +153,14 @@ describe('the candidates, and the one piece of pretending', () => {
     expect(run.endReason).toBe('completed');
     // Only the first beat ever comes out, and the clock closes it: the rest of the case is never reached.
     expect(outcomes(run)).toEqual(['timed_out']);
-    expect(run.beatsTotal).toBe(2);
+    expect(run.beatsTotal).toBe(3);
     expect(run.stages.every((s) => s.endedBy === 'timer')).toBe(true);
     expect(run.reachedRecommendWrite).toBe(true);
   });
 
   it('an off-track candidate climbs the hint ladder and is moved on by the coach', async () => {
     const run = await play('practice', 'offtrack');
-    expect(outcomes(run)).toEqual(['coach_moved', 'coach_moved']);
+    expect(outcomes(run)).toEqual(['coach_moved', 'coach_moved', 'coach_moved']);
     expect(hints(run)).toBeGreaterThan(0);
     expect(run.rungs).toContain('process_hint');
     expect(run.rungs).toContain('directional_hint');
@@ -169,7 +169,7 @@ describe('the candidates, and the one piece of pretending', () => {
 
   it('an asker asks for data and then chooses to move on, which no other candidate does', async () => {
     const run = await play('learning', 'asker');
-    expect(outcomes(run)).toEqual(['member_moved', 'member_moved']);
+    expect(outcomes(run)).toEqual(['member_moved', 'member_moved', 'member_moved']);
     expect(run.stage).toBe('done');
   });
 
@@ -191,8 +191,8 @@ describe('the clock', () => {
     const first = await play('interview', 'passive');
     const again = await play('interview', 'passive');
     expect(Date.now() - began).toBeLessThan(5000);
-    // Two exhibits: 12 minutes of discussion inside a 27-minute case, which is the plan, not a constant.
-    expect(first.limitSeconds).toBe(27 * 60);
+    // Three beats (two exhibits and a step with none): 16 minutes of discussion inside a 31-minute case, which is the plan, not a constant.
+    expect(first.limitSeconds).toBe(31 * 60);
     expect(first.seconds).toBe(again.seconds);
     expect(first.stages).toEqual(again.stages);
   });
@@ -201,7 +201,7 @@ describe('the clock', () => {
     const run = await play('practice', 'passive');
     const stage = (name: string) => run.stages.find((s) => s.stage === name);
     expect(stage('prompt')).toMatchObject({ seconds: 180, planned: 180 });
-    expect(stage('exhibits')).toMatchObject({ seconds: 12 * 60, planned: 12 * 60 });
+    expect(stage('exhibits')).toMatchObject({ seconds: 16 * 60, planned: 16 * 60 });
     expect(stage('recommend_write')).toMatchObject({ seconds: 90, planned: 90 });
   });
 
@@ -212,7 +212,8 @@ describe('the clock', () => {
   });
 
   it('sizes a one-beat case to its own clock, not to a constant', async () => {
-    const run = await play('practice', 'passive', { exhibits: [exhibit(1)] });
+    // One exhibit, and the write-up's only step is that exhibit's own discussion, so there is one thing to work through.
+    const run = await play('practice', 'passive', { exhibits: [exhibit(1)], steps: [{ title: 'Exhibit 1: Revenue by region', body: 'Read the two regions.', calc: [], whatToNotice: '', commonMiss: [] }] });
     expect(run.beatsTotal).toBe(1);
     expect(run.limitSeconds).toBe(23 * 60); // 8 minutes of discussion plus the fixed 15
     expect(run.stage).toBe('done');
@@ -242,7 +243,7 @@ describe('the whole run', () => {
     expect(s).toMatchObject({ read: 4, folded: 1, cases: 2, skipped: 1, runs: 4, done: 4, short: 0, failed: 0, byDesign: 0, threw: 0, stalled: 0 });
     expect(s.cells.get('practice/brisk')).toEqual({ of: 2, done: 2 });
     expect(s.endStates.get('done / completed')).toBe(4);
-    expect(s.outcomes.get('independent')).toBe(4);
+    expect(s.outcomes.get('independent')).toBe(6); // three beats in each of the two cases the brisk candidate played
     expect(s.outcomes.get('timed_out')).toBe(2);
     expect(s.rungs.get('process_hint')).toBe(2); // the brisk candidate's first message on a beat is already at the first rung
     expect(s.rungs.get('none')).toBe(2);
