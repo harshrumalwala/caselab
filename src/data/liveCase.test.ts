@@ -686,6 +686,57 @@ describe('the exhibit discussion', () => {
     expect(nudgeLevel(s, b.revealedAt + openBeat(s)!.budgetMs + sec(1))).toBe('advance');
   });
 
+  // What a part of the discussion is worth, and what it is worth it for (issue #164). The budget is only ever what `behindSchedule`
+  // measures a part against, so none of this moves a stage end or the length of a case.
+  /** A case with three things to work through: 16:00 of discussion inside 31:00, and no brainstorm. */
+  const threeParts = () => buildPlan({ exhibits: exhibits(3), steps: [] });
+  /** Two messages on the part that got nowhere, so the next one is at the rung before 'advance'. */
+  const stuckTwice = (s: SessionState, t: number): SessionState => recordHint(recordHint(s, t), t);
+
+  it('shares out the time the discussion really has: the part brought out as the plan runs out is worth the flexible time, not the 30-second floor', () => {
+    const s = toExhibits(threeParts(), 450);
+    const { soft, hard } = deadlines(s, 'exhibits', s.stageStartedAt);
+    expect(hard - soft).toBe(sec(330)); // the flexible time a case with no brainstorm has
+    const last = openBeat(nextBeat(nextBeat(s, soft - sec(60), 'coach_moved'), soft, 'coach_moved'))!;
+    expect(last.revealedAt).toBe(soft);
+    expect(last.budgetMs).toBe(sec(330)); // what is left to the discussion's latest end, shared by the one part still to come
+  });
+
+  it('does not call a part behind schedule the moment it is born in the flexible time: it is led before it is moved on', () => {
+    let s = toExhibits(threeParts(), 450);
+    const { soft } = deadlines(s, 'exhibits', s.stageStartedAt);
+    s = nextBeat(nextBeat(s, soft - sec(60), 'coach_moved'), soft + sec(30), 'coach_moved');
+    const t = openBeat(s)!.revealedAt;
+    s = stuckTwice(s, t + sec(20));
+    expect(openBeat(s)!.budgetMs).toBe(sec(300));
+    expect(nudgeLevel(s, t + sec(40))).toBe('lead'); // the rung where Bucket says where to look, 40 seconds in
+    expect(nudgeLevel(s, t + sec(301))).toBe('advance'); // and the skip still fires on a part that has really overrun
+  });
+
+  it('keeps a brainstorm its own time: a case with one has 3:30 of flexible time to share out rather than 5:30', () => {
+    const s = toExhibits(buildPlan({ exhibits: exhibits(3), steps: [{ title: 'Brainstorm: ways to grow' }] }), 450);
+    const { soft, hard } = deadlines(s, 'exhibits', s.stageStartedAt);
+    expect(hard - soft).toBe(sec(210));
+    const last = openBeat(nextBeat(nextBeat(s, soft - sec(60), 'coach_moved'), soft, 'coach_moved'))!;
+    expect(last.budgetMs).toBe(sec(210)); // the brainstorm's two minutes are not in it, and nor is the recommendation's
+  });
+
+  it('a break changes nothing a part is worth: a pause moves every moment of the case on, and the budget arithmetic with it', () => {
+    const p = threeParts();
+    const away = sec(300);
+    let s = toExhibits(p, 450);
+    const first = openBeat(s)!;
+    s = ok(pause(s, at(600)));
+    s = ok(continueCase(s, at(600) + away));
+    expect(openBeat(s)!.budgetMs).toBe(first.budgetMs);
+    expect(openBeat(s)!.revealedAt).toBe(first.revealedAt + away);
+    // The part brought out after the break is worth exactly what it would have been without one, and sits at the same rung.
+    const after = nextBeat(s, at(900) + away, 'coach_moved');
+    const control = nextBeat(toExhibits(p, 450), at(900), 'coach_moved');
+    expect(openBeat(after)!.budgetMs).toBe(openBeat(control)!.budgetMs);
+    expect(nudgeLevel(stuckTwice(after, at(930) + away), at(950) + away)).toBe(nudgeLevel(stuckTwice(control, at(930)), at(950)));
+  });
+
   it('leads on the third message even when no hint was given, counting the messages that got nowhere, and starts again after a clear step forward', () => {
     let s = inExhibits(3);
     const t = openBeat(s)!.revealedAt;
