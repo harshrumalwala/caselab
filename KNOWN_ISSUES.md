@@ -316,6 +316,33 @@ assistant saw a claim (for example a build session's report) but did not check i
   refuses in that shape while really withholding an answer is not caught. Narrowing it would start dropping the honest reply.
 - **An `advance` reply is cut to its first sentence.** If a model ever answered a question and moved on in the same breath at that rung
   (with `data_request` unset), the answer would be lost. The flag and `beat_complete` are both excluded from the cut for that reason.
+  Since issue #165 that first sentence is also *kept* only when it says the case is moving on; see the section below.
+
+## The move-on at the advance rung (issue #165, 2026-11-17)
+
+- **What it was.** `movingOnOnly` (#136) kept the model's first sentence whatever it said. In an interview `withoutVerdicts` (#145)
+  then dropped it as a verdict, the reply went empty, and the `!said` guard — which was not rung-aware — substituted `OVER_TO_YOU`
+  ("Okay, stay with it ...") while `applyTurn` moved the case on regardless: the member was told to stay with the part at the moment
+  it was taken away. In practice the same first sentence reached them as a bare verdict with no move-on in it. Both are fixed: the
+  opening sentence is kept only when `saysMovingOn` matches it, and the `!said` guard and the whole-reply stand-in both hand back
+  `MOVING_ON` at that rung instead of `OVER_TO_YOU` or `FALLBACK`.
+- **Unverified against a real model**, like every other change under `supabase/functions/**`, and it does nothing until
+  `npx supabase functions deploy live-case`. The unit tests put the issue's three reproductions through the real `parseTurn`.
+- **The dry run cannot see it at all.** `npm run dryrun:live` stubs the model with one fixed sentence, so no content filter in
+  `parseTurn` executes in any of its 12,705 runs; its numbers are the same before and after and prove nothing about this.
+- **`saysMovingOn` is string-level, like the rest of the filter.** It matches the usual wordings (move on / move to / on to the next /
+  next piece / leave that there / park that / come back to that / keep moving / press on). A genuine move-on worded some other way
+  ("that is enough on this one") is replaced by `MOVING_ON`, which says the same thing — the cost is the model's own wording, not the
+  member's understanding, which is why the rule errs this way.
+- **An acknowledgement in front of the move-on is lost.** "Good. Let us move on." becomes `MOVING_ON`, because only the *first*
+  sentence is examined and a later one is never promoted in its place (promoting one would reopen #131's risk of carrying the
+  abandoned beat's substance). A model that puts the move-on second therefore reads a little flatter than it wrote.
+- **Nothing ties the filter's test to the engine's.** `moving` in `parseTurn` re-derives `applyTurn`'s advance test (rung `advance`,
+  no `beat_complete`, no `data_request`, assessment `stuck` or `unclear`) and is a second copy of it that has to be changed with it.
+  It is also one condition looser, as it was before #165: `applyTurn` only advances on an `exhibit` turn, while `moving` is true on a
+  `direction` turn at that rung too. Nothing reaches that combination today — `nudgeLevel` returns `none` outside the `exhibits`
+  stage, so a direction turn is always at the bottom rung — but if that ever changed, a direction reply would be replaced by
+  `MOVING_ON` without the case moving anywhere. Which rung fires when was out of scope here (#164).
 
 ## A fact that mentions the candidate (issue #156, 2026-11-17)
 
