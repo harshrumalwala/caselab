@@ -903,6 +903,22 @@ It sits beside the existing convention (copy states the design as it is, never a
 
 **One guard that came with it:** if removing an explanation leaves the remaining wording actively implying something untrue, say so rather than writing a better explanation. The instruction is to stop explaining.
 
+**The rule does not reach list labels (PM, 2026-11-17, on PR #178).** The developer kept the "Nothing shared yet" / "Shared once" headings over the chips on the give-next card and flagged it rather than deciding alone. Ruling: keep them. The rule cuts *sentences that interpret*; a chip heading is the label a list needs to be readable, and the owner cut two blocks of prose, not labels. The guard decides it: shortening to "Not yet" would read as a claim about the person's practice ("they have not done profitability cases"), which the page does not know and never did — it knows only what they chose to share. The word *shared* is not explaining the chip, it is the chip's claim, stated accurately in three words.
+
+## The interview register and clarifying questions (issue #185, 2026-11-17)
+
+**The question.** `withoutVerdicts`, the interview-mode check that strips a reply confirming, denying or grading the member's reading (#130, PR #145), does not run on a reply to a clarifying question. Nobody had written down whether that was deliberate. It is.
+
+**What the code does.** `withoutVerdicts` runs only when the mode is `interview` and the turn kind is `exhibit` or `direction` (`liveCaseCoach.ts`, in `parseTurn`). A `clarify` reply is never stripped, in any mode. This was a choice, not an accident: commit `ba5a310` (PR #145) says in its body that `clarify` is not touched at all, two code comments state the scope, and the README describes it as product behaviour ("Asking about a **fact** is a different thing and is answered as always").
+
+**Why it was left alone.** The reason given was a protection, not an argument that a clarify stage deserves a different register. The verdict patterns must not damage a factual answer. `VERDICT` matches shapes like "which is the", so stripping could remove a figure the member asked for, and a reply emptied by stripping falls through to `FALLBACK`. A member who asks a factual question and gets the stand-in line has been failed worse than one who is told "good question" first.
+
+**What still protects a clarify reply, in every mode.** `interviewerVoice`, `leaks` and `statesHeldResult` all run, so a book answer, an interviewer-only exhibit and a result held back are caught. The `INTERVIEW_REGISTER` system prompt also tells the model to add no driver and give no verdict. That last part is enforced by the prompt alone, with nothing in code behind it.
+
+**The residual exposure, and how much is known about it.** The exposure is the model volunteering a driver the member has not raised ("good question, and that is the key driver here"). **Measured on 2026-11-17 against the two real-model pilot transcripts: 4 clarify replies, 0 matching the `VERDICT` patterns, and 0 volunteering a driver on reading.** n is 2 in the one run under the interview register, so this is an anecdote and not a rate. It is recorded as a watch-item in KNOWN_ISSUES.md.
+
+**The conclusion.** Extending `withoutVerdicts` to clarify would add risk to factual answers, which is the protection above, and would **still not catch the real exposure**: a volunteered driver does not look like praise, so a verdict pattern does not see it. If a guard is ever built, it has to be `sharesSubstance`-shaped, flagging a clarify reply that introduces content words from the exhibit or the private notes that the member has not used. Nothing was built, nothing changes in the function, and nothing needs deploying. Practice and learning are unaffected either way; their register is encouraging by design.
+
 ## Scheduling, settled on 2026-11-17
 
 - **The asker hosts.** The member who sent the practice request hosts; their saved meeting link goes on the invite, the other person's is the fallback, and if neither has one the invite says to agree a link in messages. The owner chose this over proposer-chooses and over the literal reading of their own earlier brief — **the literal reading would have made the guest host their own interviewer.**

@@ -536,6 +536,11 @@ move whenever the file does, so the quoted words are the reliable part):
   words of one sentence of the beat's private notes, none of them words the member has used, is replaced by `OVER_TO_YOU`. Above that
   rung the hint is allowed to point somewhere, so nothing checks it; and the check cannot tell a driver the member raised in their own
   words from one they never mentioned, beyond that word comparison.
+- **A clarify reply in an interview is not checked for a volunteered driver, and only the prompt prevents one (issue #185).** The scope
+  is deliberate (DECISIONS.md, "The interview register and clarifying questions"). Watch-item: **0 observed in 2 turns, not measured
+  beyond that.** On 2026-11-17 the two real-model pilot transcripts held 4 clarify replies, none matching the `VERDICT` patterns and none
+  volunteering a driver on reading; n is 2 in the one run under the interview register, an anecdote and not a rate. If a clarify reply
+  is ever seen handing over a driver, the guard to build is `sharesSubstance`-shaped, not `withoutVerdicts`.
 - **The progress test reads words, not meaning.** `madeAStep` (in `liveCase.ts`) looks for a figure, a comparison or driver word, or a
   next move, and discounts a message that admits being stuck without naming a next move. A real step forward written without any of
   those words ("the new shops are the problem") is scored `unclear`, which costs the member a rung sooner than it should — the cost is a
