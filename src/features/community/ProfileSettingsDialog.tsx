@@ -15,6 +15,7 @@ import { AudienceSwitch, profileAddress } from './AudienceSwitch';
 import { BurnedBooks } from './BurnedBooks';
 import { BurnedCases } from './BurnedCases';
 import { BurnedLine } from './BurnedLine';
+import { MeetingSection } from './MeetingSection';
 import { SharedCaseRow } from './SharedCaseRow';
 import { SharingSwitches } from './SharingSwitches';
 import { SharpeningPreview } from '../people/SharpeningCard';
@@ -203,7 +204,7 @@ function EmailSwitch() {
 export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () => void; focus?: 'burned' | null }) {
   const profile = useMyProfile();
   const { saveProfile } = useCommunity();
-  const { cases } = useData();
+  const { cases, mode } = useData();
   const toast = useToast();
 
   const [name, setName] = useState(profile.displayName);
@@ -335,6 +336,9 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
               full. "Other notes" stay private unless you turn on "Open everything", and your practice partner's name only appears if you turn on "Who cased me".
             </p>
           </section>
+
+          {/* Demo mode is sample data held in this tab: there is nothing to save it to. */}
+          {mode !== 'demo' && <MeetingSection />}
 
           <EmailSwitch />
 

@@ -86,6 +86,8 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
       const nobody = randomUUID();
       const calls: [string, SupabaseClient, Record<string, unknown>][] = [
         ['my_practice_requests', a.client, {}],
+        ['my_meeting_prefs', a.client, {}],
+        ['save_my_meeting_prefs', a.client, { p_link: 'javascript:alert(1)', p_zone: null }], // refused, so nothing is written
         ['my_conversations', a.client, {}],
         ['my_practice_blocks', a.client, {}],
         ['member_interviewed', a.client, { p_member: nobody }],
@@ -149,8 +151,10 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
     });
   });
 
-  describe('tables that hold requests, conversations and messages', () => {
-    const closed = ['practice_requests', 'practice_blocks', 'conversations', 'conversation_members', 'messages', 'message_reports'];
+  describe('tables that hold requests, conversations, messages and meeting details', () => {
+    // NOTE: `meeting_prefs` fails until the owner applies 20261126120000_meeting_prefs.sql, which is the point: it is
+    // the check that the live database matches the code.
+    const closed = ['practice_requests', 'practice_blocks', 'conversations', 'conversation_members', 'messages', 'message_reports', 'meeting_prefs'];
 
     it('refuse every direct read and write, as a member and as a visitor', async () => {
       for (const table of closed) {
@@ -177,6 +181,7 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
       for (const [name, args] of [
         ['my_practice_requests', {}],
         ['my_conversations', {}],
+        ['my_meeting_prefs', {}],
         ['member_interviewed', { p_member: randomUUID() }],
         ['delete_my_account', { p_confirm: 'DELETE' }], // refused before it can do anything: there is no one signed in
       ] as const) {

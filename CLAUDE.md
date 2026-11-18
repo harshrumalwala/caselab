@@ -52,7 +52,8 @@ Functions). Charts via Recharts (lazy loaded) and our own SVG renderer for caseb
 
 ```
 src/domain/      pure TypeScript: types, constants, all calculations and rules (stats, suggestions, improvement, progress/XP,
-                 quests, medals, stickers, warmup, goal, weeklyPlan, library matching, bookSolution parser). No React, no database.
+                 quests, medals, stickers, warmup, goal, weeklyPlan, library matching, bookSolution parser, meeting link and
+                 time zone). No React, no database.
 src/data/        persistence and I/O behind small interfaces: CaseLabRepository (Supabase and in-memory), CommunityRepository,
                  AuthApi; Excel import/export (read-excel-file, fflate), backup, CSV, live case, messages, requests, library.
                  Most *.db.test.ts files run the real migrations in PGlite (in-process Postgres).
@@ -74,7 +75,8 @@ Key mechanics worth knowing:
   fields the owner chose to share); visitors read `public_profiles` / `public_shared_cases` only. Membership is the single function
   `public.is_member_id(uuid)` (verified email); changing who counts as a member means changing only that function.
 - **Tables with no API access at all:** practice requests, conversations/messages, `live_case_sessions`, `library_case_notes`,
-  `library_case_solutions`, `message_reports`. Access is through `SECURITY DEFINER` functions that act only on the caller's own rows, or
+  `library_case_solutions`, `message_reports`, `meeting_prefs` (how a member likes to meet: a link and a time zone, readable by its
+  owner alone). Access is through `SECURITY DEFINER` functions that act only on the caller's own rows, or
   through Edge Functions using the service role.
 - **Library content flow.** Analyses and solutions are JSON in `private-data/`; `node scripts/buildLibrarySeed.mjs` turns them into
   `supabase/seeds/library.sql` (one transaction, safe to rerun; it folds duplicate case names, Booth MCG copy wins, then newest book;

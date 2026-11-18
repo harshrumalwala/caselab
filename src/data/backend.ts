@@ -10,6 +10,7 @@ import { SupabaseWarmup, type WarmupRepository } from './warmupBest';
 import { PublicCommunity, SupabaseCommunity } from './supabaseCommunity';
 import { SupabaseMessages, type MessagesRepository } from './messages';
 import { SupabaseLive, type LiveCaseRepository } from './liveCase';
+import { SupabaseMeeting, type MeetingRepository } from './meetingPrefs';
 import { SupabasePractice, type PracticeRepository } from './practiceRequests';
 import { SupabaseRepository } from './supabaseRepository';
 
@@ -24,6 +25,8 @@ export interface Backend {
   createLive(): LiveCaseRepository;
   /** The signed-in member's private conversations. */
   createMessages(): MessagesRepository;
+  /** How the signed-in member likes to meet (a meeting link and a time zone). Nobody else can read it. */
+  createMeeting(): MeetingRepository;
   /** The signed-in member's best Warm-up score and streak. */
   createWarmup(userId: string): WarmupRepository;
   /** The cases the signed-in member ran as the interviewer (private, kept apart from the cases they solved). */
@@ -94,6 +97,7 @@ export function createSupabaseBackend(
       createPractice: () => new SupabasePractice(client),
       createLive: () => new SupabaseLive(client),
       createMessages: () => new SupabaseMessages(client),
+      createMeeting: () => new SupabaseMeeting(client),
       createWarmup: () => new SupabaseWarmup(client),
       createGoal: (userId) => new SupabaseGoal(client, userId),
       createInsights: () => new SupabaseInsights(client),
