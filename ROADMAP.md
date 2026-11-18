@@ -1,30 +1,21 @@
 # ROADMAP.md
 
-## Waiting for the owner (as of 2026-11-17)
+## Waiting for the owner (as of 2026-11-18)
 
-Three things need the owner and nothing has been started on any of them. Tick these off in any order; none blocks another.
+Two things need the owner. Neither blocks the other, and neither blocks any work in progress.
 
 | # | What | Why it needs you | What happens when you say yes |
 |---|---|---|---|
-| 1 | **The #99 migration** | `npx supabase db push` is your call every time | #98's migration (`20261126120000_meeting_prefs.sql`) was applied on 2026-11-18 at 02:51 UTC with your approval. Verified afterwards: the table exists, RLS is on, it has zero policies, three functions exist, and `information_schema.role_table_grants` shows no grant to `anon`, `authenticated` or `public`, so the table is reachable only through its functions. PR #182 is unblocked and green. #99's migration does not exist yet: a developer builds it up to the migration and stops, and applying it is a separate yes once the SQL exists and is tested |
-| 2 | **#149's remaining 28 sentences** — a decision, not an approval | A judgement about how far to go | 44 of the 72 interviewer facts that named the book are fixed. The other 28 are left because the engine's voice filter already strips them before the member sees anything. Leaving them is defensible and is what the issue asked for; rewriting them too is 28 more sentences on the same reload. Your call |
-| 3 | **Confirming email delivery** | No agent can see the Resend dashboard or a real inbox | Production holds three `notify-request` sends from 2026-10-31 that all returned 2xx from Resend, through code unchanged since. Resend accepting is not Resend delivering: a bounce, a spam placement or a suppression all happen after the 2xx. Open the Resend dashboard or a real inbox and look; #101 (calendar invites) and #102 (reminder emails) stay `proposed` until then. Detail in DECISIONS.md |
+| 1 | **#149's remaining 28 sentences** — a decision, not an approval | A judgement about how far to go | 44 of the 72 interviewer facts that named the book are fixed. The other 28 are left because the engine's voice filter already strips them before the member sees anything. Leaving them is defensible and is what the issue asked for; rewriting them too is 28 more sentences on the same reload. Your call |
+| 2 | **Confirming email delivery** | No agent can see the Resend dashboard or a real inbox | Production holds three `notify-request` sends from 2026-10-31 that all returned 2xx from Resend, through code unchanged since. Resend accepting is not Resend delivering: a bounce, a spam placement or a suppression all happen after the 2xx. Open the Resend dashboard or a real inbox and look; #101 (calendar invites) and #102 (reminder emails) stay `proposed` until then. Detail in DECISIONS.md |
 
-**Done since the last version of this table (2026-11-17).** The second library seed reload was approved and loaded at 02:54 UTC in 20
-parts under 700 KB, every part OK, no errors, 78 seconds; production holds 872 `library_cases` / 872 `library_case_notes` / 872
-`library_case_solutions`. The seed was regenerated from `private-data/` first and came out byte-identical to what PR #161 produced (md5
-`3c9ff0d309e838342a409ec495633a89`, 13,223,152 bytes), so what loaded is exactly the reviewed content; all five cases named in #159 are
-present and none still describes the candidate from outside. **Correction:** the old row said #132, #143, #151, #149 and 13 further
-prompts were also waiting on this reload. That was already wrong: an md5 comparison of every production prompt against `private-data/`
-showed they were all live already, and #159's five prompts were the only library change still waiting. The third throwaway test account
-is withdrawn: it buys repeats of the same shape, not coverage of a new one.
+**Both scheduling migrations are now applied.** `20261126120000_meeting_prefs.sql` (#98) went in on 2026-11-18 at 02:51 UTC and `20261127120000_practice_meetings.sql` (#99) later the same day, each with the owner's explicit approval. #99's was verified in production by query rather than by the CLI's word: three tables present, RLS on all three, **zero policies**, `information_schema.role_table_grants` returning no rows for `anon`, `authenticated` or `public`, all seven internal helpers not executable by either role, all seven member functions executable by `authenticated` only, and the migration row present in `supabase_migrations.schema_migrations`. `e2e/deployed.e2e.test.ts` then passed 12 of 12 against the live database — that file exists to catch the live schema disagreeing with the code, and it was red by design until the apply.
 
-**The one thing that is shipped but unproven: #130.** An interview reply no longer confirms the member's guess — deployed on 2026-11-17 on
-unit tests, the dry-run harness and CI, with **no real-model check**, because both throwaway accounts hit the function's own limit of 4
-starts per rolling 24 hours. The honest position until a start frees (2026-11-18 03:05 UTC) is: the half that can be measured
-deterministically is fixed; whether a plausible-sounding stuck member now climbs the ladder is unknown. The developer's prediction for the
-A/B is recorded in PR #145 and will be reported against line by line. #133, #142 and #150 are shipped and unproven for the same reason.
+**One operational correction, because the cheat sheet is now wrong.** The newer Supabase CLI **defaults to the local stack**: a bare `npx supabase db push` tries `127.0.0.1:54322` and fails with `DbConnectError` instead of touching production. It needs `--remote` (`--linked` still works but warns it goes away in v4). It fails safe, but the error reads like a failed push, and anyone retrying blind from CLAUDE.md's operations cheat sheet would be working from a line that no longer does what it says.
 
+**Done on 2026-11-18.** Eleven pull requests merged. The four live-case engine issues the owner chose as a batch — #192 (the overall rating is kept only when more than half the skill ratings the model actually claimed are grounded), #193 (a case with no exhibits is no longer told to the model as if it had them, and no longer promises data it does not have), #194 (the book's own numbering no longer survives into a part notice) and #195 (a handed-in brainstorm or recommendation is acknowledged) — merged as PRs #206, #207, #208 and #209, then shipped in one `npx supabase functions deploy live-case` from `5036fca`. **The deploy was verified by content, not by the CLI**: the deployed source was downloaded and diffed against the merged commit with line endings normalised, giving zero differing lines on `index.ts`, `_shared/liveCase.ts` and `_shared/liveCaseCoach.ts`. Also merged: #204, #210 and #211 (records), #212 (the coach live check no longer assumes it owns a shared throwaway account), #215 (the interview register's clarify exemption is pinned by a test), #216 (#99's scheduling rules) and #217.
+
+**A number this file and #196 both carried was wrong, and the reason is worth keeping.** #196 was closed recording the audit's third-person prompt rule at **0**. The real figure is **15**. The original measurement had been taken from a checkout eight commits behind main, on which PR #190 — the commit that *added* that detector — did not exist; the flag name was already in the criteria list, so the report printed the line with a 0 beside it. **A rule that does not exist yet reports zero rather than failing**, so a stale tree turns "not measured" into "measured clean". It was caught only because a developer re-ran the audit, got 15, and declined to write the published number down. The figures are reconciled — all 15 sit on cases flagged `not_live_eligible`, so across the 847 live-eligible write-ups the campaign's count really is 0, down from 521 of 577 — and both numbers, with their populations, are now in KNOWN_ISSUES. Issue **#214** proposes printing the commit sha into the audit and dry-run report headers so a report states its own provenance.
 
 Written 2026-11-15. **Every item below is "proposed". The order is not a priority; the owner sets priorities.** Each item says where it
 came from: **Owner** (the owner asked for it or said "later"), **Docs** (the README or code comments call it a possible later addition),
@@ -104,7 +95,13 @@ entries with issues, in the order they should be done.
 | #83 | The interviewer's data is unreachable outside an open exhibit beat, and only 2 of 369 hidden tables are classed as data to hand over | `approved` | `functions deploy live-case` |
 | #84 | A repeatable live-case suitability report that imports the real production rules (partly covers R21) | `approved` | Script only |
 | #85 | Numbered book exhibits hidden by a single soft word (`expected`, `calculation`, `math`, `sample`, `approach`, `answer`); 103 exhibits affected | `approved` | `functions deploy live-case` |
+| #192 | The overall rating is not checked against the member's own words | **done and deployed** (PR #206); kept only when more than half the skill ratings the model actually claimed are grounded. Unverified against a real model |
+| #193 | A case with no exhibits is handled as if it had them | **done and deployed** (PR #208); the model is told an exhibit was shown only where one was, the stage reads as a discussion, and the directive sentence that told Bucket to say it would show data is swapped on those 246 cases. Unverified against a real model |
+| #194 | The part notices hand over the write-up's headings with the book's numbering | **done and deployed** (PR #207); 101 of 2,621 handed-over topics carried numbering before, 3 after, all three false positives of a broad detector. The cumulative-outline question was ruled "leave it" and is in DECISIONS.md |
+| #195 | A handed-in brainstorm or recommendation draws no reply | **done and deployed** (PR #209); a fixed engine line, no model call. Unverified against a real model |
 | #86 | A switch to take one case out of live practice | `proposed` — **waiting on the owner** | A migration; deliberately sequenced last, and may prove unnecessary |
+
+All four shipped in one `npx supabase functions deploy live-case` from `5036fca`, verified by downloading the deployed source and diffing it against the merged commit (zero differing lines on `index.ts`, `_shared/liveCase.ts` and `_shared/liveCaseCoach.ts`).
 | #87 | Say which cases have no exhibits before the member picks one; 285 of 847 are conversation-only | `proposed` | May need a migration; sequence after #85 |
 
 Related existing entries: **R15** (chart kinds we cannot draw) is unaffected — chart coverage measured good, and the live-case
@@ -122,8 +119,8 @@ today; scheduling is capability they do not have yet. The whole chain below wait
 | #96 | Remove the front-page member search; revoke `anon` reads of the public tables; one "people with my link" switch | `proposed` | A migration (owner approves); merge first, then apply |
 | #97 | Reset my link (random share token) | **closed, not planned** (owner, 2026-11-17). One permanent link per member, no reset and no revoke; the cost the project is accepting is in DECISIONS.md | — |
 | #98 | Preferred meeting link and time zone in Profile | `proposed`; the migration **shape is approved to be written** (owner, 2026-11-17), queued behind the engine fixes. Applying it is still a separate yes | A migration |
-| #99 | Database rules for proposing, confirming, countering and cancelling a practice time | `proposed`; same — shape approved to be written, queued behind the engine fixes | A migration |
-| #100 | Screens: pick a time inside a request and a conversation; retire `when_text` | `proposed`; after #98, #99 | App only (a migration only if `when_text` is dropped) |
+| #99 | Database rules for proposing, confirming, countering and cancelling a practice time | built and merged (PR #216); migration 20261127120000 applied by the owner on 2026-11-18 and verified in production | A migration |
+| #100 | Screens: pick a time inside a request and a conversation; retire `when_text` | in review (PR #218) | App only (a migration only if `when_text` is dropped) |
 | #101 | Invite emails with `.ics` (stable UID, sequence number) on confirm, change, cancel | `proposed`; after #100 | `functions deploy notify-request`; possibly a migration |
 | #102 | Optional reminder email shortly before | `proposed`; after #101; owner to decide it is worth a scheduled job | A scheduler, a migration, possibly a secret |
 
@@ -154,7 +151,7 @@ pilot, run on 2026-11-17".
 | #129 | A result pre-printed on the interviewer's sheet is handed over as if it were data | **done, deployed and proved on the real model** (PR #138). The turn that volunteered a computed $8B now reads out only the inputs; #83's handover is not regressed |
 | #131 | Three wording defects in Bucket's replies | **done, deployed and proved on the real model** (PR #136). `advance` now says only "Let's move on to the next piece." |
 | #142 | Asking outright for the answer showed the failure message | **done and deployed** (PR #144); unverified on the real model |
-| #130 | An interview reply confirms the member's guess before they have earned it | **done and deployed** (PR #145), **unproven on the real model** (see "The one thing that is shipped but unproven" at the top of this file). Deployed on deterministic evidence as a deliberate trade; see DECISIONS.md. The author's prediction is in the PR |
+| #130 | An interview reply confirms the member's guess before they have earned it | **done and deployed** (PR #145); deployed on deterministic evidence as a deliberate trade (see DECISIONS.md), then **settled on the real model by the 2026-11-18 pilot runs**: across 16 interview replies nothing confirmed a guess |
 | #133 | The brainstorm always runs last, and a second brainstorm never runs | **done and deployed** (PR #148); 118 brainstorms in 110 cases were out of place, 21 cases have more than one. Unverified on the real model |
 | #132 | 17 case prompts talk about the book instead of to the candidate | **done and live** (PR #146); the audit now fails on the condition. The content has been in production since a reload that preceded the second one |
 | #143 #151 | Labels cut to length that the audit could not see (a `belowRows` row label; a reference line's label) | **done and live**: measurement fixed (PRs #147, #153), 3 exhibits and 1 exhibit respectively out of 1,792, and the content fixes are in production |
