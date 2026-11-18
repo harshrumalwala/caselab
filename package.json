@@ -17,6 +17,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts --mode e2e",
     "audit:live": "node scripts/liveCaseAudit.mjs",
     "dryrun:live": "node scripts/liveCaseDryRun.mjs",
+    "coverage:engine": "node scripts/engineCoverage.mjs",
     "pilot:live": "node scripts/liveCasePilot.mjs"
   },
   "dependencies": {
