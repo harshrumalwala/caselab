@@ -142,8 +142,8 @@ const STEP_NOUN = String.raw`(?:questions?|q|parts?|steps?|sections?|prompts?|ex
  * The book's own numbering of a step in print — "Question 3B:", "Q2.", "Part C -", "Step 1:", "Prompt #2, Question 1:", "Exhibit 2,
  * question 3:", "Part II:", "Phase 2A:", "Math question 1:", "Question 3 (optional):", "Exhibits 1 and 2:" — which tells the member
  * nothing about the part they are on. As with a brainstorm's head, the number comes off only when something separates it from the
- * subject, so a title that is a phrase of its own ("Question 4 and recommendation", "Parts and labour", "Break-even, part 1: fixed cost
- * only", "5 Cs: finding alternatives") keeps its own words.
+ * subject, so a title that is a phrase of its own ("Question 4 and recommendation", "Parts and labour", "Break-even, part 2: the fixed
+ * costs only", "5 Cs: where to start") keeps its own words.
  *
  * Two things widen it past the plain noun. A word of the book's own in front of the noun comes off with it ("Math question 2:",
  * "Work stream 1:", "Case data 3:"), because it is part of how the book numbers the step and not part of the subject. And a second list
