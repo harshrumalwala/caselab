@@ -470,14 +470,20 @@ describe('the shapes the engine branches on', () => {
     }
   });
 
-  it('scores a part partial, which moves the clock on and leaves the help ladder where it was', async () => {
+  it('scores a part partial, which moves the clock on and, once they are circling, takes the part away (issue #184)', async () => {
     const run = await playRich('practice', 'circling');
     expect(run.stub.partials).toBeGreaterThan(0);
-    // 'partial' is the one score `assessmentOf` does not police, and the one the engine treats as neither progress nor stuck.
+    // 'partial' is the one score `assessmentOf` does not police, and it used to reach the top of the ladder with nothing there: the
+    // rung said 'advance' and no rung could fire, so every part this candidate left, it left by pressing the button itself.
     expect(run.rungs).toContain('advance');
     expect(reachedEnd(run)).toBe(true);
-    // Nothing in the engine moves a member on who is neither stuck nor unclear: every part they leave, they leave themselves.
-    expect(outcomes(run)).not.toContain('coach_moved');
+    expect(outcomes(run).every((o) => o === 'coach_moved')).toBe(true);
+    // Learning has no rung that moves a member on, so a learner circling is left exactly where they are: the parts are still theirs
+    // to leave (DECISIONS.md, #119).
+    const learner = await playRich('learning', 'circling');
+    expect(learner.stub.partials).toBeGreaterThan(0);
+    expect(outcomes(learner)).not.toContain('coach_moved');
+    expect(outcomes(learner).every((o) => o === 'member_moved')).toBe(true);
   });
 
   it('writes replies worth filtering, and says what became of each shape', async () => {

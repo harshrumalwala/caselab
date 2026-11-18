@@ -459,6 +459,8 @@ export interface BeatRecord {
   userMessages: number;
   /** Messages the member has sent on this exhibit since they last made clear progress on it, not counting the ones that asked for data. How far up the help ladder they are. (Missing in sessions saved before this was kept: counts as none.) */
   asked?: number;
+  /** Messages in a row scored 'partial' on this exhibit, since the last clear step forward, not counting the ones that asked for data. What tells nearly-there from circling (issue #184). (Missing in sessions saved before this was kept: counts as none.) */
+  partials?: number;
   outcome: BeatOutcome;
 }
 
@@ -735,7 +737,7 @@ function openBrainstorm(s: SessionState, at: number): string {
   // parts it did not reach are let go and the brainstorm after them is still run, because the closing time was kept for it.
   const index = s.plan.beats.findIndex((b, i) => i >= from && b.kind === 'brainstorm');
   if (index < 0) return s.plan.brainstormTopic;
-  s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastUserAt: at, lastNudgeAt: 0, budgetMs: BRAINSTORM_MS, hints: 0, userMessages: 0, asked: 0, outcome: 'open' });
+  s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastUserAt: at, lastNudgeAt: 0, budgetMs: BRAINSTORM_MS, hints: 0, userMessages: 0, asked: 0, partials: 0, outcome: 'open' });
   return s.plan.beats[index].topic ?? s.plan.brainstormTopic;
 }
 
@@ -1052,7 +1054,7 @@ function revealBeat(s: SessionState, at: number): boolean {
   const beat = s.plan.beats[index];
   if (!beat || beat.kind === 'brainstorm') return false;
   const first = !s.beats.some((b) => s.plan.beats[b.index]?.kind !== 'brainstorm');
-  s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastUserAt: at, lastNudgeAt: 0, budgetMs: beatBudget(s, at), hints: 0, userMessages: 0, asked: 0, outcome: 'open' });
+  s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastUserAt: at, lastNudgeAt: 0, budgetMs: beatBudget(s, at), hints: 0, userMessages: 0, asked: 0, partials: 0, outcome: 'open' });
   const topic = beat.kind === 'step' ? (beat.topic ?? '') : '';
   const text =
     beat.kind === 'exhibit'
@@ -1162,8 +1164,46 @@ export function recordAssessment(settled: SessionState, assessment: Assessment, 
   const s = structuredClone(settled);
   const b = openBeat(s);
   if (b && (assessment === 'progress' || assessment === 'partial')) b.lastProgressAt = now;
-  if (b && assessment === 'progress') b.asked = 0; // a clear step forward starts the count again
+  if (b && assessment === 'partial') b.partials = (b.partials ?? 0) + 1; // how long they have been nearly there (issue #184)
+  if (b && assessment === 'progress') {
+    b.asked = 0; // a clear step forward starts the count again
+    b.partials = 0;
+  }
   return bump(s);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Nearly there, or going round in circles? (issue #184)
+// ---------------------------------------------------------------------------------------------------------------------------
+// 'partial' means the member is getting somewhere, so the rungs that help and the rung that moves the case on were all held for a
+// member the model called stuck or unclear: moving on someone who is making progress is the thing 'advance' exists not to do. But the
+// score is made fresh every turn with no memory of how many times it has already been given, and the real-model pilot of 2026-11-18
+// found what that costs: six competent-sounding but wrong messages on one part came back 'partial' six times, so no rung of the ladder
+// could fire and the part never ended. The member bought themselves time by being plausibly wrong, while a member who wrote nothing at
+// all was moved on in three. The count below is the memory the score does not have.
+
+/**
+ * How many messages in a row the model may call 'partial' before the member counts as circling rather than nearly there. Two in a row
+ * is a member closing in on it and is left alone; the third is the point at which nothing has been got to for as long as the ladder
+ * gives a stuck member before it leads or moves them on, so the same rungs become available. A clear step forward sets it back to zero,
+ * so a 'partial' between two real steps costs nothing.
+ */
+export const CIRCLING_PARTIALS = 3;
+
+/** The run of 'partial' scores on the open part, not counting the message being answered now. */
+export const partialRun = (s: SessionState): number => openBeat(s)?.partials ?? 0;
+
+/**
+ * Whether the member's latest message leaves them getting nowhere on the part in front of them, which is what every rung of help in
+ * `applyTurn` acts on. They are stuck or they said nothing to tell from — or this is the `CIRCLING_PARTIALS`th 'partial' in a row,
+ * which is a member circling rather than one closing in. `run` is the count before this message, which is what `partialRun` reads.
+ *
+ * Nothing here is driven by the clock: it takes a message from the member to reach any of it ("help is never unprompted", DECISIONS.md,
+ * the interview rubric, section 1).
+ */
+export function gettingNowhere(assessment: Assessment, run: number): boolean {
+  if (assessment === 'stuck' || assessment === 'unclear') return true;
+  return assessment === 'partial' && run + 1 >= CIRCLING_PARTIALS;
 }
 
 /**
@@ -1173,7 +1213,10 @@ export function recordAssessment(settled: SessionState, assessment: Assessment, 
 export function recordDataRequest(settled: SessionState): SessionState {
   const s = structuredClone(settled);
   const b = openBeat(s);
-  if (b) b.asked = Math.max(0, (b.asked ?? 0) - 1);
+  if (b) {
+    b.asked = Math.max(0, (b.asked ?? 0) - 1);
+    b.partials = Math.max(0, (b.partials ?? 0) - 1); // and it costs no part of the run that says they are circling (issue #184)
+  }
   return bump(s);
 }
 

@@ -7,6 +7,8 @@
 import {
   assessmentOf,
   buildPlan,
+  gettingNowhere,
+  partialRun,
   isInterviewerSideExhibit,
   coachSays,
   lastMemberMessage,
@@ -1108,8 +1110,9 @@ export function parseTurn(
   maxChars = 700,
   rung: NudgeLevel = 'none',
   held: readonly string[] = [],
-  /** Which register the reply has to be in, and what the member wrote (so a word they raised themselves is theirs, not ours). */
-  opts: { mode?: LiveMode; kind?: TurnKind; memberText?: string } = {},
+  /** Which register the reply has to be in, what the member wrote (so a word they raised themselves is theirs, not ours), and how long
+   * they have been nearly there (`partialRun`, so the move-on test below is the one `applyTurn` makes). */
+  opts: { mode?: LiveMode; kind?: TurnKind; memberText?: string; partialRun?: number } = {},
 ): Turn | null {
   let raw: unknown;
   try {
@@ -1127,9 +1130,10 @@ export function parseTurn(
   const beatComplete = o.beat_complete === true;
   const dataRequest = o.data_request === true;
   const directionClear = o.direction_clear === true;
-  // The same test `applyTurn` makes before it moves the case on, so only a reply that really is the move-on is held to the move-on rule:
-  // a question answered at that rung, or a beat finished at it, is an ordinary reply and keeps everything it said.
-  const moving = rung === 'advance' && !beatComplete && !dataRequest && (assessment === 'stuck' || assessment === 'unclear');
+  // The same test `applyTurn` makes before it moves the case on, through the same function, so only a reply that really is the move-on
+  // is held to the move-on rule: a question answered at that rung, or a beat finished at it, is an ordinary reply and keeps everything
+  // it said.
+  const moving = rung === 'advance' && !beatComplete && !dataRequest && gettingNowhere(assessment, opts.partialRun ?? 0);
   const voiced = interviewerVoice(message);
   let said = moving ? movingOnOnly(voiced, privateText) : voiced;
   // An interview says nothing about whether they are right, on the turns where they are working something out. A clarifying question
@@ -1521,12 +1525,15 @@ function applyTurn(st: StoredSession, turn: Turn, kind: TurnKind, now: number, h
     // The model's score, held to what the member actually wrote (issue #130): a message that names no comparison, no figure and no
     // next move is not a step forward, so it does not reset the count that climbs the help ladder.
     const assessment = assessmentOf(turn.assessment, lastMemberMessage(s));
+    // How long they have been nearly there, read before this message is counted (issue #184).
+    const run = partialRun(s);
     s = recordAssessment(s, assessment, now);
     if (turn.beatComplete) return nextBeat(coachSays(s, turn.message, now), now, 'independent');
     // They asked for something rather than being stuck on it: the question is answered and the message is taken back off the help ladder.
     if (turn.dataRequest) return coachSays(recordDataRequest(s), turn.message, now);
-    const stuck = assessment === 'stuck' || assessment === 'unclear';
-    // Help only for a member who is in fact stuck: a good answer that arrives as help falls due is never cut off.
+    // Stuck, or nearly there for the third message running, which is circling (issue #184).
+    const stuck = gettingNowhere(assessment, run);
+    // Help only for a member who is in fact getting nowhere: a good answer that arrives as help falls due is never cut off.
     if (stuck && (help === 'process_hint' || help === 'directional_hint')) return recordHint(coachSays(s, turn.message, now, 'hint'), now);
     // The third message without getting anywhere: Bucket leads, whatever the clock says, unless the member has just made a clear step forward.
     if (help === 'lead' && assessment !== 'progress') return recordHint(coachSays(s, turn.message, now, 'hint'), now);
@@ -1583,6 +1590,7 @@ async function converse(deps: LiveDeps, userId: string, sessionId: string, text:
             mode: modeOf(saved.state),
             kind,
             memberText: lastMemberMessage(saved.state),
+            partialRun: partialRun(saved.state),
           });
   } catch {
     turn = null;

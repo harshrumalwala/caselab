@@ -4,6 +4,9 @@ import {
   assessmentOf,
   brainstormTopic,
   buildPlan,
+  CIRCLING_PARTIALS,
+  gettingNowhere,
+  partialRun,
   coachSays,
   continueCase,
   deadlines,
@@ -34,6 +37,7 @@ import {
   userSays,
   WRITING_GRACE_MS,
   type ActionResult,
+  type Assessment,
   type CasePlan,
   type LiveMode,
   type NudgeLevel,
@@ -1306,5 +1310,82 @@ describe('the help ladder, mode by mode', () => {
       expect(openBeat(s)!.asked).toBe(0);
       expect(nudgeLevel(s, openBeat(s)!.revealedAt + sec(30))).toBe('none');
     });
+  });
+});
+
+// Issue #184: 'partial' is the model's judgement of one message, made fresh each turn with no memory of how many times it has already
+// been given. The real-model pilot of 2026-11-18 found what that costs: six competent-sounding but wrong messages on one part came
+// back 'partial' six times, `asked` climbed past the top of the ladder, and no rung of it could fire.
+describe('nearly there, or going round in circles (issue #184)', () => {
+  const onExhibit = (mode: LiveMode = 'interview'): SessionState => {
+    let s = newSession(plan(3), T0, 'Prompt text', mode);
+    s = ok(ready(s, at(100)));
+    s = ok(ready(s, at(100)));
+    s = ok(submit(s, 'My framework', at(100)));
+    s = ok(userSays(s, 'I would start with demand', at(100)));
+    return endFrameworkStage(s, at(100));
+  };
+  /** One more message from the member, scored by the model, and what the engine makes of it. */
+  const message = (s: SessionState, assessment: Assessment, t: number): { state: SessionState; nowhere: boolean } => {
+    const next = ok(userSays(s, 'Something about the exhibit', at(t)));
+    const nowhere = gettingNowhere(assessment, partialRun(next));
+    return { state: recordAssessment(next, assessment, at(t)), nowhere };
+  };
+
+  it('holds a member who is stuck or who said nothing to tell from, from their very first message', () => {
+    for (const assessment of ['stuck', 'unclear'] as const) for (const run of [0, 1, 2, 9]) expect(gettingNowhere(assessment, run), assessment).toBe(true);
+  });
+
+  it('never says it of a clear step forward, however many messages have gone by', () => {
+    for (const run of [0, 1, 2, 9]) expect(gettingNowhere('progress', run)).toBe(false);
+  });
+
+  it('leaves the first two half-answers alone and calls the third one circling', () => {
+    expect(CIRCLING_PARTIALS).toBe(3);
+    expect([0, 1, 2, 3, 9].map((run) => gettingNowhere('partial', run))).toEqual([false, false, true, true, true]);
+  });
+
+  it('counts the run of half-answers on the beat, and a clear step forward sets it back to nothing', () => {
+    let s = onExhibit();
+    for (const [i, expected] of [false, false, true, true].entries()) {
+      const r = message(s, 'partial', 200 + i * 10);
+      expect(r.nowhere, `message ${i + 1}`).toBe(expected);
+      s = r.state;
+    }
+    expect(openBeat(s)!.partials).toBe(4);
+    s = message(s, 'progress', 300).state;
+    expect(openBeat(s)!.partials).toBe(0);
+    expect(openBeat(s)!.asked).toBe(0);
+  });
+
+  it('leaves a half-answer between two real steps exactly where it was: one of them is nearly there, not circling', () => {
+    let s = onExhibit();
+    for (const [i, assessment] of (['progress', 'partial', 'progress', 'partial'] as const).entries()) {
+      const r = message(s, assessment, 200 + i * 10);
+      expect(r.nowhere, assessment).toBe(false);
+      s = r.state;
+    }
+    expect(openBeat(s)!.partials).toBe(1);
+  });
+
+  it('does not count a message that asked for data: asking costs no part of the run either', () => {
+    let s = onExhibit();
+    for (let i = 0; i < 4; i++) {
+      s = ok(userSays(s, 'What is the cost base?', at(200 + i * 10)));
+      s = recordDataRequest(recordAssessment(s, 'partial', at(200 + i * 10)));
+    }
+    expect(openBeat(s)!.partials).toBe(0);
+    expect(openBeat(s)!.asked).toBe(0);
+    expect(gettingNowhere('partial', partialRun(s))).toBe(false);
+    expect(recordDataRequest(onExhibit()).beats[0].partials).toBe(0); // never below zero
+  });
+
+  it('starts the count from nothing in a case saved before it was kept', () => {
+    const s = onExhibit();
+    const b = openBeat(s)!;
+    const old: SessionState = { ...s, beats: [{ ...b, partials: undefined }] };
+    expect(partialRun(old)).toBe(0);
+    expect(gettingNowhere('partial', partialRun(old))).toBe(false);
+    expect(openBeat(recordAssessment(old, 'partial', at(200)))!.partials).toBe(1);
   });
 });

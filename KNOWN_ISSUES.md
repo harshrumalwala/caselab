@@ -406,12 +406,43 @@ move whenever the file does, so the quoted words are the reliable part):
 - **An acknowledgement in front of the move-on is lost.** "Good. Let us move on." becomes `MOVING_ON`, because only the *first*
   sentence is examined and a later one is never promoted in its place (promoting one would reopen #131's risk of carrying the
   abandoned beat's substance). A model that puts the move-on second therefore reads a little flatter than it wrote.
-- **Nothing ties the filter's test to the engine's.** `moving` in `parseTurn` re-derives `applyTurn`'s advance test (rung `advance`,
-  no `beat_complete`, no `data_request`, assessment `stuck` or `unclear`) and is a second copy of it that has to be changed with it.
+- **Nothing ties the filter's test to the engine's** (half of it does since issue #184: the score half is `gettingNowhere`, called by
+  both). `moving` in `parseTurn` re-derives the rest of `applyTurn`'s advance test (rung `advance`, no `beat_complete`, no
+  `data_request`) and is a second copy of it that has to be changed with it.
   It is also one condition looser, as it was before #165: `applyTurn` only advances on an `exhibit` turn, while `moving` is true on a
   `direction` turn at that rung too. Nothing reaches that combination today — `nudgeLevel` returns `none` outside the `exhibits`
   stage, so a direction turn is always at the bottom rung — but if that ever changed, a direction reply would be replaced by
   `MOVING_ON` without the case moving anywhere. Which rung fires when was out of scope here (#164).
+
+## A member who is nearly there every time (issue #184, 2026-11-18)
+
+- **Unverified against a real model**, like every other change under `supabase/functions/**`, and this one turns on a score only a real
+  model produces. The unit tests put the pilot's two shapes through the real `handleLive`; `npm run dryrun:live` scores `partial` from a
+  script, not from reading anything. **It needs `npx supabase functions deploy live-case` to reach anybody.**
+- **The threshold is judgement, not measurement.** `CIRCLING_PARTIALS = 3` in `supabase/functions/_shared/liveCase.ts`: the third
+  `partial` in a row with no clear step between them counts as circling, which puts the member at the same rung a stuck member would be
+  at after the same number of messages. Two is left alone because two is a member closing in. Nobody has measured how often a real model
+  says `partial`, so nobody knows how often this fires: if it says it freely, a member is moved on at their fourth message on a part more
+  often than the design intends; if it rarely says it, the fix costs nothing and buys nothing. The pilot run of 2026-11-18 is one case.
+- **Nothing holds `partial` to what the member wrote.** `assessmentOf` / `madeAStep` (issue #130) only ever take `progress` away, so the
+  floor under the score does not reach `partial` at all: a model that calls every message `partial` now moves the member on at their
+  fourth, where it used to leave them there for ever. That is the intended direction, but it is still the model's word, and the obvious
+  extension — holding `partial` to the same test, or down-scoring a `partial` that names nothing — was not done here.
+- **`partial` still extends the clock, and that was left alone.** `recordAssessment` sets `lastProgressAt` on `partial` as well as on
+  `progress`, and `stageEndsAt` reads it, so a member who is nearly there keeps the exhibit stage open longer — the competent-wrong
+  member of the pilot was buying time by being wrong. With the move-on in place the buying stops at four messages, so the extension is
+  bounded rather than removed. Taking it away would shorten the part for the member who really is closing in, which is the behaviour the
+  issue asked not to punish.
+- **The advance test is now one function, read from two places, but only half of it.** `gettingNowhere` is shared by `applyTurn` and by
+  `moving` in `parseTurn` (which is what the entry two sections down says had to be changed in step), so the score half cannot drift
+  again. The rest of `moving` — rung `advance`, no `beat_complete`, no `data_request` — is still a second copy of `applyTurn`'s
+  conditions, and is still one condition looser (it is true on a `direction` turn at that rung, which nothing reaches today).
+- **The counter is per beat and starts at zero for a session already running.** `BeatRecord.partials` is optional for the same reason
+  `asked` is: a case saved before the deploy has no count, so its member starts the run again on their next message. Nothing migrates.
+- **What the dry run can and cannot show.** The `circling` candidate (issue #181) writes half-answers and then presses "move on" itself,
+  so what the change moves there is which of them ends the part, not whether the case finishes: its beats come out `coach_moved` where
+  they were `member_moved`, and in learning mode nothing changes at all. A member who neither circles nor presses anything is not in the
+  harness, because the harness has no such candidate.
 
 ## A fact that mentions the candidate (issue #156, 2026-11-17)
 
