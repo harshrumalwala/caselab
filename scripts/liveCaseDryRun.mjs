@@ -345,7 +345,8 @@ export const CANDIDATE_SPECS = {
     directionClear: true,
     exhibit: { assessment: 'partial', beatComplete: false },
     says: () => 'half',
-    endsBeats: true, // by choosing "move on": nothing in the engine moves a member on who is neither stuck nor unclear
+    endsBeats: true, // by choosing "move on", which is the only way out of a beat in learning; in a timed mode the coach gets there
+    // first, because the third half-answer in a row is a member circling (issue #184)
     beat: (written) => (written < 4 ? 'write' : 'moveOn'),
   },
   unfiltered: {

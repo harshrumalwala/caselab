@@ -2125,3 +2125,103 @@ describe('a move-on says the case is moving on, in every mode (issue #165)', () 
     expect(w.db.get(id)!.state.beats[0].outcome).toBe('coach_moved');
   });
 });
+
+// Issue #184, from the real-model pilot of 2026-11-18. Two parts of one interview-mode case behaved in opposite ways. Three
+// content-free filler messages, which the model scored 'unclear', climbed the ladder and the part was taken away on the third turn.
+// Six competent-sounding but wrong messages, scored 'partial' every time, took `asked` to 5 — past the top of the ladder — and the
+// part never ended at all: every rung of help was held for a member the model called stuck, and 'partial' is not that. Saying nothing
+// got the member moved on; sounding good bought them the rest of the discussion, and with it the parts of the case still to come.
+describe('a member who is nearly there every time (issue #184)', () => {
+  /** The opening stages done quickly in the chosen mode: the id of a session on its first exhibit. */
+  async function toExhibitsIn(mode: 'practice' | 'interview' | 'learning', userId = ME): Promise<string> {
+    const id = view(await call({ type: 'start', libraryId: LIB, mode }, userId)).sessionId;
+    await call({ type: 'ready', sessionId: id }, userId);
+    await call({ type: 'ready', sessionId: id }, userId);
+    await call({ type: 'submit', sessionId: id, text: 'Demand, supply, cost' }, userId);
+    w.script.reply = () => turn('Good start, let us look at the data.', { direction_clear: true, assessment: 'progress' });
+    expect(view(await call({ type: 'say', sessionId: id, text: 'I would start with demand' }, userId)).stage).toBe('exhibits');
+    w.asked.length = 0;
+    return id;
+  }
+  const say = async (id: string, text: string, userId = ME): Promise<LiveView> => view(await call({ type: 'say', sessionId: id, text }, userId));
+  const beat = (id: string) => w.db.get(id)!.state.beats[0];
+  const told = () => JSON.stringify(w.asked.at(-1));
+  /** Four messages that sound like work and get nowhere, which is the shape the pilot's member wrote in. */
+  const HALF_ANSWERS = [
+    'The suburban shops feel like the place to look',
+    'I think the mix of the two groups is what matters here',
+    'It still comes back to the mix for me',
+    'I would stay with the mix of the two groups',
+  ];
+
+  it('takes the part away on the fourth half-answer, where the filler-writer loses it on the fourth message too', async () => {
+    const circling = await toExhibitsIn('interview');
+    w.script.reply = () => turn('What else is in front of you?', { assessment: 'partial' });
+    expect((await say(circling, HALF_ANSWERS[0])).messages.at(-1)!.kind).not.toBe('hint'); // one half-answer is nearly there
+    expect(beat(circling).partials).toBe(1);
+    expect((await say(circling, HALF_ANSWERS[1])).messages.at(-1)!.kind).not.toBe('hint'); // and so is a second
+    expect(beat(circling).outcome).toBe('open');
+
+    // The third in a row is a member going round in circles, so the ladder is open to them: an interview's last rung of help first.
+    expect((await say(circling, HALF_ANSWERS[2])).messages.at(-1)!.kind).toBe('hint');
+    expect(told()).toContain('more specific directional hint about where to look');
+    w.script.reply = () => turn('Let us move on to the next piece.', { assessment: 'partial' });
+    const moved = await say(circling, HALF_ANSWERS[3]);
+    expect(moved.exhibits).toHaveLength(2); // the pilot's member was still on the first one six messages in
+    expect(beat(circling).outcome).toBe('coach_moved');
+
+    // The other half of the pilot's asymmetry, unchanged: the member who writes nothing of substance still loses the part.
+    const filler = await toExhibitsIn('interview', 'user-two');
+    w.script.reply = () => turn('What do you make of it?', { assessment: 'unclear' });
+    for (const text of ['Hmm', 'Not sure', 'No idea']) await say(filler, text, 'user-two');
+    w.script.reply = () => turn('Let us move on to the next piece.', { assessment: 'unclear' });
+    expect((await say(filler, 'I really do not know', 'user-two')).exhibits).toHaveLength(2);
+    expect(w.db.get(filler)!.state.beats[0].outcome).toBe('coach_moved');
+  });
+
+  it('says the case is moving on when it moves the case on, whatever the model wrote', async () => {
+    const id = await toExhibitsIn('interview');
+    w.script.reply = () => turn('What else is in front of you?', { assessment: 'partial' });
+    for (const text of HALF_ANSWERS.slice(0, 3)) await say(id, text);
+    // The same reply the engine replaces for a stuck member: at this rung the member reads the move-on and nothing of the part they lose.
+    w.script.reply = () => turn('That is one way to look at it.', { assessment: 'partial' });
+    const moved = await say(id, HALF_ANSWERS[3]);
+    expect(moved.messages.filter((m) => m.kind !== 'exhibit').at(-1)!.text).toBe(MOVING_ON); // the last thing said before the next part arrives
+    expect(beat(id).outcome).toBe('coach_moved');
+  });
+
+  it('leads first in practice, as it always did, and then moves them on', async () => {
+    const id = await toExhibitsIn('practice');
+    w.script.reply = () => turn('What else is in front of you?', { assessment: 'partial' });
+    for (const text of HALF_ANSWERS.slice(0, 2)) expect((await say(id, text)).messages.at(-1)!.kind).not.toBe('hint');
+    w.script.reply = () => turn('Look at the two seasons side by side. Which gap is the bigger one?', { assessment: 'partial' });
+    expect((await say(id, HALF_ANSWERS[2])).messages.at(-1)!.kind).toBe('hint');
+    expect(told()).toContain('stop asking open questions and lead them'); // the rung practice has and an interview does not
+    w.script.reply = () => turn('Let us move on to the next piece.', { assessment: 'partial' });
+    expect((await say(id, HALF_ANSWERS[3])).exhibits).toHaveLength(2);
+    expect(beat(id).outcome).toBe('coach_moved');
+  });
+
+  it('never moves a learner on, however long they circle: learning has no clock and nobody but the member ends a part', async () => {
+    const id = await toExhibitsIn('learning');
+    w.script.reply = () => turn('Stay with it — what else is in there?', { assessment: 'partial' });
+    for (let i = 0; i < 8; i++) await say(id, HALF_ANSWERS[i % HALF_ANSWERS.length]);
+    expect(beat(id).partials).toBe(8);
+    expect(beat(id).outcome).toBe('open');
+    expect(view(await call({ type: 'resume', sessionId: id })).exhibits).toHaveLength(1);
+    expect(w.db.get(id)!.state.beats).toHaveLength(1); // the case is where they left it, and the move-on is theirs to press
+  });
+
+  it('leaves a half-answer between two real steps exactly where it was', async () => {
+    const id = await toExhibitsIn('interview');
+    const STEP = 'Off-peak occupancy is 31 percent against 95 at peak';
+    for (const [i, assessment] of (['progress', 'partial', 'progress', 'partial', 'progress'] as const).entries()) {
+      w.script.reply = () => turn('Noted. What would you do with that?', { assessment });
+      const r = await say(id, assessment === 'progress' ? STEP : HALF_ANSWERS[i % HALF_ANSWERS.length]);
+      expect(r.messages.at(-1)!.kind, assessment).not.toBe('hint');
+      expect(beat(id).outcome, assessment).toBe('open');
+    }
+    expect(beat(id).hints).toBe(0);
+    expect(beat(id).partials).toBe(0); // the last clear step forward started the count again
+  });
+});
