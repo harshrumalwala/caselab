@@ -296,9 +296,10 @@ move whenever the file does, so the quoted words are the reliable part):
   figures differ only by population; the audit's headline counts all 872. The README carries no figure; read the current one from the
   command.
 - **An `audit:live` or `dryrun:live` figure is only meaningful against the commit it was produced on (found 2026-11-18, issue #200).**
-  The 0 first reported for the third-person rule on #196 came from an audit run on a stale checkout: per the PM, the main tree was on
-  `claude/issue-186-coverage-engine` at `edffb0e`, 45 commits behind main, and `32961a6` (PR #190, which added the third-person
-  detector) was not an ancestor of it. The flag name `prompt_talks_about_the_case` was already in the criteria list, so the report
+  The 0 first reported for the third-person rule on #196 came from an audit run on a stale checkout: the main tree was on
+  `claude/issue-186-coverage-engine` at `edffb0e`, 8 commits behind main as it then stood (`ab4430d`) and carrying 2 commits of its own,
+  and `32961a6` (PR #190, which added the third-person detector) was not an ancestor of it. Eight commits was enough: that is an
+  ordinary afternoon's drift, not a grossly stale tree. The flag name `prompt_talks_about_the_case` was already in the criteria list, so the report
   printed its line with a 0 beside it while the rule that fills it did not exist. A rule that does not exist yet reports 0 rather than
   failing, so a stale checkout turns "not measured" into "measured clean". Record the commit alongside any figure taken from these
   reports. This is the failure mode of #183 (a harness treated as evidence when it could not execute the code it was checking) in a new
