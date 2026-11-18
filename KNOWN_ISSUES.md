@@ -306,14 +306,18 @@ move whenever the file does, so the quoted words are the reliable part):
   form. It was found because a developer re-ran the audit for #200, got 15 against the PM's 0, and did not write the PM's number down;
   the PM and the coordinator then re-ran it independently and both got 15.
 - **The 560 figure above is low: further prompts frame the member in the third person without the word "candidate".** They were
-  counted by reading, as the #196 waves went (wave-completion comment of 2026-11-18T06:48Z on #196), in separate classes. Do not add
-  them into one total: nothing establishes the classes do not overlap. (1) A hired firm with no member in the sentence ("has hired the
-  firm", or a named consulting firm): **34 prompts** across the 847, counted. (2) Case-structure narration ("the task is", "the question
-  is", "the case then...", "you will be asked"): **16 prompts**, counted. (3) Impersonal asks ("wants its strategy assessed", "asks for
-  a growth strategy"): **no number**; found by reading, never counted. Two further shapes were noted earlier, the client "sits in the
-  role of..." and a mixed "we" / "our client" voice; that comment gives no count for them either. A later pass can be scoped from the
-  #196 lists instead of measured again from a regex. The rule's regex deliberately leaves these alone; widening it is out of scope of
-  #200.
+  counted while reading, as the #196 waves went (wave-completion comment of 2026-11-18T06:48Z on #196, which says only "found by
+  reading as the waves went" and states no method beyond that), in separate classes. Do not add them into one total: nothing
+  establishes the classes do not overlap. (1) A hired firm with no member in the sentence ("has hired the firm", or a named consulting
+  firm): **34 prompts** across the 847, counted while reading. (2) Case-structure narration ("the task is", "the question is", "the
+  case then...", "you will be asked"): **16 prompts**, counted while reading. (3) Impersonal asks ("wants its strategy assessed",
+  "asks for a growth strategy"): **no number**; found by reading, never counted. (4) A different kind, not a no-member framing: the
+  words "student", "interviewee" and "applicant". **19 prompts** match those words, most of them people in the business rather than
+  the member, and **four are worth reading**; the #196 count of 0 for the member words does not contradict this, because only about
+  four of the 19 are about the member. Two further shapes were noted earlier, the client "sits in the role of..." and a mixed "we" /
+  "our client" voice; that comment gives no count for them, and where they were recorded is not known. A later pass can be scoped
+  from the #196 lists instead of measured again from a regex. The rule's regex deliberately leaves these alone; widening it is out of
+  scope of #200.
 
 ## Tests and CI
 
