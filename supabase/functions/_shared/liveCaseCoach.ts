@@ -1308,6 +1308,15 @@ export function nothingToJudge(): Feedback {
 
 const rating = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5 ? v : null);
 
+/**
+ * The headline rating is a claim about the whole case, but the model gives it with no quote of its own. It is kept only when the
+ * skill ratings under it mostly rest on the student's words: strictly more than half, so a 3-3 split cannot carry it. The count is of
+ * ratings the model asserted, not a fixed six: a stage the case never reached comes back unrated and must not count against a short case.
+ */
+export function overallIsEarned(grounded: number, claimed: number): boolean {
+  return claimed > 0 && grounded * 2 > claimed;
+}
+
 /** Accepts the model's feedback only in the shape the case log can take, and only ratings that rest on a quote of what the student wrote. */
 export function parseFeedback(text: string, state: SessionState): Feedback | null {
   let raw: unknown;
@@ -1319,6 +1328,8 @@ export function parseFeedback(text: string, state: SessionState): Feedback | nul
   const o = obj(raw);
   const theirs = norm(studentText(state));
   const skills = Object.fromEntries(SKILL_KEYS.map((k) => [k, { rating: null, feedback: '', evidence: '' }])) as Record<SkillKey, SkillFeedback>;
+  let claimed = 0; // rateable skills the model put a 1-5 rating on
+  let groundedCount = 0; // of those, the ones that quote the student
   for (const entry of Array.isArray(o.skills) ? o.skills : []) {
     const e = obj(entry);
     const key = SKILL_KEYS.find((k) => k === e.key);
@@ -1326,6 +1337,10 @@ export function parseFeedback(text: string, state: SessionState): Feedback | nul
     const evidence = str(e.evidence, 160);
     const grounded = evidence.length >= 6 && theirs.includes(norm(evidence));
     const behavioral = key === 'behavioral1' || key === 'behavioral2';
+    if (!behavioral && rating(e.rating) !== null) {
+      claimed++;
+      if (grounded) groundedCount++;
+    }
     skills[key] = { rating: grounded && !behavioral ? rating(e.rating) : null, feedback: str(e.feedback, 600), evidence: grounded ? evidence : '' };
   }
   const feedback: Feedback = {
@@ -1345,7 +1360,7 @@ export function parseFeedback(text: string, state: SessionState): Feedback | nul
     feedback.overall.rating = null;
     for (const k of SKILL_KEYS) skills[k].rating = null;
   }
-  if (SKILL_KEYS.every((k) => skills[k].rating === null)) feedback.overall.rating = null;
+  if (!overallIsEarned(groundedCount, claimed)) feedback.overall.rating = null;
   return feedback;
 }
 
