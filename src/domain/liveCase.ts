@@ -44,6 +44,18 @@ const DISCUSSION = 'Discussion';
  */
 export type CaseStep = { id: string; label: string; state: 'done' | 'current' | 'open' | 'ahead' };
 
+/**
+ * The word each state is read out as, so the strip says the same thing to someone who is not reading its fills and shapes: the pill
+ * at hand is marked `aria-current="step"` and needs no word of its own, and the other three carry theirs. The words are the ones the
+ * strip has always meant - a part is still to come, it stands open, or it is finished - so nothing new is asked of the member.
+ */
+export const STEP_STATE_WORD: Record<CaseStep['state'], string | undefined> = {
+  done: 'finished',
+  current: undefined,
+  open: 'still open',
+  ahead: 'still to come',
+};
+
 /** The stages a brainstorm is answered in. The discussion stands still while they run. */
 const BRAINSTORM_STAGES: readonly Stage[] = ['brainstorm_think', 'brainstorm_write'];
 
@@ -63,6 +75,9 @@ const BRAINSTORM_STAGES: readonly Stage[] = ['brainstorm_think', 'brainstorm_wri
  *
  * `beatsShown` and `beatsTotal` are how it knows whether the case has parts left to work. A caller that cannot say takes the careful
  * reading, where a part is not finished unless the strip can see that it is.
+ *
+ * `open` says that a part is not closed, and not that the member has worked some of it: those two are the same here, because the view
+ * says how many parts the case has reached and not which ones. Telling them apart needs a field the Edge Function does not send.
  */
 export function caseSteps(
   view: Pick<LiveView, 'stage' | 'hasBrainstorm' | 'exhibitsTotal' | 'submissions'> & Partial<Pick<LiveView, 'beatsShown' | 'beatsTotal'>>,

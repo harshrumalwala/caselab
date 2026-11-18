@@ -211,7 +211,24 @@ move whenever the file does, so the quoted words are the reliable part):
 - **Exhibit chart kinds we cannot draw** stay as tables: marimekko, bubble size, waterfall, dual axis, maps, flow diagrams, stacked area,
   scatter trend lines, stacked horizontal bars.
 - **No visual regression tests for charts.** The render check (a temporary test that draws every chart to SVG, then a contact sheet) lives in
-  the assistant's scratch folder, not in the repo. `src/features/caselog/ExhibitChart.test.tsx` covers specific behaviours only.
+  the assistant's scratch folder, not in the repo. `src/features/caselog/ExhibitChart.test.tsx` covers specific behaviours only. **Issue #175 is
+  what that costs**: a value label was drawn five pixels above its bar and so landed outside the panel whenever the bar reached the axis maximum
+  (every 100% bar on a percentage chart), and nothing in the suite saw it, because the tests asked what a chart drew and never where it drew it.
+  The tests added with the fix measure a label's position against the plot's own edges, which is the shape of test that would have caught it; the
+  browser check behind that issue was still done by hand, at desktop width and at 390px.
+- **What the label fix in #175 leaves rough** (2026-11-17, `src/features/caselog/ExhibitChart.tsx`). The placement arithmetic is estimates, not
+  measured text: a size-10 numeral is assumed to reach 8px above its baseline and to be 5.6px wide per character (`LABEL_RISE`, `labelWidth`), the
+  same way the rest of the file measures text, so an unusually long label inside a sideways bar can still sit closer to the bar's start than the
+  estimate says. A bar needs 15px of depth to hold its label inside it; a shorter bar at the axis maximum has the label just under its top instead,
+  over the plot rather than over the bar, which reads but is not pretty. And the labels **below** a mark were left alone: the label under the
+  most-negative bar of a chart sits 12px under the axis, where the category names also sit, so the two can overlap. Nothing in the library has a
+  negative bar deep enough to have been noticed; it was out of scope for #175, which was about figures leaving the panel.
+- **A chart narrower than 420px scrolls rather than fits** (issue #175). The drawing has a size of its own (560px for a single panel), and the SVG
+  scales to the card down to a floor of 420px, which keeps a 10px label at 7.5px. Below that the chart is swiped sideways and says so. Scaling the
+  whole drawing into a phone card (320px inside the Full solution dialog at 390px) was tried in the browser and puts the axis numbers and the value
+  labels at about 5.7px, which is why the floor is there. Laying a panel out at the card's own width instead — fewer pixels for the plot but the
+  same 10px type — would fit a phone properly and is the real fix; it is a layout change across every chart kind, with no visual regression tests to
+  catch what it breaks. The note says “swipe”, which is phone language: a desktop window narrow enough to show it is dragged or scrolled instead.
 - **Live case hides interviewer-only tables by heuristic** (titles and wording in `supabase/functions/_shared/liveCase*.ts`); the README
   accepts that a candidate exhibit might be hidden (the "safer way to be wrong"). Issue #85 narrowed the title half of it (a soft word
   such as "calculation" no longer hides the book's own numbered exhibit on its own), which left three kinds of leftover, all measured on
@@ -602,8 +619,9 @@ move whenever the file does, so the quoted words are the reliable part):
 - **The strip no longer calls the discussion finished while a mid-case brainstorm runs (issue #166, 2026-11-17).** An interaction
   between #148 and #152, not a bug in either: `caseSteps` filled a pill in when it was earlier in the list than the stage, which was
   the same as "finished" only while the brainstorm ran last. Since #148 it does not (100 of 844 live-eligible cases have a brainstorm
-  that is not the last beat, 20 of them before any part of the discussion). The discussion now has a fourth look, `open` (outlined in
-  the accent colour, no mini Bucket), used while the case stands in a brainstorm with `beatsShown < beatsTotal`. What is left:
+  that is not the last beat, 20 of them before any part of the discussion). The discussion now has a fourth look, `open` (a tint of the
+  accent colour since issue #176, no mini Bucket), used while the case stands in a brainstorm with `beatsShown < beatsTotal`. What is
+  left:
   - the view says how many parts of the plan the case has reached, not **which** ones. When the clock ends the discussion early the
     parts it did not reach are let go and the case goes to the brainstorm and then to the recommendation, so during that brainstorm
     the discussion is drawn as open although the case will not come back to it. The careful reading (open, not finished) was chosen
@@ -612,6 +630,38 @@ move whenever the file does, so the quoted words are the reliable part):
     the brainstorm pushes no `BeatRecord` there.
   - a case with two brainstorms still fills the Brainstorm pill in after the first one is handed in, which is #152's decision and
     unchanged: the view carries no count of the brainstorms a plan has left.
+
+## What the browser pass of issue #176 saw, and what it could not (2026-11-17)
+
+- **The four states were measured and redrawn, and the rules behind them are untouched.** `caseSteps` decides the same four states it
+  decided before; only `ClockBar` changed. `done` is a flat grey fill with a tick, `open` a tint of the accent colour with a
+  continuation mark, `current` the solid accent with the mini Bucket, `ahead` a dashed outline with no fill and no mark. The looks were
+  checked in a browser at 1,280 px and at a real 390 px viewport, in light, in dark and under a `grayscale(1)` filter.
+- **A part standing open is still drawn and read the same whether the member has worked part of it or has never been in it**, which was
+  the sharper half of #176 and is **not** fixed, deliberately. The view says how many parts the case has reached (`beatsShown` against
+  `beatsTotal`), not which, and the brainstorm beat is counted in that total in some plans and pushed as no beat at all in others, so
+  "has a discussion beat been worked?" cannot be answered from it without guessing. What the state word says was chosen to fit both:
+  "still open" claims nothing about progress, and the continuation mark says the part is not closed rather than that the member is part
+  way through it. **The durable fix is a field on the view** that says which parts of the plan have been reached (an Edge Function
+  change), which was out of scope here as it was in #152 and #167.
+- **The state word reaches a screen reader as the list item's accessible name** (`aria-label` on the `<li>`, `STEP_STATE_WORD` in
+  `src/domain/liveCase.ts`), because a visually hidden span would change the pill's `textContent` and #152's and #167's tests read
+  that. **No screen reader was run.** Browsers expose the name, and the tests assert it, but NVDA in browse mode is known to read a
+  list item's content rather than its name, so a member using that combination may hear "Prompt" without "finished". The visual marks
+  (tick, continuation, mini Bucket) do not depend on it.
+- **At 390 px the pills now wrap 3 + 2 where they wrapped 4 + 1.** Nothing about the wrapping changed — same `flex-wrap`, same gaps,
+  same padding — but a tick or a continuation mark makes a pill about 18 px wider, and the first row had about 15 px of room. Measured
+  at a 390 px viewport: the list is 358 px wide and the five pills are 82, 105, 86, 106 and 124 px. It still reads as a wrapped list,
+  and the second row is no longer one lone pill. **The 390 px viewport had to be forced through the DevTools protocol**: headless
+  Chrome on this machine will not make a window narrower than 484 px, so a `--window-size=390` screenshot is a 484 px page cropped to
+  390 and wraps one pill too late. Any future phone check of this app should set the viewport with `Emulation.setDeviceMetricsOverride`
+  rather than trust the window size.
+- **Nothing was looked at inside a real live case.** The pass rendered `ClockBar` from fixtures against the app's own stylesheet, with
+  no model call and no live-case start (the issue forbade spending one). The strip has no behaviour of its own beyond `caseSteps`,
+  which the unit tests cover, but nobody has yet watched the states change as a real case moves.
+- **`open` survives greyscale on its mark, not on its fill.** The accent tint is very light (`--accent-soft`), so under a greyscale
+  filter it is nearly the page colour; the continuation mark and the darker text are what separate it from `ahead` there. The pair the
+  issue ranked first, `done` against `ahead`, separates on fill, border and mark at once.
 
 ## Asking outright for the answer (issue #142, 2026-11-17)
 
@@ -736,10 +786,11 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   most three skills a side with no way to see the rest (the point is a short answer, not a table), and the two lines that explain an
   empty preview (too few rated cases, or every skill in the middle band) are shown to the member only, so they have never been seen
   outside a test either.
-- **The live case's progress strip has been read by tests, not by eyes** (issues #150 and #166, 2026-11-17). Screen tests assert which
-  pill is marked, and in which state, in each shape of case, but nobody has opened a live case in a browser since either change, and
-  phone width — where five pills wrap onto two rows — is unchecked, the same gap the rest of the live-case screens have. The `open`
-  look #166 added (an accent outline with no fill) has never been seen on a screen either.
+- **The live case's progress strip has now been looked at, and its four states redrawn** (issues #150, #166, #173 and #176,
+  2026-11-17). It was read in a browser for the first time on 2026-11-17 (#173) and four things it communicated badly became #176;
+  all four were changed and looked at again at 1,280 px, at 390 px, in dark mode and in greyscale, against the real stylesheet. What
+  is left is below ("What the browser pass of issue #176 saw, and what it could not"). The strip itself is no longer an unseen
+  surface; the live-case screens around it still are.
 - **No end-to-end coverage of Live case** (PR #79 says so: "E2E untouched (no live case coverage there)"). The live-case logic, handler and
   screens are covered by unit tests with a fake model and an in-memory backend, and `live_case_sessions` by PGlite tests, but nothing in
   `e2e/` starts a case against the real function. The Learning-mode screen was not exercised in a browser by its author.
@@ -782,6 +833,65 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
 - **No visual or snapshot tests** for charts or screens; charts were checked by eye from rendered SVGs.
 - **Content is validated by scripts outside the repo**, not by tests: the solution parser (`src/domain/bookSolution.ts`) is tested, but
   whether a write-up is faithful to its book is not.
+
+## What the dry run can reach, and what it still cannot (issue #181, 2026-11-17)
+
+- **The blind spots were measured, not guessed, and the measurement is not in the repo.** Before and after were V8's own coverage
+  (`NODE_V8_COVERAGE` on a whole-catalogue `dryrun:live`, with a small script that reports every function and block of
+  `liveCase.ts` and `liveCaseCoach.ts` that never executed). Over all 847 cases, before: **16 of the 155 functions the loader saw in
+  `liveCaseCoach.ts`, and 9 of 109 in `liveCase.ts`, never ran once**, among them `refusedTurn`, `recordDataRequest`, `pause`,
+  `continueCase`, `shiftTimes`, `endEarly`, `saveDraft` and `saveScratchpad`. After: **1 and 0** (the one is `nudge`, below), with 74
+  functions and branches reached that never ran before. The reader script lives in the
+  assistant's scratch folder, like `split_seed.py` before it, so **nobody can repeat the measurement from the repo**; the honest
+  residue below is the part that was written down.
+- **Still unreachable, and why.** Each of these is a branch the harness cannot execute. None is a defect on its own; the list is what
+  a green dry run does *not* cover.
+  - **The timer-driven hint**: the whole `nudge` path in `liveCaseCoach.ts` and the hint branch of `applyTurn`. `nextNudgeAt` always
+    returns null, so the screen never sends the action and the deployed function never runs it either. Reaching it would mean the
+    harness sending an action no client can send, which would be pretending rather than testing.
+  - **The 30-minute hard stop** (`settle`'s limit branch, `endReason: 'time_limit'`): 0 runs of 27,951 reach it, in any mode, for any
+    of the eleven candidates. The plan reserves the closing stages' time, so a case completes before the limit. Whether a member can
+    reach it at all is **not known** — nothing here proves it is unreachable, only that no candidate found it.
+  - **Ending a case while a part of the discussion is still open** (`endEarly`'s `timed_out` on the open beat). `interrupted` ends
+    the case in the recommendation stage, where no beat is open; ending it in the middle would cost the rest of that run's coverage.
+  - **The guards against an action the screen cannot send**: empty text, the wrong stage, acting while the case is paused
+    (`submit`, `userSays`, `ready`, `moveOn`'s paused branch, `saveScratchpad` outside the framework stages). The harness only sends
+    what the screen can send.
+  - **The caps and the collisions**: 4 starts a day, 12 a week, 3,000 actions, 90 coach replies, and every save-collision retry in
+    `mutate` and `converse`. One run is one case, played alone, by one member.
+  - **The `??` fallbacks for sessions saved before a field existed** (`b.asked`, `plan.limitMs`, `plan.exhibitMs`, `state.mode`): the
+    harness only makes new sessions, so they are unreachable by construction.
+  - **The second half of `questionIn`**: a verdict that ends in a question mark but has no question to keep.
+  - **`SHOW_DATA`**, the stand-in for a direction turn in an interview whose reply was all verdict and whose direction was clear. The
+    shape cycle lands an emptying shape on the first direction turn, where the direction is not clear yet, and a surviving one on the
+    second: reaching it would need a twelfth candidate whose cycle sits at a different offset.
+  - **Feedback that cannot be parsed** and the retry counter (`MAX_FEEDBACK_ATTEMPTS`): `blocked`'s model declines the feedback, which
+    covers the "could not be written" path, but no candidate sends feedback that is malformed rather than refused.
+- **Four things the improved harness showed about the engine. Nothing was changed for any of them** (issue #181 forbade it: a harness
+  change and an engine fix in one pull request cannot be told apart afterwards).
+  - **A member scored `partial` on every message is never moved on.** The advance rung only fires for `stuck` or `unclear`
+    (`applyTurn`), and `partial` is neither, so in practice and in interview the only ways out of that part are the member's own
+    "move on" and the clock. `circling` ends every part itself, in all three modes.
+  - **In an interview, a verdict in reply to a clarifying question is not removed.** `withoutVerdicts` runs for the `exhibit` and
+    `direction` turns only, so "You are exactly right" reaches the member whole when it answers a clarifying question. That may be
+    the right scope — a clarifying answer is not a verdict on their reading of a part — but it was never a decision anyone wrote down.
+  - **`hinted` was 0 in every dry run ever because of the harness, not the engine.** With a candidate that takes help and then closes
+    the part it is 12,357 of 115,556 beat outcomes, and the engine's rule (`nextBeat`: `b.hints > 0 ? 'hinted' : 'independent'`)
+    behaves as written in all three modes.
+  - **Two stages now show as running over their planned time** (1,694 `framework_write`, 1,652 `exhibits`, 847 `recommend_write`, 354
+    `brainstorm_write`), which is the writing grace and the discussion's flexible time doing their job. Both were invisible before
+    because no candidate ever left a draft in the box or kept a part alive with `partial` scores.
+- **What the shapes cannot do.** The stub writes fixtures: each shape is worded the way the filter it tests is written for. A
+  paraphrase a filter misses is also a paraphrase the stub never writes, so **the harness cannot find a filter's blind spot** — only a
+  real model can. "A filter fired" is also not "the member read something good": the harness reads whether the words changed, never
+  whether they were any use.
+- **The held-figure shape depends on the write-up.** It needs a figure the book worked out in a table the member cannot see and that
+  appears nowhere they can look it up, so over the catalogue it was written 382 times against 3,709 attempts that found nothing to
+  write and were counted as skipped. The private-note shape needs a recommendation sentence of 80 to 400 characters.
+- **The run takes about twice as long**: 27,951 runs in about nine minutes, against 12,705 in about four. It is still free, still
+  deterministic, and still not in CI (it needs `private-data/`).
+- **`blocked` ends every case without feedback, on purpose**, because its model declines the feedback call as well as the turns. So
+  "cases that ended with feedback written" is 22,869 of 25,410 finished runs, and the 2,541 missing are that candidate's.
 
 ## The pilot runner (`npm run pilot:live`, issue #125, added 2026-11-17)
 

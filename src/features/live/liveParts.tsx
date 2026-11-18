@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Send } from 'lucide-react';
+import { Check, Ellipsis, Send } from 'lucide-react';
 import type { DraftKey, LiveView, Message, PublicExhibit } from '../../data/liveCase';
 import { LIVE_EXHIBIT_LIMITS, parseSolutionExhibit } from '../../domain/bookSolution';
-import { caseSteps, formatClock, stageHeading } from '../../domain/liveCase';
+import { caseSteps, formatClock, stageHeading, STEP_STATE_WORD, type CaseStep } from '../../domain/liveCase';
 import { tableRepeatsChart } from '../../domain/liveExhibit';
 import { Button } from '../../components/ui/Button';
 import { ExhibitChart } from '../caselog/ExhibitChart';
@@ -82,6 +82,27 @@ export function ExhibitView({ exhibit }: { exhibit: PublicExhibit }) {
   );
 }
 
+/**
+ * How each state of a pill is drawn. Fill is what the strip uses to say where a part stands, so the three states that are not still to
+ * come each have one of their own: the part at hand is solid in the accent colour, a part that stands open is a tint of it, and a part
+ * behind the member is a flat grey that reads against the page. Still to come is the only one with no fill, and it is dashed, so the two
+ * states furthest apart in meaning - finished and still to come - are the furthest apart on screen.
+ */
+const PILL_LOOK: Record<CaseStep['state'], string> = {
+  current: 'border-accent bg-accent text-accent-ink',
+  open: 'border-accent-soft bg-accent-soft text-accent-text',
+  done: 'border-line bg-line text-ink-2',
+  ahead: 'border-dashed border-line-strong text-muted',
+};
+
+/** The mark each state carries, so the four are told apart by shape as well as by colour: a tick for a part that is finished, a continuation for one standing open. */
+function PillMark({ state }: { state: CaseStep['state'] }) {
+  if (state === 'current') return <BucketAvatar className="mr-1 inline size-4 -translate-y-px" />;
+  if (state === 'done') return <Check data-mark="finished" className="mr-1 inline size-3.5 -translate-y-px" aria-hidden strokeWidth={3} />;
+  if (state === 'open') return <Ellipsis data-mark="open" className="mr-1 inline size-3.5 -translate-y-px" aria-hidden strokeWidth={3} />;
+  return null;
+}
+
 /** The two clocks, the stage, and the steps of the case (`caseSteps` decides which of them the member is in). */
 export function ClockBar({ view, now }: { view: LiveView; now: number }) {
   const overall = view.endsAt - now;
@@ -100,9 +121,10 @@ export function ClockBar({ view, now }: { view: LiveView; now: number }) {
                 key={s.id}
                 data-state={s.state}
                 aria-current={s.state === 'current' ? 'step' : undefined}
-                className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${s.state === 'current' ? 'border-accent bg-accent text-accent-ink' : s.state === 'open' ? 'border-accent text-ink' : s.state === 'done' ? 'border-line bg-surface-2 text-ink-2' : 'border-line text-muted'}`}
+                aria-label={STEP_STATE_WORD[s.state] ? `${s.label}, ${STEP_STATE_WORD[s.state]}` : undefined}
+                className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${PILL_LOOK[s.state]}`}
               >
-                {s.state === 'current' && <BucketAvatar className="mr-1 inline size-4 -translate-y-px" />}
+                <PillMark state={s.state} />
                 {s.label}
               </li>
             ))}
