@@ -26,6 +26,11 @@ export interface MemoryLiveOptions {
   now?: () => number;
   /** What the "model" says. By default a short reply that counts as progress, and plausible feedback. */
   reply?: (kind: string, request: TurnRequest) => unknown | Promise<unknown>;
+  /**
+   * How the model's call ended. 'end_turn' unless this says otherwise; 'refusal' is the model declining the turn itself, which the
+   * engine answers in character instead of showing an error (issue #142). Without this the refusal path cannot be reached at all.
+   */
+  stopReason?: (kind: string, request: TurnRequest) => string | null;
   /** Keep a copy of every request the engine made, to assert on. Off for the dry run, which plays thousands of cases and never reads them. */
   record?: boolean;
 }
@@ -111,7 +116,8 @@ export function createMemoryLiveDeps(options: MemoryLiveOptions): MemoryLiveDeps
       if (control.failing) throw new Error('model unavailable');
       const kind = kindOf(request);
       const out = await (control.reply ?? defaultReply)(kind, request);
-      return { text: typeof out === 'string' ? out : JSON.stringify(out), stopReason: 'end_turn' };
+      const stopReason = options.stopReason ? options.stopReason(kind, request) : 'end_turn';
+      return { text: typeof out === 'string' ? out : JSON.stringify(out), stopReason };
     },
   };
 
