@@ -27,7 +27,7 @@ or **Assistant** (a logical next step the assistant noticed; the owner has not a
 
 | # | Item | Source | Notes |
 |---|---|---|---|
-| R1 | "Free this week" badge on profiles, so people do not negotiate times in messages | Owner (picked from an assistant list on 2026-10-31; later said "not now") | Not started. Would be a new profile field and a share switch; must respect the privacy model (member-only?). Open question for the PM: who sees it. Overlaps with scheduling (#98-#102, proposed 2026-11-16); retire or reconsider. |
+| R1 | ~~"Free this week" badge on profiles~~ **Retired (owner, 2026-11-18).** It existed so people would stop negotiating times in messages, which is what the scheduling chain (#98-#100) does properly. | Owner | Retired, not deferred: the need is met. |
 | R2 | A verified-email "guest tier" between visitor and full member | Owner (2026-10-20: "I'll consider a verified-email guest tier later") | Not started. Membership is defined only by `public.is_member_id()`, so a tier would need a design decision about what a guest can see. |
 | R3 | Verify the learning mode of Live case on the live site | Assistant | The session that built it (PR #79) said it had not started a Learning case on production nor confirmed Vercel had deployed. Whether the owner has tried it is not known. |
 

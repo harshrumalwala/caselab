@@ -860,6 +860,63 @@ say so, and **not** ask another session to run it instead; the owner then ran it
 The rule: a relayed approval tells the PM *what the owner wants*. It does not tell the PM *that the PM may do it*. When the two disagree,
 the permission system wins and the PM says so plainly rather than finding a route around.
 
+## Three rules about evidence, learned the hard way on 2026-11-17 and 2026-11-18
+
+These came out of the same two days as the live-case work and they generalise well past it. They are written as rules because each was learned by nearly getting it wrong.
+
+### A new check proves nothing until you have seen it fail on the unfixed code
+
+Three separate developers in one day caught a measurement they were about to believe:
+
+- The **dry run** reported 12,705 clean runs on the exact commit where four real defects sat. Not a lie — it was honest about the stage machine and the clock, and silent about everything the model says, because its stub emitted one fixed sentence. When that was fixed (#181, PR #183), the developer **broke `leaks()` deliberately and ran it**: exit 1, 28 replies carrying the book's own answer to the member — *while every case still reached the end*, so the old bar would have been green.
+- A developer measuring the progress strip at phone width found that **headless Chrome here will not make a window narrower than 484 px**, so `--window-size=390` was a 484 px page cropped and wrapped one pill too late. They forced a true viewport and re-verified the *pre-change* behaviour before trusting anything.
+- A developer resolving a conflicting documentation line found that the **"each clause appears exactly once" assertion needs an exceptions list**, because a few short clauses legitimately occur twice — and the exceptions list is the hole a stutter slips through. The count-preserving rule (every clause appears the same number of times after as before) has no exceptions and caught two real mistakes while being written.
+
+So: **a check you have not watched fail is not yet evidence.** Run the new test against the unfixed code. Break the thing the harness is supposed to catch and confirm it goes red. An assertion that is exempted into not failing is the same as no assertion, which is the general form of the harness problem.
+
+### Before concluding something is unverifiable, read how the thing records what it did
+
+`KNOWN_ISSUES` carried "nobody has confirmed the request-notification email arrives" for weeks. On 2026-11-18 it was answered by one read-only query and **no test, no secret, no dashboard and no new rows**.
+
+`notify-request` **claims before it sends and rolls the claim back if the send throws**: it stamps `practice_requests.emailed_at` (or `answer_emailed_at`), then calls Resend, and a non-2xx throws and clears the stamp. So a surviving timestamp means Resend accepted the message. Production holds 2 requests from 2026-10-31 with `emailed_at` on both and `answer_emailed_at` on the one acceptance: **three sends, all accepted, by real members, through the code that is still running** (`git log` over `notify-request` since that date is empty).
+
+The instrument was designed into the function and then never read. Caveats kept with the result: **n=3 from one day and one pair of members**, and the deployed `notify-request` has not been verified by content the way the live-case deploys are. And the limit on the claim: **Resend accepting is not Resend delivering** — a bounce, a spam placement or a suppression all happen after the 2xx, so #101 and #102 stay held until someone looks at an inbox or the Resend dashboard.
+
+### What a harness can never tell you, however good it gets
+
+Even after #183, two limits remain and no number of candidates fixes either:
+
+- **The stub's reply shapes are fixtures worded the way the filters are written for.** So the harness can prove a filter *executes*; it cannot find the filter's blind spot. Only a real model can produce the phrasing nobody anticipated.
+- **"A filter fired" is not "the member read something good."**
+
+Which is why the standing rule stands: a change to what the model is handed or what its reply may say ships marked **"not verified"**, whatever the harness says.
+
+## The copy rule the owner sharpened on 2026-11-18
+
+The owner opened their own profile link on the live site and cut two blocks from the "what to give them next" card: a paragraph about their own stated focus, and a caveat line reading *"Only what Harsh chose to share, so this is exposure, not a verdict: a case type they haven't shared yet isn't a weakness."* Their words: *"too AIsh let's be not this mechanical while writing or displaying text on our app"*.
+
+**The caveat was accurate and carefully written.** That is the point. The rule:
+
+> Cut any sentence that tells the reader how to interpret what is above it, hedges against a misreading nobody has made, or restates in prose what the layout already shows. One short human line beats a correct explanatory paragraph.
+
+It sits beside the existing convention (copy states the design as it is, never as a change) and catches a different failure. The older rule stops copy reading like a changelog; this one stops it reading like a machine defending itself. Note that *"named only: no numbers"* — written in good faith for #121 — breaks both: it describes the card by an absence, and the absence was not even true of the page, since Shared performance sits below it with the figures.
+
+**One guard that came with it:** if removing an explanation leaves the remaining wording actively implying something untrue, say so rather than writing a better explanation. The instruction is to stop explaining.
+
+## Scheduling, settled on 2026-11-18
+
+- **The asker hosts.** The member who sent the practice request hosts; their saved meeting link goes on the invite, the other person's is the fallback, and if neither has one the invite says to agree a link in messages. The owner chose this over proposer-chooses and over the literal reading of their own earlier brief — **the literal reading would have made the guest host their own interviewer.**
+- **#98, #99 and #100 are built; #101 and #102 are held**, because KNOWN_ISSUES recorded that nobody had watched a `notify-request` email land. The evidence above moves that to "the app and Resend's API both work, delivery unconfirmed", which unblocks them on the app side and leaves the one inbox check with the owner.
+- **ROADMAP R1, the "free this week" badge, is retired.** It existed so people would stop negotiating times in messages, which is what this chain does properly.
+
+## Spending the window: Sonnet for mechanical work, Opus for judgment (owner, 2026-11-18)
+
+The owner asked that simple sub-agents run on a cheaper model so more work fits in a usage window, and that briefs be tightened so a developer is not rediscovering context the PM already holds.
+
+The split in practice: **Opus where the value is noticing something** — measuring before fixing, deciding what a defect actually is, a product ruling, or catching an instrument that is about to lie. **Sonnet where the brief already says exactly what to do** and the job is to do it well: content rewrites, copy and label fixes, docs passes, test writing.
+
+Calibration from the day it was set: #170 (measure 2,723 step titles before shipping them), #179 (find the 484 px browser floor) and #183 (coverage-measure the harness) each earned Opus. #171 and #174 (a documentation audit against evidence) did not. The signal to watch is a developer **guessing where it should have measured** — that is the class of work to move back.
+
 ## Process decisions
 
 - **The owner approves every production action.** Migrations, library loads, function deploys and merges wait for an explicit "yes" or
