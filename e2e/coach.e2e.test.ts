@@ -2,17 +2,28 @@
 //
 // Bucket, the coach, against the REAL project: the deployed analyze-feedback function, the real stored table and a real Claude call.
 // It uses the two throwaway accounts. Account A gets four cases (titled "ZZ CaseLab e2e ...", removed afterwards) with written feedback,
-// asks for a read, and the checks are on the shape of what comes back and on who can see or change what. The text is always the same,
-// so after the first run a repeat is answered from the stored read and costs nothing; the first run makes one Claude call (a few cents).
+// asks for a read, and the checks are on the shape of what comes back and on who can see or change what. A read covers everything on the
+// account that has writing, and account A is shared with whoever is doing a live check, so the expected number of cases is counted on the
+// account first and the four are added to it. The text the test writes is always the same, so while the rest of the account is unchanged a
+// repeat is answered from the stored read and costs nothing; otherwise one run makes one Claude call (a few cents).
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { FEEDBACK_COLUMNS, hasWriting, RECENT_CASES, type FeedbackCaseRow } from '../supabase/functions/_shared/feedbackInsights';
 import { readReply } from '../src/data/feedbackInsights';
 import { HAVE_TWO_USERS, newClient, signedInClient, TEST_PREFIX, USER_A, USER_B } from './helpers';
+
+/** What the function fetches before it picks the cases to read (`FETCH_ROWS` in supabase/functions/analyze-feedback/index.ts). */
+const FETCH_ROWS = 150;
+const INSERTED = 4;
 
 describe.skipIf(!HAVE_TWO_USERS)('live Supabase: Bucket, the coach', () => {
   let a: { client: SupabaseClient; userId: string };
   let b: { client: SupabaseClient; userId: string };
   let anon: SupabaseClient;
+  /** How many cases a read already covered before this run inserted anything: account A is shared, and people log cases on it. */
+  let baseline = 0;
+  /** What a 'recent' read should cover once the four are in. */
+  let expectedCases = INSERTED;
 
   // Always the same text, so after the first run a repeat is answered from the stored read and costs nothing.
   const row = (i: number, over: Record<string, unknown> = {}) => ({
@@ -31,11 +42,28 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: Bucket, the coach', () => {
     if (del.error) throw del.error;
   };
 
+  // A read covers every case on the account that has writing, not only the ones with the test's prefix, so the expected number is
+  // counted here the way the function counts it (supabase/functions/_shared/feedbackInsights.ts: rows with writing, newest first,
+  // never more than RECENT_CASES). Anything the test did not create is left exactly where it is.
+  const casesWithWriting = async () => {
+    const { data, error } = await a.client.from('cases').select(FEEDBACK_COLUMNS).order('case_date', { ascending: false }).limit(FETCH_ROWS);
+    if (error) throw error;
+    return ((data ?? []) as FeedbackCaseRow[]).filter(hasWriting).length;
+  };
+
   beforeAll(async () => {
     a = await signedInClient(USER_A);
     b = await signedInClient(USER_B);
     anon = newClient();
     await wipe();
+    baseline = await casesWithWriting();
+    if (baseline + INSERTED > RECENT_CASES) {
+      throw new Error(
+        `Account A already has ${baseline} cases with written feedback, so a 'recent' read (at most ${RECENT_CASES} cases) cannot cover all ${INSERTED} this test adds. ` +
+          `Remove cases from the throwaway account, or give the four cases a date newer than the rest, before running this file.`,
+      );
+    }
+    expectedCases = baseline + INSERTED;
     const ins = await a.client.from('cases').insert([1, 2, 3, 4].map((i) => row(i)));
     if (ins.error) throw ins.error;
   });
@@ -62,12 +90,13 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: Bucket, the coach', () => {
     // The feedback was about arithmetic, so a sound read should name it. (A model could phrase it many ways: keep this loose.)
     expect(JSON.stringify(insight).toLowerCase()).toMatch(/quant|arithmetic|math|calculat/);
     expect(result.read.scope).toBe('recent');
-    expect(result.read.caseCount).toBe(4);
+    // The four this test inserted, on top of whatever the shared account already held (read just before they went in).
+    expect(result.read.caseCount).toBe(expectedCases);
 
     // And it is stored: the member can read their own row back.
     const stored = await a.client.from('feedback_insights').select('scope, case_count, model').maybeSingle();
     expect(stored.error).toBeNull();
-    expect(stored.data).toMatchObject({ scope: 'recent', case_count: 4 });
+    expect(stored.data).toMatchObject({ scope: 'recent', case_count: expectedCases });
   }, 120_000);
 
   it('answers a repeat with the stored read, without calling Claude again', async () => {
