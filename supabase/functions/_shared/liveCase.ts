@@ -1246,8 +1246,9 @@ const LADDER: Record<LiveMode, readonly NudgeLevel[]> = {
  *    the case moves on to the next exhibit.
  *  - 'timer': they have said nothing. The clock never speaks up on its own: how much they cover in the time is up to them, and when the
  *    exhibit time is used up the case moves on to the next part. This is where "Help is never unprompted" (DECISIONS.md, section 1,
- *    "The interview rubric") is held in code. Nothing in the product asks for it: there is no request that reaches it, and the callers
- *    are the tests and `npm run dryrun:live`, which use it to prove the rule rather than to get a rung of help.
+ *    "The interview rubric") is held in code, and since issue #188 it is the whole of it: there is no longer an action a client can
+ *    send to ask for help. Nothing in the product passes 'timer'. The callers are `src/data/liveCase.test.ts` and
+ *    `npm run dryrun:live`, which asks it on every step of every run to prove the rule rather than to get a rung of help.
  */
 export function nudgeLevel(s: SessionState, now: number, via: 'message' | 'timer' = 'message'): NudgeLevel {
   const b = openBeat(s);

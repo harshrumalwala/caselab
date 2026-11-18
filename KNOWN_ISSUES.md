@@ -492,11 +492,14 @@ move whenever the file does, so the quoted words are the reliable part):
 - **The rule did not change.** "Help is never unprompted" (DECISIONS.md, section 1) is now held by there being no path rather than by a
   guard on one: the only thing that produces a coach reply is `converse`, which runs because the member wrote something. Nothing in the
   member's experience changes.
-- **DECISIONS.md section 1 is now half stale and was not edited here** (a developer may not edit it). It says the rule "**Is** true
-  (`nextNudgeAt` returns null, `nudgeLevel` returns `'none'` for `via: 'timer'`)". The first of those two functions no longer exists.
-  The second does, and still returns `'none'`, but **no production code passes `'timer'` any more**: its callers are
-  `src/data/liveCase.test.ts` and `npm run dryrun:live`, which ask it to prove the rule. Either reword the record or remove the
-  parameter as well; leaving both is the ambiguity #188 was about, one level down.
+- **The guard stays, and it is now the whole of the enforcement** (the PM ruled on 2026-11-18). `nextNudgeAt` was dead in the strict
+  sense: nothing called it and nothing could. `nudgeLevel(..., 'timer')` has a caller — the dry run's `unprompted` check asks it on
+  every step — so it is exercised rather than merely unviolated, and it is the one place the rule is held. Resting the rule on the
+  absence of a path instead would be true today and undone in silence by the first person to add one.
+- **DECISIONS.md section 1 still names `nextNudgeAt` and needs one edit, which is not a developer's to make.** It says the rule
+  "**Is** true (`nextNudgeAt` returns null, `nudgeLevel` returns `'none'` for `via: 'timer'`)", and the first of those no longer
+  exists. The parenthesis should name only the surviving guard, and should say that the rule now rests on that guard plus there being
+  no action that can reach help, with `npm run dryrun:live` asserting it on every step.
 - **The dry run watches the rule a different way now.** `run.unprompted` used to count views whose `nextNudgeAt` was not null. With the
   field gone it asks the engine directly — `nudgeLevel(state, now, 'timer') !== 'none'` — so the summary line "replies the clock asked
   for unprompted (must be 0)" means the same thing and still reads 0. Had it been left alone it would have counted every step of every
