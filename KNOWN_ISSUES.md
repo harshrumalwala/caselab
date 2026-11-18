@@ -289,20 +289,17 @@ move whenever the file does, so the quoted words are the reliable part):
 
 - **The third-person prompt rule: measured before and after the #196 campaign (issues #196, #200, 2026-11-18).** Before the campaign the
   rule `talks about the member in the third person` matched **521 of 577** prompts (the 577 are those that mention the member at all, not
-  the 872 in the library). The campaign rewrote the prompts into the second person, the seed was reloaded into production on 2026-11-18
-  (872 `library_cases`, 872 `library_case_notes`, 872 `library_case_solutions`), and the owner's closing comment on #196 reports
-  `prompt_talks_about_the_case` 0 and `prompt_names_the_book` 0, with all 872 production prompts matched by md5 to the audited seed.
-  **A re-run for #200 on 2026-11-18 did not reproduce the 0 for the third-person rule:** `npm run audit:live` over the 872 write-ups in
-  `private-data/solutions/` (the `--dir` of the owner's checkout) reported `prompt_names_the_book` 0 and `prompt_talks_about_the_case`
-  **15**, all 15 under the third-person label. Not reconciled: the likely causes are write-ups edited after the seed that was reloaded,
-  or a different count of the same files, and neither was checked. The README no longer carries a figure; read the current one from the
-  command, and compare it with production before quoting either.
-- **The 560 figure above is slightly low, by at most 17 prompts known by name.** Some prompts frame the member in the third person
-  without the word "candidate": "has hired the firm", a named consulting firm hired, a standalone "The task is to...", "the client sits
-  in the role of...", and a mixed "we" / "our client" voice. The #196 waves listed these by name as they went, so a later pass can be
-  scoped from that list instead of measured again from a regex. (The campaign's own closing tally of such framings was larger than 17,
-  by a broader reading: 34 prompts with a hired firm and no member in the sentence, 16 narrating the case structure.) The rule's regex
-  deliberately leaves them alone; widening it is out of scope of #200.
+  the 872 in the library). The campaign rewrote the live-eligible prompts into the second person and the seed was reloaded into
+  production on 2026-11-18 (872 `library_cases`, 872 `library_case_notes`, 872 `library_case_solutions`). Measured by `npm run audit:live`
+  on 2026-11-18: **0 across the live-eligible population** (the campaign's scope), and **15 across all 872** write-ups, all 15 on cases
+  that are also `not_live_eligible`, so no member is offered them in Live case. `prompt_names_the_book` is 0 across all 872. The two
+  figures differ only by population; the audit's headline counts all 872. The README carries no figure; read the current one from the
+  command.
+- **The 560 figure above is slightly low, by at most 17 further prompts known by name.** Some prompts frame the member in the third
+  person without the word "candidate": "has hired the firm", a named consulting firm hired, a standalone "The task is to...", "the client
+  sits in the role of...", and a mixed "we" / "our client" voice. The #196 waves listed these by name as they went, so a later pass can
+  be scoped from that list instead of measured again from a regex. The rule's regex deliberately leaves them alone; widening it is out
+  of scope of #200.
 
 ## Tests and CI
 
