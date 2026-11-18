@@ -309,6 +309,12 @@ move whenever the file does, so the quoted words are the reliable part):
   `.env.e2e.local`. It creates and removes rows titled `ZZ CaseLab e2e ...`. It is not part of CI. It broke once because
   `e2e/app.e2e.test.tsx` looked for the old front-page headline ("Case smarter"); fixed in PR #78 to look for "Case with Bucket".
   Tests that match on marketing copy will break when copy changes.
+- **The coach live check still has two assumptions about the shared throwaway accounts** (`e2e/coach.e2e.test.ts`, after issue #205,
+  2026-11-18). (1) The baseline count of account A's cases with written feedback is read just before the four test cases go in, and
+  `analyze-feedback` is called after them, so a case logged on account A between those two moments would still fail the count. The
+  window is seconds, and was accepted rather than hidden. (2) The last check, "says there is not enough to read", assumes account **B**
+  has no cases with writing at all: three rated cases with written feedback logged on B would turn `not_enough` into `ok` and fail it.
+  That one is untouched and unfiled.
 - **Throwaway e2e accounts are listed while the suite runs** (a few minutes) and then unlisted. A check that no "E2E..." names appear in
   Community → Members was left to the owner and is not verified.
 - `tsconfig.tsbuildinfo` shows as untracked in `git status` (not ignored).

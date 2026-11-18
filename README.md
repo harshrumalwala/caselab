@@ -937,6 +937,12 @@ app sends, so deploying the app before applying its migration is caught at once.
 messages and reports refuse direct reads and writes (for a member and a visitor), the Warm-up record only goes up and is private, the email choice is
 private to its owner, and account deletion refuses anything but the exact word. It sends no messages or requests and never deletes an account.
 
+Bucket's read is checked on account A too (`e2e/coach.e2e.test.ts`): four cases with written feedback go in, the deployed
+`analyze-feedback` function is asked for a "recent" read, and the answer's shape, its storage and its privacy are checked. A read covers
+every case on the account that has writing, so the test counts those first and expects that number plus its own four; cases already on the
+account are left untouched. A run costs a few cents the first time and nothing while the account's writing is unchanged. If the account
+holds more than six cases with written feedback, a recent read (ten cases) cannot cover all four and the test says so and stops.
+
 Use throwaway accounts for A and B: the tests create their profiles and flip their sharing switches, then leave them **unlisted** with
 nothing shared, so they never appear in the Community list or search for real members. They are listed only while the suite runs (the
 member-search checks need that), which is a few minutes. (A member can delete their whole account from Settings; the live checks don't use that,
