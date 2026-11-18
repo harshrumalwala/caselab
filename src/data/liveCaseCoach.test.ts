@@ -1260,6 +1260,23 @@ describe('an interview does not tell them whether they are right (issue #130)', 
     expect(said(r)).toBe('The army pays a fixed per diem per soldier. Off-peak occupancy is 31%.');
   });
 
+  it('leaves a verdict in the answer to a clarifying question, and strips the same reply on an exhibit turn (issue #201)', () => {
+    // This pins a DELIBERATE exemption; it is not pinning a defect, so do not "fix" it by adding `clarify` to the turns
+    // `parseTurn` strips. DECISIONS.md, "The interview register and clarifying questions (issue #185, 2026-11-17)", rules that a
+    // factual answer is never stripped: the verdict pattern matches shapes like "which is the", so stripping risks the fact itself,
+    // and a reply emptied by stripping falls to FALLBACK, so the member who asked would get the stand-in line instead of their
+    // figure. DECISIONS.md also says a decision not to do something in code gets a test that fails if someone does it; this is it.
+    const reply = "You're right that off-peak is the part to ask about, which is the core signal. Off-peak occupancy is 31%.";
+    const read = (kind: 'clarify' | 'exhibit') =>
+      parseTurn(JSON.stringify(turn(reply, { assessment: 'unclear' })), [], FALLBACK, 700, 'none', [], { mode: 'interview', kind })!.message;
+    // A clarifying question in an interview: the verdict is intact, and so is the fact it carries.
+    expect(read('clarify')).toBe(reply);
+    expect(read('clarify')).toContain('Off-peak occupancy is 31%.');
+    // The same reply on an exhibit turn is stripped, so this is about the scope of the strip and not only about clarify.
+    expect(read('exhibit')).not.toMatch(/you're right|core signal/i);
+    expect(read('exhibit')).toBe(withoutVerdicts(reply));
+  });
+
   it('tells each mode what register it is in', async () => {
     const interview = await toExhibitsIn('interview');
     await call({ type: 'say', sessionId: interview, text: 'Off-peak looks weak' });

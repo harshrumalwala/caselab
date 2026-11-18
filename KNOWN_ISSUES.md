@@ -322,6 +322,38 @@ move whenever the file does, so the quoted words are the reliable part):
   firms up once someone samples a few dozen. Fixing them is a content campaign plus a seed reload, not a code fix. This also answers
   the "nobody has measured" remark in the #159 paragraph under "Library data pipeline".
 
+- **The third-person prompt rule: measured before and after the #196 campaign (issues #196, #200, 2026-11-18).** Before the campaign the
+  rule `talks about the member in the third person` matched **521 of 577** prompts (the 577 are those that mention the member at all, not
+  the 872 in the library). The campaign rewrote the live-eligible prompts into the second person and the seed was reloaded into
+  production on 2026-11-18 (872 `library_cases`, 872 `library_case_notes`, 872 `library_case_solutions`). Measured by `npm run audit:live`
+  on 2026-11-18: **0 across the live-eligible population** (the campaign's scope), and **15 across all 872** write-ups, all 15 on cases
+  that are also `not_live_eligible`, so no member is offered them in Live case. `prompt_names_the_book` is 0 across all 872. The two
+  figures differ only by population; the audit's headline counts all 872. The README carries no figure; read the current one from the
+  command.
+- **An `audit:live` or `dryrun:live` figure is only meaningful against the commit it was produced on (found 2026-11-18, issue #200).**
+  The 0 first reported for the third-person rule on #196 came from an audit run on a stale checkout: the main tree was on
+  `claude/issue-186-coverage-engine` at `edffb0e`, 8 commits behind main as it then stood (`ab4430d`) and carrying 2 commits of its own,
+  and `32961a6` (PR #190, which added the third-person detector) was not an ancestor of it. Eight commits was enough: that is an
+  ordinary afternoon's drift, not a grossly stale tree. The flag name `prompt_talks_about_the_case` was already in the criteria list, so the report
+  printed its line with a 0 beside it while the rule that fills it did not exist. A rule that does not exist yet reports 0 rather than
+  failing, so a stale checkout turns "not measured" into "measured clean". Record the commit alongside any figure taken from these
+  reports. This is the failure mode of #183 (a harness treated as evidence when it could not execute the code it was checking) in a new
+  form. It was found because a developer re-ran the audit for #200, got 15 against the PM's 0, and did not write the PM's number down;
+  the PM and the coordinator then re-ran it independently and both got 15.
+- **The 560 figure above is low: further prompts frame the member in the third person without the word "candidate".** They were
+  counted while reading, as the #196 waves went (wave-completion comment of 2026-11-18T06:48Z on #196, which says only "found by
+  reading as the waves went" and states no method beyond that), in separate classes. Do not add them into one total: nothing
+  establishes the classes do not overlap. (1) A hired firm with no member in the sentence ("has hired the firm", or a named consulting
+  firm): **34 prompts** across the 847, counted while reading. (2) Case-structure narration ("the task is", "the question is", "the
+  case then...", "you will be asked"): **16 prompts**, counted while reading. (3) Impersonal asks ("wants its strategy assessed",
+  "asks for a growth strategy"): **no number**; found by reading, never counted. (4) A different kind, not a no-member framing: the
+  words "student", "interviewee" and "applicant". **19 prompts** match those words, most of them people in the business rather than
+  the member, and **four are worth reading**; the #196 count of 0 for the member words does not contradict this, because only about
+  four of the 19 are about the member. Two further shapes were noted earlier, the client "sits in the role of..." and a mixed "we" /
+  "our client" voice; that comment gives no count for them, and where they were recorded is not known. A later pass can be scoped
+  from the #196 lists instead of measured again from a regex. The rule's regex deliberately leaves these alone; widening it is out of
+  scope of #200.
+
 ## Tests and CI
 
 - **The full unit suite is slow and had one bad run.** On 2026-11-13 a full `npm test` run took about 950 seconds (86 workers) on the owner's
