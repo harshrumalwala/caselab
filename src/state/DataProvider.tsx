@@ -87,7 +87,8 @@ export interface DataContextValue {
   exitDemo(): void;
 }
 
-const DataContext = createContext<DataContextValue | null>(null);
+/** Exported so a feature can ask which dataset is in use without the hook that insists on a provider. */
+export const DataContext = createContext<DataContextValue | null>(null);
 
 interface Props {
   children: ReactNode;

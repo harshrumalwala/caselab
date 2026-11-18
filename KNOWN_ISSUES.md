@@ -161,6 +161,30 @@ move whenever the file does, so the quoted words are the reliable part):
   the book match exactly. So the #132, #139, #143, #149, #151 and #157 rewrites are live and **#159's five prompts are the only
   library change waiting on a reload**. Re-run that comparison after the next load rather than trusting this paragraph.
 
+## Scheduling: the rules are in the repo, not in the database (issue #99, 2026-11-18)
+
+- **The migration `supabase/migrations/20261127120000_practice_meetings.sql` is written and tested but NOT applied.** Applying it is
+  the owner's call (`npx supabase db push`). Until then `npm run test:e2e` **is expected to fail** on
+  `e2e/deployed.e2e.test.ts`: it now lists `practice_meetings`, `practice_meeting_proposals` and
+  `practice_meeting_confirmations` among the tables that must exist and stay closed, and the seven scheduling functions among those
+  the app calls. That is the file doing its job (the live database does not yet match the code), not a new defect. The PGlite tests
+  (`src/data/practiceMeetings.db.test.ts`) run the same migration in process and pass today.
+- **Nothing on screen uses it yet.** `SupabaseScheduling` and `useScheduling()` are wired into the backend and the provider tree, but
+  the screens are issue #100, so in production the code is reachable only through the console. The in-memory twin and the PGlite
+  tests are what exercise it until then.
+- **Criterion 5 was narrowed for one function, on the PM's ruling of 2026-11-18**: `cancel_practice_meeting` is allowed in both
+  directions whatever block stands, because a block that left a settled time between two people who can no longer talk would make
+  the commitment permanent, and cancelling sends nothing and reveals nothing. Every other scheduling function is still refused both
+  ways. `_my_meeting(p_id, p_allow_blocked)` is where the exception lives, and four pairings of who blocked and who cancels are
+  tested.
+- **`practice_requests.when_text` is still there.** The free-text "when" on a request now overlaps with real scheduling. Dropping it
+  was put out of scope for #99 and left for the screens issue to decide.
+- **The race is proved by replay, not by two real connections.** PGlite is a single in-process connection, so
+  `practiceMeetings.db.test.ts` proves single-confirmation three ways that do not need concurrency: a second call refused, the two
+  racers' writes replayed from the state they both read (conditional update, compare-and-set on the revision, primary key on the
+  confirmation), and the real function called again from a state rewound to what the second caller had read. A true two-connection
+  race has never been run against this schema.
+
 ## Content quality and policy risks
 
 - **About 11 write-ups in the last batch are marked `partial`** because the book prints only an approach, a situation or open questions

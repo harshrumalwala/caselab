@@ -5,7 +5,7 @@
 //
 //   * Every table and column the migrations create must exist live, and every function the app calls must exist with the arguments
 //     the app sends. This is the check that catches "the app was deployed before its migration was applied".
-//   * The tables that hold requests, conversations, messages and reports must stay closed to direct access.
+//   * The tables that hold requests, conversations, messages, reports and scheduled times must stay closed to direct access.
 //   * The Warm-up record, the notification choice and account deletion keep their rules.
 //
 // Nothing here sends a message or a request, and nothing deletes an account: only read-only calls, refusals, and private rows that
@@ -87,6 +87,13 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
       const calls: [string, SupabaseClient, Record<string, unknown>][] = [
         ['my_practice_requests', a.client, {}],
         ['my_meeting_prefs', a.client, {}],
+        ['my_practice_meetings', a.client, {}],
+        ['propose_practice_meeting', a.client, { p_other: nobody, p_slots: [], p_duration: 60, p_request: null, p_conversation: null }], // refused (no times, nobody), so nothing is written
+        ['confirm_practice_meeting', a.client, { p_meeting: nobody, p_slot: new Date(Date.now() + 86_400_000).toISOString() }],
+        ['counter_practice_meeting', a.client, { p_meeting: nobody, p_slots: [], p_duration: 60 }],
+        ['decline_practice_meeting', a.client, { p_meeting: nobody }],
+        ['cancel_practice_meeting', a.client, { p_meeting: nobody }],
+        ['change_practice_meeting', a.client, { p_meeting: nobody, p_slots: [], p_duration: 60 }],
         ['save_my_meeting_prefs', a.client, { p_link: 'javascript:alert(1)', p_zone: null }], // refused, so nothing is written
         ['my_conversations', a.client, {}],
         ['my_practice_blocks', a.client, {}],
@@ -154,7 +161,12 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
   describe('tables that hold requests, conversations, messages and meeting details', () => {
     // NOTE: 20261126120000_meeting_prefs.sql was applied on 2026-11-17 (02:51 UTC on the 18th) and this passes. It stays
     // the check that the live database matches the code: a table added here fails until its migration is applied.
-    const closed = ['practice_requests', 'practice_blocks', 'conversations', 'conversation_members', 'messages', 'message_reports', 'meeting_prefs'];
+    // NOTE: the three scheduling tables come from 20261127120000_practice_meetings.sql (#99), which is NOT applied yet.
+    // Until the owner applies it, this file is expected to fail on them — that is exactly what it is for.
+    const closed = [
+      'practice_requests', 'practice_blocks', 'conversations', 'conversation_members', 'messages', 'message_reports', 'meeting_prefs',
+      'practice_meetings', 'practice_meeting_proposals', 'practice_meeting_confirmations',
+    ];
 
     it('refuse every direct read and write, as a member and as a visitor', async () => {
       for (const table of closed) {
@@ -182,6 +194,8 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
         ['my_practice_requests', {}],
         ['my_conversations', {}],
         ['my_meeting_prefs', {}],
+        ['my_practice_meetings', {}],
+        ['cancel_practice_meeting', { p_meeting: randomUUID() }],
         ['member_interviewed', { p_member: randomUUID() }],
         ['delete_my_account', { p_confirm: 'DELETE' }], // refused before it can do anything: there is no one signed in
       ] as const) {

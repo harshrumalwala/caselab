@@ -12,6 +12,7 @@ import { SupabaseMessages, type MessagesRepository } from './messages';
 import { SupabaseLive, type LiveCaseRepository } from './liveCase';
 import { SupabaseMeeting, type MeetingRepository } from './meetingPrefs';
 import { SupabasePractice, type PracticeRepository } from './practiceRequests';
+import { SupabaseScheduling, type SchedulingRepository } from './scheduling';
 import { SupabaseRepository } from './supabaseRepository';
 
 /** Everything the app needs from the outside world: who you are, where your data lives, and the community. */
@@ -27,6 +28,8 @@ export interface Backend {
   createMessages(): MessagesRepository;
   /** How the signed-in member likes to meet (a meeting link and a time zone). Nobody else can read it. */
   createMeeting(): MeetingRepository;
+  /** The practice times the signed-in member is settling with other members. */
+  createScheduling(): SchedulingRepository;
   /** The signed-in member's best Warm-up score and streak. */
   createWarmup(userId: string): WarmupRepository;
   /** The cases the signed-in member ran as the interviewer (private, kept apart from the cases they solved). */
@@ -98,6 +101,7 @@ export function createSupabaseBackend(
       createLive: () => new SupabaseLive(client),
       createMessages: () => new SupabaseMessages(client),
       createMeeting: () => new SupabaseMeeting(client),
+      createScheduling: () => new SupabaseScheduling(client),
       createWarmup: () => new SupabaseWarmup(client),
       createGoal: (userId) => new SupabaseGoal(client, userId),
       createInsights: () => new SupabaseInsights(client),

@@ -43,6 +43,7 @@ import { InsightsProvider } from './state/InsightsProvider';
 import { LibraryProvider } from './state/LibraryProvider';
 import { InterviewedProvider } from './state/InterviewedProvider';
 import { MeetingContext } from './state/meeting';
+import { SchedulingContext } from './state/scheduling';
 import { WarmupSyncContext, type WarmupSync } from './state/warmupSync';
 import { ToastProvider } from './state/ToastProvider';
 import { UIContext, type UIContextValue } from './state/ui';
@@ -277,6 +278,7 @@ function AuthGate({ backend }: { backend: Backend }) {
             practice: backend.createPractice(),
             messages: backend.createMessages(),
             meeting: backend.createMeeting(),
+            scheduling: backend.createScheduling(),
             live: backend.createLive(),
           }
         : null,
@@ -299,7 +301,9 @@ function AuthGate({ backend }: { backend: Backend }) {
                       <MessagesProvider messages={repos.messages}>
                         <LiveProvider repository={repos.live}>
                           <MeetingContext.Provider value={repos.meeting}>
-                            <Shell />
+                            <SchedulingContext.Provider value={repos.scheduling}>
+                              <Shell />
+                            </SchedulingContext.Provider>
                           </MeetingContext.Provider>
                         </LiveProvider>
                       </MessagesProvider>
