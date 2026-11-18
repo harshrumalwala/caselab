@@ -303,6 +303,13 @@ export interface LiveView {
   loggedCaseId: string | null;
 }
 
+/**
+ * How many parts of the plan hand an exhibit over. Zero is a case that is talked through from end to end - 246 of the 847 live-eligible
+ * write-ups - and everything that would otherwise speak of exhibits reads it: the stage's name, the record of what was shown, and the
+ * directive for the turn where the case moves into the work (issue #193).
+ */
+const exhibitsTotal = (s: SessionState): number => s.plan.beats.filter((b) => b.kind === 'exhibit').length;
+
 export function toView(stored: StoredSession, solution: LiveSolution | null, info: CaseInfo | null, now: number): LiveView {
   const s = stored.state;
   const beatsShown = s.beats.map((b) => s.plan.beats[b.index]).filter((b): b is Beat => Boolean(b));
@@ -327,7 +334,7 @@ export function toView(stored: StoredSession, solution: LiveSolution | null, inf
     clarifyCount: s.clarifyCount,
     beatsTotal: s.plan.beats.length,
     beatsShown: s.beats.length,
-    exhibitsTotal: s.plan.beats.filter((b) => b.kind === 'exhibit').length,
+    exhibitsTotal: exhibitsTotal(s),
     hasBrainstorm: s.plan.hasBrainstorm,
     status: stored.status,
     endReason: s.endReason,
@@ -709,6 +716,16 @@ const DIRECTIVES: Record<TurnKind, string> = {
     DATA_REQUESTS,
 };
 
+/**
+ * The one sentence of the direction turn that promises something: every mode's `direction` directive tells the model to say it will
+ * show the student some data. On a case that hands over no exhibit there is nothing to show, and a student told data is coming waits
+ * for it (issue #193), so that turn says the case is getting into the work instead. The interviewer still holds the book's own figures
+ * and still reads them out when asked - a case with no exhibit beat can have them - so only the promise changes, never a data request.
+ */
+const DATA_PROMISE = 'say you will show them some data';
+const WORK_PROMISE = 'say you will start working through it with them';
+const withoutDataPromise = (directive: string): string => directive.replace(DATA_PROMISE, WORK_PROMISE);
+
 /** What the clock allows on top of the student's own message: help only if they are in fact stuck. */
 const HELP: Record<NudgeLevel, string> = {
   none: '',
@@ -808,11 +825,24 @@ export const TURN_SCHEMA = {
 
 const MAX_HISTORY = 60;
 
+/**
+ * The part of the plan a notice brought out. Every part is announced with a message of kind `exhibit` - it is the kind that stands
+ * apart from the conversation, and the one the screen prints as a notice - whether the part is an exhibit or a step of the book's
+ * analysis talked through. The message carries its place in `state.beats`, and the plan says which it was.
+ */
+const beatShown = (state: SessionState, m: Message): Beat | undefined => state.plan.beats[state.beats[m.beat ?? 0]?.index ?? -1];
+
+/**
+ * Did this notice really hand an exhibit over? A step beat hands over nothing, so saying so to the model told it an exhibit was on the
+ * table when none was - on every conversation-only case, and on the step beats of every other one (issue #193).
+ */
+const showedAnExhibit = (state: SessionState, m: Message): boolean => m.kind === 'exhibit' && beatShown(state, m)?.kind === 'exhibit';
+
 function history(state: SessionState): { role: 'user' | 'assistant'; content: string }[] {
   const out: { role: 'user' | 'assistant'; content: string }[] = [{ role: 'user', content: 'Begin the case.' }];
   for (const m of state.messages.slice(-MAX_HISTORY)) {
     const role = m.from === 'user' ? 'user' : 'assistant';
-    const content = m.kind === 'exhibit' ? `[An exhibit is shown to the student.] ${m.text}` : m.text;
+    const content = showedAnExhibit(state, m) ? `[An exhibit is shown to the student.] ${m.text}` : m.text;
     const last = out[out.length - 1];
     if (last && last.role === role) last.content += `\n${content}`;
     else out.push({ role, content });
@@ -835,8 +865,11 @@ export function turnRequest(sol: LiveSolution, state: SessionState, kind: TurnKi
   const mode = modeOf(state);
   const directives = mode === 'learning' ? LEARNING_DIRECTIVES : mode === 'interview' ? INTERVIEW_DIRECTIVES : DIRECTIVES;
   const helps = mode === 'learning' ? LEARNING_HELP : mode === 'interview' ? INTERVIEW_HELP : HELP;
+  // A case with nothing to hand over does not promise it (issue #193). Only the turn that carries the promise is rewritten, so this
+  // costs nothing on every other turn of every other case.
+  const told = kind === 'direction' && exhibitsTotal(state) === 0 ? withoutDataPromise(directives[kind]) : directives[kind];
   // The directive rides on the last turn only and is not saved, so the conversation before it stays identical from request to request.
-  const directive = `\n\n<directive>\n${directives[kind]}${kind === 'exhibit' ? helps[help] : ''}\n</directive>${context ? `\n${context}` : ''}`;
+  const directive = `\n\n<directive>\n${told}${kind === 'exhibit' ? helps[help] : ''}\n</directive>${context ? `\n${context}` : ''}`;
   const last = messages[messages.length - 1];
   if (last.role === 'user') last.content += directive;
   else messages.push({ role: 'user', content: `(The student has said nothing new.)${directive}` });
@@ -1095,6 +1128,8 @@ export function withoutVerdicts(message: string): string {
 export const OVER_TO_YOU = 'Okay, stay with it — what do you make of this part, and what would you do next?';
 /** The same, for the one turn before the case has anything on the table: their starting point heard, and the data coming out. */
 export const SHOW_DATA = 'Understood. Let us look at some data.';
+/** The same stand-in for a case that hands over no exhibit: the work starts, and nothing is promised that will not come (issue #193). */
+export const START_WORKING = 'Understood. Let us start working through it.';
 
 export function parseTurn(
   text: string,
@@ -1103,9 +1138,10 @@ export function parseTurn(
   maxChars = 700,
   rung: NudgeLevel = 'none',
   held: readonly string[] = [],
-  /** Which register the reply has to be in, what the member wrote (so a word they raised themselves is theirs, not ours), and how long
-   * they have been nearly there (`partialRun`, so the move-on test below is the one `applyTurn` makes). */
-  opts: { mode?: LiveMode; kind?: TurnKind; memberText?: string; partialRun?: number } = {},
+  /** Which register the reply has to be in, what the member wrote (so a word they raised themselves is theirs, not ours), how long
+   * they have been nearly there (`partialRun`, so the move-on test below is the one `applyTurn` makes), and whether the case hands over
+   * an exhibit at all (`noExhibits`, so a stand-in reply promises nothing the case does not have). */
+  opts: { mode?: LiveMode; kind?: TurnKind; memberText?: string; partialRun?: number; noExhibits?: boolean } = {},
 ): Turn | null {
   let raw: unknown;
   try {
@@ -1140,7 +1176,7 @@ export function parseTurn(
       // The stand-in is the one for the moment (issue #165). A reply that moves the case on is replaced by the move-on line: the
       // part is being taken away, so "stay with it" would contradict the exhibit arriving on the next line. This guard used to run
       // at every rung, so a move-on whose only sentence was a verdict came out as `OVER_TO_YOU` and the beat advanced anyway.
-      said = moving ? MOVING_ON : opts.kind === 'exhibit' ? OVER_TO_YOU : directionClear ? SHOW_DATA : '';
+      said = moving ? MOVING_ON : opts.kind === 'exhibit' ? OVER_TO_YOU : directionClear ? (opts.noExhibits ? START_WORKING : SHOW_DATA) : '';
   }
   // A reply thrown away whole is replaced by the line for the moment: at the rung that moves the case on that is the move-on, not
   // the line asking them to stay with the part they are losing (issue #165).
@@ -1241,14 +1277,25 @@ const STAGE_LABEL: Record<string, string> = {
   recommend_write: 'Recommendation',
 };
 
+/** What a case that hands over no exhibit calls that stage. The word is the strip's own (`DISCUSSION` in `src/domain/liveCase.ts`). */
+const DISCUSSION = 'Discussion';
+
+/**
+ * The name of a stage as the model is told it. These names are the model's, not the member's: they head the written record and the
+ * stage times, and the model writes them back into the debrief the member reads. A case with no exhibits used to be told its middle
+ * stage was "Exhibits and discussion" and said so in the debrief, where the strip beside it said Discussion (issue #193).
+ */
+const stageLabel = (state: SessionState, stage: string): string =>
+  stage === 'exhibits' && exhibitsTotal(state) === 0 ? DISCUSSION : (STAGE_LABEL[stage] ?? stage);
+
 /** Everything the student wrote, in order, as the evidence for the feedback. The private scratchpad is not part of it. */
 export function writtenRecord(state: SessionState): string {
   const lines: string[] = [];
   for (const m of state.messages) {
-    if (m.from === 'user') lines.push(`[${STAGE_LABEL[m.stage] ?? m.stage}] Student: ${m.text}`);
-    else if (m.kind === 'text' || m.kind === 'hint') lines.push(`[${STAGE_LABEL[m.stage] ?? m.stage}] Interviewer${m.kind === 'hint' ? ' (hint)' : ''}: ${m.text}`);
+    if (m.from === 'user') lines.push(`[${stageLabel(state, m.stage)}] Student: ${m.text}`);
+    else if (m.kind === 'text' || m.kind === 'hint') lines.push(`[${stageLabel(state, m.stage)}] Interviewer${m.kind === 'hint' ? ' (hint)' : ''}: ${m.text}`);
     // The message points at the part of the case it brought out (its place in `beats`), which the plan says what kind it was.
-    else if (m.kind === 'exhibit') lines.push(`[${STAGE_LABEL[m.stage] ?? m.stage}] Interviewer showed ${state.plan.beats[state.beats[m.beat ?? 0]?.index ?? -1]?.kind === 'step' ? 'the next topic' : 'an exhibit'}.`);
+    else if (m.kind === 'exhibit') lines.push(`[${stageLabel(state, m.stage)}] Interviewer showed ${showedAnExhibit(state, m) ? 'an exhibit' : 'the next topic'}.`);
   }
   for (const sub of state.submissions) {
     lines.push(`[${sub.kind}] Student ${sub.timedOut ? '(unfinished draft captured when the case ended)' : 'handed in'}: ${sub.text}`);
@@ -1261,7 +1308,7 @@ function studentText(state: SessionState): string {
 }
 
 export function feedbackRequest(sol: LiveSolution, state: SessionState): TurnRequest {
-  const stats = timeInStages(state).map((t) => `${STAGE_LABEL[t.stage] ?? t.stage}: ${t.seconds}s${t.endedBy ? ` (ended by ${t.endedBy})` : ''}`).join('; ');
+  const stats = timeInStages(state).map((t) => `${stageLabel(state, t.stage)}: ${t.seconds}s${t.endedBy ? ` (ended by ${t.endedBy})` : ''}`).join('; ');
   // A brainstorm is one of the parts of a case, but how it ended says nothing: what the student wrote is in the record below.
   const beats = state.beats
     .filter((b) => state.plan.beats[b.index]?.kind !== 'brainstorm')
@@ -1593,6 +1640,7 @@ async function converse(deps: LiveDeps, userId: string, sessionId: string, text:
             kind,
             memberText: lastMemberMessage(saved.state),
             partialRun: partialRun(saved.state),
+            noExhibits: exhibitsTotal(saved.state) === 0,
           });
   } catch {
     turn = null;
