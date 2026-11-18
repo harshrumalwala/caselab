@@ -921,6 +921,14 @@ It sits beside the existing convention (copy states the design as it is, never a
 
 **The conclusion.** Extending `withoutVerdicts` to clarify would add risk to factual answers, which is the protection above, and would **still not catch the real exposure**: a volunteered driver does not look like praise, so a verdict pattern does not see it. If a guard is ever built, it has to be `sharesSubstance`-shaped, flagging a clarify reply that introduces content words from the exhibit or the private notes that the member has not used. Nothing was built, nothing changes in the function, and nothing needs deploying. Practice and learning are unaffected either way; their register is encouraging by design.
 
+## The part notices, and how far ahead practice may point (issue #194, 2026-11-18)
+
+Two rulings from the same pilot observation, kept together because they are the same trade: how much of what is coming may a member be told?
+
+**The member keeps receiving each part's own subject, one at a time (PM, 2026-11-18).** A pilot run showed that the topics #163 hands over, read in sequence, amount to an outline of the write-up's headings. Three options were weighed: leave it, have the engine rephrase each topic as a question, or replace it with a short neutral label. **Leave it.** The member is meant to work through these parts in this order, and the subject of a part is not the answer to it — the case already refuses a topic whose title holds the finding (`TITLE_IS_THE_ANSWER` in `liveCase.ts`), which is the guard that matters. Rephrasing would put the engine in the business of writing prose about content it is specifically not allowed to interpret, to defend against a worry no member has raised. What *is* a defect, and was fixed in this issue, is numbering surviving `STEP_HEAD` and reaching the member as a section title.
+
+**A practice hint may point at a later part of the plan (owner, 2026-11-18).** In the same run a `directional_hint` named a driver that was the subject of the case's final beat, four minutes before that beat opened and before the member had used the word. This is allowed by design — #130's "add no driver they have not raised" rule binds at rung `none`, which practice does not reach during the discussion — and the owner has confirmed it should stay. Practice is the coaching mode; a hint that points ahead is real help, and the cost (that part's discovery is softened) is the trade practice mode exists to make. Interview mode is unaffected and keeps its stricter ladder.
+
 ## Scheduling, settled on 2026-11-17
 
 - **The asker hosts.** The member who sent the practice request hosts; their saved meeting link goes on the invite, the other person's is the fallback, and if neither has one the invite says to agree a link in messages. The owner chose this over proposer-chooses and over the literal reading of their own earlier brief — **the literal reading would have made the guest host their own interviewer.**

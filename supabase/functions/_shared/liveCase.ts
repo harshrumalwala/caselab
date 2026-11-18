@@ -119,14 +119,38 @@ const tableTopic = (title: string): string => {
 };
 
 /**
- * The book's own numbering of a step in print — "Question 3B:", "Q2.", "Part C -", "Step 1:", "Prompt #2, Question 1:", "Exhibit 2,
- * question 3:" — which tells the member nothing about the part they are on. As with a brainstorm's head, the number comes off only
- * when something separates it from the subject, so a title that is a phrase of its own ("Question 4 and recommendation", "Parts and
- * labour") keeps its own words.
+ * One number the books put on a step: "3", "3B", a roman numeral, or a bare letter. The roman numeral and the letter are followed by a
+ * lookahead rather than a word boundary, because on their own they are also ordinary words ("Part is the key", "Phase in the new rota"):
+ * they only count as numbering when the thing that separates the number from the subject comes next.
  */
-const STEP_HEAD =
+const STEP_NUMBER = String.raw`(?:\d{1,2}[a-z]?|(?:i{1,3}|iv|vi{0,3}|ix|xi{0,2})(?=\s*[:.,)\](\-–—])|[a-z](?=\s*[:.,)\](\-–—]))`;
+/** The numbering of a step that covers two of them at once ("Exhibits 1 and 2:", "Scenarios 2a and 2b:", "Steps 1 to 3:"). */
+const STEP_NUMBERS = String.raw`${STEP_NUMBER}(?:\s*(?:and|&|,|to|through|[-–—/])\s*#?\s*${STEP_NUMBER})*`;
+/** What the book hangs on its own numbering rather than on the subject: "Question 3 (optional):", "Step 2 (continued):", "Question 1 guidance:". */
+const STEP_HEAD_TAIL = String.raw`(?:\s*\([^()]{1,24}\)|\s+(?:continued|cont|guidance))?`;
+/** What has to come between the numbering and the subject for the numbering to be numbering at all. */
+const STEP_HEAD_SEP = String.raw`\s*[:.,)\]\-–—]\s*`;
+/** The nouns a step is numbered with that the books also use as ordinary words, so they come off only when a number follows them. */
+const NUMBERED_NOUN = String.raw`(?:phases?|buckets?|analys[ei]s|options?|alternatives?|scenarios?|approach(?:es)?|ideas?|streams?|decisions?|answers?|data)`;
+/** The nouns that head the book's numbering of a step, which come off with or without a number ("Question:", "Exhibit 2,"). */
+const STEP_NOUN = String.raw`(?:questions?|q|parts?|steps?|sections?|prompts?|exhibits?|figures?|tables?|follow[-\s]?ups?)`;
+/**
+ * The book's own numbering of a step in print — "Question 3B:", "Q2.", "Part C -", "Step 1:", "Prompt #2, Question 1:", "Exhibit 2,
+ * question 3:", "Part II:", "Phase 2A:", "Math question 1:", "Question 3 (optional):", "Exhibits 1 and 2:" — which tells the member
+ * nothing about the part they are on. As with a brainstorm's head, the number comes off only when something separates it from the
+ * subject, so a title that is a phrase of its own ("Question 4 and recommendation", "Parts and labour", "Break-even, part 1: fixed cost
+ * only", "5 Cs: finding alternatives") keeps its own words.
+ *
+ * Two things widen it past the plain noun. A word of the book's own in front of the noun comes off with it ("Math question 2:",
+ * "Work stream 1:", "Case data 3:"), because it is part of how the book numbers the step and not part of the subject. And a second list
+ * of nouns — the ones a book also uses as ordinary words — comes off only when a number follows ("Phase 3:", "Bucket 1:", "Option 2:"),
+ * so a step headed "Decision:" or "Analysis:" keeps its word.
+ */
+const STEP_HEAD = new RegExp(
   // The noun is followed by a lookahead rather than a word boundary, because "Q2" runs the two together.
-  /^\s*(?:(?:questions?|q|parts?|steps?|sections?|prompts?|exhibits?|figures?|tables?|follow[-\s]?ups?)(?![a-z])[\s#]*(?:\d{1,2}[a-z]?|[a-z](?=\s*[:.,)\]\-–—]))?\s*[:.,)\]\-–—]\s*)+/i;
+  String.raw`^\s*(?:(?:[a-z][a-z'’]*\s+)?(?:${STEP_NOUN}(?![a-z])[\s#]*(?:${STEP_NUMBERS})?|${NUMBERED_NOUN}(?![a-z])[\s#]*(?:${STEP_NUMBERS}))${STEP_HEAD_TAIL}${STEP_HEAD_SEP})+`,
+  'i',
+);
 /**
  * A title that answers the part instead of naming it. The books head a step both ways: most say what is to be worked out ("Break-even
  * volume", "Should the client invest?"), and some say what the working found ("Why the suburban shops lag", "Demand is driven by end
