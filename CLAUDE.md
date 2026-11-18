@@ -106,6 +106,13 @@ Key mechanics worth knowing:
   one ("there is nobody to browse: no list and no search") and never reads like a changelog: a member has not seen the old version and
   should not be told what it was. Say what the thing does instead ("each member's own link is the way in"). Documentation (`README.md`,
   `KNOWN_ISSUES.md`, `DECISIONS.md`) is the opposite and *should* record what changed and when.
+- **Copy stops explaining itself (owner, 2026-11-17).** Cut any sentence that tells the reader how to interpret what is above it, hedges
+  against a misreading nobody has made, or restates in prose what the layout already shows; one short human line beats a correct
+  explanatory paragraph. The guard: if cutting leaves wording that actively implies something untrue, say that instead of writing a
+  better explanation. The instruction is to stop explaining. The worked example is in `DECISIONS.md`.
+- **Dates in these documents are local, and a UTC instant says so.** A bare date ("the owner settled this on 2026-11-17") is the
+  day it happened where the owner is. A time read off a log or the database is written with its zone ("loaded at 02:54 UTC"), which
+  after about 18:00 local is the next day: writing that bare puts the record a day ahead of the git history of the same work.
 - Deterministic code decides rules and numbers; the model only writes words and judges the member's writing (and a rating is kept only
   if the feedback quotes something the member wrote).
 

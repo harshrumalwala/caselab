@@ -1,16 +1,23 @@
 # ROADMAP.md
 
-## Waiting for the owner (as of 2026-11-17, after the $2 pilot)
+## Waiting for the owner (as of 2026-11-17)
 
-Four things need the owner and nothing has been started on any of them. Everything else from the pilot is shipped. Tick these off in
-any order; none blocks another.
+Three things need the owner and nothing has been started on any of them. Tick these off in any order; none blocks another.
 
 | # | What | Why it needs you | What happens when you say yes |
 |---|---|---|---|
-| 1 | **A second library seed reload** | A reload rewrites production content and is your call every time | The content is already fixed and waiting in `private-data/`: #132's 17 case prompts that talk about the book, #143's three row labels, #151's one reference-line label (Soap Co.), #149's 44 interviewer facts that name the book, and 13 further prompts that describe the case without naming the book. None of it reaches a member until a reload. The first reload (2026-11-17) ran clean in 20 parts, counts back at 872 / 872 / 872, `npm run test:e2e` 60 passed / 10 skipped |
-| 2 | **The #98 and #99 migrations** | `npx supabase db push` is your call every time | You approved the *shapes* to be written on 2026-11-17 and they queued behind the engine work, which is now done. A developer builds each up to its migration and stops; applying it is a separate yes, after the SQL exists and is tested. **#121 is done: its migration was applied on 2026-11-17 and 0 of 9 members have the switch on.** The scheduling pair is all that is left here, and the owner has not said scheduling beats the live-case follow-ups |
-| 3 | **A third throwaway test account** | It is a Supabase dashboard action, not something an agent can do | Dashboard → Authentication → Users → Add user with Auto Confirm, then `CASELAB_E2E_EMAIL_C` / `CASELAB_E2E_PASSWORD_C` in the git-ignored `.env.e2e.local`. Buys 4 more live-case starts a day. Not urgent, but it is the only thing between us and proving #130 on the same day rather than the next one |
-| 4 | **#149's remaining 28 sentences** — a decision, not an approval | A judgement about how far to go | 44 of the 72 interviewer facts that named the book are fixed. The other 28 are left because the engine's voice filter already strips them before the member sees anything. Leaving them is defensible and is what the issue asked for; rewriting them too is 28 more sentences on the same reload. Your call |
+| 1 | **The #99 migration** | `npx supabase db push` is your call every time | #98's migration (`20261126120000_meeting_prefs.sql`) was applied on 2026-11-18 at 02:51 UTC with your approval. Verified afterwards: the table exists, RLS is on, it has zero policies, three functions exist, and `information_schema.role_table_grants` shows no grant to `anon`, `authenticated` or `public`, so the table is reachable only through its functions. PR #182 is unblocked and green. #99's migration does not exist yet: a developer builds it up to the migration and stops, and applying it is a separate yes once the SQL exists and is tested |
+| 2 | **#149's remaining 28 sentences** — a decision, not an approval | A judgement about how far to go | 44 of the 72 interviewer facts that named the book are fixed. The other 28 are left because the engine's voice filter already strips them before the member sees anything. Leaving them is defensible and is what the issue asked for; rewriting them too is 28 more sentences on the same reload. Your call |
+| 3 | **Confirming email delivery** | No agent can see the Resend dashboard or a real inbox | Production holds three `notify-request` sends from 2026-10-31 that all returned 2xx from Resend, through code unchanged since. Resend accepting is not Resend delivering: a bounce, a spam placement or a suppression all happen after the 2xx. Open the Resend dashboard or a real inbox and look; #101 (calendar invites) and #102 (reminder emails) stay `proposed` until then. Detail in DECISIONS.md |
+
+**Done since the last version of this table (2026-11-17).** The second library seed reload was approved and loaded at 02:54 UTC in 20
+parts under 700 KB, every part OK, no errors, 78 seconds; production holds 872 `library_cases` / 872 `library_case_notes` / 872
+`library_case_solutions`. The seed was regenerated from `private-data/` first and came out byte-identical to what PR #161 produced (md5
+`3c9ff0d309e838342a409ec495633a89`, 13,223,152 bytes), so what loaded is exactly the reviewed content; all five cases named in #159 are
+present and none still describes the candidate from outside. **Correction:** the old row said #132, #143, #151, #149 and 13 further
+prompts were also waiting on this reload. That was already wrong: an md5 comparison of every production prompt against `private-data/`
+showed they were all live already, and #159's five prompts were the only library change still waiting. The third throwaway test account
+is withdrawn: it buys repeats of the same shape, not coverage of a new one.
 
 **The one thing that is shipped but unproven: #130.** An interview reply no longer confirms the member's guess — deployed on 2026-11-17 on
 unit tests, the dry-run harness and CI, with **no real-model check**, because both throwaway accounts hit the function's own limit of 4
@@ -27,7 +34,7 @@ or **Assistant** (a logical next step the assistant noticed; the owner has not a
 
 | # | Item | Source | Notes |
 |---|---|---|---|
-| R1 | "Free this week" badge on profiles, so people do not negotiate times in messages | Owner (picked from an assistant list on 2026-10-31; later said "not now") | Not started. Would be a new profile field and a share switch; must respect the privacy model (member-only?). Open question for the PM: who sees it. Overlaps with scheduling (#98-#102, proposed 2026-11-16); retire or reconsider. |
+| R1 | ~~"Free this week" badge on profiles~~ **Retired (owner, 2026-11-17).** It existed so people would stop negotiating times in messages, which is what the scheduling chain (#98-#100) does properly. | Owner | Retired, not deferred: the need is met. |
 | R2 | A verified-email "guest tier" between visitor and full member | Owner (2026-10-20: "I'll consider a verified-email guest tier later") | Not started. Membership is defined only by `public.is_member_id()`, so a tier would need a design decision about what a guest can see. |
 | R3 | Verify the learning mode of Live case on the live site | Assistant | The session that built it (PR #79) said it had not started a Learning case on production nor confirmed Vercel had deployed. Whether the owner has tried it is not known. |
 
