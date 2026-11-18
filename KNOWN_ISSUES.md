@@ -273,6 +273,19 @@ move whenever the file does, so the quoted words are the reliable part):
   issue #82). The ceiling is today's longest case, which the issue asked not to exceed, so from six beats up every extra beat makes the
   others shorter: 56 of the 847 eligible write-ups have six or more, and at twelve `beatBudget` works out at about two minutes each. If a
   longer case is ever acceptable, the ceiling is the one number to raise.
+- **The live-case opening prompt talks about "the candidate" across most of the library (found 2026-11-18, not triaged; the PM has not
+  ruled on it).** Measured against production on 2026-11-18, after the seed reload, by string match on `solution->>'prompt'`: of 847
+  live-eligible solutions, **560 prompts contain "the candidate"** and **345 contain the exact phrase "the candidate is asked"**; across
+  all 872 solutions the figures are 577 and 351. `openingText()` in `supabase/functions/_shared/liveCaseCoach.ts` returns `s.prompt`
+  word for word as the member's first screen, so "The candidate is asked to..." is the same break in the fiction that issue #157 was
+  created to remove. Nothing caught it because `PROMPT_RULES` in `scripts/liveCaseAudit.mjs` has no pattern for the candidate: its rules
+  cover naming the book, noting how a page prints something, saying how hard or open the case is, saying what kind of case it is, and
+  saying how the case is run, so `prompt_talks_about_the_case` cannot see this class. Issue #159 predicted exactly that ("the audit's
+  rules match one phrasing and these use another") while correctly putting rule changes out of scope. Scale against what was fixed:
+  #157 removed 11 prompts' sentences and reworded 2, #159 fixed 5; sixteen, against roughly 560. **Caveats:** this is a string match,
+  not a reading. Nobody has read these 560 prompts; some may be fine in context (a role play, for instance), and the real number only
+  firms up once someone samples a few dozen. Fixing them is a content campaign plus a seed reload, not a code fix. This also answers
+  the "nobody has measured" remark in the #159 paragraph under "Library data pipeline".
 
 ## Tests and CI
 
