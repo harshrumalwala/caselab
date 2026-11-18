@@ -821,9 +821,8 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   `liveCase.ts` and `liveCaseCoach.ts` that never executed). Over all 847 cases, before: **16 of the 155 functions the loader saw in
   `liveCaseCoach.ts`, and 9 of 109 in `liveCase.ts`, never ran once**, among them `refusedTurn`, `recordDataRequest`, `pause`,
   `continueCase`, `shiftTimes`, `endEarly`, `saveDraft` and `saveScratchpad`. After: **1 and 0** (the one is `nudge`, below), with 74
-  functions and branches reached that never ran before. The reader script lives in the
-  assistant's scratch folder, like `split_seed.py` before it, so **nobody can repeat the measurement from the repo**; the honest
-  residue below is the part that was written down.
+  functions and branches reached that never ran before. The reader is now in the repo as `npm run coverage:engine` (issue #186,
+  `scripts/engineCoverage.mjs`), so the measurement can be repeated; the honest residue below is the part that was written down.
 - **Still unreachable, and why.** Each of these is a branch the harness cannot execute. None is a defect on its own; the list is what
   a green dry run does *not* cover.
   - **The timer-driven hint**: the whole `nudge` path in `liveCaseCoach.ts` and the hint branch of `applyTurn`. `nextNudgeAt` always
