@@ -469,7 +469,7 @@ export function stubModel(spec, ctx = newStubContext()) {
       if (e.dataRequest) ctx.dataRequests += 1;
       return words(turn({ assessment: e.assessment, beat_complete: e.beatComplete, ...(e.dataRequest ? { data_request: true } : {}) }));
     }
-    // The hint turns only come from the timer path, which never fires (nextNudgeAt is always null); answered anyway, so nothing hangs.
+    // Only the three turn kinds above are ever asked for; anything else is answered as a stuck member, so nothing hangs.
     return words(turn({ assessment: 'stuck' }));
   };
 }
@@ -762,7 +762,10 @@ export async function playCase(raw, mode, candidate, engine, startAt = START_AT)
     let idle = 0;
     let last = '';
     while (view.stage !== 'done' && run.steps < STEP_CAP) {
-      if (view.nextNudgeAt !== null) run.unprompted += 1;
+      // Help is never unprompted (DECISIONS.md, section 1). There is no longer a request that asks for it (issue #188), so what is
+      // left to watch is the engine's own answer: the clock alone must never produce a rung of help.
+      const quiet = db.get(id)?.state;
+      if (quiet && engine.nudgeLevel(quiet, clock.t, 'timer') !== 'none') run.unprompted += 1;
       if (view.beatsShown !== beatKey) {
         beatKey = view.beatsShown;
         writtenOnBeat = 0;

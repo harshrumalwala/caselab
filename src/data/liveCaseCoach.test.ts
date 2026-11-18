@@ -395,7 +395,7 @@ describe('the exhibit discussion', () => {
     expect(said.messages.filter((m) => m.kind === 'hint')).toHaveLength(0);
     const asked = w.asked.length;
     clock.t += sec(10);
-    const r = view(await call({ type: 'nudge', sessionId: id }));
+    const r = view(await call({ type: 'resume', sessionId: id }));
     expect(w.asked.length).toBe(asked);
     expect(r.messages.filter((m) => m.kind === 'hint')).toHaveLength(0);
   });
@@ -820,14 +820,15 @@ describe('the member drives', () => {
     expect(r.messages.at(-1)).toMatchObject({ kind: 'hint', text: expect.stringContaining('biggest number') }); // not "what do you think?"
   });
 
+  // `resume` is the only thing the screen sends while the member says nothing (it asks where the case is when a stage runs out), so
+  // it is what "however long it is quiet" now means: there is no request that asks for help (issue #188).
   it('never gives a hint on its own, however long it is quiet', async () => {
     const id = await toExhibits();
     for (const t of [200, 600, 1000]) {
       clock.t = T0 + sec(t);
-      expect(view(await call({ type: 'nudge', sessionId: id })).messages.filter((m) => m.kind === 'hint')).toHaveLength(0);
+      expect(view(await call({ type: 'resume', sessionId: id })).messages.filter((m) => m.kind === 'hint')).toHaveLength(0);
     }
     expect(w.asked).toHaveLength(0);
-    expect(view(await call({ type: 'resume', sessionId: id })).nextNudgeAt).toBeNull();
   });
 });
 
@@ -1323,13 +1324,13 @@ describe('hints that nobody asked for', () => {
     const start = clock.t;
     for (const t of [30, 60, 100, 140]) {
       clock.t = start + sec(t);
-      const r = view(await call({ type: 'nudge', sessionId: id }));
+      const r = view(await call({ type: 'resume', sessionId: id }));
       expect(r.messages.filter((m) => m.kind === 'hint'), `at ${t}s`).toHaveLength(0);
     }
     expect(w.asked).toHaveLength(0);
     await call({ type: 'draft', sessionId: id, key: 'exhibit', text: 'Peak is 95 and off-peak is' });
     clock.t = start + sec(260); // long after the exhibit appeared, but they were typing 120 seconds ago
-    expect(view(await call({ type: 'nudge', sessionId: id })).messages.filter((m) => m.kind === 'hint')).toHaveLength(0);
+    expect(view(await call({ type: 'resume', sessionId: id })).messages.filter((m) => m.kind === 'hint')).toHaveLength(0);
   });
 
 });

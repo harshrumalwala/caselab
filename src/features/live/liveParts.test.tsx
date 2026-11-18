@@ -255,7 +255,6 @@ const liveView = (over: Partial<LiveView> = {}): LiveView => ({
   stageStartedAt: NOW,
   stageEndsAt: NOW + 5 * 60_000,
   plannedEndsAt: NOW + 15 * 60_000,
-  nextNudgeAt: null,
   frameworkPhase: 'framework',
   messages: [],
   exhibits: [],

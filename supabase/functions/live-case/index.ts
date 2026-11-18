@@ -1,4 +1,4 @@
-// live-case: "practise a whole case with Bucket". One request per thing the member does in the live case (start, answer, hand in, nudge, finish).
+// live-case: "practise a whole case with Bucket". One request per thing the member does in the live case (start, answer, hand in, move on, finish).
 //
 // What happens when, and what Bucket may say, lives in ../_shared/liveCase.ts and ../_shared/liveCaseCoach.ts and is tested there; this file
 // only plugs in the real services: the database (through the service role, because members have no access to live_case_sessions and the
@@ -35,7 +35,6 @@ function readAction(b: Record<string, unknown>): LiveAction | null {
     case 'resume':
       return b.sessionId === undefined || isId(b.sessionId) ? { type: 'resume', sessionId: b.sessionId as string | undefined } : null;
     case 'ready':
-    case 'nudge':
     case 'next':
     case 'pause':
     case 'continue':

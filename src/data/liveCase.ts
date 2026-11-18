@@ -32,7 +32,6 @@ export interface LiveCaseRepository {
   ready(sessionId: string): Promise<LiveView>;
   submit(sessionId: string, text: string): Promise<LiveView>;
   say(sessionId: string, text: string): Promise<LiveView>;
-  nudge(sessionId: string): Promise<LiveView>;
   /** Done with this exhibit: on to the next one, or the next section after the last. */
   next(sessionId: string): Promise<LiveView>;
   /** Stops the clock until `unpause`. */
@@ -70,7 +69,6 @@ export class LiveClient implements LiveCaseRepository {
   ready = (sessionId: string) => this.view({ type: 'ready', sessionId });
   submit = (sessionId: string, text: string) => this.view({ type: 'submit', sessionId, text });
   say = (sessionId: string, text: string) => this.view({ type: 'say', sessionId, text });
-  nudge = (sessionId: string) => this.view({ type: 'nudge', sessionId });
   next = (sessionId: string) => this.view({ type: 'next', sessionId });
   pause = (sessionId: string) => this.view({ type: 'pause', sessionId });
   unpause = (sessionId: string) => this.view({ type: 'continue', sessionId });

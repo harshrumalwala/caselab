@@ -16,7 +16,6 @@ import {
   hardEnd,
   newSession,
   nextBeat,
-  nextNudgeAt,
   nudgeLevel,
   openBeat,
   ready,
@@ -279,7 +278,6 @@ export interface LiveView {
   stageEndsAt: number;
   /** The planned end of the exhibit discussion, when the stage can run longer. */
   plannedEndsAt: number;
-  nextNudgeAt: number | null;
   frameworkPhase: 'framework' | 'direction';
   messages: Message[];
   exhibits: PublicExhibit[];
@@ -317,7 +315,6 @@ export function toView(stored: StoredSession, solution: LiveSolution | null, inf
     stageStartedAt: s.stageStartedAt,
     stageEndsAt: stageEndsAt(s),
     plannedEndsAt: s.stage === 'done' ? (s.endedAt ?? hardEnd(s)) : deadlines(s, s.stage, s.stageStartedAt).soft,
-    nextNudgeAt: nextNudgeAt(s, now),
     frameworkPhase: s.frameworkPhase,
     messages: s.messages,
     exhibits: beatsShown.flatMap((b, i) => {
@@ -679,7 +676,7 @@ There is no exhibit in front of the student yet. This is what you hold for them:
 </data>`;
 }
 
-export type TurnKind = 'clarify' | 'direction' | 'exhibit' | 'nudge_process' | 'nudge_directional';
+export type TurnKind = 'clarify' | 'direction' | 'exhibit';
 
 /**
  * The line between data and the answer, in the words the model is given it in (DECISIONS.md, "The interview rubric"): inputs are given
@@ -710,10 +707,6 @@ const DIRECTIVES: Record<TurnKind, string> = {
     PROGRESS_TEST +
     ' Set beat_complete to true as soon as they have independently stated what the exhibit means for the client (a sensible next step is welcome but not needed), so a student who gets it quickly moves on without being held here. Do not give a hint unless told to below.' +
     DATA_REQUESTS,
-  nudge_process:
-    'The student has made no progress for a while. Give ONE brief process-oriented hint: suggest a way to approach the data (what to compare, what to ask of it, how to structure the calculation) without telling them what to conclude. One or two sentences.',
-  nudge_directional:
-    'The student is still stuck after a hint. Give ONE more specific directional hint pointing at where to look or which comparison matters, still without stating the conclusion or the result of any calculation. One or two sentences.',
 };
 
 /** What the clock allows on top of the student's own message: help only if they are in fact stuck. */
@@ -835,7 +828,7 @@ export function turnRequest(sol: LiveSolution, state: SessionState, kind: TurnKi
   const learning = isUntimed(state);
   // The beat on the table carries the data with it; before there is one (clarifying questions, the starting direction) the data still
   // goes, on its own, so a student who asks for a figure in the first two minutes is given it instead of being told we do not have it.
-  const onTheTable = kind === 'exhibit' || kind.startsWith('nudge') ? beatContext(sol, beat ? state.plan.beats[beat.index] : undefined, learning) : '';
+  const onTheTable = kind === 'exhibit' ? beatContext(sol, beat ? state.plan.beats[beat.index] : undefined, learning) : '';
   const context = onTheTable || earlyDataContext(sol, learning);
   const messages = history(state);
   // Which register this mode is in (issue #130): an interview judges without saying so, practice and learning coach as they go.
@@ -867,7 +860,7 @@ const norm = (t: string): string => t.toLowerCase().replace(/[^a-z0-9%$.]+/g, ' 
 export const FALLBACK = 'Let us stay with your reasoning. What would you take from that, and what would you do next?';
 /** When a reply that was meant to lead has to be thrown away, the stand-in still points somewhere, instead of asking the member to think again. */
 export const LEAD_FALLBACK = 'Let me get you moving. Start with the biggest number, or the biggest change, in what you have in front of you: what is it, and what could be driving it?';
-/** The whole of a reply that moves the case on, here and on the timer path: moving on, and not a word about the piece being left. */
+/** The whole of a reply that moves the case on: moving on, and not a word about the piece being left. */
 export const MOVING_ON = 'Let us move on to the next piece.';
 /** The whole of a refusal: in the second person, the work is theirs, and no answer is mentioned as existing. */
 export const WORK_IS_YOURS = 'That one is yours to work out — talk me through how you would get there.';
@@ -1375,7 +1368,6 @@ export type LiveAction =
   | { type: 'say'; sessionId: string; text: string }
   | { type: 'draft'; sessionId: string; key: DraftKey; text: string }
   | { type: 'scratch'; sessionId: string; text: string }
-  | { type: 'nudge'; sessionId: string }
   | { type: 'next'; sessionId: string }
   | { type: 'pause'; sessionId: string }
   | { type: 'continue'; sessionId: string }
@@ -1490,8 +1482,6 @@ export async function handleLive(userId: string, action: LiveAction, deps: LiveD
     }
     case 'say':
       return converse(deps, userId, sessionId, action.text, refuse);
-    case 'nudge':
-      return nudge(deps, userId, sessionId, mutate, refuse);
     case 'finish':
       return finishCase(deps, userId, sessionId, mutate, refuse);
   }
@@ -1521,27 +1511,24 @@ function applyTurn(st: StoredSession, turn: Turn, kind: TurnKind, now: number, h
     if (turn.directionClear || s.directionFollowUps >= 1) return endFrameworkStage(s, now);
     return { ...s, directionFollowUps: s.directionFollowUps + 1 };
   }
-  if (kind === 'exhibit') {
-    // The model's score, held to what the member actually wrote (issue #130): a message that names no comparison, no figure and no
-    // next move is not a step forward, so it does not reset the count that climbs the help ladder.
-    const assessment = assessmentOf(turn.assessment, lastMemberMessage(s));
-    // How long they have been nearly there, read before this message is counted (issue #184).
-    const run = partialRun(s);
-    s = recordAssessment(s, assessment, now);
-    if (turn.beatComplete) return nextBeat(coachSays(s, turn.message, now), now, 'independent');
-    // They asked for something rather than being stuck on it: the question is answered and the message is taken back off the help ladder.
-    if (turn.dataRequest) return coachSays(recordDataRequest(s), turn.message, now);
-    // Stuck, or nearly there for the third message running, which is circling (issue #184).
-    const stuck = gettingNowhere(assessment, run);
-    // Help only for a member who is in fact getting nowhere: a good answer that arrives as help falls due is never cut off.
-    if (stuck && (help === 'process_hint' || help === 'directional_hint')) return recordHint(coachSays(s, turn.message, now, 'hint'), now);
-    // The third message without getting anywhere: Bucket leads, whatever the clock says, unless the member has just made a clear step forward.
-    if (help === 'lead' && assessment !== 'progress') return recordHint(coachSays(s, turn.message, now, 'hint'), now);
-    if (stuck && help === 'advance') return nextBeat(coachSays(s, turn.message, now), now, 'coach_moved');
-    return coachSays(s, turn.message, now);
-  }
-  // a hint
-  return recordHint(coachSays(s, turn.message, now, 'hint'), now);
+  // What remains is the exhibit discussion, the one kind of turn that carries a rung of help.
+  // The model's score, held to what the member actually wrote (issue #130): a message that names no comparison, no figure and no
+  // next move is not a step forward, so it does not reset the count that climbs the help ladder.
+  const assessment = assessmentOf(turn.assessment, lastMemberMessage(s));
+  // How long they have been nearly there, read before this message is counted (issue #184).
+  const run = partialRun(s);
+  s = recordAssessment(s, assessment, now);
+  if (turn.beatComplete) return nextBeat(coachSays(s, turn.message, now), now, 'independent');
+  // They asked for something rather than being stuck on it: the question is answered and the message is taken back off the help ladder.
+  if (turn.dataRequest) return coachSays(recordDataRequest(s), turn.message, now);
+  // Stuck, or nearly there for the third message running, which is circling (issue #184).
+  const stuck = gettingNowhere(assessment, run);
+  // Help only for a member who is in fact getting nowhere: a good answer that arrives as help falls due is never cut off.
+  if (stuck && (help === 'process_hint' || help === 'directional_hint')) return recordHint(coachSays(s, turn.message, now, 'hint'), now);
+  // The third message without getting anywhere: Bucket leads, whatever the clock says, unless the member has just made a clear step forward.
+  if (help === 'lead' && assessment !== 'progress') return recordHint(coachSays(s, turn.message, now, 'hint'), now);
+  if (stuck && help === 'advance') return nextBeat(coachSays(s, turn.message, now), now, 'coach_moved');
+  return coachSays(s, turn.message, now);
 }
 
 async function converse(deps: LiveDeps, userId: string, sessionId: string, text: string, refuse: Refuse): Promise<LiveResponse> {
@@ -1609,46 +1596,6 @@ async function converse(deps: LiveDeps, userId: string, sessionId: string, text:
     if (await deps.saveSession(next, cur.version)) return { status: 'ok', view: toView(next, sol, c.info, now) };
   }
   return refuse('Something else changed this case at the same moment. Try again.');
-}
-
-async function nudge(deps: LiveDeps, userId: string, sessionId: string, mutate: Mutate, refuse: Refuse): Promise<LiveResponse> {
-  const loaded = await deps.getSession(userId, sessionId);
-  if (!loaded) return refuse('That live case was not found.');
-  const stored = await settleStored(deps, loaded);
-  const c = await deps.loadCase(stored.libraryId);
-  const sol = c ? readSolution(c.solution) : null;
-  if (!c || !sol) return { status: 'failed', message: 'The case could not be loaded.' };
-  const now = deps.now();
-  const level = nudgeLevel(stored.state, now, 'timer');
-  const plain: LiveResponse = { status: 'ok', view: toView(stored, sol, c.info, now) };
-  if (level === 'none') return plain;
-
-  if (level === 'advance') {
-    // Moving the case on needs no words from the model: the app says it, and brings out the next exhibit.
-    const r = await mutate((st, t) => (nudgeLevel(st.state, t, 'timer') === 'advance' ? { ...st, state: nextBeat(coachSays(st.state, MOVING_ON, t, 'hint'), t, 'coach_moved') } : st));
-    return typeof r === 'string' ? refuse(r) : { status: 'ok', view: toView(r, sol, c.info, deps.now()) };
-  }
-  if (stored.llmCalls >= MAX_COACH_CALLS) return plain;
-  const marked = await mutate((st) => ({ ...st, llmCalls: st.llmCalls + 1 }));
-  if (typeof marked === 'string') return refuse(marked);
-  const before = fingerprint(marked.state);
-  const kind: TurnKind = level === 'process_hint' ? 'nudge_process' : 'nudge_directional';
-
-  let turn: Turn | null = null;
-  try {
-    const answer = await deps.ask(turnRequest(sol, marked.state, kind));
-    if (answer.stopReason !== 'refusal')
-      turn = parseTurn(answer.text, privateNotes(sol, marked.state), FALLBACK, isUntimed(marked.state) ? 1000 : 700, 'none', heldResults(sol, marked.state), {
-        mode: modeOf(marked.state),
-        kind,
-        memberText: lastMemberMessage(marked.state),
-      });
-  } catch {
-    turn = null;
-  }
-  if (!turn) return plain;
-  const r = await mutate((st, t) => (fingerprint(st.state) === before && nudgeLevel(st.state, t, 'timer') === level ? { ...st, state: applyTurn(st, turn, kind, t) } : st));
-  return typeof r === 'string' ? refuse(r) : { status: 'ok', view: toView(r, sol, c.info, deps.now()) };
 }
 
 async function finishCase(deps: LiveDeps, userId: string, sessionId: string, mutate: Mutate, refuse: Refuse): Promise<LiveResponse> {

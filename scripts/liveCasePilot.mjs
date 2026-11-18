@@ -1,6 +1,6 @@
 // Drives a real live case against the DEPLOYED `live-case` Edge Function, turn by turn, and says what it costs as it goes.
 //
-// THIS SPENDS REAL MONEY. Every `say`, `nudge` and `finish` is a real model call on the owner's Anthropic key. The cap is $2.00 by
+// THIS SPENDS REAL MONEY. Every `say` and `finish` is a real model call on the owner's Anthropic key. The cap is $2.00 by
 // default (the owner's figure for the pilot) and is checked BEFORE a call is made, never after. Nothing here judges a reply: the script
 // records exactly what the member would have seen, and the person running the pilot reads it.
 //
@@ -47,9 +47,9 @@ export const MAX_STARTS_PER_WEEK = 12;
 export const ACCOUNTS = ['a', 'b'];
 export const MODES = ['practice', 'interview', 'learning'];
 /** Everything one `turn` can do. `logged` is deliberately absent: the pilot never logs a case. */
-export const TURN_ACTIONS = ['ready', 'say', 'submit', 'next', 'nudge', 'finish', 'end'];
-/** The three actions that cost money. Everything else only moves the session on. */
-export const MODEL_ACTIONS = ['say', 'nudge', 'finish'];
+export const TURN_ACTIONS = ['ready', 'say', 'submit', 'next', 'finish', 'end'];
+/** The two actions that cost money. Everything else only moves the session on. */
+export const MODEL_ACTIONS = ['say', 'finish'];
 export const callsModel = (action) => MODEL_ACTIONS.includes(action);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -578,7 +578,6 @@ export const STAGES_FOR = {
   say: ['prompt', 'framework_write', 'exhibits'],
   submit: ['framework_write', 'brainstorm_write', 'recommend_write'],
   next: ['exhibits'],
-  nudge: ['prompt', 'framework_write', 'exhibits'],
   finish: ['done'],
   end: ['prompt', 'framework_think', 'framework_write', 'exhibits', 'brainstorm_think', 'brainstorm_write', 'recommend_think', 'recommend_write'],
 };
@@ -589,7 +588,7 @@ export function stepFitsStage(step, view) {
   if (step.stage && step.stage !== stage) return `the step expected stage ${step.stage} and the case is at ${stage}`;
   const allowed = STAGES_FOR[step.do] ?? [];
   if (!allowed.includes(stage)) return `"${step.do}" belongs at ${allowed.join(', ')} and the case is at ${stage}`;
-  if ((step.do === 'say' || step.do === 'nudge') && stage === 'framework_write' && view?.frameworkPhase !== 'direction') {
+  if (step.do === 'say' && stage === 'framework_write' && view?.frameworkPhase !== 'direction') {
     return `"${step.do}" has nothing to answer while the framework is being written: the case takes "submit" here`;
   }
   return null;
@@ -603,7 +602,6 @@ export const actionFor = (step, sessionId) => {
       return { type: 'submit', sessionId, text: step.text };
     case 'ready':
     case 'next':
-    case 'nudge':
     case 'finish':
     case 'end':
       return { type: step.do, sessionId };
@@ -1089,7 +1087,7 @@ const HELP = `Usage: npm run pilot:live -- <command> [flags]        THIS SPENDS 
 
   catalog [--book "<substring>"] [--json <path>]      the cases that can be practised live (no model call)
   start --case <libraryId> --mode practice|interview|learning
-  turn (--ready | --say "<text>" | --submit "<text>" | --next | --nudge | --finish | --end)
+  turn (--ready | --say "<text>" | --submit "<text>" | --next | --finish | --end)
   play --script <path.json> [--case <libraryId> --mode <mode>]    a whole case unattended
   spend                                               what this account has spent (no model call)
 

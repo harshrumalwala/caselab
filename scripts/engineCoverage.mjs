@@ -7,11 +7,12 @@
 //   npm run coverage:engine -- --dir <path> --out <file>
 //
 // THIS IS AN INSTRUMENT FOR A PERSON TO READ, NOT A GATE. It prints names, so it reads as a to-do and not a score. Some unreached code is
-// right to be unreached (the timer-driven hint is dead in the deployed function too), and a threshold would invite someone to write a
-// candidate to satisfy a number. Nothing here fails on what it finds; it exits non-zero only if the dry run itself crashes or no coverage
+// right to be unreached (the guards against an action the screen cannot send, the `??` fallbacks for older sessions), and a threshold
+// would invite someone to write a candidate to satisfy a number. Nothing here fails on what it finds; it exits non-zero only if the dry run itself crashes or no coverage
 // of the engine was written.
 //
-// PR #183's figures on the whole catalogue were 1 function unreached in liveCaseCoach.ts and 0 in liveCase.ts (from 16 and 9).
+// PR #183's figures on the whole catalogue were 1 function unreached in liveCaseCoach.ts and 0 in liveCase.ts (from 16 and 9). The one
+// was `nudge`, the timer-driven hint, which issue #188 deleted; both files read 0 unreached functions since.
 //
 // Like `audit:live` and `dryrun:live` it needs the git-ignored write-ups in private-data/solutions/ (the same --dir) and Node 22.6+ (the
 // engine is TypeScript; the dry run restarts itself with type stripping when this Node has none), so it cannot run in CI. The report is
