@@ -622,6 +622,28 @@ describe('reading what comes back', () => {
     expect(f.overall.rating).toBe(null);
   });
 
+  describe('the overall rating needs a majority of the claimed skill ratings to be grounded', () => {
+    const SIX = ['prompt', 'framework', 'quant', 'exhibits', 'brainstorm', 'recommendation'] as const;
+    const QUOTE = 'Demand, supply, cost';
+    const overallWith = (groundedKeys: number, claimedKeys: number = 6) => {
+      const skills = SIX.map((key, i) => ({
+        key,
+        rating: i < claimedKeys ? 4 : 0, // 0 is the schema's "cannot be rated"
+        feedback: 'x',
+        evidence: i < groundedKeys ? QUOTE : 'something the student never wrote',
+      }));
+      return parseFeedback(JSON.stringify({ ...GOOD_FEEDBACK, skills }), state)!.overall.rating;
+    };
+
+    it('keeps it when six are claimed and six grounded', () => expect(overallWith(6)).toBe(3));
+    it('drops it when six are claimed and none grounded', () => expect(overallWith(0)).toBe(null));
+    it('drops it when six are claimed and one grounded', () => expect(overallWith(1)).toBe(null));
+    it('drops it when six are claimed and three grounded (exactly half)', () => expect(overallWith(3)).toBe(null));
+    it('keeps it when six are claimed and four grounded', () => expect(overallWith(4)).toBe(3));
+    it('keeps it when a short case claims two and both are grounded', () => expect(overallWith(2, 2)).toBe(3));
+    it('drops it when the model claims nothing rateable', () => expect(overallWith(0, 0)).toBe(null));
+  });
+
   it('rejects feedback with nothing in it, and turns that are not JSON', () => {
     expect(parseFeedback('{}', state)).toBeNull();
     expect(parseFeedback('oops', state)).toBeNull();
