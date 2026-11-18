@@ -295,6 +295,15 @@ move whenever the file does, so the quoted words are the reliable part):
   that are also `not_live_eligible`, so no member is offered them in Live case. `prompt_names_the_book` is 0 across all 872. The two
   figures differ only by population; the audit's headline counts all 872. The README carries no figure; read the current one from the
   command.
+- **An `audit:live` or `dryrun:live` figure is only meaningful against the commit it was produced on (found 2026-11-18, issue #200).**
+  The 0 first reported for the third-person rule on #196 came from an audit run on a stale checkout: per the PM, the main tree was on
+  `claude/issue-186-coverage-engine` at `edffb0e`, 45 commits behind main, and `32961a6` (PR #190, which added the third-person
+  detector) was not an ancestor of it. The flag name `prompt_talks_about_the_case` was already in the criteria list, so the report
+  printed its line with a 0 beside it while the rule that fills it did not exist. A rule that does not exist yet reports 0 rather than
+  failing, so a stale checkout turns "not measured" into "measured clean". Record the commit alongside any figure taken from these
+  reports. This is the failure mode of #183 (a harness treated as evidence when it could not execute the code it was checking) in a new
+  form. It was found because a developer re-ran the audit for #200, got 15 against the PM's 0, and did not write the PM's number down;
+  the PM and the coordinator then re-ran it independently and both got 15.
 - **The 560 figure above is slightly low, by at most 17 further prompts known by name.** Some prompts frame the member in the third
   person without the word "candidate": "has hired the firm", a named consulting firm hired, a standalone "The task is to...", "the client
   sits in the role of...", and a mixed "we" / "our client" voice. The #196 waves listed these by name as they went, so a later pass can
