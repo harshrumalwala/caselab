@@ -363,6 +363,17 @@ describe('what a part with no exhibit says it is about', () => {
     for (const title of kept) expect(stepTopic(title), title).toBe(title);
   });
 
+  it('answers a title that chains numbers without end, instead of reading it every possible way', () => {
+    // A head that counts on and on and then stops without the separator used to send the engine down every way of splitting the
+    // chain: seconds for forty links, and worse past that. There is no timing in this test on purpose — if the blow-up came back the
+    // suite would hang here rather than report a slow number.
+    const chain = `Question ${'1 and '.repeat(40)}the rest`;
+    expect(stepTopic(chain)).toBe('');
+    expect(stepTopic(`Exhibits ${'1 to '.repeat(40)}`)).toBe('');
+    // The chain the books do write still comes off whole.
+    expect(stepTopic('Exhibits 1, 2 and 3: the wait times')).toBe('the wait times');
+  });
+
   it('says nothing at all when the title is the answer rather than the question', () => {
     const answers = ['Why the suburban shops lag', 'Demand is driven by end users', 'Confirm the profit decline', 'Capabilities Megatron lacks', 'Why is Dolphin losing revenue?'];
     for (const title of answers) expect(stepTopic(title), title).toBe('');

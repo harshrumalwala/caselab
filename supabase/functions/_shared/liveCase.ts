@@ -124,8 +124,12 @@ const tableTopic = (title: string): string => {
  * they only count as numbering when the thing that separates the number from the subject comes next.
  */
 const STEP_NUMBER = String.raw`(?:\d{1,2}[a-z]?|(?:i{1,3}|iv|vi{0,3}|ix|xi{0,2})(?=\s*[:.,)\](\-–—])|[a-z](?=\s*[:.,)\](\-–—]))`;
-/** The numbering of a step that covers two of them at once ("Exhibits 1 and 2:", "Scenarios 2a and 2b:", "Steps 1 to 3:"). */
-const STEP_NUMBERS = String.raw`${STEP_NUMBER}(?:\s*(?:and|&|,|to|through|[-–—/])\s*#?\s*${STEP_NUMBER})*`;
+/**
+ * The numbering of a step that covers two of them at once ("Exhibits 1 and 2:", "Scenarios 2a and 2b:", "Steps 1 to 3:"). The chain
+ * stops at four numbers, and the space around the `#` is one character class rather than two optional runs: both keep the engine from
+ * trying every way of reading a long chain, which on a title that ends without the separator took seconds rather than milliseconds.
+ */
+const STEP_NUMBERS = String.raw`${STEP_NUMBER}(?:\s*(?:and|&|,|to|through|[-–—/])[\s#]*${STEP_NUMBER}){0,3}`;
 /** What the book hangs on its own numbering rather than on the subject: "Question 3 (optional):", "Step 2 (continued):", "Question 1 guidance:". */
 const STEP_HEAD_TAIL = String.raw`(?:\s*\([^()]{1,24}\)|\s+(?:continued|cont|guidance))?`;
 /** What has to come between the numbering and the subject for the numbering to be numbering at all. */
