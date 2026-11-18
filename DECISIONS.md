@@ -344,7 +344,8 @@ only if this message shows they are still stuck", which is a real safeguard but 
 - **Help is never unprompted.** Bucket speaks only in reply to something the member wrote; no timer produces a hint. **Is** true
   (`nudgeLevel` returns `'none'` for `via: 'timer'`) and must stay true in every mode. Since issue #188 removed the timer-driven
   hint path, that guard is the whole of the enforcement — there is no action a client can send to ask for help — and
-  `npm run dryrun:live` asserts it on every step of every run.
+  `npm run dryrun:live` counts it on every step of every run and prints it. That figure is reported, not gated: it is not one of
+  the two the run fails on, so it tells a reader who looks and stops nobody who does not.
 - **In interview mode the first stuck message gets nothing.** A real interviewer lets you sit with it. The ladder **should** start one
   rung later: rung 0 `none`, rung 1 a process question, rung 2 a directional nudge, rung 3+ `advance`.
 - **Interview mode has no `lead` rung.** `lead` tells the model to "stop asking open questions and lead them ... say plainly where to
