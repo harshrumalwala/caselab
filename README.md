@@ -296,8 +296,8 @@ up-to-five ratings) for the second — worked out in the browser from the `skill
 
 **Profile & privacy → How I like to meet** holds two optional details: one **meeting link or phone number** (a Zoom personal room,
 Google Meet, Teams, a school or firm tool, or a phone number) and one **time zone**. They are what scheduling a case inside
-CaseLab puts on the invite: the link goes to the one person a case is settled with, once it is settled (see "Scheduling a time
-with another member"). No screen reads them that way yet — that is issue #100.
+CaseLab uses: the link goes to the one person a case is settled with, once it is settled, and the time zone is the one every time
+is shown to you in (your browser's, until you save one). See "Scheduling a time with another member".
 
 - **Readable by exactly one person: you.** This is not a sharing switch. The link is in no profile, in no projection another member
   or a link holder reads, in no message or email, and in nobody else's backup. `meeting_prefs` has **no API access at all** for
@@ -619,8 +619,9 @@ Up to three suggestions, chosen by fixed rules that stay silent when there isn't
 ### Practice requests: "Case with me?"
 
 A small way to line up a case without a chat. On a member's profile, **Case with *name*?** sends them a short request: an
-optional proposed case and casebook, a time ("tonight 8pm"), and a note of up to 280 characters. They accept or decline, with an
-optional reply of up to 280 characters (a video link, how to reach them). Everything lives in **Community → Inbox**, and
+optional proposed case and casebook, up to three times to case at (see "Scheduling a time with another member"), and a note of up
+to 280 characters. They accept or decline, with an optional reply of up to 280 characters, and if times came with the request they
+can accept by tapping one. Everything lives in **Community → Inbox**, and
 the Community tab shows a count when something needs you (requests waiting for your answer, or answers you haven't seen yet; it
 refreshes when you come back to the tab and once a minute while the app is open), and so does a "Needs you" strip at the top of
 the Dashboard. **Find a case for them** also offers "Ask to case this" on each case you could give them.
@@ -630,6 +631,10 @@ the Dashboard. **Find a case for them** also offers "Ask to case this" on each c
 - **Limits.** One waiting request per person, at most 5 waiting at a time and 20 sent in 24 hours. Declining can also stop that person asking again; their next request is refused with the same message as any other refusal, so they can't tell. You can undo that under "Blocked members".
 - **Once you're connected, asking again is a message.** After a request is accepted you have a conversation, so "Case with …?" becomes **Case again with …?** and sends the new case details (case, book, time and note) into that conversation as a message. There is nothing to accept: it shows up as new in their inbox and they reply in the conversation. The database enforces it too: a new request between two connected members is refused ("You're already connected with this member. Send them a message instead."). Requests already waiting are unaffected.
 - **Emails for the two moments that matter.** The count and the list come from `my_practice_requests()`, and two events also send an email: someone asks you to case, and someone says yes to your request (see Email notifications). Accepting a request opens a conversation (see Messages).
+- **The time is picked, not typed.** A request used to carry a free-text "when" of up to 80 characters; since the scheduling
+  screens (issue #100) the dialog proposes real times instead, and nothing writes `practice_requests.when_text` any more. The
+  column is still there and requests that already have one still show it, on the card and as part of the first message of the
+  conversation.
 - Requests are not available in demo mode.
 
 ### Email notifications
@@ -665,8 +670,9 @@ person's profile (**Message *name***). There is no way to message someone you ha
 
 - **Two people, private.** One conversation per pair, readable only by them. The tables have no direct access for the API roles at all; reads and writes go through database functions that act only on your own conversations. No email address is stored or shown.
 - **Not live, and no email.** Messages arrive by polling: an open conversation looks for new ones every 5 seconds, and the count on the Community tab refreshes when you come back to the tab and once a minute. Messages are not emailed or pushed (only requests and acceptances are; see Email notifications).
-- **Count.** The Community tab and its Inbox view show one number: requests that need you plus *conversations* with new messages (not messages), not including muted or archived ones. The Dashboard's "Needs you" strip shows the two parts separately. Opening a conversation reads it.
+- **Count.** The Community tab and its Inbox view show one number: requests that need you, plus *conversations* with new messages (not messages, and not muted or archived ones), plus times somebody proposed that are waiting for your answer. The Dashboard's "Needs you" strip shows the three parts separately. Times that came with a request you haven't answered are counted once, on the request. Opening a conversation reads it.
 - **Controls.** **Mute** (no count), **Archive** (a new message brings it back), **Delete** your own messages (gone for both of you), **Block**, **Report**. Mute and archive affect only your own view.
+- **Scheduling sits at the top of the conversation.** A settled time, the times waiting on one of you, or a **Schedule a time** button when there is neither; the conversation row in the Inbox carries the same thing in one word ("Time to pick", or the time you have settled). See the next section.
 - **Blocking** stops messages and practice requests between you in both directions. The other person is never told: they just get "You can't message this member right now". Undo it under **Community → Inbox → Blocked members**.
 - **Reporting.** A report keeps your reason and a snapshot of the last 30 messages, even if messages are deleted afterwards, and can optionally block as well. Reports go to a table only the database owner can read (Supabase dashboard → Table editor → `message_reports`); there is no in-app admin, so whoever runs CaseLab needs to check it.
 - **Limits.** A message is 1 to 1000 characters; at most 30 messages in 10 minutes and 500 in 24 hours; at most 5 reports in 24 hours.
@@ -677,7 +683,32 @@ person's profile (**Message *name***). There is no way to message someone you ha
 Two members who have agreed to case settle one time between them: one of them proposes up to three times with a length, the
 other picks one, counters with times of their own, or says no. Either of them can call the whole thing off, or ask to move a
 time that is already settled. The rules are in the database (`supabase/migrations/20261127120000_practice_meetings.sql`,
-issue #99) and in `src/domain/scheduling.ts`; the screens that use them are issue #100, so nothing in the app offers this yet.
+issue #99) and in `src/domain/scheduling.ts`; the screens are issue #100.
+
+**Where it is on screen** (all of it in the member's own time zone, with the other person's beside it):
+
+- **Asking.** "Case with *name*?" has an optional **Propose times**: one to three date-and-time boxes and a length. Leaving it
+  empty sends an ordinary request, which is still the quick way to ask. The request is saved first and the times second, so if
+  the times are refused the request stands and the dialog says so and offers them again on their own.
+- **Answering.** The request card in **Community → Inbox** lists the times under "Pick a time". Tapping one accepts the request
+  and settles that time in a single step; there is also **Accept without a time**, **Suggest other times** (which hands the times
+  back without answering the request) and **Decline** (which says no to both).
+- **In a conversation.** The top of the thread holds the settled time, how long it runs and the link, or the times waiting on one
+  of you, or a **Schedule a time** button. **Move it** proposes a new time and leaves the old one standing until it is picked;
+  **Call it off** ends it.
+- **Waiting.** Times waiting for your answer count on the Community tab and in the Dashboard's "Needs you" strip, beside requests
+  and new messages.
+- **The picker** is the browser's own `datetime-local` box — a phone opens its wheel, a keyboard walks the parts, and each box is
+  labelled "Time 1" to "Time 3". Underneath each one the time is read back as both of you will see it, before anything is sent:
+  "Wed 18 Nov, 7:00 pm for you (8:00 pm for Bob)". What you type is read as a wall clock **in your saved time zone**, not your
+  browser's, and `src/domain/meetingTime.ts` does that conversion (daylight saving included; a time in a zone where the clock has
+  not changed yet moves by an hour, and the preview says so).
+- **If you have no meeting link saved**, the propose window says "Add a meeting link and *name* gets it with the time." with a way
+  straight to Profile & privacy. Scheduling works either way.
+- **Nothing shows as proposed, settled or called off until the database says so**, and a refusal is shown in the database's own
+  words with everything you picked still there.
+- Times are shown only for the member reading them: nothing here is on a profile, and the other person's time zone is known only
+  inside a record the two of you share, so the very first times you propose to someone are read back in your own zone alone.
 
 - **A record of its own, between exactly two people**, created from a practice request or from a conversation. It keeps the
   same `id` for its whole life and carries a `revision` that goes up every time a settled time is changed or called off, so a
@@ -712,7 +743,9 @@ issue #99) and in `src/domain/scheduling.ts`; the screens that use them are issu
   declining and moving a time are all refused with one sentence that gives nothing away, and the record keeps its place for both
   of them, without the link. **Calling it off is the one thing a block does not stop**: either of them can always cancel, because
   a block should end a commitment rather than leave two people who can no longer talk holding a time neither can clear.
-- Records go with the accounts involved (on delete cascade), and scheduling is not available in demo mode.
+- Records go with the accounts involved (on delete cascade), and scheduling is not available in demo mode: the dialog and the
+  conversation show nothing about it there, and nothing is stored.
+- **No calendar file or email yet.** A settled time is visible in the app only; invites and `.ics` are the next issue.
 
 ### Live case: practise a whole case with Bucket
 
@@ -918,7 +951,7 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **Email notifications**: the setting and the once-only markers in Postgres (private, on by default, own row only, no deletes or anonymous access, cascade on account delete, not part of any profile), the email logic with no live service (who is emailed and who isn't, callers who aren't a party, stale or replayed calls, simultaneous calls, a failed send that can be retried, the details, subjects, plain-text twin and escaping of everything a member typed), the app side (the background call, the setting) and the Profile & privacy switch
 - **Messages**: in Postgres (a conversation only opens when a request is accepted, seeded with the proposal, note and reply; one per pair; no direct table access; nobody else can read, write, mark, mute, archive or report; trimming and length limits; unread counts; mute and archive per person and a new message bringing one back; deleting only your own; silent blocks in both directions that also stop requests; the 30-in-10-minutes and 500-a-day limits; reports with a snapshot that survives deletions and can't be read by members or visitors; cascade on user delete; no email columns), the Supabase wrapper, the in-memory twin, and the screens (list, count, opening and reading, Enter and Shift+Enter, errors that keep what you typed, new messages on returning to the tab, delete, mute, archive, block, report, entry points, demo mode)
 - **Finding it**: five tabs in both navigation bars with people and messages together under Community (Members and Inbox views, the older `#/requests` and `#/messages` addresses still working), one count on the tab, and the Dashboard's "Needs you" strip (not shown in demo mode)
-- **Scheduling a practice time** (issue #99, rules only): the rules (`scheduling.test.ts`: one to three distinct times at least ten
+- **Scheduling a practice time** (issues #99 and #100): the rules (`scheduling.test.ts`: one to three distinct times at least ten
   minutes away and within 60 days, the four lengths, what is waiting on you, when a proposal has lapsed and which settled time is
   next); the database (`practiceMeetings.db.test.ts`, 43 checks against the real migrations in an in-process Postgres — the turn
   rule, the time rules, the limits, lapsing by arithmetic, a change leaving the old time standing, the three tables refused to every
@@ -927,6 +960,16 @@ There is no group administration, group chat or social feed: members, profiles, 
   confirmed and searched for everywhere a third member or a visitor can read**, **two confirmations settling exactly one time**, and
   the same inputs run through the plain function and the database so the two cannot drift apart); the Supabase wrapper and its
   in-memory twin; and scheduling not being offered in demo mode, where nothing is stored
+- **Reading and picking a time in two zones** (issue #100): `meetingTime.test.ts` (the date and clock a member reads, both zones in
+  one sentence, a weekday added when the time lands on another day for them, a half-hour zone, and what a `datetime-local` box
+  hands back read as a wall clock **in the member's own zone** — including both sides of the United States' clock change of March
+  2027, the hour that does not exist that night, and the week when Chicago and London are five hours apart instead of six); and the
+  screens (`Scheduling.test.tsx`, 19 checks against the in-memory twin: asking with times and without, the free-text "when" gone
+  and an old one still read back, a time the rules refuse kept in the box with nothing sent, a request that went when its times did
+  not, the "add a meeting link" line and where it leads, picking a time from a request card in one step, accepting without one,
+  countering, declining, times that have gone since the page loaded, proposing and calling off in a conversation, the host's link
+  released only once a time is settled, moving a settled time with the old one still standing, a blocked pair still able to call
+  one off, the two zones across the daylight-saving boundary, the Dashboard strip and tab count, and demo mode offering none of it)
 - **Connected members**: a new request between two members with a conversation is refused by the database (both directions, after the generic refusal, leaving waiting requests alone), and in the app "Case again with …?" sends the case details as a message instead (from the profile and from Find a case; errors keep what you typed; a normal request to someone you aren't connected to is unchanged)
 - **Live case**:
   - the clock and the pacing rules (every stage, early finishes, flexible time, the protected closing time at every size of case from no beats to twelve, the hint ladder, drafts and timeouts, the case sized to how much it has to work through, a plan saved under an older rule, and cases with different numbers of exhibits and with or without a brainstorm)

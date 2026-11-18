@@ -206,7 +206,7 @@ function EmailSwitch() {
   );
 }
 
-export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () => void; focus?: 'burned' | null }) {
+export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () => void; focus?: 'burned' | 'meeting' | null }) {
   const profile = useMyProfile();
   const { saveProfile } = useCommunity();
   const { cases, mode } = useData();
@@ -218,10 +218,11 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
   const [nameError, setNameError] = useState<string | null>(null);
   const [confirmPublic, setConfirmPublic] = useState(false);
 
-  // Arriving from "Burn cases" on the Case Log: bring that part of the page into view.
+  // Arriving from "Burn cases" on the Case Log, or from scheduling: bring that part of the page into view.
   useEffect(() => {
-    if (focus !== 'burned') return;
-    const timer = window.setTimeout(() => document.getElementById('burned-cases-title')?.scrollIntoView?.({ block: 'start' }), 150);
+    if (!focus) return;
+    const target = focus === 'burned' ? 'burned-cases-title' : 'meeting-title';
+    const timer = window.setTimeout(() => document.getElementById(target)?.scrollIntoView?.({ block: 'start' }), 150);
     return () => window.clearTimeout(timer);
   }, [focus]);
   // Opening everything while visible without an account changes what visitors read, so it asks first.

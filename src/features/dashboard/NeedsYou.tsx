@@ -1,4 +1,4 @@
-import { Inbox, MessageCircle } from 'lucide-react';
+import { CalendarClock, Inbox, MessageCircle } from 'lucide-react';
 import { useNavBadge } from '../../state/badge';
 
 /**
@@ -6,8 +6,8 @@ import { useNavBadge } from '../../state/badge';
  * new messages. It disappears when there is nothing, so it never takes space for nothing.
  */
 export function NeedsYou() {
-  const { requests, chats } = useNavBadge();
-  if (requests === 0 && chats === 0) return null;
+  const { requests, chats, times } = useNavBadge();
+  if (requests === 0 && chats === 0 && times === 0) return null;
 
   const link = 'inline-flex items-center gap-2 rounded-xl border-2 border-ink/80 bg-surface px-3.5 py-2 text-sm font-semibold text-ink transition hover:bg-sun-soft';
   return (
@@ -21,6 +21,11 @@ export function NeedsYou() {
       {chats > 0 && (
         <a href="#/inbox" className={link}>
           <MessageCircle className="size-4" aria-hidden /> {chats} conversation{chats === 1 ? '' : 's'} with new messages
+        </a>
+      )}
+      {times > 0 && (
+        <a href="#/inbox" className={link}>
+          <CalendarClock className="size-4" aria-hidden /> {times} time{times === 1 ? '' : 's'} to pick
         </a>
       )}
     </section>

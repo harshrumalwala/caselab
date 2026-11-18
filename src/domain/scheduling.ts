@@ -128,13 +128,57 @@ export function meetingState(status: MeetingStatus, proposal: Pick<MeetingPropos
 /** Records waiting for you to answer. */
 export const needsYou = (m: ScheduledMeeting) => m.myTurn && !m.blocked;
 
+/** For a link's spoken name: "1 time needs you", "3 times need you". */
+export const timesNeedYou = (n: number) => `${n} time${n === 1 ? ' needs' : 's need'} you`;
+
 /** How many records are waiting for you: the number a screen can show on a tab. */
 export const schedulingBadge = (meetings: ScheduledMeeting[]) => meetings.filter(needsYou).length;
 
 /** The next settled time that has not happened yet, if there is one. */
-export function nextConfirmed(meetings: ScheduledMeeting[], now: Date = new Date()): ScheduledMeeting | null {
+export function nextConfirmed(meetings: readonly ScheduledMeeting[], now: Date = new Date()): ScheduledMeeting | null {
   const upcoming = meetings
     .filter((m) => m.state === 'confirmed' && m.startsAt !== null && (instant(m.startsAt) ?? 0) > now.getTime())
     .sort((a, b) => (instant(a.startsAt!) ?? 0) - (instant(b.startsAt!) ?? 0));
   return upcoming[0] ?? null;
+}
+
+/** The times still waiting for an answer from one of you, if there are any. A set whose times have all passed is not. */
+export function openProposal(m: ScheduledMeeting, now: Date = new Date()): MeetingProposal | null {
+  if (!m.proposal || m.state === 'declined' || m.state === 'cancelled') return null;
+  return hasLapsed(m.proposal, now) ? null : m.proposal;
+}
+
+/** What is going on with one member: the time you have settled, and the times waiting on one of you. */
+export interface SchedulingWith {
+  /** The settled time still to come, if there is one. */
+  confirmed: ScheduledMeeting | null;
+  /** The record whose times are waiting for an answer — theirs for you, or yours for them. */
+  awaiting: ScheduledMeeting | null;
+}
+
+/** Everything a conversation or a request card needs to show about scheduling with one member. */
+export function schedulingWith(meetings: readonly ScheduledMeeting[], otherId: string, now: Date = new Date()): SchedulingWith {
+  const theirs = meetings.filter((m) => m.otherId === otherId);
+  return {
+    confirmed: nextConfirmed(theirs, now),
+    awaiting: theirs.find((m) => openProposal(m, now) !== null) ?? null,
+  };
+}
+
+/**
+ * The zone a member reads times in, as far as you can know it: it comes back inside a record the two of you share,
+ * so the first time you ever propose to someone there is nothing to read and their side is left unsaid.
+ */
+export function zoneOfMember(meetings: readonly ScheduledMeeting[], otherId: string): string {
+  return meetings.find((m) => m.otherId === otherId && m.otherTimeZone !== '')?.otherTimeZone ?? '';
+}
+
+/**
+ * The records waiting for your answer that the badge should count. Times that came with a practice request you have
+ * not answered yet are left out: that request is already on the badge, and answering it is where those times are
+ * picked, so counting both would count one thing twice.
+ */
+export function timesNeedingYou(meetings: readonly ScheduledMeeting[], requestsAwaitingYou: readonly string[] = []): ScheduledMeeting[] {
+  const held = new Set(requestsAwaitingYou);
+  return meetings.filter((m) => needsYou(m) && !(m.requestId !== null && held.has(m.requestId)));
 }

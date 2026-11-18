@@ -44,6 +44,7 @@ import { LibraryProvider } from './state/LibraryProvider';
 import { InterviewedProvider } from './state/InterviewedProvider';
 import { MeetingContext } from './state/meeting';
 import { SchedulingContext } from './state/scheduling';
+import { SchedulingProvider } from './state/SchedulingProvider';
 import { WarmupSyncContext, type WarmupSync } from './state/warmupSync';
 import { ToastProvider } from './state/ToastProvider';
 import { UIContext, type UIContextValue } from './state/ui';
@@ -74,7 +75,7 @@ function Shell() {
   useShareLevel(level, status === 'ready' && mode !== 'demo');
   // A brand-new account gets the tour once: not people who already have cases, and not after it was finished or skipped.
   const [tourPending] = useState(() => !hasSeenTour(session.userId));
-  const [profileFocus, setProfileFocus] = useState<'burned' | null>(null);
+  const [profileFocus, setProfileFocus] = useState<'burned' | 'meeting' | null>(null);
   const counter = useRef(0);
 
   // Arriving from the sign-in or sign-up page: drop that address and show the dashboard.
@@ -105,6 +106,10 @@ function Shell() {
       openShortcuts: () => setShortcutsOpen(true),
       openBurned: () => {
         setProfileFocus('burned');
+        setProfileOpen(true);
+      },
+      openMeetingPrefs: () => {
+        setProfileFocus('meeting');
         setProfileOpen(true);
       },
     }),
@@ -302,7 +307,9 @@ function AuthGate({ backend }: { backend: Backend }) {
                         <LiveProvider repository={repos.live}>
                           <MeetingContext.Provider value={repos.meeting}>
                             <SchedulingContext.Provider value={repos.scheduling}>
-                              <Shell />
+                              <SchedulingProvider>
+                                <Shell />
+                              </SchedulingProvider>
                             </SchedulingContext.Provider>
                           </MeetingContext.Provider>
                         </LiveProvider>

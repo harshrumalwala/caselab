@@ -14,7 +14,8 @@ interface PracticeContextValue {
   badge: number;
   reload(): Promise<void>;
   /** Each of these rejects with an error whose message is fit to show, and refreshes the list when it works. */
-  send(to: string, request: NewRequest): Promise<void>;
+  /** Resolves with the new request's id, which is what times proposed with it are attached to. */
+  send(to: string, request: NewRequest): Promise<string>;
   respond(id: string, accept: boolean, reply: string, blockAsker?: boolean): Promise<void>;
   cancel(id: string): Promise<void>;
   /** You are looking at the answers now. */
@@ -75,8 +76,9 @@ export function PracticeProvider({ practice, children }: { practice: PracticeRep
       badge: badgeCount(requests),
       reload,
       async send(to, request) {
-        await practice.send(to, request);
+        const id = await practice.send(to, request);
         await reload();
+        return id;
       },
       async respond(id, accept, reply, blockAsker) {
         await practice.respond(id, accept, reply, blockAsker);

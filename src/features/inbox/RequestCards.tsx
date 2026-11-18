@@ -2,13 +2,18 @@ import { useEffect, useState } from 'react';
 import { Check, MessageCircle, X } from 'lucide-react';
 import type { BlockedMember } from '../../data/practiceRequests';
 import { describeError } from '../../data/errors';
+import { describeSlot, durationLabel } from '../../domain/meetingTime';
 import { cleanReply, describeProposal, MAX_REQUEST_TEXT, unseenAnswer, type PracticeRequest } from '../../domain/requests';
+import { openProposal, schedulingWith, type ScheduledMeeting } from '../../domain/scheduling';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { usePractice } from '../../state/PracticeProvider';
+import { useMeetings } from '../../state/SchedulingProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useConversationWith } from '../../state/MessagesProvider';
+import { MeetingPanel } from '../scheduling/MeetingPanel';
+import { ProposeTimesDialog } from '../scheduling/TimesField';
 
 const first = (name: string) => name.trim().split(/\s+/)[0] || name;
 
@@ -36,17 +41,27 @@ function Proposal({ r }: { r: PracticeRequest }) {
 /** Someone asked you: say yes or no, with a note back (a video link, how to reach you). */
 export function AnswerCard({ r }: { r: PracticeRequest }) {
   const { respond } = usePractice();
+  const scheduling = useMeetings();
   const toast = useToast();
   const [reply, setReply] = useState('');
   const [stop, setStop] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [countering, setCountering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const name = first(r.otherName);
 
-  const answer = async (accept: boolean) => {
+  // The times they proposed with the request, if they proposed any and they are still waiting for you.
+  const waiting = scheduling.available ? schedulingWith(scheduling.meetings, r.otherId).awaiting : null;
+  const offered: ScheduledMeeting | null = waiting && waiting.myTurn && openProposal(waiting) ? waiting : null;
+  const proposal = offered ? openProposal(offered) : null;
+
+  /** Accepting with a time settles the time first: if someone got there first, nothing else has happened yet. */
+  const answer = async (accept: boolean, slot?: string) => {
     setBusy(true);
     setError(null);
     try {
+      if (offered && slot) await scheduling.confirm(offered.id, slot);
+      if (offered && !accept) await scheduling.decline(offered.id);
       await respond(r.id, accept, cleanReply(reply), stop);
       toast({ title: accept ? `You said yes to ${name}` : `You declined ${name}'s request` });
     } catch (e) {
@@ -61,6 +76,28 @@ export function AnswerCard({ r }: { r: PracticeRequest }) {
         <Person r={r} /> asks you to case
       </p>
       <Proposal r={r} />
+      {offered && proposal && (
+        <div className="mt-3" role="group" aria-labelledby={`times-${r.id}`}>
+          <p id={`times-${r.id}`} className="label">
+            Pick a time
+          </p>
+          <ul className="space-y-2">
+            {proposal.slots.map((slot) => (
+              <li key={slot}>
+                <Button variant="primary" className="w-full justify-start text-left" disabled={busy} onClick={() => void answer(true, slot)}>
+                  {describeSlot(slot, scheduling.myZone, offered.otherTimeZone, name)}
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-xs text-ink-2">{durationLabel(proposal.durationMinutes)}</p>
+        </div>
+      )}
+      {!offered && (
+        <div className="mt-3">
+          <MeetingPanel otherId={r.otherId} otherName={r.otherName} requestId={r.id} quiet />
+        </div>
+      )}
       <div className="mt-3">
         <label className="label" htmlFor={`reply-${r.id}`}>
           Reply <span className="font-normal text-muted">(optional: a video link, or how to reach you)</span>
@@ -68,9 +105,14 @@ export function AnswerCard({ r }: { r: PracticeRequest }) {
         <textarea id={`reply-${r.id}`} className="field" rows={2} value={reply} maxLength={MAX_REQUEST_TEXT} onChange={(e) => setReply(e.target.value)} />
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Button variant="primary" onClick={() => void answer(true)} disabled={busy}>
-          <Check className="size-4" /> Accept
+        <Button variant={offered ? 'secondary' : 'primary'} onClick={() => void answer(true)} disabled={busy}>
+          <Check className="size-4" /> {offered ? 'Accept without a time' : 'Accept'}
         </Button>
+        {offered && (
+          <Button onClick={() => setCountering(true)} disabled={busy}>
+            Suggest other times
+          </Button>
+        )}
         <Button onClick={() => void answer(false)} disabled={busy}>
           <X className="size-4" /> Decline
         </Button>
@@ -83,6 +125,19 @@ export function AnswerCard({ r }: { r: PracticeRequest }) {
         <p role="alert" className="mt-2 text-sm font-medium text-bad-text">
           {error}
         </p>
+      )}
+      {countering && offered && (
+        <ProposeTimesDialog
+          title={`Suggest other times to ${name}`}
+          submitLabel="Send times"
+          otherName={r.otherName}
+          otherZone={offered.otherTimeZone}
+          onClose={() => setCountering(false)}
+          onSubmit={async (times) => {
+            await scheduling.counter(offered.id, times);
+            toast({ title: `Times sent to ${name}` });
+          }}
+        />
       )}
     </li>
   );
@@ -125,6 +180,11 @@ export function HistoryRow({ r, onCancel }: { r: PracticeRequest; onCancel?: () 
         {fresh && <Badge tone="warn">New answer</Badge>}
       </div>
       <Proposal r={r} />
+      {r.status === 'pending' && r.direction === 'sent' && (
+        <div className="mt-3">
+          <MeetingPanel otherId={r.otherId} otherName={r.otherName} requestId={r.id} quiet />
+        </div>
+      )}
       {r.reply && (
         <p className="mt-2 rounded-xl bg-surface-2 px-3 py-2 text-sm text-ink">
           <span className="font-semibold">{r.direction === 'sent' ? `${first(r.otherName)} says: ` : 'You said: '}</span>

@@ -10,6 +10,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { useMessages } from '../../state/MessagesProvider';
 import { useToast } from '../../state/ToastProvider';
 import { useUI } from '../../state/ui';
+import { MeetingPanel } from '../scheduling/MeetingPanel';
 
 /** While a conversation is open, look for new messages this often. */
 const POLL_MS = 5_000;
@@ -264,6 +265,8 @@ export function Thread({ conversationId }: { conversationId: string }) {
           </div>
         </div>
       </div>
+
+      <MeetingPanel otherId={conv.otherId} otherName={name} conversationId={conv.id} />
 
       <section aria-label={`Conversation with ${name}`} className="space-y-3">
         {messages.length === 0 ? (

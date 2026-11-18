@@ -277,7 +277,7 @@ describe('controls', () => {
 });
 
 describe('asking again when you are already connected', () => {
-  const again = { caseTitle: 'Jumping Jack', caseBook: 'Booth', when: 'this weekend', message: 'want to do it' };
+  const again = { caseTitle: 'Jumping Jack', caseBook: 'Booth', message: 'want to do it' };
   const requestRows = (env: FakeEnv) => env.practice.rows.length;
 
   async function openDialog() {
@@ -294,13 +294,12 @@ describe('asking again when you are already connected', () => {
     expect(within(dialog).getByText(/already connected, so this goes into your conversation as a message/)).toBeInTheDocument();
     await user.type(within(dialog).getByLabelText('Case to try'), again.caseTitle);
     await user.type(within(dialog).getByLabelText('Casebook'), again.caseBook);
-    await user.type(within(dialog).getByLabelText('When'), again.when);
     await user.type(within(dialog).getByLabelText('Note'), again.message);
     await user.click(within(dialog).getByRole('button', { name: 'Send message' }));
 
     expect(await screen.findByText('Sent to Bob')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(env.chat.msgs.at(-1)).toMatchObject({ conversationId: id, sender: ME, body: 'Case again? Jumping Jack (Booth) · this weekend\nwant to do it' });
+    expect(env.chat.msgs.at(-1)).toMatchObject({ conversationId: id, sender: ME, body: 'Case again? Jumping Jack (Booth)\nwant to do it' });
     expect(requestRows(env)).toBe(before); // no new request
     expect(env.practice.rows.filter((r) => r.status === 'pending')).toEqual([]);
   });

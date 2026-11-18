@@ -18,6 +18,8 @@ export interface UIContextValue {
   openProfile(): void;
   /** Profile & privacy, scrolled to the cases and books you've burned. */
   openBurned(): void;
+  /** Profile & privacy, scrolled to how you like to meet (your meeting link and time zone). */
+  openMeetingPrefs(): void;
   /** The list of keyboard shortcuts. */
   openShortcuts(): void;
 }
