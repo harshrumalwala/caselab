@@ -55,8 +55,6 @@ export const kindOf = (req: TurnRequest): string => {
   if (last.includes('asked a clarifying question')) return 'clarify';
   if (last.includes('handed in a framework')) return 'direction';
   if (last.includes('is working on the exhibit')) return 'exhibit';
-  if (last.includes('ONE brief process-oriented hint')) return 'nudge_process';
-  if (last.includes('still stuck after a hint')) return 'nudge_directional';
   return 'unknown';
 };
 

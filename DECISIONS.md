@@ -342,7 +342,9 @@ The ladder today is `process_hint` (rung 0, i.e. the member's **first** message 
 only if this message shows they are still stuck", which is a real safeguard but a soft one.
 
 - **Help is never unprompted.** Bucket speaks only in reply to something the member wrote; no timer produces a hint. **Is** true
-  (`nextNudgeAt` returns null, `nudgeLevel` returns `'none'` for `via: 'timer'`) and must stay true in every mode.
+  (`nudgeLevel` returns `'none'` for `via: 'timer'`) and must stay true in every mode. Since issue #188 removed the timer-driven
+  hint path, that guard is the whole of the enforcement — there is no action a client can send to ask for help — and
+  `npm run dryrun:live` asserts it on every step of every run.
 - **In interview mode the first stuck message gets nothing.** A real interviewer lets you sit with it. The ladder **should** start one
   rung later: rung 0 `none`, rung 1 a process question, rung 2 a directional nudge, rung 3+ `advance`.
 - **Interview mode has no `lead` rung.** `lead` tells the model to "stop asking open questions and lead them ... say plainly where to

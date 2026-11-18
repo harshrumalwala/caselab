@@ -10,7 +10,7 @@ const MAX_FEEDBACK_TRIES = 3;
 
 /**
  * The running live case: the case as the server last described it, a clock kept in step with the server's, and the things that happen
- * on their own (the next stage when time is up, a nudge when the member is stuck, the feedback when the case ends).
+ * on their own (the next stage when time is up, and the feedback when the case ends).
  */
 export function useLiveSession(repo: LiveCaseRepository) {
   const [view, setView] = useState<LiveView | null>(null);
@@ -22,7 +22,7 @@ export function useLiveSession(repo: LiveCaseRepository) {
   const [tick, setTick] = useState(() => Date.now());
   const offset = useRef(0);
   const viewRef = useRef<LiveView | null>(null);
-  const last = useRef({ settle: 0, nudge: 0, finish: 0 });
+  const last = useRef({ settle: 0, finish: 0 });
   const finishing = useRef(false);
   const inFlight = useRef(0);
 
@@ -93,17 +93,6 @@ export function useLiveSession(repo: LiveCaseRepository) {
       .then((v) => v && apply(v))
       .catch(() => undefined);
   }, [now, view, repo, apply]);
-
-  // A member who is stuck gets a hint, and then the next exhibit: the server decides, the screen only asks when it is due.
-  useEffect(() => {
-    if (!view || view.status !== 'active' || view.stage !== 'exhibits' || view.nextNudgeAt === null) return;
-    if (now < view.nextNudgeAt || busy || inFlight.current > 0 || Date.now() - last.current.nudge < RETRY_MS) return;
-    last.current.nudge = Date.now();
-    repo
-      .nudge(view.sessionId)
-      .then(apply)
-      .catch(() => undefined);
-  }, [now, view, busy, repo, apply]);
 
   // The case is over: write the feedback (it does not have to fit in the 30 minutes).
   const needsFeedback = Boolean(view && view.status === 'done' && !view.feedback);

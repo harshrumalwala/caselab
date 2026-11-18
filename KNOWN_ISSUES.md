@@ -477,6 +477,69 @@ move whenever the file does, so the quoted words are the reliable part):
   they were `member_moved`, and in learning mode nothing changes at all. A member who neither circles nor presses anything is not in the
   harness, because the harness has no such candidate.
 
+## The timer-driven hint is gone, and the 30-minute hard stop is not (issue #188, 2026-11-18)
+
+- **What went.** The whole timer-driven hint path, which no client could reach: `nextNudgeAt` (it returned null unconditionally), its
+  field on `LiveView`, the `nudge` action (the entry in `LiveAction`, its dispatch in `handleLive`, the `case 'nudge'` in
+  `supabase/functions/live-case/index.ts`'s `readAction`, and the `nudge()` handler), the `nudge_process` and `nudge_directional` turn
+  kinds with their directive text, `LiveClient.nudge` and the `nudge` method on `LiveCaseRepository`, the client effect in
+  `src/features/live/useLiveSession.ts`, the unreachable `// a hint` tail of `applyTurn`, the two lines of `kindOf` in
+  `src/test/memoryLiveDeps.ts`, and the `--nudge` turn of `npm run pilot:live`. The owner ruled on it (issue #188, comment of
+  2026-11-18): delete rather than document.
+- **What deliberately stayed, because both look dead and are not.** `recordHint` is called by the message-path rungs in
+  `liveCaseCoach.ts` (the `process_hint` / `directional_hint` gate and the `lead` gate); only its use in the `// a hint` tail went.
+  `MOVING_ON` is the stand-in for an advance reply in `parseTurn` and in `movingOnOnly`; only its use in the timer-advance branch went.
+- **The rule did not change.** "Help is never unprompted" (DECISIONS.md, section 1) is now held by there being no path rather than by a
+  guard on one: the only thing that produces a coach reply is `converse`, which runs because the member wrote something. Nothing in the
+  member's experience changes.
+- **The guard stays, and it is now the whole of the enforcement** (the PM ruled on 2026-11-18). `nextNudgeAt` was dead in the strict
+  sense: nothing called it and nothing could. `nudgeLevel(..., 'timer')` has a caller — the dry run's `unprompted` check asks it on
+  every step — so it is exercised rather than merely unviolated, and it is the one place the rule is held. Resting the rule on the
+  absence of a path instead would be true today and undone in silence by the first person to add one.
+- **DECISIONS.md section 1 named `nextNudgeAt`; the PM has made the edit in this PR.** The parenthesis read "`nextNudgeAt` returns
+  null, `nudgeLevel` returns `'none'` for `via: 'timer'`", and the first of those no longer exists. A developer may not edit
+  `DECISIONS.md`, so the PM did it (commit `3c18912`). The parenthesis now names only the surviving `via: 'timer'` guard and says the
+  rule rests on that guard plus there being no action a client can send to reach help, with `npm run dryrun:live` checking it on
+  every step.
+- **The dry run watches the rule a different way now.** `run.unprompted` used to count views whose `nextNudgeAt` was not null. With the
+  field gone it asks the engine directly — `nudgeLevel(state, now, 'timer') !== 'none'` — so the summary line "replies the clock asked
+  for unprompted (must be 0)" means the same thing and still reads 0. Had it been left alone it would have counted every step of every
+  run, because a missing field is `undefined` and `undefined !== null`.
+- **The deploy order is safe either way, and only one of the two can happen.** Merging ships the website; the Edge Function ships on a
+  separate `npx supabase functions deploy live-case`, which the owner has said will happen once after this merges, carrying #198 as
+  well. Website first (what will happen): the new bundle has no nudge effect, so nothing sends the action, and the old function would
+  have answered it with nothing anyway. Function first: a browser still running the old bundle has the effect, and the field it guards
+  on is now missing — `undefined === null` is false, so the guard passes, and `now < undefined` is false too, so it would POST `nudge`.
+  `readAction` rejects an unknown type with a 400 before `handleLive` sees it, the effect swallows the error, and its own `RETRY_MS`
+  holds it to one attempt every four seconds while such a tab sits in the exhibit stage. No state changes, no model call, no money, and
+  nothing on screen. It ends when the tab reloads.
+- **`readAction` is the gate in that second order and is not unit-tested** (it lives in the Deno entry point, which the Vitest suite
+  cannot import). That was true before this change; it matters a little more now.
+- **The 30-minute hard stop is reachable, and the shape of the session that reaches it is known.** `settle` ends a stage on its own
+  clock whenever that deadline falls *before* `hardEnd`, and only reaches the limit branch (`endReason: 'time_limit'`) when it does
+  not. `deadlines()` clamps every stage's hard deadline to `end - laterPlanned(stage)`, so the only stage whose deadline can equal
+  `hardEnd` is the closing one, the recommendation. Two things have to hold at once. First, **the stages before it have to have eaten
+  the plan's flexible time**, so the recommendation's own window ends at `hardEnd` or within `WRITING_GRACE_MS` (30 s) of it: the
+  flexible time is `limitMs` (the discussion's planned time plus `AROUND_EXHIBITS_MS`, 15:00) less what the stages actually plan for,
+  which is **3:30 in a case with a brainstorm and 5:30 in one without**, because the 15:00 reserves a brainstorm's two minutes whether
+  the case has one or not. The exhibit discussion is what normally eats it: its hard deadline is `hardEnd - closingNeeded` rather than
+  its planned end, so a member with parts still open who is scored `progress` or `partial` within `PROGRESS_WINDOW_MS` (60 s) of that
+  deadline keeps it open. Second, **the member has to still be writing the recommendation when its 90 seconds run out**, because the
+  writing grace is what pushes that stage's deadline the last few seconds onto `hardEnd` (it is capped there), and because a member who
+  hands in finishes the case `completed` instead. (If the slack is gone to the last second the writing window already ends on
+  `hardEnd` and the typing does not matter, but that is the narrower case.) `src/data/liveCase.test.ts` has had a unit test of exactly that session since before
+  this issue ("enforces the 30-minute limit when the clock is the thing that runs out"): progress at 26:40 holds the discussion open,
+  the recommendation starts at 28:10, and a draft saved at 29:35 carries its deadline to 30:00. So the branch is covered by the suite
+  even though no dry-run candidate produces it.
+- **The issue's own guess was the wrong way round.** A member who pauses cannot reach it (`settle` returns the state unchanged while
+  `pausedAt` is set), a learning case cannot (it is untimed), and a member who walks away cannot either: with no progress recorded,
+  `stageEndsAt` holds the discussion to its *planned* end, every stage then runs out in turn and the case finishes `completed` with the
+  slack unspent. It is the engaged member, not the absent one, who can reach the limit.
+- **None of this is a measurement of real sessions.** It is the arithmetic of the plan read off the code, plus the dry run over the 847
+  live-eligible cases, which reaches it in 0 of 27,951 runs with all eleven candidates in all three modes (measured for issue #181;
+  repeatable with `npm run coverage:engine`, the reader PR #191 put in the repo for issue #186). Nobody has seen a real member reach
+  it, and nothing here says how often it happens. The clock was not changed, which is what the issue asked.
+
 ## A fact that mentions the candidate (issue #156, 2026-11-17)
 
 - **The defect was 18 times bigger than the issue said, and that is what chose the route.** #149 had counted only the sentences that
@@ -919,14 +982,14 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   `continueCase`, `shiftTimes`, `endEarly`, `saveDraft` and `saveScratchpad`. After: **1 and 0** (the one is `nudge`, below), with 74
   functions and branches reached that never ran before. The reader is now in the repo as `npm run coverage:engine` (issue #186,
   `scripts/engineCoverage.mjs`), so the measurement can be repeated; the honest residue below is the part that was written down.
+  **The one remaining unreachable function, `nudge`, was deleted in issue #188** (2026-11-18), so the count a fresh run should report
+  is 0 and 0.
 - **Still unreachable, and why.** Each of these is a branch the harness cannot execute. None is a defect on its own; the list is what
   a green dry run does *not* cover.
-  - **The timer-driven hint**: the whole `nudge` path in `liveCaseCoach.ts` and the hint branch of `applyTurn`. `nextNudgeAt` always
-    returns null, so the screen never sends the action and the deployed function never runs it either. Reaching it would mean the
-    harness sending an action no client can send, which would be pretending rather than testing.
+  - **The timer-driven hint**: gone since issue #188 (2026-11-18). It is no longer a blind spot, because there is no longer a path.
+    See the section of its own below.
   - **The 30-minute hard stop** (`settle`'s limit branch, `endReason: 'time_limit'`): 0 runs of 27,951 reach it, in any mode, for any
-    of the eleven candidates. The plan reserves the closing stages' time, so a case completes before the limit. Whether a member can
-    reach it at all is **not known** — nothing here proves it is unreachable, only that no candidate found it.
+    of the eleven candidates. Issue #188 reasoned out why; the section of its own below has the answer.
   - **Ending a case while a part of the discussion is still open** (`endEarly`'s `timed_out` on the open beat). `interrupted` ends
     the case in the recommendation stage, where no beat is open; ending it in the middle would cost the rest of that run's coverage.
   - **The guards against an action the screen cannot send**: empty text, the wrong stage, acting while the case is paused

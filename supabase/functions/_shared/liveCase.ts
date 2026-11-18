@@ -1245,7 +1245,10 @@ const LADDER: Record<LiveMode, readonly NudgeLevel[]> = {
  *    the last rung before moving on is skipped once the exhibit has already taken longer than it is worth, and after the top of the ladder
  *    the case moves on to the next exhibit.
  *  - 'timer': they have said nothing. The clock never speaks up on its own: how much they cover in the time is up to them, and when the
- *    exhibit time is used up the case moves on to the next part.
+ *    exhibit time is used up the case moves on to the next part. This is where "Help is never unprompted" (DECISIONS.md, section 1,
+ *    "The interview rubric") is held in code, and since issue #188 it is the whole of it: there is no longer an action a client can
+ *    send to ask for help. Nothing in the product passes 'timer'. The callers are `src/data/liveCase.test.ts` and
+ *    `npm run dryrun:live`, which asks it on every step of every run to prove the rule rather than to get a rung of help.
  */
 export function nudgeLevel(s: SessionState, now: number, via: 'message' | 'timer' = 'message'): NudgeLevel {
   const b = openBeat(s);
@@ -1258,11 +1261,6 @@ export function nudgeLevel(s: SessionState, now: number, via: 'message' | 'timer
   // moves the member on (learning, which has no clock at all) has no such thing.
   if (ladder[ladder.length - 1] === 'advance' && rung >= ladder.length - 2 && behindSchedule(b, now)) return 'advance';
   return ladder[Math.min(rung, ladder.length - 1)];
-}
-
-/** Nothing wakes the screen up for a hint: they only come in reply to the member. */
-export function nextNudgeAt(_s: SessionState, _now: number): number | null {
-  return null;
 }
 
 /** Records that the coach gave a hint (level 1 or 2) on the open exhibit. */

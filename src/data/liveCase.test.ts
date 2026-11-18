@@ -19,7 +19,6 @@ import {
   moveOn,
   newSession,
   nextBeat,
-  nextNudgeAt,
   nudgeLevel,
   openBeat,
   pause,
@@ -766,11 +765,12 @@ describe('the exhibit discussion', () => {
     expect(many).toBeLessThan(few);
   });
 
+  // "Help is never unprompted" (DECISIONS.md, section 1). Since issue #188 nothing in the product can ask for the clock's opinion
+  // at all; this is the rule itself, asked of the engine directly.
   it('never speaks up on its own: the member drives, and hints only answer what they write', () => {
     const s = inExhibits(3);
     const b = openBeat(s)!;
     for (const n of [30, 150, 600, 1200]) expect(nudgeLevel(s, b.revealedAt + sec(n), 'timer')).toBe('none');
-    expect(nextNudgeAt(s, b.revealedAt)).toBeNull();
   });
 
   it('helps in reply to the member: a process hint, a sharper one, then on the third message it leads, and it moves on if they are still stuck', () => {
