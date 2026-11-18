@@ -295,9 +295,9 @@ up-to-five ratings) for the second — worked out in the browser from the `skill
 ### How I like to meet (your own, not a sharing switch)
 
 **Profile & privacy → How I like to meet** holds two optional details: one **meeting link or phone number** (a Zoom personal room,
-Google Meet, Teams, a school or firm tool, or a phone number) and one **time zone**. They are groundwork for scheduling a case
-inside CaseLab (issue #98); nothing in the app reads them yet, and when scheduling arrives the link goes to the one person a case
-is scheduled with.
+Google Meet, Teams, a school or firm tool, or a phone number) and one **time zone**. They are what scheduling a case inside
+CaseLab puts on the invite: the link goes to the one person a case is settled with, once it is settled (see "Scheduling a time
+with another member"). No screen reads them that way yet — that is issue #100.
 
 - **Readable by exactly one person: you.** This is not a sharing switch. The link is in no profile, in no projection another member
   or a link holder reads, in no message or email, and in nobody else's backup. `meeting_prefs` has **no API access at all** for
@@ -349,6 +349,7 @@ These rules are tested directly against a real Postgres (see Tests), including a
 | `practice_requests`, `practice_blocks` | Requests between two members (a proposed case, a time, a note and a reply, each short) and who you've stopped asking. No direct table access at all: only functions that act on your own requests | Only the two people involved |
 | `conversations`, `conversation_members`, `messages` | A private conversation between two members (it starts when a request is accepted), each person's read marker, mute and archive, and the messages (1 to 1000 characters). No direct table access at all: only functions that act on your own conversations | Only the two people involved |
 | `message_reports` | A report (a reason and a snapshot of the last 30 messages). Kept even if the people involved leave | Only the database owner |
+| `practice_meetings`, `practice_meeting_proposals`, `practice_meeting_confirmations` | A practice time between two members: the pair, the host, the status, the settled time and its revision; the one to three times waiting for an answer and how each was answered; one row per settled time. No direct table access at all: only the scheduling functions, which act on your own records | Only the two people involved |
 | `meeting_prefs` | How you like to meet: a meeting link or phone number and a time zone, with the count behind the 20-a-day save limit. No direct table access at all: only `my_meeting_prefs()` and `save_my_meeting_prefs()`, which act on your own row | Only you |
 | `warmup_best` | Your best Warm-up score and streak for each round length (one row per member and length: 30, 60 or 120 seconds). Read-only for you; changed only by `record_warmup_best()`, which can only raise it | Only you |
 | `interviewed_cases` | Cases you ran as the interviewer: date, title, book, type, industry, who you interviewed, what you told them and what you learned. Same case-type list as `cases`, with length limits. Never joined to `cases`, so it can't reach a total, rating, trend or the weekly goal | Only you |
@@ -671,6 +672,47 @@ person's profile (**Message *name***). There is no way to message someone you ha
 - **Limits.** A message is 1 to 1000 characters; at most 30 messages in 10 minutes and 500 in 24 hours; at most 5 reports in 24 hours.
 - **Honest about privacy.** Messages are **not end-to-end encrypted**: whoever administers the Supabase project could read them. They are deleted with the accounts involved. Messages are not available in demo mode.
 
+### Scheduling a time with another member
+
+Two members who have agreed to case settle one time between them: one of them proposes up to three times with a length, the
+other picks one, counters with times of their own, or says no. Either of them can call the whole thing off, or ask to move a
+time that is already settled. The rules are in the database (`supabase/migrations/20261127120000_practice_meetings.sql`,
+issue #99) and in `src/domain/scheduling.ts`; the screens that use them are issue #100, so nothing in the app offers this yet.
+
+- **A record of its own, between exactly two people**, created from a practice request or from a conversation. It keeps the
+  same `id` for its whole life and carries a `revision` that goes up every time a settled time is changed or called off, so a
+  later invite email can update one calendar event instead of sending a second.
+- **One to three times, and one length.** A time has to be at least ten minutes away and within 60 days, the same time twice is
+  refused, and a length is 30, 45, 60 or 90 minutes. `checkMeetingTimes` in `src/domain/scheduling.ts` is the rule the screen
+  uses and `_check_meeting_times()` is the same rule in the database, down to the sentence; a test runs the same inputs through
+  both and fails if they ever disagree.
+- **The turn rule.** You answer their times, never your own: whoever proposed cannot confirm, counter or decline their own
+  proposal. Nothing can be answered on a record that was declined or called off, and a time that has already happened cannot be
+  moved or cancelled.
+- **Changing a settled time leaves the old one standing** until the new one is confirmed, so there is never a gap where neither
+  of you has a time. Saying no to a change keeps the time that was already agreed.
+- **One settled time, even in a race.** Confirming answers the proposal with a conditional update, moves the record on only if
+  its revision is still the one that was read, and writes a row in `practice_meeting_confirmations` whose primary key is that
+  proposal (and which is unique per record and revision). Two confirmations arriving together therefore end with exactly one
+  time: the second is refused by the database itself, not by the order the two callers happened to read in, and is told the
+  same sentence.
+- **A proposal lapses when every time in it has passed.** That is arithmetic, not a scheduled job: a read calls it lapsed, and
+  the next proposal to the same member closes it and takes its place.
+- **Private to the two people.** The three tables have no direct access for the API roles at all; everything goes through
+  `security definer` functions that act only on the caller's own records. A read returns your own records and nothing else.
+- **The meeting link: the asker hosts.** The member who sent the practice request hosts, and their saved link (see "How I like
+  to meet") is the one handed over, with the other person's as the fallback and nothing at all if neither saved one. It is
+  returned **only once the time is confirmed**, and only to the two people on the record: never while the times are still being
+  settled, never once the record is called off, never to anyone else, and never while one of them has blocked the other. The
+  other person's time zone comes back inside the record too, so each of you can read the times in both.
+- **Limits, in the same shape as practice requests.** One open proposal per pair, times waiting with at most 5 members at once,
+  and 20 proposals in any 24 hours. A counter and a change each count as a proposal, so negotiating cannot be used to get round
+  them.
+- **Blocking stops it in both directions**, silently, as it does for requests and messages: every scheduling function is
+  refused with one sentence that gives nothing away. The record stays visible to both of them, without the link, until the
+  block is lifted.
+- Records go with the accounts involved (on delete cascade), and scheduling is not available in demo mode.
+
 ### Live case: practise a whole case with Bucket
 
 **Live Case tab → pick a mode, then Surprise me (or pick a lane).** The Dashboard banner, the Improvement Areas card and the first-login tour all lead here too. You get one casebook case that has a full write-up (a random one you have not logged, or one you pick), typed, against one continuous clock that starts when the prompt first appears and is as long as the case has in it (23 minutes for a case with one thing to work through, 39 for the usual five, up to 40 for the busiest; see the table below). Bucket plays the interviewer. When the case ends you get feedback on what you actually wrote, and the case is added to your case log. Opening the tab after a case has finished and been logged starts afresh: its feedback lives in the case log.
@@ -875,6 +917,15 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **Email notifications**: the setting and the once-only markers in Postgres (private, on by default, own row only, no deletes or anonymous access, cascade on account delete, not part of any profile), the email logic with no live service (who is emailed and who isn't, callers who aren't a party, stale or replayed calls, simultaneous calls, a failed send that can be retried, the details, subjects, plain-text twin and escaping of everything a member typed), the app side (the background call, the setting) and the Profile & privacy switch
 - **Messages**: in Postgres (a conversation only opens when a request is accepted, seeded with the proposal, note and reply; one per pair; no direct table access; nobody else can read, write, mark, mute, archive or report; trimming and length limits; unread counts; mute and archive per person and a new message bringing one back; deleting only your own; silent blocks in both directions that also stop requests; the 30-in-10-minutes and 500-a-day limits; reports with a snapshot that survives deletions and can't be read by members or visitors; cascade on user delete; no email columns), the Supabase wrapper, the in-memory twin, and the screens (list, count, opening and reading, Enter and Shift+Enter, errors that keep what you typed, new messages on returning to the tab, delete, mute, archive, block, report, entry points, demo mode)
 - **Finding it**: five tabs in both navigation bars with people and messages together under Community (Members and Inbox views, the older `#/requests` and `#/messages` addresses still working), one count on the tab, and the Dashboard's "Needs you" strip (not shown in demo mode)
+- **Scheduling a practice time** (issue #99, rules only): the rules (`scheduling.test.ts`: one to three distinct times at least ten
+  minutes away and within 60 days, the four lengths, what is waiting on you, when a proposal has lapsed and which settled time is
+  next); the database (`practiceMeetings.db.test.ts`, 43 checks against the real migrations in an in-process Postgres — the turn
+  rule, the time rules, the limits, lapsing by arithmetic, a change leaving the old time standing, the three tables refused to every
+  API role however the query is shaped, the functions attacked as a third member, a visitor, a signed-out caller, a blocked member
+  in both directions and an unverified member, the record gone with either account, **the host's link withheld until the time is
+  confirmed and searched for everywhere a third member or a visitor can read**, **two confirmations settling exactly one time**, and
+  the same inputs run through the plain function and the database so the two cannot drift apart); the Supabase wrapper and its
+  in-memory twin; and scheduling not being offered in demo mode, where nothing is stored
 - **Connected members**: a new request between two members with a conversation is refused by the database (both directions, after the generic refusal, leaving waiting requests alone), and in the app "Case again with …?" sends the case details as a message instead (from the profile and from Find a case; errors keep what you typed; a normal request to someone you aren't connected to is unchanged)
 - **Live case**:
   - the clock and the pacing rules (every stage, early finishes, flexible time, the protected closing time at every size of case from no beats to twelve, the hint ladder, drafts and timeouts, the case sized to how much it has to work through, a plan saved under an older rule, and cases with different numbers of exhibits and with or without a brainstorm)

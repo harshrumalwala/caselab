@@ -6,6 +6,7 @@ import type { CaseLabRepository } from '../data/repository';
 import { createMemoryMessages } from '../data/messages';
 import { createMemoryMeeting } from '../data/meetingPrefs';
 import { createMemoryPractice } from '../data/practiceRequests';
+import { createMemoryScheduling } from '../data/scheduling';
 import { createMemoryLive } from './memoryLive';
 import { createMemoryInterviewed } from '../data/interviewed';
 import { toSharedInterviewed, type SharedInterviewed } from '../domain/interviewed';
@@ -146,6 +147,8 @@ export interface FakeEnv {
   live: ReturnType<typeof createMemoryLive>;
   /** How the member likes to meet, as the "database" holds it. */
   meeting: ReturnType<typeof createMemoryMeeting>;
+  /** Practice times between all the fake members; `as(userId)` is that member's view. */
+  scheduling: ReturnType<typeof createMemoryScheduling> & { mine: ReturnType<ReturnType<typeof createMemoryScheduling>['as']> };
   /** The member's Warm-up record, as the "database" holds it. */
   warmup: ReturnType<typeof createMemoryWarmup>;
   /** The cases the member ran as the interviewer, as the "database" holds them. */
@@ -268,6 +271,19 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
     cases: { [SAMPLE_LIBRARY[0].id]: { info: { name: SAMPLE_LIBRARY[0].name, book: SAMPLE_LIBRARY[0].book, caseType: SAMPLE_LIBRARY[0].caseType, industry: SAMPLE_LIBRARY[0].industry }, solution: SAMPLE_LIBRARY_SOLUTIONS[SAMPLE_LIBRARY[0].id] } },
   });
   const meeting = createMemoryMeeting();
+  // The member's own link comes from the meeting-prefs twin; other members have none unless a test gives them one.
+  const scheduling = createMemoryScheduling({
+    members: () =>
+      community.profiles.map((p) => ({
+        userId: p.userId,
+        name: p.displayName,
+        link: p.userId === TEST_USER.userId ? meeting.saved.link : undefined,
+        timeZone: p.userId === TEST_USER.userId ? meeting.saved.timeZone : undefined,
+      })),
+    requests: () => practice.rows.map((r) => ({ from: r.from, to: r.to, status: r.status, createdAt: r.createdAt })),
+    blocks: () => practice.blocks,
+  });
+  const myScheduling = scheduling.as(TEST_USER.userId);
   const publicReader = createMemoryPublic({ profiles: () => community.profiles, shared });
 
   return {
@@ -284,6 +300,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
         createPractice: () => myPractice,
         createMessages: () => myChat,
         createMeeting: () => meeting,
+        createScheduling: () => myScheduling,
         createLive: () => live,
         createPublicCommunity: () => publicReader,
       },
@@ -298,6 +315,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
     practice: Object.assign(practice, { mine: myPractice }),
     chat: Object.assign(chat, { mine: myChat }),
     meeting,
+    scheduling: Object.assign(scheduling, { mine: myScheduling }),
     live,
     publicReader,
     calls: flaky.calls,

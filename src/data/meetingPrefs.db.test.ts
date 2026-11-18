@@ -197,6 +197,9 @@ describe('the value is in no projection, no profile and no function anyone else 
     expect(rows.map((r) => `${r.table_name}.${r.column_name}`)).toEqual([
       'meeting_prefs.meeting_link',
       'meeting_prefs.time_zone',
+      // The two scheduling tables point at a practice meeting by id; neither holds an address or a zone.
+      'practice_meeting_confirmations.meeting_id',
+      'practice_meeting_proposals.meeting_id',
       // A historical flag with nothing reading it (see KNOWN_ISSUES); it is a boolean, not an address.
       'profiles.public_link_only',
     ]);
@@ -228,6 +231,9 @@ describe('the value is in no projection, no profile and no function anyone else 
     );
     expect(rows.filter((r) => r.reads).map((r) => `${r.name} (${r.role})`)).toEqual([
       'my_meeting_prefs (authenticated)',
+      // The one release the owner agreed to: the host's link, on a confirmed practice time, to the two people on it and
+      // nobody else. What it may and may not hand over is attacked in practiceMeetings.db.test.ts.
+      'my_practice_meetings (authenticated)',
       'save_my_meeting_prefs (authenticated)',
     ]);
     // And no function hands the column name back to a caller either.
@@ -255,6 +261,8 @@ describe('the value is in no projection, no profile and no function anyone else 
       ['select to_jsonb(b) as row from public.my_practice_blocks() b', []],
       ['select to_jsonb(c) as row from public.my_conversations() c', []],
       ['select to_jsonb(i) as row from public.member_interviewed($1) i', [ALICE]],
+      // Reads meeting_prefs, but only for a record the caller is on, and only once the time is confirmed.
+      ['select to_jsonb(m) as row from public.my_practice_meetings() m', []],
     ];
     for (const [sql, params] of calls) {
       const { rows } = await db.query<{ row: unknown }>(sql, params);
