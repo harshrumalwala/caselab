@@ -154,22 +154,17 @@ pilot, run on 2026-11-17".
 | #129 | A result pre-printed on the interviewer's sheet is handed over as if it were data | **done, deployed and proved on the real model** (PR #138). The turn that volunteered a computed $8B now reads out only the inputs; #83's handover is not regressed |
 | #131 | Three wording defects in Bucket's replies | **done, deployed and proved on the real model** (PR #136). `advance` now says only "Let's move on to the next piece." |
 | #142 | Asking outright for the answer showed the failure message | **done and deployed** (PR #144); unverified on the real model |
-| #130 | An interview reply confirms the member's guess before they have earned it | **done and deployed** (PR #145), **real-model A/B pending** — both throwaway accounts are at 4 starts per 24 hours until 03:05 UTC. Deployed on deterministic evidence as a deliberate trade; see DECISIONS.md. The author's prediction is in the PR and will be reported line by line |
+| #130 | An interview reply confirms the member's guess before they have earned it | **done and deployed** (PR #145), **unproven on the real model** (see "The one thing that is shipped but unproven" at the top of this file). Deployed on deterministic evidence as a deliberate trade; see DECISIONS.md. The author's prediction is in the PR |
 | #133 | The brainstorm always runs last, and a second brainstorm never runs | **done and deployed** (PR #148); 118 brainstorms in 110 cases were out of place, 21 cases have more than one. Unverified on the real model |
-| #132 | 17 case prompts talk about the book instead of to the candidate | **fixed in `private-data/` and merged** (PR #146); the audit now fails on the condition. **Takes effect only on the next seed reload**, which is the owner's call |
-| #143 #151 | Labels cut to length that the audit could not see (a `belowRows` row label; a reference line's label) | **measurement fixed** (PRs #147, #153). 3 exhibits and 1 exhibit respectively, out of 1,792; the content fixes join the reload batch |
-| #149 | The interviewer's own facts name the book, in 50 write-ups (49 live-eligible) | `proposed` — **measure before rewriting**: facts are read out to a member on request, but the engine's voice rules may already strip the phrase |
-| #150 | The progress strip never marks Recommendation in a case with no brainstorm | `approved`, in build |
+| #132 | 17 case prompts talk about the book instead of to the candidate | **done and live** (PR #146); the audit now fails on the condition. The content has been in production since a reload that preceded the second one |
+| #143 #151 | Labels cut to length that the audit could not see (a `belowRows` row label; a reference line's label) | **done and live**: measurement fixed (PRs #147, #153), 3 exhibits and 1 exhibit respectively out of 1,792, and the content fixes are in production |
+| #149 | The interviewer's own facts name the book, in 50 write-ups (49 live-eligible) | **closed**; measured first, 44 of 72 sentences rewritten and live. The other 28 are left because the voice filter already strips them; whether to rewrite those too is item 2 in "Waiting for the owner" at the top |
+| #150 | The progress strip never marks Recommendation in a case with no brainstorm | **done** (PR #152) |
 | #86 | A switch to take one case out of live practice | closed, not planned (see DECISIONS.md); the emergency exit is setting one row's `confidence` to `partial` |
 
-**One seed reload is done; a second batch is queued.** The owner approved a reload on 2026-11-17 and it was run: 20 parts, no errors,
-counts back at 872 / 872 / 872, `npm run test:e2e` 60 passed / 10 skipped. It carried the Contagion Containment and Bumpers R Us captions
-and nine cut exhibit labels.
-
-**Waiting for the next reload, which needs the owner's approval:** #132's 17 case prompts, #143's three `belowRows` row labels, #151's one
-reference-line label (Soap Co.), and the 13 further prompts that describe the case without naming the book. They batch on purpose —
-teach the measurement first, then measure, then fix the content once; two reloads of a 13 MB seed to save a day is a bad trade.
-ROADMAP R21-R23 still apply to the tooling and the backup.
+**Both seed reloads have run.** Production holds 872 `library_cases` / 872 `library_case_notes` / 872 `library_case_solutions`, and the
+content the issues above produced (#132, #143, #151, #149 and the 13 further prompts) is live. Nothing in this section is waiting for a
+reload; what is still waiting for the owner is the table at the top of the file. ROADMAP R21-R23 still apply to the tooling and the backup.
 
 **What the pilot cost, for anyone planning the next one.** A whole interview case, prompt to Sonnet feedback, is about **$0.03** — a
 third of the README's estimate. The binding constraint is not money but **4 live-case starts per account per day** (`MAX_STARTS_PER_DAY`),

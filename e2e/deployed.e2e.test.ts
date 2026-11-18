@@ -152,8 +152,8 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
   });
 
   describe('tables that hold requests, conversations, messages and meeting details', () => {
-    // NOTE: `meeting_prefs` fails until the owner applies 20261126120000_meeting_prefs.sql, which is the point: it is
-    // the check that the live database matches the code.
+    // NOTE: 20261126120000_meeting_prefs.sql was applied on 2026-11-17 (02:51 UTC on the 18th) and this passes. It stays
+    // the check that the live database matches the code: a table added here fails until its migration is applied.
     const closed = ['practice_requests', 'practice_blocks', 'conversations', 'conversation_members', 'messages', 'message_reports', 'meeting_prefs'];
 
     it('refuse every direct read and write, as a member and as a visitor', async () => {
