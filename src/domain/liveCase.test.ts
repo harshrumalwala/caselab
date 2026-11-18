@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Feedback } from '../data/liveCase';
 import type { LiveCatalogCase } from '../data/liveCase';
-import { bucketLine, caseSteps, COACH_PARTNER, formatClock, groupLanes, liveCaseToInput, searchCases, stageHeading, STEP_STATE_WORD } from './liveCase';
+import { bucketLine, caseSteps, COACH_PARTNER, formatClock, groupLanes, handInLine, liveCaseToInput, searchCases, stageHeading, STEP_STATE_WORD } from './liveCase';
 
 const SKILLS = ['behavioral1', 'behavioral2', 'prompt', 'framework', 'quant', 'exhibits', 'brainstorm', 'recommendation'] as const;
 const blank = () => Object.fromEntries(SKILLS.map((k) => [k, { rating: null, feedback: '', evidence: '' }])) as Feedback['skills'];
@@ -123,6 +123,31 @@ describe('what Bucket says, and how Bucket looks', () => {
     expect(at('prompt').text).toBe(at('prompt').text);
     const texts = new Set(['a', 'b', 'c', 'd', 'e', 'f'].map((id) => at('prompt', { sessionId: id }).text));
     expect(texts.size).toBeGreaterThan(1);
+  });
+});
+
+/**
+ * The thanks for work just handed in, on the two screens that show none of the conversation: a thinking stage and the end of the case
+ * (issue #195). The engine says it as the new stage opens, before that stage's own line, so it is the first thing said there.
+ */
+describe('the thanks for work handed in', () => {
+  type Msg = Parameters<typeof handInLine>[0]['messages'][number];
+  const msg = (stage: Msg['stage'], kind: Msg['kind'], text: string, from: Msg['from'] = 'coach'): Msg => ({ id: 1, at: 0, from, stage, kind, text });
+
+  it('is the first thing Bucket said in this stage, when Bucket said one', () => {
+    const ack = msg('recommend_think', 'text', 'Thanks, I have your ideas.');
+    const own = msg('recommend_think', 'notice', 'Time to bring it together. You have 30 seconds to think about your recommendation, using what you have worked through.');
+    expect(handInLine({ stage: 'recommend_think', messages: [msg('brainstorm_write', 'notice', 'Write your ideas now.'), ack, own] })).toBe('Thanks, I have your ideas.');
+    expect(handInLine({ stage: 'done', messages: [msg('done', 'text', 'Thanks, I have your recommendation.')] })).toBe('Thanks, I have your recommendation.');
+  });
+
+  it('is nothing at all when the member handed nothing in', () => {
+    const own = msg('recommend_think', 'notice', 'Time to bring it together.');
+    expect(handInLine({ stage: 'recommend_think', messages: [msg('brainstorm_write', 'notice', 'Write your ideas now.'), own] })).toBeNull();
+    expect(handInLine({ stage: 'done', messages: [msg('recommend_write', 'notice', 'You ended the case here.')] })).toBeNull();
+    expect(handInLine({ stage: 'recommend_think', messages: [] })).toBeNull();
+    // What the member themselves wrote is theirs, not Bucket thanking them for it.
+    expect(handInLine({ stage: 'exhibits', messages: [msg('exhibits', 'text', 'Revenue is falling', 'user')] })).toBeNull();
   });
 });
 

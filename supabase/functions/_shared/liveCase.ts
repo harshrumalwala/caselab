@@ -721,6 +721,19 @@ const LINES = {
   recommend_write: 'Write your recommendation now. You have a minute and a half.',
   wrap_up: 'Let us move to your recommendation using what you have so far.',
   to_brainstorm: 'Let us move on to brainstorming.',
+  brainstorm_in: 'Thanks, I have your ideas.',
+  recommend_in: 'Thanks, I have your recommendation.',
+};
+
+/**
+ * What Bucket says when the member hands work in, and nothing more (issue #195). A hand-in used to be answered with silence: only the
+ * framework spoke, and the member who had written for ninety seconds under a clock was handed the next part or the end of the case. The
+ * line says the work arrived and stops there - not that it was good, not that it was complete, and nothing of what the book's own list
+ * holds. The two differ because what follows them differs: another part of the case after the ideas, the debrief after the recommendation.
+ */
+const HAND_IN: Partial<Record<Stage, string>> = {
+  brainstorm_write: LINES.brainstorm_in,
+  recommend_write: LINES.recommend_in,
 };
 
 /** The same lines without a stopwatch in them: a learning case has no time to give. */
@@ -742,17 +755,23 @@ function logEnd(s: SessionState, at: number, by: StageLogEntry['endedBy']): void
   }
 }
 
-function startStage(s: SessionState, stage: Stage, at: number): void {
+/**
+ * `handIn` is the acknowledgement of the work that ended the stage before this one. It is said *inside* the new stage, before that
+ * stage's own line, because the screen shows a member only what was said in the stage they are on: said in the stage they have just
+ * left, the thanks would be recorded and never read.
+ */
+function startStage(s: SessionState, stage: Stage, at: number, handIn?: string): void {
   s.stage = stage;
   s.stageStartedAt = at;
   s.stageLog.push({ stage, startedAt: at, endedAt: null, endedBy: null });
+  if (handIn) say(s, at, handIn, 'text');
   if (stage === 'framework_think') say(s, at, line(s, 'prompt_ready'), 'notice');
   else if (stage === 'framework_write') say(s, at, LINES.framework_write, 'notice');
   else if (stage === 'brainstorm_think') say(s, at, line(s, 'brainstorm_think')(openBrainstorm(s, at)), 'notice');
   else if (stage === 'brainstorm_write') say(s, at, line(s, 'brainstorm_write'), 'notice');
   else if (stage === 'recommend_think') say(s, at, line(s, 'recommend_think'), 'notice');
   else if (stage === 'recommend_write') say(s, at, line(s, 'recommend_write'), 'notice');
-  else if (stage === 'exhibits') revealBeat(s, at);
+  else if (stage === 'exhibits') revealBeat(s, at, Boolean(handIn));
 }
 
 /**
@@ -807,8 +826,11 @@ function finish(s: SessionState, at: number, reason: 'completed' | 'time_limit' 
 /** What is said as the discussion is left: where the case goes next decides it. */
 const leavingDiscussion = (s: SessionState, at: number): string => (nextStage(s, 'exhibits', at) === 'brainstorm_think' ? LINES.to_brainstorm : LINES.wrap_up);
 
-/** Ends the current stage and starts the next one (or finishes the case). */
-function endStage(s: SessionState, at: number, by: StageLogEntry['endedBy']): void {
+/**
+ * Ends the current stage and starts the next one (or finishes the case). A stage the member ended by handing work in says so as the
+ * next one opens (`handIn`); a stage the clock ended, or one the member left with nothing handed in, says nothing of the kind.
+ */
+function endStage(s: SessionState, at: number, by: StageLogEntry['endedBy'], handIn?: string): void {
   const from = s.stage;
   if (from === 'framework_write' || from === 'brainstorm_write' || from === 'recommend_write') {
     if (by === 'timer' || by === 'limit') captureTimedOut(s, at);
@@ -825,8 +847,11 @@ function endStage(s: SessionState, at: number, by: StageLogEntry['endedBy']): vo
   }
   logEnd(s, at, by);
   const next = nextStage(s, from, at);
-  if (next === 'done') finish(s, at, 'completed');
-  else startStage(s, next, at);
+  if (next === 'done') {
+    finish(s, at, 'completed');
+    // The case is over, so there is no next stage to carry it: the thanks belongs to the end of the case, in front of the debrief.
+    if (handIn) say(s, at, handIn, 'text');
+  } else startStage(s, next, at, handIn);
 }
 
 /**
@@ -949,7 +974,11 @@ export function ready(settled: SessionState, now: number): ActionResult {
   return { ok: true, state: bump(s) };
 }
 
-/** Hands in the response of a writing stage. The framework is followed by "where would you start?"; the other two move the case on. */
+/**
+ * Hands in the response of a writing stage. The framework is followed by "where would you start?"; the brainstorm and the
+ * recommendation are acknowledged (`HAND_IN`, issue #195) as the case moves on, by the engine and never by the model: a fixed line
+ * costs no call and cannot stray into the ideas the member has just written or the book's own list of them.
+ */
 export function submit(settled: SessionState, text: string, now: number): ActionResult {
   if (settled.pausedAt != null) return refuse(PAUSED);
   const body = clip(text);
@@ -966,7 +995,7 @@ export function submit(settled: SessionState, text: string, now: number): Action
     const kind: SubmissionKind = s.stage === 'brainstorm_write' ? 'brainstorm' : 'recommendation';
     s.submissions.push({ kind, text: body, at: now, timedOut: false });
     delete s.drafts[kind];
-    endStage(s, now, 'user');
+    endStage(s, now, 'user', HAND_IN[s.stage]);
     return { ok: true, state: bump(s) };
   }
   return refuse('There is nothing to hand in right now.');
@@ -1077,11 +1106,13 @@ const asSentence = (topic: string): string => (/[.?!]$/.test(topic) ? topic : `$
  * interview register rightly forbids the model to volunteer a subject the member has not raised. A step whose title is its own answer
  * has no topic, and keeps the opening line that asks the question without naming it.
  */
-function revealBeat(s: SessionState, at: number): boolean {
+function revealBeat(s: SessionState, at: number, afterHandIn = false): boolean {
   const index = beatPointer(s);
   const beat = s.plan.beats[index];
   if (!beat || beat.kind === 'brainstorm') return false;
   const first = !s.beats.some((b) => s.plan.beats[b.index]?.kind !== 'brainstorm');
+  // "Thanks, I have your ideas." has just been said, so the part opens with its own subject: "Good." on top of the thanks is two greetings in a row.
+  const good = afterHandIn ? '' : 'Good. ';
   s.beats.push({ index, revealedAt: at, lastProgressAt: at, lastUserAt: at, lastNudgeAt: 0, budgetMs: beatBudget(s, at), hints: 0, userMessages: 0, asked: 0, partials: 0, outcome: 'open' });
   const topic = beat.kind === 'step' ? (beat.topic ?? '') : '';
   const text =
@@ -1092,10 +1123,10 @@ function revealBeat(s: SessionState, at: number): boolean {
       : topic
         ? first
           ? `Let us dig in. First part: ${asSentence(topic)} What would you analyse first, and how?`
-          : `Good. Next part: ${asSentence(topic)} What would you look at, and how?`
+          : `${good}Next part: ${asSentence(topic)} What would you look at, and how?`
         : first
           ? 'Let us dig in. What would you analyse first, and how?'
-          : 'Good. What would you look at next, and how?';
+          : `${good}What would you look at next, and how?`;
   say(s, at, text, 'exhibit', s.beats.length - 1);
   return true;
 }

@@ -930,6 +930,16 @@ Two rulings from the same pilot observation, kept together because they are the 
 
 **A practice hint may point at a later part of the plan (owner, 2026-11-18).** In the same run a `directional_hint` named a driver that was the subject of the case's final beat, four minutes before that beat opened and before the member had used the word. This is allowed by design — #130's "add no driver they have not raised" rule binds at rung `none`, which practice does not reach during the discussion — and the owner has confirmed it should stay. Practice is the coaching mode; a hint that points ahead is real help, and the cost (that part's discovery is softened) is the trade practice mode exists to make. Interview mode is unaffected and keeps its stricter ladder.
 
+## A hand-in is acknowledged, by the engine (issue #195, 2026-11-18)
+
+Two live pilot runs on 2026-11-18, in different modes and different books, both showed a member handing in a brainstorm and getting nothing back: no model call, no line, straight on to the next part. The recommendation has the same gap, unobserved only because the debrief follows and covers the silence. The cause was in `submit`, which spoke for the framework and not for the other two, and the only record of intent was half a sentence in its docstring.
+
+**The silence goes, for both, and the line comes from the engine rather than the model.** A member who writes for ninety seconds under a clock should be able to tell the work arrived, and the fact that it *is* read later, at feedback time, makes the silence worse rather than better: the system knows and does not say. A model turn was rejected on two grounds — it costs a call per hand-in on every case, and it puts the model one step from commenting on a list of ideas whose book version it is holding, which is the one thing a brainstorm reply must not do. A fixed line costs nothing and cannot leak.
+
+**The line says only that the work arrived**: not that it was good, not that it was complete, and nothing of what the book's list holds. The brainstorm and the recommendation get different lines because what follows them differs — another part of the case in one, the debrief in the other.
+
+**A draft the clock captured and a part the member moved on from are not acknowledged**, because nothing was handed in; telling someone their ideas arrived when the box was taken away would be false.
+
 ## Scheduling, settled on 2026-11-17
 
 - **The asker hosts.** The member who sent the practice request hosts; their saved meeting link goes on the invite, the other person's is the fallback, and if neither has one the invite says to agree a link in messages. The owner chose this over proposer-chooses and over the literal reading of their own earlier brief — **the literal reading would have made the guest host their own interviewer.**

@@ -197,6 +197,16 @@ const LINES: Record<Stage, readonly string[]> = {
   done: ["Nice work! You made it all the way through."],
 };
 
+/**
+ * Bucket's thanks for the work the member has just handed in, when it is theirs to read here (issue #195). The engine says it as the
+ * stage it opens begins, so a stage that shows the conversation has it in the thread already; a thinking stage and the end of the case
+ * are a card and show none of the transcript, which is why those two read it from here and put it in front of their own line.
+ */
+export function handInLine(view: Pick<LiveView, 'stage' | 'messages'>): string | null {
+  const first = view.messages.find((m) => m.stage === view.stage);
+  return first && first.from === 'coach' && first.kind === 'text' ? first.text : null;
+}
+
 /** What Bucket says (and how Bucket looks) right now, from the stage, the time left, and what just happened. */
 export function bucketLine(view: Pick<LiveView, 'stage' | 'sessionId' | 'frameworkPhase' | 'serverNow' | 'endsAt'> & { mode?: LiveView['mode'] }, now: number, lastWasHint: boolean): BucketLine {
   const seed = view.sessionId;
