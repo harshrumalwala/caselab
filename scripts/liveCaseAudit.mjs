@@ -239,6 +239,12 @@ export const PROMPT_RULES = [
     fails: false,
     test: /\bthe\s+candidate\s+should\b/i,
   },
+  {
+    label: 'talks about the member in the third person',
+    fails: false,
+    // A client who hires or invites the member is the business situation, so those phrasings are left alone.
+    test: /(?<!\b(?:hire[sd]?|hiring|asks?|asked|invites?|invited)\s+)\bthe\s+(?:candidate|interviewee|student|applicant)s?\b(?!-)/i,
+  },
 ];
 
 const PROMPT_FAILS = new Set(PROMPT_RULES.filter((rule) => rule.fails).map((rule) => rule.label));
