@@ -41,9 +41,12 @@ describe('both zones in one sentence', () => {
   });
 
   it('says it once when they saved no zone, or when both clocks read the same', () => {
+    // Two names for one clock, and no name at all. (Zones that merely happen to agree are not used here: which
+    // of them are the same zone is a question of the machine's time-zone database, and it changes.)
     expect(describeSlot('2026-11-19T01:00:00Z', CHICAGO, '', 'Sam', NOW)).toBe('Wed 18 Nov, 7:00 pm');
-    expect(describeSlot('2026-11-19T01:00:00Z', CHICAGO, 'America/Winnipeg', 'Sam', NOW)).toBe('Wed 18 Nov, 7:00 pm');
-    expect(sameClock('2026-11-19T01:00:00Z', CHICAGO, 'America/Winnipeg')).toBe(true);
+    expect(describeSlot('2026-11-19T01:00:00Z', CHICAGO, CHICAGO, 'Sam', NOW)).toBe('Wed 18 Nov, 7:00 pm');
+    expect(describeSlot('2026-11-19T01:00:00Z', 'UTC', 'Etc/UTC', 'Sam', NOW)).toBe('Thu 19 Nov, 1:00 am');
+    expect(sameClock('2026-11-19T01:00:00Z', 'UTC', 'Etc/UTC')).toBe(true);
   });
 
   it('counts a half-hour zone as a different clock', () => {
