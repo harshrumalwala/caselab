@@ -1,4 +1,4 @@
-import type { LiveSolution, PublicExhibit, handleLive, isFullSolution, readSolution } from '../supabase/functions/_shared/liveCaseCoach';
+import type { LiveSolution, PublicExhibit, handleLive, heldResults, isFullSolution, readSolution } from '../supabase/functions/_shared/liveCaseCoach';
 import type { BeatOutcome, LiveMode, NudgeLevel, PLANNED_MS, Stage, StageLogEntry, isInterviewerSideExhibit, nudgeLevel, timeInStages } from '../supabase/functions/_shared/liveCase';
 import type { createMemoryLiveDeps } from '../src/test/memoryLiveDeps';
 
@@ -7,6 +7,9 @@ export interface DryRunEngine {
   handleLive: typeof handleLive;
   isFullSolution: typeof isFullSolution;
   readSolution: typeof readSolution;
+  heldResults: typeof heldResults;
+  /** The lines the engine writes itself when a filter throws a reply away, so the harness can tell a replaced reply from an edited one. */
+  standIns: string[];
   isInterviewerSideExhibit: typeof isInterviewerSideExhibit;
   nudgeLevel: typeof nudgeLevel;
   timeInStages: typeof timeInStages;
@@ -14,7 +17,63 @@ export interface DryRunEngine {
   createMemoryLiveDeps: typeof createMemoryLiveDeps;
 }
 
-export type CandidateName = 'brisk' | 'passive' | 'offtrack' | 'asker' | 'plausible';
+export type CandidateName =
+  | 'brisk'
+  | 'passive'
+  | 'offtrack'
+  | 'asker'
+  | 'plausible'
+  | 'coached'
+  | 'probing'
+  | 'blocked'
+  | 'circling'
+  | 'unfiltered'
+  | 'interrupted';
+
+/** A shape of reply the stub can write, each one a rule in `parseTurn` made to run. */
+export type ReplyShape =
+  | 'plain'
+  | 'verdict'
+  | 'bare_verdict'
+  | 'verdict_question'
+  | 'verdict_moves_on'
+  | 'tell'
+  | 'tell_only'
+  | 'withholds'
+  | 'narration'
+  | 'moves_on'
+  | 'held_figure'
+  | 'private_note'
+  | 'not_json'
+  | 'empty';
+
+/** What became of a reply: the member read it word for word, read it edited, read one of the engine's own lines, or read nothing. */
+export type ReplyFate = 'kept' | 'edited' | 'stand_in' | 'dropped';
+export type ReplyTally = { sent: number } & Record<ReplyFate, number>;
+
+/** What the stub decides for one turn on a part of the discussion. */
+export interface ExhibitTurn {
+  assessment: 'progress' | 'partial' | 'stuck' | 'unclear';
+  beatComplete: boolean;
+  /** The member asked for something rather than being stuck on it, so the turn costs them no rung of help. */
+  dataRequest?: boolean;
+}
+
+/** What `playCase` keeps for the stub between turns. Everything in it is written by the harness; the stub never reads the case. */
+export interface StubContext {
+  written: number;
+  turns: number;
+  directions: number;
+  shape: ReplyShape | null;
+  message: string;
+  figure: string;
+  skipped: number;
+  refused: number;
+  dataRequests: number;
+  partials: number;
+  heldFigure: () => string;
+  privateSentence: string;
+}
 
 /** What a scripted candidate pretends. This is the harness's only piece of pretending; everything else is the engine's. */
 export interface CandidateSpec {
@@ -23,9 +82,28 @@ export interface CandidateSpec {
   acts: boolean;
   thinkMs: number;
   clarifyQuestions: number;
-  directionClear: boolean;
+  /** Whether the starting direction is settled; a function of how many times it has been asked for a candidate whose is not at first. */
+  directionClear: boolean | ((asked: number) => boolean);
   /** What the stub sends back for a turn on a beat. */
-  exhibit: { assessment: 'progress' | 'partial' | 'stuck' | 'unclear'; beatComplete: boolean };
+  exhibit: ExhibitTurn;
+  /** The same, when it depends on how many times the member has already written on this part (a hint before the step that closes it). */
+  exhibitTurn?: (written: number) => ExhibitTurn;
+  /** Which of `WRITES` the member sends, when it depends on how many times they have written here. */
+  says?: (written: number) => string;
+  /** Which kinds of turn this candidate's model declines outright (`stopReason: 'refusal'`). */
+  refuses?: (kind: string) => boolean;
+  /** Whether the stub writes the shapes in `REPLY_SHAPES` instead of its one fixed sentence. */
+  shapes?: boolean;
+  /** Types into the box of every writing stage and leaves it there, and writes in the scratchpad. */
+  drafts?: boolean;
+  /** Stops the clock in the middle of the discussion and starts it again. */
+  pauses?: boolean;
+  /** Ends the case while writing the recommendation, where the mode allows it. */
+  endsEarly?: boolean;
+  /** Logs the case once the feedback is written. */
+  logs?: boolean;
+  /** Presses "move on" before writing anything on a part. */
+  jumpsFirst?: boolean;
   /** How many messages on one beat the harness allows before it gives up (the engine has no such limit). */
   beatCap?: number;
   /** Which of `WRITES` this candidate sends on a beat, when it is not the shared one. */
@@ -76,6 +154,14 @@ export interface DryRun {
   beats: { outcome: BeatOutcome; hints: number }[];
   /** The brainstorms the case plans, the ones the member was asked, and the ones they handed in. */
   brainstorms: { planned: number; asked: number; answered: number };
+  /** Every shape of reply the stub wrote in this run, and what became of each one. */
+  replies: Partial<Record<ReplyShape, ReplyTally>>;
+  /** What the stub put the engine through, counted by the stub itself. */
+  stub: { refused: number; dataRequests: number; partials: number; skipped: number };
+  /** Replies that carried a held figure or a sentence of the private notes as far as the member. Must be 0. */
+  answerReached: number;
+  /** Answers kept from the box without the member handing them in: the clock's, or their own early end. */
+  timedOutDrafts: number;
   stages: StageTime[];
   seconds: number;
   limitSeconds: number;
@@ -140,6 +226,16 @@ export interface DryRunSummary {
   unprompted: number;
   feedback: number;
   coachCalls: number;
+  /** Shape of reply to what became of it, over every run. */
+  shapes: Map<ReplyShape, ReplyTally>;
+  /** Times a shape could not be written because the case held nothing for it. */
+  shapesSkipped: number;
+  declined: number;
+  dataRequests: number;
+  partials: number;
+  timedOutDrafts: number;
+  /** Replies that carried a held figure or a private note as far as the member. Must be 0. */
+  toldTheAnswer: number;
 }
 
 export interface PlayOptions {
@@ -156,6 +252,9 @@ export const CANDIDATES: CandidateName[];
 export const BEAT_OUTCOMES: BeatOutcome[];
 export const RUNGS: NudgeLevel[];
 export const CANDIDATE_SPECS: Record<CandidateName, CandidateSpec>;
+export const REPLY_SHAPES: ReplyShape[];
+export const REPLY_FATES: ReplyFate[];
+export function noReplies(): ReplyTally;
 
 export function loadEngine(): Promise<DryRunEngine>;
 export function exhibitLeaks(
@@ -164,7 +263,12 @@ export function exhibitLeaks(
   solution: LiveSolution,
   isInterviewerSide: typeof isInterviewerSideExhibit,
 ): string[];
-export function stubModel(spec: CandidateSpec): (kind: string) => unknown;
+export function newStubContext(over?: Partial<StubContext>): StubContext;
+export function stubModel(spec: CandidateSpec, ctx?: StubContext): (kind: string) => unknown;
+export function stubStopReason(spec: CandidateSpec, ctx?: StubContext): (kind: string) => string;
+export function standInLines(coach: Record<string, unknown>): string[];
+/** One sentence of the private notes long enough for the leak rule to see and short enough to survive the reply's length cap. */
+export function privateSentenceOf(solution: LiveSolution | null): string;
 export function playCase(raw: unknown, mode: LiveMode, candidate: CandidateName, engine: DryRunEngine, startAt?: number): Promise<DryRun>;
 export function playAll(entries: unknown[], engine: DryRunEngine, options?: PlayOptions): Promise<DryRunResult>;
 export function failureCause(run: DryRun): string;

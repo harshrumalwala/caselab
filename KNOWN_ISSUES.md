@@ -814,6 +814,65 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
 - **Content is validated by scripts outside the repo**, not by tests: the solution parser (`src/domain/bookSolution.ts`) is tested, but
   whether a write-up is faithful to its book is not.
 
+## What the dry run can reach, and what it still cannot (issue #181, 2026-11-17)
+
+- **The blind spots were measured, not guessed, and the measurement is not in the repo.** Before and after were V8's own coverage
+  (`NODE_V8_COVERAGE` on a whole-catalogue `dryrun:live`, with a small script that reports every function and block of
+  `liveCase.ts` and `liveCaseCoach.ts` that never executed). Over all 847 cases, before: **16 of the 155 functions the loader saw in
+  `liveCaseCoach.ts`, and 9 of 109 in `liveCase.ts`, never ran once**, among them `refusedTurn`, `recordDataRequest`, `pause`,
+  `continueCase`, `shiftTimes`, `endEarly`, `saveDraft` and `saveScratchpad`. After: **1 and 0** (the one is `nudge`, below), with 74
+  functions and branches reached that never ran before. The reader script lives in the
+  assistant's scratch folder, like `split_seed.py` before it, so **nobody can repeat the measurement from the repo**; the honest
+  residue below is the part that was written down.
+- **Still unreachable, and why.** Each of these is a branch the harness cannot execute. None is a defect on its own; the list is what
+  a green dry run does *not* cover.
+  - **The timer-driven hint**: the whole `nudge` path in `liveCaseCoach.ts` and the hint branch of `applyTurn`. `nextNudgeAt` always
+    returns null, so the screen never sends the action and the deployed function never runs it either. Reaching it would mean the
+    harness sending an action no client can send, which would be pretending rather than testing.
+  - **The 30-minute hard stop** (`settle`'s limit branch, `endReason: 'time_limit'`): 0 runs of 27,951 reach it, in any mode, for any
+    of the eleven candidates. The plan reserves the closing stages' time, so a case completes before the limit. Whether a member can
+    reach it at all is **not known** — nothing here proves it is unreachable, only that no candidate found it.
+  - **Ending a case while a part of the discussion is still open** (`endEarly`'s `timed_out` on the open beat). `interrupted` ends
+    the case in the recommendation stage, where no beat is open; ending it in the middle would cost the rest of that run's coverage.
+  - **The guards against an action the screen cannot send**: empty text, the wrong stage, acting while the case is paused
+    (`submit`, `userSays`, `ready`, `moveOn`'s paused branch, `saveScratchpad` outside the framework stages). The harness only sends
+    what the screen can send.
+  - **The caps and the collisions**: 4 starts a day, 12 a week, 3,000 actions, 90 coach replies, and every save-collision retry in
+    `mutate` and `converse`. One run is one case, played alone, by one member.
+  - **The `??` fallbacks for sessions saved before a field existed** (`b.asked`, `plan.limitMs`, `plan.exhibitMs`, `state.mode`): the
+    harness only makes new sessions, so they are unreachable by construction.
+  - **The second half of `questionIn`**: a verdict that ends in a question mark but has no question to keep.
+  - **`SHOW_DATA`**, the stand-in for a direction turn in an interview whose reply was all verdict and whose direction was clear. The
+    shape cycle lands an emptying shape on the first direction turn, where the direction is not clear yet, and a surviving one on the
+    second: reaching it would need a twelfth candidate whose cycle sits at a different offset.
+  - **Feedback that cannot be parsed** and the retry counter (`MAX_FEEDBACK_ATTEMPTS`): `blocked`'s model declines the feedback, which
+    covers the "could not be written" path, but no candidate sends feedback that is malformed rather than refused.
+- **Four things the improved harness showed about the engine. Nothing was changed for any of them** (issue #181 forbade it: a harness
+  change and an engine fix in one pull request cannot be told apart afterwards).
+  - **A member scored `partial` on every message is never moved on.** The advance rung only fires for `stuck` or `unclear`
+    (`applyTurn`), and `partial` is neither, so in practice and in interview the only ways out of that part are the member's own
+    "move on" and the clock. `circling` ends every part itself, in all three modes.
+  - **In an interview, a verdict in reply to a clarifying question is not removed.** `withoutVerdicts` runs for the `exhibit` and
+    `direction` turns only, so "You are exactly right" reaches the member whole when it answers a clarifying question. That may be
+    the right scope — a clarifying answer is not a verdict on their reading of a part — but it was never a decision anyone wrote down.
+  - **`hinted` was 0 in every dry run ever because of the harness, not the engine.** With a candidate that takes help and then closes
+    the part it is 12,357 of 115,556 beat outcomes, and the engine's rule (`nextBeat`: `b.hints > 0 ? 'hinted' : 'independent'`)
+    behaves as written in all three modes.
+  - **Two stages now show as running over their planned time** (1,694 `framework_write`, 1,652 `exhibits`, 847 `recommend_write`, 354
+    `brainstorm_write`), which is the writing grace and the discussion's flexible time doing their job. Both were invisible before
+    because no candidate ever left a draft in the box or kept a part alive with `partial` scores.
+- **What the shapes cannot do.** The stub writes fixtures: each shape is worded the way the filter it tests is written for. A
+  paraphrase a filter misses is also a paraphrase the stub never writes, so **the harness cannot find a filter's blind spot** — only a
+  real model can. "A filter fired" is also not "the member read something good": the harness reads whether the words changed, never
+  whether they were any use.
+- **The held-figure shape depends on the write-up.** It needs a figure the book worked out in a table the member cannot see and that
+  appears nowhere they can look it up, so over the catalogue it was written 382 times against 3,709 attempts that found nothing to
+  write and were counted as skipped. The private-note shape needs a recommendation sentence of 80 to 400 characters.
+- **The run takes about twice as long**: 27,951 runs in about nine minutes, against 12,705 in about four. It is still free, still
+  deterministic, and still not in CI (it needs `private-data/`).
+- **`blocked` ends every case without feedback, on purpose**, because its model declines the feedback call as well as the turns. So
+  "cases that ended with feedback written" is 22,869 of 25,410 finished runs, and the 2,541 missing are that candidate's.
+
 ## The pilot runner (`npm run pilot:live`, issue #125, added 2026-11-17)
 
 - **The whole $2 pilot has run against production** (the owner, 2026-11-17: 8 real starts — there are 8 transcripts in the
