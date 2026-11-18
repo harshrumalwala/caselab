@@ -22,6 +22,7 @@ import {
   MOVING_ON,
   OVER_TO_YOU,
   SHOW_DATA,
+  START_WORKING,
   WORK_IS_YOURS,
   WORK_IT_TOGETHER,
   withoutVerdicts,
@@ -1686,6 +1687,132 @@ describe('a part of the case that hands over no exhibit', () => {
       expect(r.messages.at(-1)?.text, note).not.toContain('SECRET');
       expect(r.messages.at(-1)?.text).toContain('stay with your reasoning');
     }
+  });
+});
+
+/**
+ * 246 of the 847 live-eligible write-ups hand over no exhibit at all: the case is the book's own steps, talked through (issue #193).
+ * The engine ran them as if an exhibit were on the table - the model was told one had been shown, the stage it was told about was
+ * called the exhibits, and the directive told it to promise data the case does not have.
+ */
+describe('a case that hands over no exhibit at all (issue #193)', () => {
+  const TALKED_THROUGH = {
+    ...SOLUTION,
+    exhibits: [],
+    steps: [
+      { title: 'Size peak demand', body: 'Peak fills the hotel for four months SECRET-STEP', calc: [], whatToNotice: 'The base is busy only part of the year', commonMiss: [], checkYourself: [] },
+      { title: 'Close or invest: the ROIC test', body: 'The offer costs five hundred thousand a store SECRET-BODY', calc: [], whatToNotice: 'The build cost is sunk', commonMiss: [], checkYourself: [] },
+    ],
+  };
+
+  /** A case with nothing to hand over, walked to its first part. `w.asked` is left alone: its last entry is the direction turn. */
+  async function toTalk(mode: 'practice' | 'interview' | 'learning' = 'practice', userId = ME): Promise<string> {
+    w.deps.loadCase = async (lib) => (lib === LIB ? { info: INFO, solution: TALKED_THROUGH } : null);
+    const id = view(await call({ type: 'start', libraryId: LIB, mode }, userId)).sessionId;
+    await call({ type: 'ready', sessionId: id }, userId);
+    await call({ type: 'ready', sessionId: id }, userId);
+    await call({ type: 'submit', sessionId: id, text: 'Demand, supply, cost' }, userId);
+    w.script.reply = () => turn('Good start.', { direction_clear: true, assessment: 'progress' });
+    const v = view(await call({ type: 'say', sessionId: id, text: 'I would start with demand' }, userId));
+    expect(v.stage).toBe('exhibits');
+    expect(v.exhibitsTotal).toBe(0);
+    expect(v.exhibits).toHaveLength(0);
+    return id;
+  }
+
+  /** The same case ended and judged: what the feedback model was sent. */
+  async function feedbackFor(id: string, userId = ME): Promise<string> {
+    w.script.reply = (kind) => (kind === 'feedback' ? GOOD_FEEDBACK : turn('ok'));
+    await call({ type: 'end', sessionId: id }, userId);
+    await call({ type: 'finish', sessionId: id }, userId);
+    return JSON.stringify(w.asked.at(-1));
+  }
+
+  it('does not tell the model an exhibit was shown for a part that is only talked through', async () => {
+    const id = await toTalk();
+    w.asked.length = 0;
+    w.script.reply = () => turn('Go on.', { assessment: 'progress' });
+    await call({ type: 'say', sessionId: id, text: 'I would compare peak and off-peak occupancy' });
+    expect(JSON.stringify(w.asked.at(-1))).not.toContain('An exhibit is shown to the student');
+  });
+
+  it('still tells it so for a part that really handed one over', async () => {
+    const id = await toExhibits();
+    w.script.reply = () => turn('Go on.', { assessment: 'progress' });
+    await call({ type: 'say', sessionId: id, text: 'Off-peak is 31 percent' });
+    expect(JSON.stringify(w.asked.at(-1))).toContain('An exhibit is shown to the student');
+  });
+
+  it('marks only the parts that handed one over, on a case with both kinds', async () => {
+    const id = await toExhibits();
+    w.script.reply = () => turn('Go on.', { assessment: 'partial' });
+    await call({ type: 'say', sessionId: id, text: 'Off-peak is 31 percent' });
+    await call({ type: 'next', sessionId: id });
+    await call({ type: 'say', sessionId: id, text: 'Off-peak is 32 percent' });
+    await call({ type: 'next', sessionId: id }); // the last part of this plan is the sizing step, which hands over nothing
+    const v = view(await call({ type: 'resume', sessionId: id }));
+    expect(v.exhibits).toHaveLength(2);
+    expect(v.beatsShown).toBe(3);
+    await call({ type: 'say', sessionId: id, text: 'I would size the peak season first' });
+    expect(JSON.stringify(w.asked.at(-1)).match(/An exhibit is shown to the student/g)).toHaveLength(2);
+  });
+
+  it('calls the stage the discussion in the record and the stage times the model is sent', async () => {
+    const id = await toTalk();
+    w.script.reply = () => turn('Go on.', { assessment: 'progress' });
+    await call({ type: 'say', sessionId: id, text: 'I would compare peak and off-peak occupancy' });
+    const sent = await feedbackFor(id);
+    expect(sent).not.toContain('Exhibits and discussion');
+    expect(sent).toContain('[Discussion] Student: I would compare peak and off-peak occupancy');
+    expect(sent).toMatch(/Discussion: \d+s/);
+  });
+
+  it('keeps every part notice in the written record, named for what it was', async () => {
+    const id = await toTalk();
+    w.script.reply = () => turn('Go on.', { assessment: 'progress' });
+    await call({ type: 'say', sessionId: id, text: 'I would compare peak and off-peak occupancy' });
+    expect(await feedbackFor(id)).toContain('Interviewer showed the next topic.');
+  });
+
+  it('calls the stage the exhibits, and the notice an exhibit, on a case that has them', async () => {
+    const id = await toExhibits();
+    w.script.reply = () => turn('Go on.', { assessment: 'progress' });
+    await call({ type: 'say', sessionId: id, text: 'Off-peak is 31 percent' });
+    const sent = await feedbackFor(id);
+    expect(sent).toContain('[Exhibits and discussion] Student: Off-peak is 31 percent');
+    expect(sent).toMatch(/Exhibits and discussion: \d+s/);
+    expect(sent).toContain('Interviewer showed an exhibit.');
+  });
+
+  it('does not tell the model to promise data the case does not have, in any mode', async () => {
+    const users = { practice: ME, interview: 'user-b', learning: 'user-c' } as const;
+    for (const mode of ['practice', 'interview', 'learning'] as const) {
+      w.asked.length = 0;
+      await toTalk(mode, users[mode]);
+      const sent = JSON.stringify(w.asked.at(-1));
+      expect(sent, mode).not.toContain('show them some data');
+      expect(sent, mode).toContain('say you will start working through it with them');
+    }
+  });
+
+  it('keeps the promise of data on a case whose parts are exhibits, in any mode', async () => {
+    const users = { practice: ME, interview: 'user-b', learning: 'user-c' } as const;
+    for (const mode of ['practice', 'interview', 'learning'] as const) {
+      w.asked.length = 0;
+      const id = view(await call({ type: 'start', libraryId: LIB, mode }, users[mode])).sessionId;
+      await call({ type: 'ready', sessionId: id }, users[mode]);
+      await call({ type: 'ready', sessionId: id }, users[mode]);
+      await call({ type: 'submit', sessionId: id, text: 'Demand, supply, cost' }, users[mode]);
+      w.script.reply = () => turn('Good start.', { direction_clear: true, assessment: 'progress' });
+      await call({ type: 'say', sessionId: id, text: 'I would start with demand' }, users[mode]);
+      expect(JSON.stringify(w.asked.at(-1)), mode).toContain('say you will show them some data');
+    }
+  });
+
+  it('answers an emptied interview reply with a move into the work rather than a promise of data', () => {
+    const verdict = JSON.stringify(turn('Good instinct, that is exactly the right place to start.', { direction_clear: true }));
+    expect(parseTurn(verdict, [], FALLBACK, 700, 'none', [], { mode: 'interview', kind: 'direction' })!.message).toBe(SHOW_DATA);
+    expect(parseTurn(verdict, [], FALLBACK, 700, 'none', [], { mode: 'interview', kind: 'direction', noExhibits: true })!.message).toBe(START_WORKING);
   });
 });
 

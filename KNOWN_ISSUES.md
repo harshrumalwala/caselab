@@ -816,6 +816,46 @@ move whenever the file does, so the quoted words are the reliable part):
   could be retitled instead; nothing flags them. (It was 32 until issue #194 took the numbering off one more title, whose subject is
   then exactly a hidden table's name.)
 
+## A case with no exhibits, run as the conversation it is (issue #193, 2026-11-18)
+
+- **Unverified against a real model, and the part that most needs one is the part that is only a request.** Two of the three defects
+  are code and are tested (the conversation the model reads no longer says an exhibit was shown for a part that handed nothing over;
+  the stage it is told about is called Discussion when the plan has no exhibit beat). The third — Bucket offering to show data on a
+  case with none — is answered by taking the promise out of the `direction` directive, and a directive is a request. Whether a real
+  model stops offering data cannot be seen from here. `npm run dryrun:live` stubs the model with one fixed sentence, so no directive
+  text influences any of its 27,951 runs, and the two reports (before and after, 847 cases, 0 that failed the bar, 2,541 open by
+  design) are byte-identical apart from their timestamp — the expected null result, and not evidence for the fix. The unit tests over
+  the real `handleLive`, `turnRequest`, `writtenRecord` and `parseTurn` are. **It needs `npx supabase functions deploy live-case` to
+  reach anybody**, and a session already running keeps the plan it started with.
+- **The message kind on the wire did not change, and that was the choice.** A part notice is still `kind: 'exhibit'` whatever kind of
+  beat it opened; what changed is that `history()` and `writtenRecord` now read the beat behind it (`beatShown` / `showedAnExhibit` in
+  `liveCaseCoach.ts`) instead of trusting the kind. Re-typing a step notice as `'notice'` would have been invisible on screen
+  (`liveParts.tsx` draws the two identically) but would have dropped those notices out of the written record, which has an `'exhibit'`
+  branch and none for `'notice'` — and a `'notice'` branch could not simply be added, because the same kind carries the opening prompt
+  and the stage-change lines, which are deliberately not in the record. It would also have split sessions saved before the deploy from
+  sessions saved after. The cost of the route taken: the kind no longer means what it says on its own, and a third reader of
+  `Message.kind` has to know to ask the plan. Both readers that matter go through the one helper now.
+- **`withoutDataPromise` is a string replace on one sentence of three directives.** `DIRECTIVES.direction`,
+  `INTERVIEW_DIRECTIVES.direction` and `LEARNING_DIRECTIVES.direction` all contain "say you will show them some data"; reword any of
+  them without rewording `DATA_PROMISE` and the replacement silently stops happening for that mode. The test asserts the *replacement*
+  sentence is present on a no-exhibit case in all three modes, so a drift fails rather than passing in silence — that positive
+  assertion is the whole of the protection.
+- **The `exhibit` turn directive still opens "The student is working on the exhibit"** on a part that hands over nothing. That is true
+  of every case with a talked-through part, not only of these 246, and the only thing correcting it is `beatContext`, which says "There
+  is no exhibit here: you are discussing one part of the analysis with the student in conversation." on the same request. Rewording the
+  directive per beat kind was out of scope here; it would change the prompt for every case in the library.
+- **The debrief the member reads is still whatever the model writes.** `parseFeedback` takes `d.stage` straight from the model's JSON
+  and nothing checks it against the stage names. Telling the model "Discussion" is the whole of the fix for the debrief heading; a model
+  that writes "Exhibits and discussion" anyway is not caught. The member-facing strip and stage heading have never been the model's
+  (`stageHeading` in `src/domain/liveCase.ts`), and are untouched.
+- **"No exhibits" means no exhibit beat, not no data.** A case with no exhibit of its own can still hold the interviewer's reference
+  tables and data given on request, and those are still read out when the member asks for them, at the same budget as before. Only the
+  unprompted promise of data changed.
+- **Two neighbours were left as they are.** `feedbackRequest` still lists the parts as "Exhibit/topic 1: ...", which covers both kinds;
+  and the member-visible wording of the part notices is a separate issue (#194 took the book's numbering out of the topic).
+- **The count of 246 of 847 is the issue's, measured on 2026-11-17** against the git-ignored write-ups. Nothing here re-measured it, and
+  nothing in CI can: `private-data/` is not in git.
+
 ## The numbering `STEP_HEAD` takes off, and the numbering it leaves (issue #194, 2026-11-18)
 
 - **Unverified against a real model**, like every change under `supabase/functions/**`. The evidence is the library measurement and
