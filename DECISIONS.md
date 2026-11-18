@@ -432,6 +432,18 @@ estimate. What was actually spent is reported, not what was projected.
 leave mostly data fixes, which cost nothing. Worth testing rather than assuming. If the engine problems turn out to be deeper than ten
 cases can settle, or the data fixes need model runs of their own, that is the finding and it is said plainly.
 
+## A member who is nearly there every time: the rulings on #184 (PM, 2026-11-17, on PR #198)
+
+The pilot found a member scored `partial` on every message who was never moved on, because the hint and advance gates all required `stuck`. #184 closed it. The PM ruled on three choices the developer flagged and on the threshold, and this is where those reasons live; the rubric's sections 1 ("help is never unprompted") and 2 ("asking costs nothing") are what rulings 1 and 2 lean on. The PM's argument for acting at all was the asymmetry the pilot measured: three content-free messages cost a member the part in three turns, while six plausible-sounding wrong ones cost nothing, and nobody had chosen that.
+
+1. **A circling member reaches the hint rungs, not only the move-on.** #94's decision is that an interview nudges rather than rescues. A directional nudge is the nudge, and no `lead` rung was added, so the interview register is unchanged. Being moved on with nothing in between would treat a member who is nearly there worse than one who says "I don't know", which no decision asked for. The cost is one extra sentence of help in an interview.
+2. **A message that asked for data costs no part of the circling run.** "Asking costs nothing" is settled (section 2 above), and the two counters that measure messages that got nowhere (`asked` and the run) must not disagree about what a question is. `recordAssessment` adds one and `recordDataRequest` takes it back off, clamped at zero, so a question scored `partial` is a no-op rather than a discount. If this is ever wrong it shows as a member who asks their way out of the ladder, an exposure `asked` already has.
+3. **`stuck` / `unclear` neither reset the run nor add to it.** The run means partials since the last clear step. A stuck message is not a clear step, so resetting would reward it; adding would double-count a message that already fires every gate by itself.
+
+**The threshold is `CIRCLING_PARTIALS = 3`, and it is judgement, not data.** It comes from the ladder's own arithmetic: the third `partial` in a row puts the member at the rung a stuck member reaches on the same message count, so a circling member is not treated worse than one who said nothing. Two is left alone because two is a member closing in. Nobody has measured how often a real model says `partial`, so nobody knows how often this fires, and the number should not be defended as if somebody had. A single `partial` between two real steps is unaffected, because a clear step zeroes the run.
+
+**Status.** Deployed: it shipped in `live-case` function version 24 on 2026-11-18 (together with #188's removal), verified by diffing the deployed source against the merged commit (ROADMAP, live-case row; the note on PR #198). **It was deployed on deterministic evidence only; nothing in it has been checked against a real model**, and that caveat is the part to carry forward. The caveats (unverified against a real model, the `partial` score unbounded by what the member wrote, `partial` still extending the clock) are in `KNOWN_ISSUES.md`, "A member who is nearly there every time (issue #184, 2026-11-18)"; they are not repeated here.
+
 ## The link-and-scheduling backlog (#96-#102), triaged 2026-11-16
 
 The owner filed seven issues from another session on the same day as the live-case work: remove the public member search (#96), reset
@@ -989,6 +1001,12 @@ Calibration from the day it was set: #170 (measure 2,723 step titles before ship
   each with its own git worktree, on issues that do not touch the same files. A developer sharing the primary working tree once switched
   its branch underneath a commit and cost a cherry-pick recovery, so isolation is not optional. Parallelism goes into writing code, never
   into deciding what lands.
+- **A decision that something is deliberately not done in code gets a test that fails if someone does it (PM, 2026-11-17, on PR #199).**
+  When a decision records an exemption or a deliberate omission, the suite gets an assertion that fails if the omission is undone, and
+  that assertion's comment points at the decision. Otherwise a refactor can reverse the decision with every test green, and what was a
+  ruling becomes an accident. The instance being built is #201 (the interview register's clarify scope, #185, was answered with a
+  decision and no test, on the reading that a test was owed only if scope changed). Applies to every future decision of this kind, not
+  only that one.
 
 ## Decisions whose reasons live only in the README (collected here so a new agent finds them)
 
