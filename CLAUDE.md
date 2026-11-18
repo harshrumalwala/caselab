@@ -77,8 +77,7 @@ Key mechanics worth knowing:
 - **Tables with no API access at all:** practice requests, conversations/messages, `live_case_sessions`, `library_case_notes`,
   `library_case_solutions`, `message_reports`, `meeting_prefs` (how a member likes to meet: a link and a time zone, readable by its
   owner alone), and the three scheduling tables (`practice_meetings`, `practice_meeting_proposals`,
-  `practice_meeting_confirmations`: a practice time between two members, whose migration is written but **not applied** — see
-  KNOWN_ISSUES). Access is through `SECURITY DEFINER` functions that act only on the caller's own rows, or
+  `practice_meeting_confirmations`: a practice time between two members). Access is through `SECURITY DEFINER` functions that act only on the caller's own rows, or
   through Edge Functions using the service role.
 - **Library content flow.** Analyses and solutions are JSON in `private-data/`; `node scripts/buildLibrarySeed.mjs` turns them into
   `supabase/seeds/library.sql` (one transaction, safe to rerun; it folds duplicate case names, Booth MCG copy wins, then newest book;

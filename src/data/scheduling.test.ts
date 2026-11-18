@@ -190,16 +190,19 @@ describe('the in-memory twin keeps the rules the database keeps', () => {
     await expect(t.carol.propose('alice', TIMES)).rejects.toThrow("You can't schedule with this member right now.");
   });
 
-  it('refuses everything in both directions once one of them has blocked the other', async () => {
+  it('refuses everything but cancelling once one of them has blocked the other', async () => {
     const t = twin({ aliceLink: 'https://zoom.us/my/alice', blocks: [] });
     const id = await t.bob.propose('alice', TIMES);
     await t.alice.confirm(id, TIMES.slots[0]);
     t.blocks.push({ blocker: 'bob', blocked: 'alice' });
-    for (const call of [t.alice.cancel(id), t.bob.cancel(id), t.alice.change(id, { slots: [inHours(72)], durationMinutes: 60 })]) {
+    for (const call of [t.alice.change(id, { slots: [inHours(72)], durationMinutes: 60 }), t.bob.change(id, { slots: [inHours(72)], durationMinutes: 60 })]) {
       await expect(call).rejects.toThrow("You can't schedule with this member right now.");
     }
     // The record is still theirs to see, but it carries no link while a block stands.
     expect((await t.alice.list())[0]).toMatchObject({ blocked: true, meetingLink: '' });
+    // And the blocked one can still clear the time: a block ends a commitment, it does not make it permanent.
+    await t.alice.cancel(id);
+    expect((await t.bob.list())[0]).toMatchObject({ state: 'cancelled', revision: 2, blocked: true });
   });
 
   it('keeps the old time standing until a change is confirmed, and counts revisions', async () => {

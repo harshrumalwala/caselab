@@ -32,8 +32,11 @@
 --
 --   * THE SAME WALLS AS REQUESTS AND MESSAGES. The three tables have NO direct access for the API roles at all;
 --     everything goes through the `security definer` functions below, which act only on the caller's own records. A
---     block in either direction (`_blocked_between`) refuses every one of them, in both directions, with one sentence
---     that gives nothing away. Verified members only. Deleting either account removes the record (on delete cascade).
+--     block in either direction (`_blocked_between`) refuses them, in both directions, with one sentence that gives
+--     nothing away. The single exception is `cancel_practice_meeting`, which either of them may always call: it sends
+--     nothing and tells the other person nothing, and a block that left a settled time standing between two people who
+--     can no longer talk would make the commitment permanent. Verified members only. Deleting either account removes
+--     the record (on delete cascade).
 --
 --   * LIMITS, in the same shape as practice requests: one open proposal per pair, 5 open proposals at a time, 20
 --     proposals in any 24 hours. A counter and a change each count as a proposal, so negotiating cannot be used to
@@ -231,7 +234,9 @@ end;
 $$;
 
 -- The caller's own record, with the other person and whether scheduling is off between them. Raises if it is not theirs.
-create function public._my_meeting(p_id uuid)
+-- `p_allow_blocked` is for cancelling alone: calling a time off sends nothing and only removes an obligation, so a block
+-- must not leave two people who can no longer talk holding a time neither of them can clear.
+create function public._my_meeting(p_id uuid, p_allow_blocked boolean default false)
 returns public.practice_meetings
 language plpgsql
 stable
@@ -250,7 +255,7 @@ begin
   -- One sentence for every reason it can't go through (blocked either way, or they are no longer a member).
   if not public.is_member_id(v_user)
      or not public.is_member_id(case when v_meeting.user_lo = v_user then v_meeting.user_hi else v_meeting.user_lo end)
-     or public._blocked_between(v_meeting.user_lo, v_meeting.user_hi) then
+     or (not coalesce(p_allow_blocked, false) and public._blocked_between(v_meeting.user_lo, v_meeting.user_hi)) then
     raise exception 'You can''t schedule with this member right now.' using errcode = 'P0001';
   end if;
   return v_meeting;
@@ -552,7 +557,8 @@ begin
 end;
 $$;
 
--- Calls the whole thing off, from either side, whether or not a time was settled.
+-- Calls the whole thing off, from either side, whether or not a time was settled. The one function a block does not
+-- refuse (the PM's ruling of 2026-11-18): a block should end a commitment, not make it permanent.
 create function public.cancel_practice_meeting(p_meeting uuid)
 returns void
 language plpgsql
@@ -567,7 +573,7 @@ begin
   if v_user is null then
     raise exception 'Not signed in' using errcode = '28000';
   end if;
-  v_meeting := public._my_meeting(p_meeting);
+  v_meeting := public._my_meeting(p_meeting, true);
   if v_meeting.status in ('cancelled', 'declined') then
     raise exception 'That time isn''t available.' using errcode = 'P0001';
   end if;
@@ -713,7 +719,7 @@ revoke all on function public._meeting_last_slot(timestamptz[]) from public, ano
 revoke all on function public._check_meeting_times(timestamptz[], integer) from public, anon, authenticated;
 revoke all on function public._close_lapsed_proposals(uuid, uuid) from public, anon, authenticated;
 revoke all on function public._check_meeting_limits(uuid) from public, anon, authenticated;
-revoke all on function public._my_meeting(uuid) from public, anon, authenticated;
+revoke all on function public._my_meeting(uuid, boolean) from public, anon, authenticated;
 revoke all on function public._open_proposal_for_me(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.propose_practice_meeting(uuid, timestamptz[], integer, uuid, uuid) from public, anon, authenticated;
 revoke all on function public.change_practice_meeting(uuid, timestamptz[], integer) from public, anon, authenticated;

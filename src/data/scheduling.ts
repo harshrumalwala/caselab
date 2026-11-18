@@ -25,7 +25,7 @@ export interface SchedulingRepository {
   counter(id: string, times: NewMeetingTimes): Promise<void>;
   /** Says no to the times they proposed. */
   decline(id: string): Promise<void>;
-  /** Calls the whole thing off, from either side. */
+  /** Calls the whole thing off, from either side. The one thing a block does not stop. */
   cancel(id: string): Promise<void>;
   /** Asks to move a time that is already settled. The old time stands until the new one is confirmed. */
   change(id: string, times: NewMeetingTimes): Promise<void>;
@@ -244,11 +244,15 @@ export function createMemoryScheduling(opts: {
     const guard = () => {
       if (control.failing) throw new Error('TypeError: Failed to fetch');
     };
-    const mineOnly = (id: string) => {
+    /**
+     * The caller's own record. `allowBlocked` is for cancelling alone: calling a time off sends nothing and only
+     * removes an obligation, so a block must not leave two people holding a time neither of them can clear.
+     */
+    const mineOnly = (id: string, allowBlocked = false) => {
       const row = rows.find((r) => r.id === id && (r.lo === me || r.hi === me));
       if (!row) throw gone();
       const other = row.lo === me ? row.hi : row.lo;
-      if (!member(other) || blockedBetween(row.lo, row.hi)) throw refused();
+      if (!member(other) || (!allowBlocked && blockedBetween(row.lo, row.hi))) throw refused();
       return row;
     };
     const myTurnProposal = (row: Stored) => {
@@ -386,7 +390,7 @@ export function createMemoryScheduling(opts: {
 
       async cancel(id) {
         guard();
-        const row = mineOnly(id);
+        const row = mineOnly(id, true);
         if (row.status === 'cancelled' || row.status === 'declined') throw gone();
         if (row.startsAt && Date.parse(row.startsAt) <= Date.now()) throw new DataError('That case has already happened.');
         const open = openOf(row);

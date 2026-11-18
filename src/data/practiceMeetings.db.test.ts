@@ -722,7 +722,6 @@ describe('a block in either direction', () => {
       expect(await confirm(uid, id, slot), uid).toMatch(/You can't schedule with this member right now\./);
       expect(await counter(uid, id), uid).toMatch(/You can't schedule with this member right now\./);
       expect(await decline(uid, id), uid).toMatch(/You can't schedule with this member right now\./);
-      expect(await cancel(uid, id), uid).toMatch(/You can't schedule with this member right now\./);
       expect(await change(uid, id), uid).toMatch(/You can't schedule with this member right now\./);
     }
     expect(await proposeFails(ALICE, BOB, at(96))).toMatch(/You can't schedule with this member right now\./);
@@ -730,12 +729,46 @@ describe('a block in either direction', () => {
     expect(await one(ALICE)).toMatchObject({ state: 'proposed', blocked: true });
   };
 
-  it('refuses every function when the one who proposed is the blocker', async () => {
+  it('refuses every function but cancelling when the one who proposed is the blocker', async () => {
     await refusedBothWays(BOB, ALICE);
+    // The blocked member can still clear it, which is the whole point of the exception.
+    expect(await cancel(ALICE, id)).toBe('');
+    expect(await one(BOB)).toMatchObject({ state: 'cancelled', blocked: true });
   });
 
-  it('refuses every function when the one who was asked is the blocker', async () => {
+  it('refuses every function but cancelling when the one who was asked is the blocker', async () => {
     await refusedBothWays(ALICE, BOB);
+    expect(await cancel(BOB, id)).toBe('');
+    expect(await one(ALICE)).toMatchObject({ state: 'cancelled', blocked: true });
+  });
+
+  it('lets either of them call a settled time off, whoever did the blocking', async () => {
+    // A block must end a commitment, not make it permanent: four pairings of who blocked and who cancels.
+    for (const [blocker, canceller] of [
+      [ALICE, ALICE],
+      [ALICE, BOB],
+      [BOB, BOB],
+      [BOB, ALICE],
+    ]) {
+      await resetData(db);
+      await as(db, 'postgres');
+      await db.query(
+        `insert into public.profiles (user_id, display_name, listed, open_to_requests) values ($1, 'Alice', true, true), ($2, 'Bob', true, true)`,
+        [ALICE, BOB],
+      );
+      await connectAliceAndBob();
+      const settled = await propose(BOB, ALICE, at(24, 48));
+      expect(await confirm(ALICE, settled, await firstSlot(ALICE))).toBe('');
+      await as(db, 'authenticated', blocker);
+      await db.query('select public.block_member($1)', [blocker === ALICE ? BOB : ALICE]);
+
+      const label = `${blocker} blocked, ${canceller} cancels`;
+      expect(await cancel(canceller, settled), label).toBe('');
+      // Called off, counted as a revision, and carrying no link to either of them.
+      expect(await one(canceller), label).toMatchObject({ state: 'cancelled', revision: 2, meeting_link: null, blocked: true });
+      // And it stays called off: a second one is refused for the usual reason, not because of the block.
+      expect(await cancel(canceller, settled), label).toMatch(/That time isn't available\./);
+    }
   });
 
   it('lets them carry on once the block is lifted', async () => {

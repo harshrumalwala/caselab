@@ -708,9 +708,10 @@ issue #99) and in `src/domain/scheduling.ts`; the screens that use them are issu
 - **Limits, in the same shape as practice requests.** One open proposal per pair, times waiting with at most 5 members at once,
   and 20 proposals in any 24 hours. A counter and a change each count as a proposal, so negotiating cannot be used to get round
   them.
-- **Blocking stops it in both directions**, silently, as it does for requests and messages: every scheduling function is
-  refused with one sentence that gives nothing away. The record stays visible to both of them, without the link, until the
-  block is lifted.
+- **Blocking stops it in both directions**, silently, as it does for requests and messages: proposing, confirming, countering,
+  declining and moving a time are all refused with one sentence that gives nothing away, and the record keeps its place for both
+  of them, without the link. **Calling it off is the one thing a block does not stop**: either of them can always cancel, because
+  a block should end a commitment rather than leave two people who can no longer talk holding a time neither can clear.
 - Records go with the accounts involved (on delete cascade), and scheduling is not available in demo mode.
 
 ### Live case: practise a whole case with Bucket
