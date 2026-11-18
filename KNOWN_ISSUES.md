@@ -504,7 +504,9 @@ move whenever the file does, so the quoted words are the reliable part):
 - **The dry run watches the rule a different way now.** `run.unprompted` used to count views whose `nextNudgeAt` was not null. With the
   field gone it asks the engine directly — `nudgeLevel(state, now, 'timer') !== 'none'` — so the summary line "replies the clock asked
   for unprompted (must be 0)" means the same thing and still reads 0. Had it been left alone it would have counted every step of every
-  run, because a missing field is `undefined` and `undefined !== null`.
+  run, because a missing field is `undefined` and `undefined !== null`. **"Must be 0" is the report talking, not the bar:**
+  `failedTheBar` is leaks, answers reached and runs that did not finish, so a non-zero count here would print and the run would
+  still exit 0. It tells a reader who looks and stops nobody who does not.
 - **The deploy order is safe either way, and only one of the two can happen.** Merging ships the website; the Edge Function ships on a
   separate `npx supabase functions deploy live-case`, which the owner has said will happen once after this merges, carrying #198 as
   well. Website first (what will happen): the new bundle has no nudge effect, so nothing sends the action, and the old function would
