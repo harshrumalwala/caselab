@@ -52,7 +52,8 @@ Functions). Charts via Recharts (lazy loaded) and our own SVG renderer for caseb
 
 ```
 src/domain/      pure TypeScript: types, constants, all calculations and rules (stats, suggestions, improvement, progress/XP,
-                 quests, medals, stickers, warmup, goal, weeklyPlan, library matching, bookSolution parser). No React, no database.
+                 quests, medals, stickers, warmup, goal, weeklyPlan, library matching, bookSolution parser, meeting link and
+                 time zone). No React, no database.
 src/data/        persistence and I/O behind small interfaces: CaseLabRepository (Supabase and in-memory), CommunityRepository,
                  AuthApi; Excel import/export (read-excel-file, fflate), backup, CSV, live case, messages, requests, library.
                  Most *.db.test.ts files run the real migrations in PGlite (in-process Postgres).
@@ -74,7 +75,8 @@ Key mechanics worth knowing:
   fields the owner chose to share); visitors read `public_profiles` / `public_shared_cases` only. Membership is the single function
   `public.is_member_id(uuid)` (verified email); changing who counts as a member means changing only that function.
 - **Tables with no API access at all:** practice requests, conversations/messages, `live_case_sessions`, `library_case_notes`,
-  `library_case_solutions`, `message_reports`. Access is through `SECURITY DEFINER` functions that act only on the caller's own rows, or
+  `library_case_solutions`, `message_reports`, `meeting_prefs` (how a member likes to meet: a link and a time zone, readable by its
+  owner alone). Access is through `SECURITY DEFINER` functions that act only on the caller's own rows, or
   through Edge Functions using the service role.
 - **Library content flow.** Analyses and solutions are JSON in `private-data/`; `node scripts/buildLibrarySeed.mjs` turns them into
   `supabase/seeds/library.sql` (one transaction, safe to rerun; it folds duplicate case names, Booth MCG copy wins, then newest book;
@@ -104,6 +106,13 @@ Key mechanics worth knowing:
   one ("there is nobody to browse: no list and no search") and never reads like a changelog: a member has not seen the old version and
   should not be told what it was. Say what the thing does instead ("each member's own link is the way in"). Documentation (`README.md`,
   `KNOWN_ISSUES.md`, `DECISIONS.md`) is the opposite and *should* record what changed and when.
+- **Copy stops explaining itself (owner, 2026-11-17).** Cut any sentence that tells the reader how to interpret what is above it, hedges
+  against a misreading nobody has made, or restates in prose what the layout already shows; one short human line beats a correct
+  explanatory paragraph. The guard: if cutting leaves wording that actively implies something untrue, say that instead of writing a
+  better explanation. The instruction is to stop explaining. The worked example is in `DECISIONS.md`.
+- **Dates in these documents are local, and a UTC instant says so.** A bare date ("the owner settled this on 2026-11-17") is the
+  day it happened where the owner is. A time read off a log or the database is written with its zone ("loaded at 02:54 UTC"), which
+  after about 18:00 local is the next day: writing that bare puts the record a day ahead of the git history of the same work.
 - Deterministic code decides rules and numbers; the model only writes words and judges the member's writing (and a rating is kept only
   if the feedback quotes something the member wrote).
 

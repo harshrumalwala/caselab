@@ -284,9 +284,22 @@ describe('what the prompt says', () => {
     expect(one().asides).toEqual([]);
     expect(one().flags).not.toContain('prompt_names_the_book');
     expect(one().flags).not.toContain('prompt_talks_about_the_case');
-    // The house phrasing of the ask, and an interviewer who is a character in the story, are the case itself.
-    expect(promptAsides('The candidate must say whether the client should buy the plant.')).toEqual([]);
+    // An interviewer who is a character in the story is the case itself.
     expect(promptAsides('The interviewer, a manager who travels a lot, walked into a packed bar.')).toEqual([]);
+  });
+
+  it('sees the member talked about in the third person, and leaves a client who engages the member alone', () => {
+    const label = 'talks about the member in the third person';
+    expect(promptAsides('The client sells widgets. The candidate is asked to determine whether to buy the plant.')).toContain(label);
+    expect(promptAsides('The client sells widgets. The interviewee must say whether to buy the plant.')).toContain(label);
+    expect(promptAsides('The client sells widgets. The applicant should size the market.')).toContain(label);
+    expect(promptAsides('The client sells widgets. Should it buy the plant?')).not.toContain(label);
+    expect(promptAsides('A widget maker has hired the candidate to decide whether to buy a plant.')).not.toContain(label);
+    expect(promptAsides('The CEO asks the candidate to join a call about a plant.')).not.toContain(label);
+    expect(promptAsides('This is a candidate-led case about a plant.')).not.toContain(label);
+    const c = one({ prompt: 'The client sells widgets. The candidate is asked to decide whether to buy the plant.' });
+    expect(c.flags).toContain('prompt_talks_about_the_case');
+    expect(c.flags).not.toContain('prompt_names_the_book');
   });
 
   it('counts the prompts in the summary, by rule', () => {

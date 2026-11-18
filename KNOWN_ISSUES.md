@@ -273,6 +273,19 @@ move whenever the file does, so the quoted words are the reliable part):
   issue #82). The ceiling is today's longest case, which the issue asked not to exceed, so from six beats up every extra beat makes the
   others shorter: 56 of the 847 eligible write-ups have six or more, and at twelve `beatBudget` works out at about two minutes each. If a
   longer case is ever acceptable, the ceiling is the one number to raise.
+- **The live-case opening prompt talks about "the candidate" across most of the library (found 2026-11-17, not triaged; the PM has not
+  ruled on it).** Measured against production on 2026-11-17, after the seed reload, by string match on `solution->>'prompt'`: of 847
+  live-eligible solutions, **560 prompts contain "the candidate"** and **345 contain the exact phrase "the candidate is asked"**; across
+  all 872 solutions the figures are 577 and 351. `openingText()` in `supabase/functions/_shared/liveCaseCoach.ts` returns `s.prompt`
+  word for word as the member's first screen, so "The candidate is asked to..." is the same break in the fiction that issue #157 was
+  created to remove. Nothing caught it because `PROMPT_RULES` in `scripts/liveCaseAudit.mjs` has no pattern for the candidate: its rules
+  cover naming the book, noting how a page prints something, saying how hard or open the case is, saying what kind of case it is, and
+  saying how the case is run, so `prompt_talks_about_the_case` cannot see this class. Issue #159 predicted exactly that ("the audit's
+  rules match one phrasing and these use another") while correctly putting rule changes out of scope. Scale against what was fixed:
+  #157 removed 11 prompts' sentences and reworded 2, #159 fixed 5; sixteen, against roughly 560. **Caveats:** this is a string match,
+  not a reading. Nobody has read these 560 prompts; some may be fine in context (a role play, for instance), and the real number only
+  firms up once someone samples a few dozen. Fixing them is a content campaign plus a seed reload, not a code fix. This also answers
+  the "nobody has measured" remark in the #159 paragraph under "Library data pipeline".
 
 ## Tests and CI
 
@@ -701,6 +714,33 @@ move whenever the file does, so the quoted words are the reliable part):
   member is never told the name of a table they will not see, issue #95), but those parts are back to being unnamed. The write-ups
   could be retitled instead; nothing flags them.
 
+## How a member likes to meet (issue #98, 2026-11-17)
+
+- **The migration is written and tested but NOT APPLIED.** `supabase/migrations/20261126120000_meeting_prefs.sql` has only been run
+  by PGlite (`src/data/meetingPrefs.db.test.ts`). Applying it is the owner's call, every time. **The app half must not be deployed
+  before it is applied**: `ProfileSettingsDialog` calls `my_meeting_prefs()` on open, and without the function the section shows its
+  error line (the rest of Profile & privacy is unaffected). `e2e/deployed.e2e.test.ts` fails on the new table and the two functions
+  until it is applied, by design, as it did for #96 and #121.
+- **The link rule exists twice, in TypeScript and in SQL**, because the database has to enforce it as well as the screen.
+  `parseMeetingLink` in `src/domain/meeting.ts` and `public.is_meeting_link()` are kept in step by a test that runs 40 inputs through
+  both (`meetingPrefs.db.test.ts`, "accepts and refuses exactly the same links"), so they cannot drift silently — but the patterns
+  themselves are still two pieces of text, and POSIX and JavaScript regular expressions do not have the same syntax, so they can
+  never be compared literally.
+- **A phone number in brackets is refused.** `1 (773) 555-0134` is not accepted: the acceptance criteria named digits, an optional
+  leading `+`, spaces and dashes, and the database enforces exactly that. The member is told what is allowed, but a US number pasted
+  in its usual form is a rejection they did not expect. Widening both copies of the rule is one character class each.
+- **The shape check on the time zone is shadowed by the trigger.** `meeting_prefs` has a `check` constraint for the zone's shape and
+  a `before insert or update` trigger for membership of `pg_timezone_names`; a BEFORE trigger runs first, so a nonsense value is
+  refused with the trigger's message and the constraint is only ever the second belt. The test accepts either message.
+- **The zone list is whatever the browser knows.** `timeZoneChoices()` uses `Intl.supportedValuesOf('timeZone')`, with a 13-zone
+  fallback for a browser that has none. Restoring a backup is strict about it: a zone this browser has never heard of is left behind
+  rather than written back, so a file written on a machine with a newer time-zone database can lose that one field on an older one.
+- **Nothing reads either value yet.** It is phase 1 of the scheduling split (#99-#102). Until the scheduling flow exists, the only
+  thing a member can do with the section is fill it in, and no screen tells them when it will be used.
+- **The save counter is a column, not a log.** 20 saves in a rolling 24 hours is counted by `saves` / `saves_since` on the row
+  itself, so the limit is per member, survives clearing the fields, and leaves no history of what was saved when (by design: the
+  values are the member's own and we keep no older copies).
+
 ## Unverified user-side checks left open
 
 - Whether the "someone said yes" notification email arrives (the owner confirmed the sign-up email flow; whether the "asked you" request email was checked is not known).
@@ -841,9 +881,8 @@ Each was found by a real play-through or a visual check and fixed; the risk is t
   `liveCase.ts` and `liveCaseCoach.ts` that never executed). Over all 847 cases, before: **16 of the 155 functions the loader saw in
   `liveCaseCoach.ts`, and 9 of 109 in `liveCase.ts`, never ran once**, among them `refusedTurn`, `recordDataRequest`, `pause`,
   `continueCase`, `shiftTimes`, `endEarly`, `saveDraft` and `saveScratchpad`. After: **1 and 0** (the one is `nudge`, below), with 74
-  functions and branches reached that never ran before. The reader script lives in the
-  assistant's scratch folder, like `split_seed.py` before it, so **nobody can repeat the measurement from the repo**; the honest
-  residue below is the part that was written down.
+  functions and branches reached that never ran before. The reader is now in the repo as `npm run coverage:engine` (issue #186,
+  `scripts/engineCoverage.mjs`), so the measurement can be repeated; the honest residue below is the part that was written down.
 - **Still unreachable, and why.** Each of these is a branch the harness cannot execute. None is a defect on its own; the list is what
   a green dry run does *not* cover.
   - **The timer-driven hint**: the whole `nudge` path in `liveCaseCoach.ts` and the hint branch of `applyTurn`. `nextNudgeAt` always
