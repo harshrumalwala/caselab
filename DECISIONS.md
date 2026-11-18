@@ -860,7 +860,7 @@ say so, and **not** ask another session to run it instead; the owner then ran it
 The rule: a relayed approval tells the PM *what the owner wants*. It does not tell the PM *that the PM may do it*. When the two disagree,
 the permission system wins and the PM says so plainly rather than finding a route around.
 
-## Three rules about evidence, learned the hard way on 2026-11-17 and 2026-11-18
+## Three rules about evidence, learned the hard way on 2026-11-17
 
 These came out of the same two days as the live-case work and they generalise well past it. They are written as rules because each was learned by nearly getting it wrong.
 
@@ -876,7 +876,7 @@ So: **a check you have not watched fail is not yet evidence.** Run the new test 
 
 ### Before concluding something is unverifiable, read how the thing records what it did
 
-`KNOWN_ISSUES` carried "nobody has confirmed the request-notification email arrives" for weeks. On 2026-11-18 it was answered by one read-only query and **no test, no secret, no dashboard and no new rows**.
+`KNOWN_ISSUES` carried "nobody has confirmed the request-notification email arrives" for weeks. On 2026-11-17 it was answered by one read-only query and **no test, no secret, no dashboard and no new rows**.
 
 `notify-request` **claims before it sends and rolls the claim back if the send throws**: it stamps `practice_requests.emailed_at` (or `answer_emailed_at`), then calls Resend, and a non-2xx throws and clears the stamp. So a surviving timestamp means Resend accepted the message. Production holds 2 requests from 2026-10-31 with `emailed_at` on both and `answer_emailed_at` on the one acceptance: **three sends, all accepted, by real members, through the code that is still running** (`git log` over `notify-request` since that date is empty).
 
@@ -891,7 +891,7 @@ Even after #183, two limits remain and no number of candidates fixes either:
 
 Which is why the standing rule stands: a change to what the model is handed or what its reply may say ships marked **"not verified"**, whatever the harness says.
 
-## The copy rule the owner sharpened on 2026-11-18
+## The copy rule the owner sharpened on 2026-11-17
 
 The owner opened their own profile link on the live site and cut two blocks from the "what to give them next" card: a paragraph about their own stated focus, and a caveat line reading *"Only what Harsh chose to share, so this is exposure, not a verdict: a case type they haven't shared yet isn't a weakness."* Their words: *"too AIsh let's be not this mechanical while writing or displaying text on our app"*.
 
@@ -903,13 +903,13 @@ It sits beside the existing convention (copy states the design as it is, never a
 
 **One guard that came with it:** if removing an explanation leaves the remaining wording actively implying something untrue, say so rather than writing a better explanation. The instruction is to stop explaining.
 
-## Scheduling, settled on 2026-11-18
+## Scheduling, settled on 2026-11-17
 
 - **The asker hosts.** The member who sent the practice request hosts; their saved meeting link goes on the invite, the other person's is the fallback, and if neither has one the invite says to agree a link in messages. The owner chose this over proposer-chooses and over the literal reading of their own earlier brief — **the literal reading would have made the guest host their own interviewer.**
 - **#98, #99 and #100 are built; #101 and #102 are held**, because KNOWN_ISSUES recorded that nobody had watched a `notify-request` email land. The evidence above moves that to "the app and Resend's API both work, delivery unconfirmed", which unblocks them on the app side and leaves the one inbox check with the owner.
 - **ROADMAP R1, the "free this week" badge, is retired.** It existed so people would stop negotiating times in messages, which is what this chain does properly.
 
-## Spending the window: Sonnet for mechanical work, Opus for judgment (owner, 2026-11-18)
+## Spending the window: Sonnet for mechanical work, Opus for judgment (owner, 2026-11-17)
 
 The owner asked that simple sub-agents run on a cheaper model so more work fits in a usage window, and that briefs be tightened so a developer is not rediscovering context the PM already holds.
 

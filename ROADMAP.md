@@ -1,6 +1,6 @@
 # ROADMAP.md
 
-## Waiting for the owner (as of 2026-11-18)
+## Waiting for the owner (as of 2026-11-17)
 
 Three things need the owner and nothing has been started on any of them. Tick these off in any order; none blocks another.
 
@@ -10,7 +10,7 @@ Three things need the owner and nothing has been started on any of them. Tick th
 | 2 | **#149's remaining 28 sentences** — a decision, not an approval | A judgement about how far to go | 44 of the 72 interviewer facts that named the book are fixed. The other 28 are left because the engine's voice filter already strips them before the member sees anything. Leaving them is defensible and is what the issue asked for; rewriting them too is 28 more sentences on the same reload. Your call |
 | 3 | **Confirming email delivery** | No agent can see the Resend dashboard or a real inbox | Production holds three `notify-request` sends from 2026-10-31 that all returned 2xx from Resend, through code unchanged since. Resend accepting is not Resend delivering: a bounce, a spam placement or a suppression all happen after the 2xx. Open the Resend dashboard or a real inbox and look; #101 (calendar invites) and #102 (reminder emails) stay `proposed` until then. Detail in DECISIONS.md |
 
-**Done since the last version of this table (2026-11-18).** The second library seed reload was approved and loaded at 02:54 UTC in 20
+**Done since the last version of this table (2026-11-17).** The second library seed reload was approved and loaded at 02:54 UTC in 20
 parts under 700 KB, every part OK, no errors, 78 seconds; production holds 872 `library_cases` / 872 `library_case_notes` / 872
 `library_case_solutions`. The seed was regenerated from `private-data/` first and came out byte-identical to what PR #161 produced (md5
 `3c9ff0d309e838342a409ec495633a89`, 13,223,152 bytes), so what loaded is exactly the reviewed content; all five cases named in #159 are
@@ -34,7 +34,7 @@ or **Assistant** (a logical next step the assistant noticed; the owner has not a
 
 | # | Item | Source | Notes |
 |---|---|---|---|
-| R1 | ~~"Free this week" badge on profiles~~ **Retired (owner, 2026-11-18).** It existed so people would stop negotiating times in messages, which is what the scheduling chain (#98-#100) does properly. | Owner | Retired, not deferred: the need is met. |
+| R1 | ~~"Free this week" badge on profiles~~ **Retired (owner, 2026-11-17).** It existed so people would stop negotiating times in messages, which is what the scheduling chain (#98-#100) does properly. | Owner | Retired, not deferred: the need is met. |
 | R2 | A verified-email "guest tier" between visitor and full member | Owner (2026-10-20: "I'll consider a verified-email guest tier later") | Not started. Membership is defined only by `public.is_member_id()`, so a tier would need a design decision about what a guest can see. |
 | R3 | Verify the learning mode of Live case on the live site | Assistant | The session that built it (PR #79) said it had not started a Learning case on production nor confirmed Vercel had deployed. Whether the owner has tried it is not known. |
 

@@ -273,8 +273,8 @@ move whenever the file does, so the quoted words are the reliable part):
   issue #82). The ceiling is today's longest case, which the issue asked not to exceed, so from six beats up every extra beat makes the
   others shorter: 56 of the 847 eligible write-ups have six or more, and at twelve `beatBudget` works out at about two minutes each. If a
   longer case is ever acceptable, the ceiling is the one number to raise.
-- **The live-case opening prompt talks about "the candidate" across most of the library (found 2026-11-18, not triaged; the PM has not
-  ruled on it).** Measured against production on 2026-11-18, after the seed reload, by string match on `solution->>'prompt'`: of 847
+- **The live-case opening prompt talks about "the candidate" across most of the library (found 2026-11-17, not triaged; the PM has not
+  ruled on it).** Measured against production on 2026-11-17, after the seed reload, by string match on `solution->>'prompt'`: of 847
   live-eligible solutions, **560 prompts contain "the candidate"** and **345 contain the exact phrase "the candidate is asked"**; across
   all 872 solutions the figures are 577 and 351. `openingText()` in `supabase/functions/_shared/liveCaseCoach.ts` returns `s.prompt`
   word for word as the member's first screen, so "The candidate is asked to..." is the same break in the fiction that issue #157 was
