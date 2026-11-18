@@ -3,7 +3,7 @@ import { Brain, Clock, Pause, Play } from 'lucide-react';
 import type { LiveView } from '../../data/liveCase';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { bucketLine, formatClock, isThinking } from '../../domain/liveCase';
+import { bucketLine, formatClock, handInLine, isThinking } from '../../domain/liveCase';
 import { BucketSays } from './BucketSays';
 import { ChatInput, ClockBar, ExhibitView, Scratchpad, Thread, WriteBox } from './liveParts';
 import type { LiveSession } from './useLiveSession';
@@ -179,7 +179,10 @@ function RunningCase({ s, view }: { s: LiveSession; view: LiveView }) {
   // A part that is talked through has nothing to read, so Bucket asks for the thinking rather than for a reading of an exhibit. The
   // happy mood is the stage's own line; the low-clock and hint lines have moods of their own and are about something else.
   const talkedThrough = view.stage === 'exhibits' && !onTable && bucket.mood === 'happy';
-  const says = <BucketSays mood={bucket.mood}>{talkedThrough ? DISCUSSION_LINE : bucket.text}</BucketSays>;
+  // A thinking stage is a card with none of the conversation on it, so the thanks for what was just handed in is read from the view and
+  // said in front of the stage's own line, as one thing Bucket says (issue #195).
+  const handIn = thinking ? handInLine(view) : null;
+  const says = <BucketSays mood={bucket.mood}>{talkedThrough ? DISCUSSION_LINE : handIn ? `${handIn} ${bucket.text}` : bucket.text}</BucketSays>;
 
   const warning = untimed
     ? null

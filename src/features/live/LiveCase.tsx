@@ -7,7 +7,7 @@ import { Badge, RatingBadge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { chipClass } from '../../components/ui/chips';
-import { groupLanes, liveCaseToInput, searchCases, type Lane } from '../../domain/liveCase';
+import { groupLanes, handInLine, liveCaseToInput, searchCases, type Lane } from '../../domain/liveCase';
 import { SKILLS } from '../../domain/constants';
 import { useData } from '../../state/DataProvider';
 import { useLive } from '../../state/LiveProvider';
@@ -294,6 +294,9 @@ function Finished({ s, view, onAgain }: { s: LiveSession; view: LiveView; onAgai
   const feedback = view.feedback;
   const empty = nothingWritten(view);
   const learning = view.mode === 'learning';
+  // The end of the case shows none of the conversation, so Bucket's thanks for the recommendation is read back and said in front of
+  // the line about the feedback being written (issue #195). A case the clock or the member ended has no hand-in and no thanks.
+  const handIn = handInLine(view);
 
   const log = async () => {
     if (!info || !feedback || empty || view.loggedCaseId || logging.current) return;
@@ -336,7 +339,7 @@ function Finished({ s, view, onAgain }: { s: LiveSession; view: LiveView; onAgai
               : view.endReason === 'ended_early'
               ? 'You stopped here, and that is fine. Here is how what you did went, as honestly as I can tell it. It is in your log too.'
               : 'That is a wrap! Here is how it went, as honestly as I can tell it. Your case is in your log too.'
-            : 'Give me a moment while I read through everything you wrote...'}
+            : `${handIn ? `${handIn} ` : ''}Give me a moment while I read through everything you wrote...`}
       </BucketSays>
 
       {!feedback && !s.feedbackError && view.feedbackAttempts < 3 && (

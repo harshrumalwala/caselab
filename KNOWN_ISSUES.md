@@ -888,6 +888,38 @@ move whenever the file does, so the quoted words are the reliable part):
   "why", "because", "driven by"), and this change neither adds nor removes the exposure — the same words were already on screen,
   behind the numbering. It is the same lexical gap the #163 section records, found again from the other side.
 
+## The thanks for a hand-in, and the engine lines a member never reads (issue #195, 2026-11-18)
+
+- **Unverified against a real model**, like every change under `supabase/functions/**` — though nothing here asks a model anything:
+  the line is fixed and the engine says it. **It needs `npx supabase functions deploy live-case` to reach anybody**, and the website
+  half (the two screens that read the line back) ships with the merge, so for a while a browser may ask a function that never says it.
+  Nothing breaks in that window: `handInLine` finds no message and the screens read exactly as they do today.
+- **Most of what the engine says is never on screen, and this is the first change that had to care.** A `say` is shown only where a
+  `Thread` is mounted: the prompt stage, the framework's "where would you start?" phase, and the exhibit discussion (filtered to that
+  stage's own messages). The thinking stages, the writing stages and the end of the case mount none, and cover the engine's words with
+  the screen's own copy, so a line said in the stage the member is leaving is recorded and never read. That is why the acknowledgement
+  is said *inside* the stage it opens and why two screens read it back out of `view.messages` (`handInLine` in
+  `src/domain/liveCase.ts`). Nothing stops the next engine line from being written into a stage nobody can see it in, and no test
+  compares the two sides.
+- **`handInLine` identifies the line by where it sits, not by a mark on it**: the first message of the current stage, from the coach,
+  of kind `text`. Nothing else produces that shape today (every other stage opener is a `notice`, and an exhibit reveal is an
+  `exhibit`), so it is exact — but a future engine line said first in a stage in Bucket's voice would be read as a thanks and put in
+  front of a thinking stage's own line. A message kind of its own would settle it; it was not worth the churn through the view, the
+  client types and the thread renderer for one line.
+- **The thanks is in the written record the feedback model reads.** `writtenRecord` keeps coach messages of kind `text`, so the
+  evidence now carries "[Discussion] Interviewer: Thanks, I have your ideas." in front of the member's handed-in answer. It is true,
+  it is three words, and it says nothing about the work; a `notice` would have kept it out, at the cost of the line not reading as
+  something Bucket says. The stage it is filed under is the stage it opens (the discussion, or the recommendation), not the one the
+  member handed in from.
+- **"Moved on" is not a path out of a writing stage, and the tests say so rather than exercising one.** `moveOn` needs the exhibit
+  discussion and `ready` needs the prompt or a thinking stage, so the only ways out of the brainstorm or the recommendation box are
+  handing in, the clock, and ending the case. The two "moved on by the member" tests assert the refusals and then end the case there.
+  If a move-on is ever offered in a writing stage, it reaches `endStage` with `by: 'user'` from a writing stage, which is exactly the
+  shape that today means "handed in": the `handIn` argument is passed from `submit` only, so the line itself stays correct, but
+  `endStage`'s brainstorm branch would record the beat as `member_moved` either way.
+- **Nobody has read the line on the live site.** The paths were walked through the real engine (a script in the assistant's scratch
+  folder, not in the repo) and the two screens have unit tests; no live case has been run since.
+
 ## How a member likes to meet (issue #98, 2026-11-17)
 
 - **The migration is written and tested but NOT APPLIED.** `supabase/migrations/20261126120000_meeting_prefs.sql` has only been run

@@ -554,6 +554,108 @@ describe('the brainstorm, in the book\'s own place', () => {
 });
 
 /**
+ * Work the member hands in is answered with a line of Bucket's own, and nothing else is (issue #195). The brainstorm and the
+ * recommendation used to be met with silence - the framework spoke, those two moved the case on - so a member who had written for
+ * ninety seconds under a clock was handed the next part, or the end of the case, with no sign the work had arrived. The line is the
+ * engine's, not the model's, and says only that: a draft the clock took, and a stage the member walked away from, still say nothing.
+ */
+describe('a hand-in is acknowledged, and only a hand-in', () => {
+  const THANKS = /^Thanks, I have your/;
+  const thanks = (s: SessionState) => s.messages.filter((m) => THANKS.test(m.text)).map((m) => m.text);
+
+  /** A case that asks for the ideas in the middle, with a part of the discussion still to come after them. */
+  const midBrainstorm = () =>
+    buildPlan({
+      exhibits: [{ title: 'Exhibit 1: the numbers' }],
+      steps: [{ title: 'Exhibit 1: the numbers' }, { title: 'Brainstorm: ways to grow' }, { title: 'Pick the cheaper plant' }],
+    });
+
+  /** On the brainstorm's writing stage of that case, with something typed in the box. */
+  function toBrainstormWrite(): SessionState {
+    let s = toExhibits(midBrainstorm(), 100);
+    s = nextBeat(s, at(200), 'independent');
+    expect(s.stage).toBe('brainstorm_think');
+    s = ok(ready(s, at(205)));
+    expect(s.stage).toBe('brainstorm_write');
+    return saveDraft(s, 'brainstorm', 'Price, volume', at(210));
+  }
+
+  /** On the recommendation's writing stage of a one-exhibit case, with something typed in the box. */
+  function toRecommendWrite(): SessionState {
+    let s = toExhibits(plan(1, false), 200);
+    s = nextBeat(s, at(300), 'independent');
+    expect(s.stage).toBe('recommend_think');
+    s = ok(ready(s, at(310)));
+    expect(s.stage).toBe('recommend_write');
+    return saveDraft(s, 'recommendation', 'Open it', at(320));
+  }
+
+  it('thanks the member for the ideas they handed in, in the part of the case that opens next', () => {
+    const s = ok(submit(toBrainstormWrite(), 'Price, volume, mix, new channels', at(240)));
+    // Said inside the stage the member lands on, before that part's own line: the screen shows them only what was said where they are.
+    expect(s.messages.at(-2)).toMatchObject({ text: 'Thanks, I have your ideas.', kind: 'text', stage: 'exhibits', from: 'coach' });
+    expect(s.messages.at(-1)).toMatchObject({ kind: 'exhibit', text: 'Next part: Pick the cheaper plant. What would you look at, and how?' });
+    expect(s.messages.at(-1)?.text).not.toContain('Good.'); // "Thanks" and then "Good." is two greetings in a row
+    expect(thanks(s)).toEqual(['Thanks, I have your ideas.']);
+    // And the hand-in itself is recorded, the box emptied and the stage closed, as before.
+    expect(s.submissions.at(-1)).toMatchObject({ kind: 'brainstorm', text: 'Price, volume, mix, new channels', timedOut: false });
+    expect(s.drafts.brainstorm).toBeUndefined();
+    expect(s.stageLog.at(-2)).toMatchObject({ stage: 'brainstorm_write', endedAt: at(240), endedBy: 'user' });
+    expect(s.stage).toBe('exhibits');
+  });
+
+  it('says nothing of the kind when the clock takes the brainstorm away', () => {
+    const s = settle(toBrainstormWrite(), at(400));
+    expect(s.stage).toBe('exhibits');
+    expect(thanks(s)).toEqual([]);
+    // What the member gets is what they always got: the next part, opened as the case moves on.
+    expect(s.messages.at(-1)).toMatchObject({ kind: 'exhibit', text: 'Good. Next part: Pick the cheaper plant. What would you look at, and how?' });
+    expect(s.submissions.at(-1)).toMatchObject({ kind: 'brainstorm', text: 'Price, volume', timedOut: true });
+  });
+
+  it('says nothing of the kind when the member leaves the brainstorm without handing it in', () => {
+    const s = toBrainstormWrite();
+    // There is no part to move on from and nothing to be ready for in a writing stage: ending the case is the one way out of it.
+    expect(moveOn(s, at(220)).ok).toBe(false);
+    expect(ready(s, at(220)).ok).toBe(false);
+    const ended = ok(endEarly(s, at(220)));
+    expect(ended.stage).toBe('done');
+    expect(thanks(ended)).toEqual([]);
+    expect(ended.messages.at(-1)?.text).toBe('You ended the case here.');
+    expect(ended.submissions.at(-1)).toMatchObject({ kind: 'brainstorm', text: 'Price, volume', timedOut: true });
+  });
+
+  it('thanks the member for the recommendation they handed in, as the case closes', () => {
+    const s = ok(submit(toRecommendWrite(), 'Open the hotel: the maths works and the risk is small', at(340)));
+    expect(s.stage).toBe('done');
+    expect(s.endReason).toBe('completed');
+    expect(s.messages.at(-1)).toMatchObject({ text: 'Thanks, I have your recommendation.', kind: 'text', stage: 'done', from: 'coach' });
+    expect(thanks(s)).toEqual(['Thanks, I have your recommendation.']);
+    expect(s.submissions.at(-1)).toMatchObject({ kind: 'recommendation', text: 'Open the hotel: the maths works and the risk is small', timedOut: false });
+    expect(s.drafts.recommendation).toBeUndefined();
+    expect(s.stageLog.at(-1)).toMatchObject({ stage: 'recommend_write', endedAt: at(340), endedBy: 'user' });
+  });
+
+  it('says nothing of the kind when the clock takes the recommendation away', () => {
+    const s = settle(toRecommendWrite(), at(5000));
+    expect(s.stage).toBe('done');
+    expect(thanks(s)).toEqual([]);
+    expect(s.submissions.at(-1)).toMatchObject({ kind: 'recommendation', text: 'Open it', timedOut: true });
+  });
+
+  it('says nothing of the kind when the member leaves the recommendation without handing it in', () => {
+    const s = toRecommendWrite();
+    expect(moveOn(s, at(330)).ok).toBe(false);
+    expect(ready(s, at(330)).ok).toBe(false);
+    const ended = ok(endEarly(s, at(330)));
+    expect(ended.stage).toBe('done');
+    expect(thanks(ended)).toEqual([]);
+    expect(ended.messages.at(-1)?.text).toBe('You ended the case here.');
+    expect(ended.submissions.at(-1)).toMatchObject({ kind: 'recommendation', text: 'Open it', timedOut: true });
+  });
+});
+
+/**
  * Real titles and captions from the library (issue #85). A word like "calculation" or "expected" is one the books use on both sides of the
  * table, so on its own it must not take a numbered book exhibit away from the member; everything else is hidden as before.
  */
