@@ -63,11 +63,7 @@ export function GiveThemNext({ person, shared }: { person: Profile; shared: Shar
       <CardHeader
         titleId="give-next-title"
         title={`What to give ${name} next`}
-        subtitle={`From the ${plural(ideas.total, 'case')} ${name} shares: ${plural(ideas.coveredTypes.length, 'case type')} and ${plural(
-          ideas.coveredIndustries.length,
-          'industry',
-          'industries',
-        )} so far.`}
+        subtitle={`From the ${plural(ideas.total, 'case')} ${name} shares.`}
         icon={<Compass className="size-4" />}
       />
 
@@ -77,7 +73,7 @@ export function GiveThemNext({ person, shared }: { person: Profile; shared: Shar
             title="Case types"
             unseen={ideas.unseenTypes}
             once={ideas.onceTypes}
-            allCovered={`${name} has shared at least two of every case type we list. Pick by industry, or by what they're working on.`}
+            allCovered={`${name} has shared at least two of every case type we list. Pick by industry instead.`}
           />
           <Lane
             title="Industries"
@@ -88,27 +84,11 @@ export function GiveThemNext({ person, shared }: { person: Profile; shared: Shar
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-ink-2">
-            Only {plural(ideas.total, 'case')} shared so far, which is too few to read anything into what's missing. Here's simply
-            what's in them.
-          </p>
+          <p className="text-sm text-ink-2">Only {plural(ideas.total, 'case')} shared so far. Here's what's in them.</p>
           <Chips label="Case types" names={ideas.coveredTypes.map((c) => c.name)} />
           <Chips label="Industries" names={ideas.coveredIndustries.map((c) => c.name)} />
         </div>
       )}
-
-      {ideas.focus && (
-        <div className="mt-5 rounded-xl border border-line bg-surface-2 px-4 py-3">
-          <p className="text-sm text-ink-2">
-            <strong className="font-semibold text-ink">{name}'s own focus: {ideas.focus.label}.</strong> They tagged it as the main
-            thing to improve on {ideas.focus.count} of the {plural(ideas.total, 'case')} they share.
-          </p>
-        </div>
-      )}
-
-      <p className="mt-4 text-xs text-muted">
-        Only what {name} chose to share, so this is exposure, not a verdict: a case type they haven't shared yet isn't a weakness.
-      </p>
     </Card>
   );
 }

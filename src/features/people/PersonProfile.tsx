@@ -25,6 +25,7 @@ import { CaseFilterBar } from '../community/CaseFilterBar';
 import { SharedCaseRow } from '../community/SharedCaseRow';
 import { FindCase } from './FindCase';
 import { GiveThemNext } from './GiveThemNext';
+import { sharingShown } from '../../domain/sharpening';
 import { SharpeningCard } from './SharpeningCard';
 import { LevelTag } from '../progress/LevelTag';
 
@@ -181,7 +182,10 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
   const visible = shared.filter((s) => matchesFilter(s, filter));
   const industries = distinctValues(shared, 'industry');
   const sources = distinctValues(shared, 'source');
-  const summary = visitor ? publicSharingSummary(person.sharing) : sharingSummary(person.sharing);
+  // What the top line promises is read from what the page carries, not from the switches: the sharpening summary
+  // also needs scores it can name a skill from, and it belongs to the link, so a member's page never carries it.
+  const onThePage = sharingShown(person.sharing, shared, visitor ? 'visitor' : 'member');
+  const summary = visitor ? publicSharingSummary(onThePage) : sharingSummary(onThePage);
 
   const casesPanel = (
     <div className="space-y-4" role={visitor ? undefined : 'tabpanel'}>

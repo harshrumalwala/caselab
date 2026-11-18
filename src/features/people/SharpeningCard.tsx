@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { SharedCase } from '../../domain/community';
 import { MIN_CASES_FOR_SKILL_INSIGHTS } from '../../domain/improvement';
-import { publicSharpening } from '../../domain/sharpening';
+import { hasSharpening, publicSharpening } from '../../domain/sharpening';
 import { Card, CardHeader } from '../../components/ui/Card';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -34,14 +34,14 @@ function Skills({ label, names }: { label: string; names: string[] }) {
  */
 export function SharpeningCard({ name, shared, note }: { name: string; shared: SharedCase[]; note?: ReactNode }) {
   const view = useMemo(() => publicSharpening(shared), [shared]);
-  if (view.sharpen.length === 0 && view.strengths.length === 0) return null;
+  if (!hasSharpening(view)) return null;
 
   return (
     <Card strip="teal" aria-labelledby="sharpening-title">
       <CardHeader
         titleId="sharpening-title"
         title={`What ${name} is sharpening`}
-        subtitle={`${name} chose to show this, worked out from the skill scores on the ${plural(view.rated, 'case')} they share.`}
+        subtitle={`From the skill scores on the ${plural(view.rated, 'case')} ${name} shares.`}
         icon={<Sparkles className="size-4" />}
       />
 
@@ -51,8 +51,7 @@ export function SharpeningCard({ name, shared, note }: { name: string; shared: S
       </div>
 
       <p className="mt-4 text-xs text-muted">
-        Where {name}'s practice is pointed, in their own skill list. A useful case to give them asks for what they're
-        sharpening and leans on what's already strong.
+        A useful case to give {name} asks for what they're sharpening and leans on what's already strong.
       </p>
       {note}
     </Card>
@@ -67,7 +66,7 @@ export function SharpeningCard({ name, shared, note }: { name: string; shared: S
 export function SharpeningPreview({ name, shared, on }: { name: string; shared: SharedCase[]; on: boolean }) {
   const view = useMemo(() => publicSharpening(shared), [shared]);
 
-  if (view.sharpen.length === 0 && view.strengths.length === 0) {
+  if (!hasSharpening(view)) {
     // Only you see this: your link stays silent either way, because "not enough yet" is itself a statement about you.
     return on ? (
       <p className="rounded-xl bg-surface px-4 py-3 text-sm text-ink-2">
@@ -86,7 +85,7 @@ export function SharpeningPreview({ name, shared, on }: { name: string; shared: 
         <p className="mt-3 rounded-xl bg-surface-2 px-4 py-3 text-xs text-ink-2">
           {on
             ? 'This is on your link now, word for word.'
-            : "This joins your link when you turn on What I'm sharpening. Until then the card is yours alone."}
+            : "This joins your link when you turn on What I'm sharpening."}
         </p>
       }
     />
