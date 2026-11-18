@@ -811,9 +811,42 @@ move whenever the file does, so the quoted words are the reliable part):
   line for its own when nothing is on the table, and tells the two apart by the mood `bucketLine` returned, which is an indirect way
   of asking "is this the stage's generic line?". The tidier home is `bucketLine` in `src/domain/liveCase.ts`, which this change was
   asked to stay out of (#167 had just changed that file).
-- **The 32 parts whose title names an interviewer-side table say nothing.** Dropping the topic is the safe side of the rule (the
+- **The 33 parts whose title names an interviewer-side table say nothing.** Dropping the topic is the safe side of the rule (the
   member is never told the name of a table they will not see, issue #95), but those parts are back to being unnamed. The write-ups
-  could be retitled instead; nothing flags them.
+  could be retitled instead; nothing flags them. (It was 32 until issue #194 took the numbering off one more title, whose subject is
+  then exactly a hidden table's name.)
+
+## The numbering `STEP_HEAD` takes off, and the numbering it leaves (issue #194, 2026-11-18)
+
+- **Unverified against a real model**, like every change under `supabase/functions/**`. The evidence is the library measurement and
+  the unit tests. **It needs `npx supabase functions deploy live-case` to reach anybody**, and a session already running keeps the
+  plan it started with, topics and all.
+- **The nouns are a list, and the list is what was measured.** `NUMBERED_NOUN` in `supabase/functions/_shared/liveCase.ts` holds the
+  filing words the 872 write-ups actually use (phase, bucket, analysis, option, alternative, scenario, approach, idea, stream, data,
+  decision, answer). A book that files its parts under a word nobody has used yet goes straight through, and nothing in CI can see
+  it: the measurement needs `private-data/`, which is not in git. Re-run it after a batch of write-ups is added.
+- **One word in front of the noun comes off with it.** That is what makes a two-word filing label work ("<word> question 2:"), and it
+  means a one-word subject sitting in front of a numbered filing noun would be taken as well. Nothing in the library has that shape
+  today; a negative test pins the shapes that do (a subject, then a comma, then the numbering; a framework whose name starts with a
+  digit; a percentage; a filing word used as a verb).
+- **Numbering that is not at the head is still handed over.** `STEP_HEAD` has only ever worked on the head, so a number inside or at
+  the end of the phrase stays: **66 of the 2,620 topics** handed over hold one, most of them an exhibit, chart or slide the step
+  names. That is the same class as the trailing-cross-reference bullet in the #163 section above (which counted the trailing
+  parenthesis only, about 30), measured the wider way. Left alone deliberately: a named exhibit is a thing the member is shown, not
+  the step's place in the write-up.
+- **The first draft of the widened rule could be made exponential, and nothing but a hand-written stress check found it.** A head that
+  chains numbers and then stops without the separator ("<noun> 1 and 1 and ... x") took seconds at 24 links, because the chain's
+  `\s*#?\s*` is two optional runs of space around an optional character and the engine tried every way of splitting them. It is one
+  character class now and the chain stops at four numbers; a test in `src/data/liveCase.test.ts` sends forty links through, so the
+  suite hangs rather than passes if it ever comes back. **No other regex in `liveCase.ts` or `liveCaseCoach.ts` has been checked for
+  the same shape**, and nothing in CI would catch one: every title the live case reads comes from our own write-ups, so the cost is a
+  slow request rather than an opening for anybody.
+- **A filing noun with no number keeps its word**, on purpose: those words are also ordinary words and what follows the colon can be
+  the book's finding rather than its subject. So a part headed with one of them still opens with the filing word in front of its
+  subject.
+- **Two topics in one case name the book's own suggested answer as their subject.** `TITLE_IS_THE_ANSWER` does not match them (no
+  "why", "because", "driven by"), and this change neither adds nor removes the exposure — the same words were already on screen,
+  behind the numbering. It is the same lexical gap the #163 section records, found again from the other side.
 
 ## How a member likes to meet (issue #98, 2026-11-17)
 

@@ -308,6 +308,72 @@ describe('what a part with no exhibit says it is about', () => {
     expect(stepTopic('Parts and labour')).toBe('Parts and labour');
   });
 
+  /**
+   * Every shape here was found by running `stepTopic` over the library's step titles for issue #194: a real run showed the book's
+   * numbering reaching the member inside a part notice. The titles are written here rather than copied from the data.
+   */
+  it('takes off the shapes of numbering the books also use', () => {
+    const shapes: [string, string][] = [
+      // The book files its parts under a word the rule did not know, numbered.
+      ['Phase 3: the cost base', 'the cost base'],
+      ['Bucket 2: who buys it', 'who buys it'],
+      ['Analysis 2: the spare capacity', 'the spare capacity'],
+      ['Option 1: lease the second line', 'lease the second line'],
+      ['Alternative 2: buy the capacity in', 'buy the capacity in'],
+      ['Scenario 3: both plants move south', 'both plants move south'],
+      ['Approach 2: start from the goal', 'start from the goal'],
+      ['Idea 1: manage the vendors', 'manage the vendors'],
+      // A roman numeral instead of a digit.
+      ['Part II: what else to weigh', 'what else to weigh'],
+      ['Phase IV: the closing numbers', 'the closing numbers'],
+      // A digit with a letter on it.
+      ['Phase 2A: the smaller machine', 'the smaller machine'],
+      // One part that covers two of the book's numbers.
+      ['Exhibits 1 and 2: the wait times', 'the wait times'],
+      ['Steps 1 to 3: the cost walk', 'the cost walk'],
+      ['Scenarios 2a and 2b: either plant moves', 'either plant moves'],
+      // Something the book hangs on the number rather than on the subject.
+      ['Question 3 (optional): the tax breaks', 'the tax breaks'],
+      ['Step 2 (continued): check the costs', 'check the costs'],
+      ['Question 1 continued: add the synergies', 'add the synergies'],
+      ['Question 1 guidance: the risks and what is missing', 'the risks and what is missing'],
+      // A word of the book's own in front of the noun it numbers with.
+      ['Math question 2: the price point', 'the price point'],
+      ['Work stream 1: how the jobs are designed', 'how the jobs are designed'],
+      ['Case data 3: what each line costs', 'what each line costs'],
+      ['Bonus question: the share lost at break-even', 'the share lost at break-even'],
+    ];
+    for (const [title, topic] of shapes) expect(stepTopic(title), title).toBe(topic);
+  });
+
+  it('keeps the words of a title that counts something of its own', () => {
+    // The same guard as the test above: the number comes off only when something separates it from the subject.
+    const kept = [
+      '5 Cs: where to start', // the framework is the subject
+      'Break-even, part 2: the fixed costs only', // the subject comes first and the numbering qualifies it
+      'Next 15%: where the rest comes from', // a share is not a number of the book's
+      'Year 2 takings and outgoings',
+      'The portfolio in 6 years',
+      'Phase in the new rota: what it costs', // the word is the verb, not the filing word
+      'Options to weigh before the board meets', // a filing word the books also use needs a number before it comes off
+      'Decision: leave the market',
+      'Analysis of the three routes',
+      'Looking at Exhibit 4 (the map of it)', // an exhibit named inside the phrase is a thing the member is shown
+    ];
+    for (const title of kept) expect(stepTopic(title), title).toBe(title);
+  });
+
+  it('answers a title that chains numbers without end, instead of reading it every possible way', () => {
+    // A head that counts on and on and then stops without the separator used to send the engine down every way of splitting the
+    // chain: seconds for forty links, and worse past that. There is no timing in this test on purpose — if the blow-up came back the
+    // suite would hang here rather than report a slow number.
+    const chain = `Question ${'1 and '.repeat(40)}the rest`;
+    expect(stepTopic(chain)).toBe('');
+    expect(stepTopic(`Exhibits ${'1 to '.repeat(40)}`)).toBe('');
+    // The chain the books do write still comes off whole.
+    expect(stepTopic('Exhibits 1, 2 and 3: the wait times')).toBe('the wait times');
+  });
+
   it('says nothing at all when the title is the answer rather than the question', () => {
     const answers = ['Why the suburban shops lag', 'Demand is driven by end users', 'Confirm the profit decline', 'Capabilities Megatron lacks', 'Why is Dolphin losing revenue?'];
     for (const title of answers) expect(stepTopic(title), title).toBe('');
