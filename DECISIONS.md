@@ -471,7 +471,8 @@ issues are detailed and their acceptance criteria are already strong; what follo
   of an unverified sender is how a feature ships that silently does nothing. **Decided: before #101 is built, the existing
   request-notification email is verified to arrive** (one throwaway account asking another, checking the inbox), and the result is
   written into KNOWN_ISSUES either way. That check costs nothing and is the owner's own instruction applied to email: never report
-  something as working without checking it.
+  something as working without checking it. **Answered on 2026-11-19: the owner has seen both emails arrive** (see "Email delivery is
+  confirmed" below), so the condition this decision set is met and #101 is no longer held by it.
 - **#102 needs something CaseLab does not have: a timer.** Every function today runs because a member did something. A reminder needs
   pg_cron or an external schedule, which is a new moving part and a new failure mode, and the issue itself says it is optional and
   larger than it looks. **Held, not approved**, until #101 is shipped and the owner has seen invites working; then it is a yes/no on
@@ -895,7 +896,7 @@ So: **a check you have not watched fail is not yet evidence.** Run the new test 
 
 `notify-request` **claims before it sends and rolls the claim back if the send throws**: it stamps `practice_requests.emailed_at` (or `answer_emailed_at`), then calls Resend, and a non-2xx throws and clears the stamp. So a surviving timestamp means Resend accepted the message. Production holds 2 requests from 2026-10-31 with `emailed_at` on both and `answer_emailed_at` on the one acceptance: **three sends, all accepted, by real members, through the code that is still running** (`git log` over `notify-request` since that date is empty).
 
-The instrument was designed into the function and then never read. Caveats kept with the result: **n=3 from one day and one pair of members**, and the deployed `notify-request` has not been verified by content the way the live-case deploys are. And the limit on the claim: **Resend accepting is not Resend delivering** — a bounce, a spam placement or a suppression all happen after the 2xx, so #101 and #102 stay held until someone looks at an inbox or the Resend dashboard.
+The instrument was designed into the function and then never read. Caveats kept with the result: **n=3 from one day and one pair of members**, and the deployed `notify-request` has not been verified by content the way the live-case deploys are. And the limit on the claim: **Resend accepting is not Resend delivering** — a bounce, a spam placement or a suppression all happen after the 2xx, so #101 and #102 stayed held until someone looked at an inbox or the Resend dashboard. **Somebody has now looked: see "Email delivery is confirmed" below (2026-11-19).** The reasoning above keeps its value anyway, which is why it is left standing — reading an instrument the code already had turned "unverifiable without the owner" into "verified as far as Resend's API", for nothing, weeks before the owner could check the inbox half.
 
 ### What a harness can never tell you, however good it gets
 
@@ -955,7 +956,7 @@ Two live pilot runs on 2026-11-18, in different modes and different books, both 
 ## Scheduling, settled on 2026-11-17
 
 - **The asker hosts.** The member who sent the practice request hosts; their saved meeting link goes on the invite, the other person's is the fallback, and if neither has one the invite says to agree a link in messages. The owner chose this over proposer-chooses and over the literal reading of their own earlier brief — **the literal reading would have made the guest host their own interviewer.**
-- **#98, #99 and #100 are built; #101 and #102 are held**, because KNOWN_ISSUES recorded that nobody had watched a `notify-request` email land. The evidence above moves that to "the app and Resend's API both work, delivery unconfirmed", which unblocks them on the app side and leaves the one inbox check with the owner.
+- **#98, #99 and #100 are built; #101 and #102 were held**, because KNOWN_ISSUES recorded that nobody had watched a `notify-request` email land. The evidence above moved that to "the app and Resend's API both work, delivery unconfirmed", which unblocked them on the app side and left the one inbox check with the owner. **That check came back on 2026-11-19 and #101 and #102 are no longer held** (see "Email delivery is confirmed" at the end of this file).
 - **ROADMAP R1, the "free this week" badge, is retired.** It existed so people would stop negotiating times in messages, which is what this chain does properly.
 
 ## A block does not trap a settled time (PM, 2026-11-18, on PR #216)
@@ -1035,3 +1036,29 @@ Calibration from the day it was set: #170 (measure 2,723 step titles before ship
   shared level badge, which a database check forces empty when sharing is off.
 - **Messages are polled, not pushed**, and tables are never added to a Realtime publication, because Realtime does not apply column-level
   privileges.
+
+## Email delivery is confirmed (owner, 2026-11-19)
+
+For weeks the project could say only that Resend's API had accepted three `notify-request` messages. Nobody had seen one arrive, and
+"Resend accepted it" and "a member read it" are separated by bounces, spam placement and suppression lists. No agent can open the
+Resend dashboard or a real inbox, so this was one of two things left in ROADMAP's "Waiting for the owner" table.
+
+Asked which of the two notification emails they had actually seen land, the owner answered **both**: the "asked you to case" email and
+the "said yes" acceptance email. **The channel works end to end.**
+
+What that changes:
+
+- **#101 (calendar invites with `.ics`) and #102 (reminder emails) are unblocked.** The decision recorded above — "before #101 is built,
+  the existing request-notification email is verified to arrive" — set a condition, and the condition is met. Unblocked is not started:
+  neither has been built and the owner has not asked for either. #102 additionally still needs the owner to decide a scheduled job is
+  worth it.
+- **PRODUCT.md's email-notifications row goes to plain `done`**, from "done / partly not verified".
+- **The earlier database reasoning keeps its value and is left standing.** Reading `emailed_at` / `answer_emailed_at` — an instrument
+  the function already had, claimed before the send and rolled back on failure — proved the app-and-API half for nothing, weeks before
+  the owner could check the half only a human can see. The lesson it was written for ("before concluding something is unverifiable, read
+  how the thing records what it did") is not weakened by the owner confirming the rest; it is the reason the remaining question was as
+  small as one glance at an inbox.
+
+The caveat that survives: this is the owner's own inbox and the owner's own sending domain. Deliverability to a classmate's school
+address, to Gmail's spam folder or to a tenant with strict filtering is a different question and nobody has tested it. That is worth
+knowing before the first email goes to someone who is not the owner, but it is not a reason to hold #101.
