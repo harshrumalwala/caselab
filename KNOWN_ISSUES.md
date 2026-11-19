@@ -340,6 +340,9 @@ move whenever the file does, so the quoted words are the reliable part):
   reports. This is the failure mode of #183 (a harness treated as evidence when it could not execute the code it was checking) in a new
   form. It was found because a developer re-ran the audit for #200, got 15 against the PM's 0, and did not write the PM's number down;
   the PM and the coordinator then re-ran it independently and both got 15.
+  As of 2026-11-19 #214 (PR #223) closes this in the reports themselves: `reports/live-case-audit.md` and `reports/live-case-dry-run.md`
+  print the short commit sha and an `(uncommitted changes)` flag on the existing `Run:` line. The limit of the fix: `reports/engine-coverage.md`
+  and the pilot transcripts are still unstamped, so the same mistake is still possible there.
 - **The 560 figure above is low: further prompts frame the member in the third person without the word "candidate".** They were
   counted while reading, as the #196 waves went (wave-completion comment of 2026-11-18T06:48Z on #196, which says only "found by
   reading as the waves went" and states no method beyond that), in separate classes. Do not add them into one total: nothing
@@ -383,9 +386,14 @@ move whenever the file does, so the quoted words are the reliable part):
 - **The coach live check still has two assumptions about the shared throwaway accounts** (`e2e/coach.e2e.test.ts`, after issue #205,
   2026-11-18). (1) The baseline count of account A's cases with written feedback is read just before the four test cases go in, and
   `analyze-feedback` is called after them, so a case logged on account A between those two moments would still fail the count. The
-  window is seconds, and was accepted rather than hidden. (2) The last check, "says there is not enough to read", assumes account **B**
+  window is seconds, and was accepted rather than hidden. (2) The last check, "says there is not enough to read", assumed account **B**
   has no cases with writing at all: three rated cases with written feedback logged on B would turn `not_enough` into `ok` and fail it.
-  That one is untouched and unfiled.
+  Fixed as of 2026-11-19 by #213 (PR #222): the test reads a baseline of B and asserts against it, and skips loudly, with the count and
+  the reason, if B is at or over the threshold.
+- **The coach live check's third check ("is private...") assumes account B has no `feedback_insights` row (found 2026-11-19, not fixed,
+  no issue open).** One Bucket read on B in the real app, with three written-feedback cases present, stores a row permanently:
+  `20261115120000_feedback_insights.sql` grants members `select` only, and the same test file asserts a delete is refused. That check
+  then fails until the owner clears the row from the Supabase dashboard. Same class as #213, a different check, outside its criteria.
 - **Throwaway e2e accounts are listed while the suite runs** (a few minutes) and then unlisted. A check that no "E2E..." names appear in
   Community → Members was left to the owner and is not verified.
 - `tsconfig.tsbuildinfo` shows as untracked in `git status` (not ignored).
