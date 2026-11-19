@@ -161,8 +161,8 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: the deployed schema matches the
   describe('tables that hold requests, conversations, messages and meeting details', () => {
     // NOTE: 20261126120000_meeting_prefs.sql was applied on 2026-11-17 (02:51 UTC on the 18th) and this passes. It stays
     // the check that the live database matches the code: a table added here fails until its migration is applied.
-    // NOTE: the three scheduling tables come from 20261127120000_practice_meetings.sql (#99), which is NOT applied yet.
-    // Until the owner applies it, this file is expected to fail on them — that is exactly what it is for.
+    // NOTE: the three scheduling tables come from 20261127120000_practice_meetings.sql (#99), applied on 2026-11-18, and this
+    // passes on them. A table added here fails until its migration is applied — that is exactly what it is for.
     const closed = [
       'practice_requests', 'practice_blocks', 'conversations', 'conversation_members', 'messages', 'message_reports', 'meeting_prefs',
       'practice_meetings', 'practice_meeting_proposals', 'practice_meeting_confirmations',

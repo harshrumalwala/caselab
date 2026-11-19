@@ -6,9 +6,11 @@
 // account that has writing, and account A is shared with whoever is doing a live check, so the expected number of cases is counted on the
 // account first and the four are added to it. The text the test writes is always the same, so while the rest of the account is unchanged a
 // repeat is answered from the stored read and costs nothing; otherwise one run makes one Claude call (a few cents).
+// Account B is counted the same way, because the last check wants a member the read has too little to go on: while B is under the
+// threshold the check asks for the exact number it saw, and above it the check says why it stepped aside instead of failing.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { FEEDBACK_COLUMNS, hasWriting, RECENT_CASES, type FeedbackCaseRow } from '../supabase/functions/_shared/feedbackInsights';
+import { FEEDBACK_COLUMNS, hasWriting, MIN_CASES, RECENT_CASES, type FeedbackCaseRow } from '../supabase/functions/_shared/feedbackInsights';
 import { readReply } from '../src/data/feedbackInsights';
 import { HAVE_TWO_USERS, newClient, signedInClient, TEST_PREFIX, USER_A, USER_B } from './helpers';
 
@@ -24,6 +26,8 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: Bucket, the coach', () => {
   let baseline = 0;
   /** What a 'recent' read should cover once the four are in. */
   let expectedCases = INSERTED;
+  /** The same count for account B, which the "not enough to read" check needs to be under MIN_CASES. Account B is shared too. */
+  let baselineB = 0;
 
   // Always the same text, so after the first run a repeat is answered from the stored read and costs nothing.
   const row = (i: number, over: Record<string, unknown> = {}) => ({
@@ -45,8 +49,8 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: Bucket, the coach', () => {
   // A read covers every case on the account that has writing, not only the ones with the test's prefix, so the expected number is
   // counted here the way the function counts it (supabase/functions/_shared/feedbackInsights.ts: rows with writing, newest first,
   // never more than RECENT_CASES). Anything the test did not create is left exactly where it is.
-  const casesWithWriting = async () => {
-    const { data, error } = await a.client.from('cases').select(FEEDBACK_COLUMNS).order('case_date', { ascending: false }).limit(FETCH_ROWS);
+  const casesWithWriting = async (client: SupabaseClient) => {
+    const { data, error } = await client.from('cases').select(FEEDBACK_COLUMNS).order('case_date', { ascending: false }).limit(FETCH_ROWS);
     if (error) throw error;
     return ((data ?? []) as FeedbackCaseRow[]).filter(hasWriting).length;
   };
@@ -56,7 +60,8 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: Bucket, the coach', () => {
     b = await signedInClient(USER_B);
     anon = newClient();
     await wipe();
-    baseline = await casesWithWriting();
+    baseline = await casesWithWriting(a.client);
+    baselineB = await casesWithWriting(b.client);
     if (baseline + INSERTED > RECENT_CASES) {
       throw new Error(
         `Account A already has ${baseline} cases with written feedback, so a 'recent' read (at most ${RECENT_CASES} cases) cannot cover all ${INSERTED} this test adds. ` +
@@ -122,9 +127,18 @@ describe.skipIf(!HAVE_TWO_USERS)('live Supabase: Bucket, the coach', () => {
     expect(bad.error).not.toBeNull();
   }, 60_000);
 
-  it('says there is not enough to read, and spends nothing, for a member with too little written', async () => {
-    // Account B has no cases with writing, so there is nothing to send.
+  it('says there is not enough to read, and spends nothing, for a member with too little written', async (ctx) => {
+    // Account B is shared with whoever is doing a live check, so what it holds is counted rather than assumed: a read needs
+    // MIN_CASES cases with writing, and while B is under that — the normal state — the function must say so, and say how few it saw.
+    if (baselineB >= MIN_CASES) {
+      const note =
+        `account B has ${baselineB} cases with written feedback and a read needs ${MIN_CASES}, so "not enough to read" is not true of it today. ` +
+        `Asking anyway would spend a Claude call and store a read on B that this test has no right to delete. ` +
+        `Remove those cases from the throwaway account to get this check back.`;
+      console.warn(`\ncoach.e2e: skipping "not enough to read": ${note}\n`);
+      ctx.skip(note);
+    }
     const { data } = await b.client.functions.invoke('analyze-feedback', { body: { scope: 'recent' } });
-    expect(readReply(data)).toMatchObject({ status: 'not_enough', needed: 3 });
+    expect(readReply(data)).toMatchObject({ status: 'not_enough', caseCount: baselineB, needed: MIN_CASES });
   }, 60_000);
 });
