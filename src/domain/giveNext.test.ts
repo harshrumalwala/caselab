@@ -3,6 +3,8 @@ import type { SharedCase } from './community';
 import { giveNextView, MIN_SHARED_FOR_SKILL, whatToGiveNext } from './giveNext';
 import { MIN_CASES_FOR_TRENDS } from './suggestions';
 import { CASE_TYPES, CASE_TYPE_PRIORITY, INDUSTRIES, INDUSTRY_PRIORITY } from './constants';
+import type { CaseRecord } from './types';
+import { makeCase, type CaseOverrides } from '../test/builders';
 
 const shared = (over: Partial<SharedCase> & { title: string }): SharedCase => ({
   caseId: `s-${over.title}`,
@@ -243,5 +245,76 @@ describe('the pairing view a profile link is drawn from', () => {
     expect(view.total).toBe(5);
     expect(view.enough).toBe(true);
     expect(view.coveredTypes).toEqual([{ name: 'Profitability', count: 5 }]);
+  });
+});
+
+describe('the pairing a signed-in reader is shown', () => {
+  /** `n` shared cases of theirs, every one carrying the same skill scores. */
+  const theirs = (n: number, scores: Record<string, number>): SharedCase[] =>
+    Array.from({ length: n }, (_, i) =>
+      shared({ title: `Theirs ${Object.keys(scores).join('-')} ${i}`, skillScores: scores as SharedCase['skillScores'] }),
+    );
+
+  /** `n` cases of the reader's own, every one carrying the same skill ratings. */
+  const mine = (n: number, skills: Record<string, number>, over: CaseOverrides = {}): CaseRecord[] =>
+    Array.from({ length: n }, () => makeCase({ skills: skills as CaseOverrides['skills'], ...over }));
+
+  it('says nothing about a pairing to a reader with no log of their own', () => {
+    expect(giveNextView(theirs(4, { framework: 5 })).pairing).toBeNull();
+    expect(giveNextView(theirs(4, { framework: 5 }), null).pairing).toBeNull();
+  });
+
+  it('names both directions: what they are ahead on, and what the reader is ahead on', () => {
+    const view = giveNextView(theirs(4, { framework: 5, quant: 2 }), mine(4, { framework: 2, quant: 5 }));
+    expect(view.pairing?.theyLead.map((s) => [s.label, s.theirs, s.yours])).toEqual([['Framework', 5, 2]]);
+    expect(view.pairing?.youLead.map((s) => [s.label, s.theirs, s.yours])).toEqual([['Quant / Math', 2, 5]]);
+  });
+
+  it('shows the clearest areas first and stops at two each way', () => {
+    const view = giveNextView(
+      theirs(4, { framework: 5, quant: 4, exhibits: 4, brainstorm: 4 }),
+      mine(4, { framework: 1, quant: 2, exhibits: 3, brainstorm: 1 }),
+    );
+    expect(view.pairing?.theyLead.map((s) => s.label)).toEqual(['Framework', 'Brainstorm(s)']);
+    expect(view.pairing?.youLead).toEqual([]);
+  });
+
+  it('holds back an area one or two cases carry, on either side, by the one minimum', () => {
+    const thin = MIN_SHARED_FOR_SKILL - 1;
+    // Their side is thin: it is not among their scores at all, so it cannot be in the pairing.
+    expect(giveNextView(theirs(thin, { framework: 5 }), mine(MIN_SHARED_FOR_SKILL, { framework: 1 })).pairing).toEqual({
+      theyLead: [],
+      youLead: [],
+    });
+    // The reader's side is thin.
+    expect(giveNextView(theirs(MIN_SHARED_FOR_SKILL, { framework: 5 }), mine(thin, { framework: 1 })).pairing).toEqual({
+      theyLead: [],
+      youLead: [],
+    });
+    // Both sides at the minimum: the claim stands.
+    const at = giveNextView(theirs(MIN_SHARED_FOR_SKILL, { framework: 5 }), mine(MIN_SHARED_FOR_SKILL, { framework: 1 }));
+    expect(at.pairing?.theyLead.map((s) => s.label)).toEqual(['Framework']);
+  });
+
+  it('calls two close averages the same answer rather than a difference', () => {
+    const close = giveNextView(theirs(4, { framework: 4 }), mine(4, { framework: 4 }));
+    expect(close.pairing).toEqual({ theyLead: [], youLead: [] });
+    // Three 4s and a 5 of the reader's against four 4s of theirs: 4.3 against 4.0, under half a point.
+    const nearly = giveNextView(theirs(4, { framework: 4 }), [...mine(3, { framework: 4 }), ...mine(1, { framework: 5 })]);
+    expect(nearly.pairing).toEqual({ theyLead: [], youLead: [] });
+  });
+
+  it('never pairs on the overall score, which is a reading of the person rather than an area', () => {
+    const rated = Array.from({ length: 4 }, (_, i) => shared({ title: `Overall ${i}`, overall: 5 }));
+    const view = giveNextView(rated, mine(4, {}, { overall: 2 }));
+    expect(view.scores.map((s) => s.key)).toEqual(['overall']); // still drawn as one of the scores they share
+    expect(view.pairing).toEqual({ theyLead: [], youLead: [] });
+  });
+
+  it('leaves everything the descriptive card draws exactly as it was', () => {
+    const cases = [...many(5, { caseType: 'Profitability' }), ...theirs(4, { framework: 5 })];
+    const withReader = giveNextView(cases, mine(4, { framework: 1 }));
+    expect({ ...withReader, pairing: null }).toEqual(giveNextView(cases));
+    expect(withReader.pairing?.theyLead).toHaveLength(1);
   });
 });

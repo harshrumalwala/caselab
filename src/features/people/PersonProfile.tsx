@@ -26,6 +26,7 @@ import { SharedCaseRow } from '../community/SharedCaseRow';
 import { FindCase } from './FindCase';
 import { GiveThemNext } from './GiveThemNext';
 import { LiveCaseTeaser } from './LiveCaseTeaser';
+import { PairingLines } from './PairingLines';
 import { SharedScores } from './SharedScores';
 import { sharingShown } from '../../domain/sharpening';
 import { SharpeningCard } from './SharpeningCard';
@@ -64,14 +65,18 @@ function AskButton({ person, onAsk }: { person: Profile; onAsk: () => void }) {
   );
 }
 
-/** What the person shares, as averages. Only appears when they share scores. */
-function SharedPerformance({ shared }: { shared: SharedCase[] }) {
-  const view = useMemo(() => giveNextView(shared), [shared]);
+/**
+ * What the person shares, as averages, with the reader's own log held up against it underneath. Only appears
+ * when they share scores; the pairing lines only where both logs can carry the claim.
+ */
+function SharedPerformance({ shared, mine, name }: { shared: SharedCase[]; mine: CaseRecord[] | null; name: string }) {
+  const view = useMemo(() => giveNextView(shared, mine), [shared, mine]);
   if (view.scores.length === 0 && view.thinScores.length === 0) return null;
   return (
     <Card strip="sky" aria-labelledby="shared-perf">
       <CardHeader titleId="shared-perf" title="Shared performance" />
       <SharedScores scores={view.scores} thin={view.thinScores} label="Shared performance" />
+      <PairingLines pairing={view.pairing} name={name} />
     </Card>
   );
 }
@@ -257,8 +262,11 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
           "What I'm sharpening" switch is on, and they see the same card in their preview before they choose. */}
       {visitor && person.sharing.sharpening && <SharpeningCard name={firstName(person.displayName)} shared={shared} />}
 
-      {/* A visitor reads the scores inside "What to give them next", where they sit beside the practice they came for. */}
-      {!visitor && <SharedPerformance shared={shared} />}
+      {/* A visitor reads the scores inside "What to give them next", where they sit beside the practice they came for.
+          A member reads them here, with the two directions of the pairing under them: their own log is already in the
+          browser, so the card can answer "is this worth it, and which way round" instead of leaving them to do it.
+          Nobody is paired with themselves: on your own page the card is the scores you share and nothing else. */}
+      {mine && <SharedPerformance shared={shared} mine={person.userId === me ? null : mine} name={firstName(person.displayName)} />}
       <InterviewedCard name={firstName(person.displayName)} items={interviewed} />
 
       {visitor ? (

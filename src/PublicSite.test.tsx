@@ -556,6 +556,16 @@ describe('what to give this member next (a visitor has no log of their own)', ()
     expect(screen.queryByRole('region', { name: 'Shared performance' })).not.toBeInTheDocument();
   });
 
+  it('holds nobody up against the reader on a link: the card describes this member and stops', async () => {
+    const rated: SharedCase[] = Array.from({ length: 3 }, (_, i) => row({ caseId: `sc${i}`, title: `Scored case ${i}`, skillScores: { framework: 4, quant: 3 } }));
+    const env = visitor({ members: [SCORER], shared: rated });
+    await openLink(env, 'bob');
+    const give = await screen.findByRole('region', { name: /What to give Bob next/ });
+    // A visitor has no log, so there is no pairing to draw and nothing in the card speaks about the reader.
+    expect(screen.queryByRole('group', { name: 'Casing together' })).not.toBeInTheDocument();
+    expect(give.textContent).not.toMatch(/You can help Bob with|than you|ahead of you/i);
+  });
+
   it('counts only shared practice cases: burned cases are not in the numbers', async () => {
     const burned = { burnedBooks: ['Cosentino'], burnedCases: [{ title: 'Piano tuners', book: '' }, { title: 'Airline profit', book: '' }] };
     const env = visitor({ members: [{ ...BOB, ...burned, sharing: { ...BOB.sharing, burned: true } }], shared: FIVE });

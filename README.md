@@ -276,6 +276,32 @@ does not see "What to give them next" at all. **Find a case for them** stays a m
 the better answer. The rules are plain functions in `src/domain/giveNext.ts` (`giveNextView`, which carries `whatToGiveNext` whole)
 with unit tests, and like every other number in CaseLab they are worked out deterministically: no AI is involved.
 
+#### Casing together (a signed-in member only)
+
+A member already has their own log in the browser, so since issue #230 (2026-11-19) the **Shared performance** card ends with the two
+directions of the pairing: **"*Name* can help you with ..."** and **"You can help *name* with ..."**, each naming skills and nothing
+else. A visitor's card is untouched — a link holder has no log, so there is nothing to hold anyone up against.
+
+- **Both directions, or it is a ranking.** What they are ahead on says why to case with them; what the reader is ahead on says what
+  the reader brings. A direction with nothing in it is simply absent, and when neither has anything the block is not there.
+- **One minimum, on both sides.** A skill is compared only where at least `MIN_SHARED_FOR_SKILL` cases (three) carry it in *their*
+  shared cases **and** in the reader's own log. One or two cases cannot carry a claim in either direction, and their side of it is
+  the same rule that decides whether a score is drawn as a bar at all.
+- **Half a point before anything is said.** `CLEAR_SCORE_GAP` is 0.5 on the five-point scale. Both sides are a handful of
+  hand-written ratings rounded to one decimal, so a smaller distance is the same answer twice and naming it would invent a
+  difference.
+- **Two areas each way** (`PAIRED_AREAS`), the clearest gaps first. The card is read five minutes before a practice call; a list of
+  eight skills in two directions is the wall of text the redesign removed.
+- **Never the overall score**, though it is still drawn as one of the bars above. A pairing is about areas to case together, and an
+  average of overall ratings is the nearest thing CaseLab has to a mark out of five for a person.
+- **Nothing about the reader leaves the browser, and the member is told nothing.** The comparison is `pairingWith` inside
+  `giveNextView(shared, mine)`, computed from rows the page already held: no request, nothing stored, nothing on the profiled
+  member's side, and no email anywhere near it. Burned and interviewed cases are not part of a case log on either side.
+- **Still their own numbers, never a verdict.** The copy names skills in the pairing's words ("can help you with"), and nothing
+  derives a weakness band for the profiled member — that stays their own **What I'm sharpening** switch.
+- **Nobody is paired with themselves.** On your own page the card is the scores you share and nothing else, which matters because
+  the cases you share are a subset of your log and would otherwise produce a gap against yourself.
+
 ### What I'm sharpening (a switch of its own, off by default)
 
 A profile link can also carry a short **What *name* is sharpening** card: up to three skills they are sharpening, up to three they are
@@ -966,6 +992,12 @@ There is no group administration, group chat or social feed: members, profiles, 
   nothing for a member who shares nothing, burned cases out of the numbers, the averages in one card rather than two, a member's own
   **Shared performance** card carrying the same bars and thin line, the member's profile still leading with "Find a case for them",
   and no request or network call that the page didn't already make
+- **Casing together** (the signed-in pairing): no pairing at all without a log of the reader's own, both directions named, the
+  clearest areas first and two each way, the one thin-data minimum enforced on each side (one below it, at it, and the member's
+  side thin), two averages under half a point apart treated as the same answer, the overall score never paired on, everything the
+  descriptive card draws unchanged by the extra argument; and on the screens, a member seeing both directions under **Shared
+  performance**, nothing claimed while either side is one or two cases, nobody paired with themselves on their own page, and a link
+  holder getting no pairing and no sentence about a reader
 - **The profile link's register**: both cards read for sentences that interpret, hedge or restate what is already on them (the
   removed caveat, "chose to show this", "no numbers, no ranking", the removed "Averages across the N cases ..." subtitle), and the
   **What I'm sharpening** switch read for a line that says what it writes rather than what it leaves out
