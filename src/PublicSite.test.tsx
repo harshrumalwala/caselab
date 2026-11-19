@@ -423,50 +423,68 @@ describe('what to give this member next (a visitor has no log of their own)', ()
     ...lots(1, { caseType: 'Market Entry', industry: 'Financial Services' }),
     ...lots(1, { caseType: 'Market Sizing', industry: 'Financial Services' }),
   ];
+  /** Bob, with the skill scores on his cases on his link too. */
+  const SCORER: Profile = { ...BOB, sharing: { ...BOB.sharing, skills: true } };
   const section = async () => within(await screen.findByRole('region', { name: /What to give Bob next/ }));
-  const chips = (where: ReturnType<typeof within>, lane: string, label: string) =>
-    within(where.getByRole('group', { name: lane }))
-      .queryAllByRole('list', { name: label })
-      .flatMap((l) => within(l).getAllByRole('listitem').map((li) => li.textContent));
+  const names = (where: ReturnType<typeof within>, list: string) =>
+    within(where.getByRole('list', { name: list }))
+      .getAllByRole('listitem')
+      .map((li) => li.textContent ?? '');
+  /** What they have never cased, every name of it. */
+  const uncased = (where: ReturnType<typeof within>, title: string) => names(where, `${title}: hasn't cased yet`);
+  /** What they have cased, as the bars are drawn and as a screen reader reads them. */
+  const cased = (where: ReturnType<typeof within>, title: string) => names(where, `${title}: cased`);
 
-  it('names the case types and industries they have never shared, and the ones they have shared once', async () => {
+  it('names every case type and industry they have never cased, with nothing folded into "+ n more"', async () => {
     const env = visitor({ shared: FIVE });
     await openLink(env, 'bob');
     const give = await section();
     expect(give.getByText(/From the 5 cases Bob shares\./)).toBeInTheDocument();
 
-    // The most asked-about types and industries come first, and only a few are named.
-    expect(chips(give, 'Case types', 'Nothing shared yet')).toEqual(['Growth Strategy', 'Mergers and Acquisitions', 'Revenue', '+ 6 more']);
-    expect(chips(give, 'Case types', 'Shared once')).toEqual(['Market Entry', 'Market Sizing']);
-    expect(chips(give, 'Industries', 'Nothing shared yet')).toEqual([
+    // The ones interviews ask about most come first, and all nine are there.
+    const types = uncased(give, 'Case types');
+    expect(types.slice(0, 3)).toEqual(['Growth Strategy', 'Mergers and Acquisitions', 'Revenue']);
+    expect(types).toContain('Non-traditional');
+    expect(types).toHaveLength(9);
+    expect(types).not.toContain('Profitability');
+
+    // Then what they have done, fewest cases first, with the counts the chart draws.
+    expect(cased(give, 'Case types')).toEqual(['Market Entry: 1 case', 'Market Sizing: 1 case', 'Profitability: 3 cases']);
+
+    expect(uncased(give, 'Industries').slice(0, 3)).toEqual([
       'Healthcare / Pharmaceuticals',
       'Consumer Products / Retail',
       'Energy / Utilities',
-      '+ 7 more',
     ]);
-    expect(chips(give, 'Industries', 'Shared once')).toEqual([]); // both of theirs have two cases
-    expect(chips(give, 'Case types', 'Nothing shared yet')).not.toContain('Profitability');
+    expect(uncased(give, 'Industries')).toHaveLength(10);
+    expect(cased(give, 'Industries')).toEqual(['Financial Services: 2 cases', 'Technology / SaaS: 3 cases']);
+    expect(give.queryByText(/\+ \d+ more/)).not.toBeInTheDocument();
   });
 
-  it('leaves out the tag the member put on their own cases: the lanes are the answer to "what next"', async () => {
-    // Every one of these five cases carries an improvement tag, and the card still says nothing about it.
+  it('leads with the tag the member put on their own cases, in their words', async () => {
     const env = visitor({ shared: FIVE });
     await openLink(env, 'bob');
     const give = await section();
-    expect(give.queryByText(/own focus|main thing to improve|tagged/i)).not.toBeInTheDocument();
-    expect(give.getByRole('group', { name: 'Case types' })).toBeInTheDocument(); // the lanes are what is left
-    expect(give.getByRole('group', { name: 'Industries' })).toBeInTheDocument();
+    const wants = within(give.getByRole('group', { name: 'Wants practice in' }));
+    expect(wants.getByText('Quant / Math')).toBeInTheDocument();
+    expect(wants.getByText(/Bob's own tag, on 3 cases/)).toBeInTheDocument();
   });
 
-  it('shows coverage only, and suggests nothing, when too few cases are shared to say anything', async () => {
+  it('says nothing about a focus the member never tagged', async () => {
+    const env = visitor({ shared: FIVE.map((c) => ({ ...c, improvementArea: null })) });
+    await openLink(env, 'bob');
+    const give = await section();
+    expect(give.queryByRole('group', { name: 'Wants practice in' })).not.toBeInTheDocument();
+  });
+
+  it('shows what is in the cases, and names no gap, when too few are shared to point anywhere', async () => {
     const env = visitor({ shared: FIVE.slice(0, 2) });
     await openLink(env, 'bob');
     const give = await section();
-    expect(give.getByText(/Only 2 cases shared so far\. Here's what's in them\./)).toBeInTheDocument();
-    expect(within(give.getByRole('list', { name: 'Case types' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Profitability']);
-    expect(within(give.getByRole('list', { name: 'Industries' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Technology / SaaS']);
-    expect(give.queryByRole('list', { name: 'Nothing shared yet' })).not.toBeInTheDocument();
-    expect(give.queryByRole('list', { name: 'Shared once' })).not.toBeInTheDocument();
+    expect(give.getByText(/From the 2 cases Bob shares\./)).toBeInTheDocument();
+    expect(cased(give, 'Case types')).toEqual(['Profitability: 2 cases']);
+    expect(cased(give, 'Industries')).toEqual(['Technology / SaaS: 2 cases']);
+    expect(give.queryByText("Hasn't cased yet")).not.toBeInTheDocument();
   });
 
   it('does not appear at all for a member who shares no case history', async () => {
@@ -477,16 +495,36 @@ describe('what to give this member next (a visitor has no log of their own)', ()
     expect(screen.getByText('No shared cases')).toBeInTheDocument();
   });
 
-  it('keeps unpracticed neutral: never a weakness, and never the catch-all "Other"', async () => {
+  it('keeps uncased neutral: never a weakness, and never the catch-all "Other" as a gap', async () => {
     const env = visitor({ shared: [...FIVE, ...lots(1, { caseType: 'Other', industry: 'Other' })] });
     await openLink(env, 'bob');
     const give = await section();
-    for (const lane of ['Case types', 'Industries']) {
-      for (const label of ['Nothing shared yet', 'Shared once']) expect(chips(give, lane, label), `${lane} / ${label}`).not.toContain('Other');
+    for (const title of ['Case types', 'Industries']) {
+      expect(uncased(give, title), title).not.toContain('Other');
+      expect(cased(give, title), title).toContain('Other: 1 case'); // still counted as something they have done
     }
     expect(give.queryByText(/gap|weakness in|behind|needs work/i)).not.toBeInTheDocument();
-    // The chips say "Nothing shared yet", which is the whole claim. Nothing explains that claim or guards it.
+    // "Hasn't cased yet" is the whole claim. Nothing explains that claim or guards it.
     expect(give.queryByText(/not a verdict|isn't a weakness|this is exposure/i)).not.toBeInTheDocument();
+  });
+
+  it('never lets one case be the headline score, and keeps the scores in the same card', async () => {
+    const rated: SharedCase[] = [
+      ...Array.from({ length: 3 }, (_, i) => row({ caseId: `sc${i}`, title: `Scored case ${i}`, skillScores: { framework: 4, quant: 3 } })),
+      row({ caseId: 'sc-one', title: 'One behavioral case', caseType: 'Revenue', skillScores: { behavioral1: 2 } }),
+    ];
+    const env = visitor({ members: [SCORER], shared: rated });
+    await openLink(env, 'bob');
+    const give = await section();
+
+    // Strongest first, each with the number of cases behind it; the single Behavioral case is not among them.
+    expect(names(give, 'Scores Bob shares')).toEqual([
+      'Framework: 4.0 out of 5, from 3 cases',
+      'Quant / Math: 3.0 out of 5, from 3 cases',
+    ]);
+    expect(give.getByText('Only a case or two so far:').parentElement).toHaveTextContent('Only a case or two so far: Behavioral 2.0');
+    // One card, not two: the averages are not repeated below.
+    expect(screen.queryByRole('region', { name: 'Shared performance' })).not.toBeInTheDocument();
   });
 
   it('counts only shared practice cases: burned cases are not in the numbers', async () => {

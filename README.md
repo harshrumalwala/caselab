@@ -244,22 +244,36 @@ therefore leads with **What to give *name* next**, a short section above the cas
 link already hands out. Nothing new is released: no extra column, function, grant or switch, and no request that opening the profile
 didn't already make.
 
-- **Coverage.** The case types and industries they have **never shared**, and those they have **shared once**, the ones interviews
-  use most first, at most three names each and then "+ n more". The catch-all "Other" is never named as something to practise.
-- **Silence when the rows can't support it.** A member who shares no case history gets no section at all. Below five shared cases
-  (`MIN_CASES_FOR_TRENDS`, the same minimum the Dashboard's suggestions use) it shows only what is in those cases and suggests nothing.
-- **Unpracticed is neutral.** A case type nobody has shared is new ground, not a weakness — the same stance as the Dashboard's grey
-  unpracticed industries. The chips carry that in their own words ("Nothing shared yet"), and since 2026-11-17 no sentence underneath
-  explains it: the owner's instruction was that a card which tells the reader how to read itself reads as machine-written. Burned cases
-  and interviewed cases are not part of a case log, so they can't reach any of these counts.
-- **The reader is not told how to read it** (2026-11-17, issue #177's PR, at the owner's request after opening their own link). The
-  section is the two lanes of chips and one line of provenance. The member's own **Improvement focus** tag ("*name*'s own focus:
-  Framework, tagged on 4 of the 15 cases they share") was removed, because it did not help anyone decide what case to give; so was the
-  caveat under the lists. `whatToGiveNext` still returns `focus`; nothing reads it (see KNOWN_ISSUES).
+Since issue #229 (2026-11-19) it is one card with three parts, drawn as sorted bars rather than chips, after the owner opened their
+own link and said the text "doesn't help with figuring what next case should be given".
 
-Signed-in members are unchanged: **Find a case for them** stays their first tab, because overlap with a real log is the better
-answer, and they don't see this section. The rules are plain functions in `src/domain/giveNext.ts` with unit tests, and like every
-other number in CaseLab they are worked out deterministically: no AI is involved.
+- **Wants practice in.** The **Improvement focus** they tagged most often, named as theirs ("Bob's own tag, on 3 cases"). Their own
+  words are preferred to anything we could infer from scores, and the badge keeps the two apart. It is absent when they never tagged
+  one. (This brings back the block removed on 2026-11-17, in the pairing framing the owner asked for this time.)
+- **Case types and industries, least practised first.** Each lane names everything they have **never cased** first, in the order
+  interviews ask about them and in full — there is no "+ n more", which used to hide the gaps the card exists to show — and then
+  draws what they have cased as horizontal bars, fewest cases first, in two bands the legend names: **Cased once** and **Can help
+  you with** (two or more). A bar is drawn only where there is a case to draw, so an area with nothing in it is a name, not an empty
+  row. The catch-all "Other" is never named as a gap, though a case they logged under it is still counted.
+- **Scores they share**, when they share any: the shared averages as bars, strongest first, each with the number of cases behind it.
+  A score carried by fewer than `MIN_SHARED_FOR_SKILL` shared cases (three, the minimum the Improvement Areas screen and the
+  sharpening summary already use) is held out of that order and shown quietly underneath instead — "Only a case or two so far:
+  Behavioral 2.0". One case is not a measurement, and a single low or single high score never leads the card.
+- **Silence when the rows can't support it.** A member who shares no case history gets no card at all. Below five shared cases
+  (`MIN_CASES_FOR_TRENDS`, the same minimum the Dashboard's suggestions use) the lanes hold only the areas their cases are in: no gap
+  is named.
+- **Uncased is neutral, and nobody is judged.** A case type nobody has shared is new ground, not a weakness — the same stance as the
+  Dashboard's grey unpracticed industries — and the bands describe practice, never the person. No sentence underneath explains any of
+  it (the owner's instruction of 2026-11-17: a card that tells the reader how to read itself reads as machine-written). Burned cases
+  and interviewed cases are not part of a case log, so they can't reach any of these counts.
+- **The chart is never the only carrier.** Every bar is also a line of text for a screen reader ("Market Entry: 1 case", "Framework:
+  4.0 out of 5, from 18 cases"), the bars take their colours from the shared palette in `src/components/charts/colors.ts` in both
+  themes, and the chart module (`ProfileBars.tsx`) is lazy-loaded like the Dashboard's trend.
+
+A visitor reads the averages inside this card: the **Shared performance** card below it is the same bars for a signed-in member, who
+does not see "What to give them next" at all. **Find a case for them** stays a member's first tab, because overlap with a real log is
+the better answer. The rules are plain functions in `src/domain/giveNext.ts` (`giveNextView`, which carries `whatToGiveNext` whole)
+with unit tests, and like every other number in CaseLab they are worked out deterministically: no AI is involved.
 
 ### What I'm sharpening (a switch of its own, off by default)
 
@@ -274,8 +288,8 @@ up-to-five ratings) for the second — worked out in the browser from the `skill
   (`profiles.share_sharpening`, carried to the link-visible copy and returned by `public_person(id)`); no summary is stored anywhere.
 - **Names only.** The skills are named and nothing else: no average, no position, no ranking of all eight, and no superlative. A skill
   is on one list, the other, or neither. The switch decides whether CaseLab writes that summary, not whether figures are on the page:
-  the per-case scores and the **Shared performance** averages under the card belong to **Skill scores**, which the member switched on
-  separately. Since 2026-11-17 the switch's own line says what it writes ("Whether CaseLab sums up the skill scores you already
+  the per-case scores, and the averages in **What to give *name* next** (in **Shared performance** for a member), belong to **Skill
+  scores**, which the member switched on separately. Since 2026-11-17 the switch's own line says what it writes ("Whether CaseLab sums up the skill scores you already
   share ...") instead of promising "no numbers, no ranking", which was true of the card and false of the page below it.
 - **The line at the top says what the page carries.** The "Shares ..." sentence under a member's name reads the summary the same way
   the card does (`sharingShown` in `src/domain/sharpening.ts`), so it offers "what they're sharpening" only where the summary is
@@ -927,14 +941,19 @@ There is no group administration, group chat or social feed: members, profiles, 
   profile that existed before the migration, a flag and nothing else stored, another member able to read the switch but not set it and
   getting no extra case data, both tables refusing `anon` and the signed-out caller with any filter, and `public_person(id)` the only way
   the flag reaches a link holder
-- **What to give someone next** (the link holder's summary): the rules (never shared / shared once in interview order, "Other" never
-  named, industries they typed themselves counted but never called a gap, their own focus tag with ties broken by the app's skill
-  order, coverage only below five shared cases, nothing at all with no shared history) and the visitor's screen (the two lanes and
-  their "+ n more", the quiet state, the improvement tag left off the card, nothing for a member who shares nothing, burned cases out
-  of the numbers, the member's own profile unchanged, and no request or network call that the page didn't already make)
+- **What to give someone next** (the link holder's card): the rules (never shared / shared once in interview order, "Other" never
+  named as a gap, industries they typed themselves counted but never called a gap, their own focus tag with ties broken by the app's
+  skill order, coverage only below five shared cases, nothing at all with no shared history) and the pairing view `giveNextView`
+  adds to them (every main case type in the lane, least practised first, with its band; the lane holding only what they have cased
+  below the minimum; scores strongest first with the cases behind each; the thin-data minimum tested at it, one below and one above;
+  one case never leading, high or low; the overall score read as one of them). The screens: the lanes read as a screen reader reads
+  them with nothing behind "+ n more", the member's own tag named as theirs and absent when they never tagged one, the quiet state,
+  nothing for a member who shares nothing, burned cases out of the numbers, the averages in one card rather than two, a member's own
+  **Shared performance** card carrying the same bars and thin line, the member's profile still leading with "Find a case for them",
+  and no request or network call that the page didn't already make
 - **The profile link's register**: both cards read for sentences that interpret, hedge or restate what is already on them (the
-  removed caveat, the removed focus block, "chose to show this", "no numbers, no ranking"), and the **What I'm sharpening** switch
-  read for a line that says what it writes rather than what it leaves out
+  removed caveat, "chose to show this", "no numbers, no ranking", the removed "Averages across the N cases ..." subtitle), and the
+  **What I'm sharpening** switch read for a line that says what it writes rather than what it leaves out
 - **How I like to meet** (the meeting link and time zone, issue #98): the rule (`meeting.test.ts`: an https address kept exactly as
   it will be passed on, the three rooms named and everything else called a link, a phone number with spaces, dashes and an optional
   `+`, both fields optional, and a refusal with a sentence worth showing for `javascript:`, `data:`, `vbscript:`, `file:`, `tel:`,

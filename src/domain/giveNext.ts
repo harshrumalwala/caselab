@@ -1,13 +1,16 @@
 import {
   CASE_TYPE_PRIORITY,
+  DASHBOARD_SKILLS,
   INDUSTRY_PRIORITY,
   SKILL_GROUPS,
   skillGroupLabel,
   type CaseType,
+  type DashboardSkillKey,
   type SkillGroupKey,
 } from './constants';
 import { sharedToRecords, type SharedCase } from './community';
-import { caseTypeCounts, exposureOf, industryCounts } from './stats';
+import { MIN_CASES_FOR_SKILL_INSIGHTS } from './improvement';
+import { caseTypeCounts, exposureOf, industryCounts, round1, skillStats, type Exposure } from './stats';
 import { MIN_CASES_FOR_TRENDS } from './suggestions';
 
 export interface Covered {
@@ -126,5 +129,105 @@ export function whatToGiveNext(shared: SharedCase[]): GiveNext {
     unseenIndustries: industriesBy('none'),
     onceIndustries: industriesBy('once'),
     focus,
+  };
+}
+
+// ---------------------------------------------------------------------------------------
+// The pairing view: the same rules, laid out as the profile link draws them.
+// ---------------------------------------------------------------------------------------
+
+/**
+ * How many shared cases must carry a score before it is read as something they can help with. It is the
+ * minimum the Improvement Areas screen and the sharpening summary already use, so one number governs every
+ * reading of a member's scores: below it, an average is one or two cases and is shown as that.
+ */
+export const MIN_SHARED_FOR_SKILL = MIN_CASES_FOR_SKILL_INSIGHTS;
+
+/** One case type or industry, with how many of their shared cases are in it. */
+export interface PracticeArea {
+  name: string;
+  count: number;
+  /** `none` nothing shared, `once` one case, `multiple` two or more. */
+  band: Exposure;
+}
+
+/** One score they share, averaged over the shared cases that carry it. */
+export interface SharedScore {
+  key: DashboardSkillKey;
+  label: string;
+  /** The average of those cases, to one decimal. */
+  average: number;
+  /** How many shared cases carry this score. */
+  count: number;
+  /** Fewer than MIN_SHARED_FOR_SKILL cases carry it, so it is one or two cases, not a measurement. */
+  thin: boolean;
+}
+
+/**
+ * Everything the profile card draws, in the order it draws it. It carries `GiveNext` whole, so the signed-in
+ * view (overlap with the reader's own log) can add fields to this without any of it being rewritten.
+ */
+export interface GiveNextView extends GiveNext {
+  /** Case types, least practised first. Gaps join it only once there are enough cases to point anywhere. */
+  typeLane: PracticeArea[];
+  /** Industries, the same way, including the ones they typed themselves. */
+  industryLane: PracticeArea[];
+  /** The scores they share that enough cases carry, strongest first. */
+  scores: SharedScore[];
+  /** The scores one or two cases carry, in the app's own order of skills: never ranked, never a headline. */
+  thinScores: SharedScore[];
+}
+
+/** Least practised first, and within a count the order interviews ask about them. */
+const byCountThen = (order: (name: string) => number) => (a: PracticeArea, b: PracticeArea) =>
+  a.count - b.count || order(a.name) - order(b.name) || a.name.localeCompare(b.name);
+
+const indexIn = (names: readonly string[]) => (name: string) => {
+  const i = names.indexOf(name);
+  return i === -1 ? names.length : i;
+};
+
+/**
+ * What to give this member next and what they can help with, from the cases they share and nothing else:
+ * `whatToGiveNext`'s rules, laid out as lanes a chart can draw and scores a reader can weigh.
+ *
+ * Two readings are deliberately kept apart. A case type or industry is counted, which is a fact about their
+ * log; a score is averaged, which is only worth reading when enough cases carry it, so a score from one or two
+ * cases is kept out of the ordering and shown as the one or two cases it is.
+ */
+export function giveNextView(shared: SharedCase[]): GiveNextView {
+  const base = whatToGiveNext(shared);
+  const records = sharedToRecords(shared);
+
+  // Gaps are named only where whatToGiveNext would name them: never below the minimum, and never "Other".
+  const unseenTypes = new Set<string>(base.unseenTypes);
+  const typeLane = caseTypeCounts(records)
+    .filter((t) => t.count > 0 || unseenTypes.has(t.caseType))
+    .map((t) => ({ name: t.caseType, count: t.count, band: t.exposure }))
+    .sort(byCountThen(indexIn(CASE_TYPE_PRIORITY)));
+
+  const unseenIndustries = new Set<string>(base.unseenIndustries);
+  const industryLane = industryCounts(records, customIndustriesOf(records))
+    .filter((c) => c.count > 0 || unseenIndustries.has(c.industry))
+    .map((c) => ({ name: c.industry, count: c.count, band: exposureOf(c.count) }))
+    .sort(byCountThen(indexIn(INDUSTRY_PRIORITY)));
+
+  const measured: SharedScore[] = skillStats(records)
+    .filter((s) => s.count > 0 && s.average !== null)
+    .map((s) => ({
+      key: s.key,
+      label: s.label,
+      average: round1(s.average as number),
+      count: s.count,
+      thin: s.count < MIN_SHARED_FOR_SKILL,
+    }));
+  const skillOrder = indexIn(DASHBOARD_SKILLS.map((s) => s.key));
+
+  return {
+    ...base,
+    typeLane,
+    industryLane,
+    scores: measured.filter((s) => !s.thin).sort((a, b) => b.average - a.average || skillOrder(a.key) - skillOrder(b.key)),
+    thinScores: measured.filter((s) => s.thin).sort((a, b) => skillOrder(a.key) - skillOrder(b.key)),
   };
 }
