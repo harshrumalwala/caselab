@@ -260,6 +260,30 @@ describe('People', () => {
     expect(screen.queryByRole('region', { name: /What to give Bob next/ })).not.toBeInTheDocument();
   }, 20000); // may pay for loading the whole app when the full suite is running
 
+  it('keeps the scores they share beside the two answers, in view while a member switches between them', async () => {
+    const rated = Array.from({ length: 3 }, (_, i) => shared({ caseId: `r${i}`, title: `Rated case ${i}`, skillScores: { framework: 4 } }));
+    const env = createFakeEnv({ members: [{ ...BOB, sharing: { ...BOB.sharing, skills: true } }], shared: rated });
+    const { user } = await openApp(env);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await goTo('#/people/bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+
+    // A member's own switch is still the two answers to "what do I give them", not the visitor's pair.
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Find a case for them', 'Shared cases (3)']);
+    const scores = screen.getByRole('region', { name: 'Shared performance' });
+    expect(scores).toBeInTheDocument();
+    expect(screen.getByRole('tabpanel')).not.toContainElement(scores); // beside the answers, not inside one
+
+    await user.click(screen.getByRole('tab', { name: /Shared cases/ }));
+    expect(screen.getByText('Rated case 0')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /Cases you've done/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Shared performance' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: /Find a case for them/ }));
+    expect(screen.getByRole('region', { name: /Cases you've done/ })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Shared performance' })).toBeInTheDocument();
+  }, 20000); // may pay for loading the whole app when the full suite is running
+
   it('pitches no account to a member who has one: no live case band on a profile they open from inside', async () => {
     const env = createFakeEnv(people);
     await openApp(env);

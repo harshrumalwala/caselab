@@ -3,7 +3,7 @@ import { ArrowLeft, Hand, Loader2, MessageCircle, Mic, UserRound } from 'lucide-
 import type { PublicReader } from '../../data/community';
 import { describeError } from '../../data/errors';
 import { publicSharingSummary, sharingSummary, type Profile, type SharedCase } from '../../domain/community';
-import { giveNextView } from '../../domain/giveNext';
+import { giveNextView, type GiveNextView } from '../../domain/giveNext';
 import { distinctValues, matchesFilter, NO_FILTER, type CaseFilter } from '../../domain/pairing';
 import type { CaseRecord } from '../../domain/types';
 import { Badge } from '../../components/ui/Badge';
@@ -65,13 +65,15 @@ function AskButton({ person, onAsk }: { person: Profile; onAsk: () => void }) {
   );
 }
 
+/** Whether the shared rows carry any score at all: what decides if "Shared performance" has a card to draw. */
+const hasSharedScores = (view: GiveNextView | null): boolean => !!view && (view.scores.length > 0 || view.thinScores.length > 0);
+
 /**
  * What the person shares, as averages, with the reader's own log held up against it underneath. Only appears
  * when they share scores; the pairing lines only where both logs can carry the claim.
  */
-function SharedPerformance({ shared, mine, name }: { shared: SharedCase[]; mine: CaseRecord[] | null; name: string }) {
-  const view = useMemo(() => giveNextView(shared, mine), [shared, mine]);
-  if (view.scores.length === 0 && view.thinScores.length === 0) return null;
+function SharedPerformance({ view, name }: { view: GiveNextView; name: string }) {
+  if (!hasSharedScores(view)) return null;
   return (
     <Card strip="sky" aria-labelledby="shared-perf">
       <CardHeader titleId="shared-perf" title="Shared performance" />
@@ -99,12 +101,15 @@ interface Props {
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 
+/** A stable empty list, so the view below is only recomputed when the real rows change. */
+const NO_SHARED: SharedCase[] = [];
+
 export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, backLabel = 'All members' }: Props) {
   const visitor = mine === null;
   const [state, setState] = useState<
     { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; person: Profile | null; shared: SharedCase[]; interviewed: SharedInterviewed[] }
   >({ status: 'loading' });
-  const [tab, setTab] = useState<Tab>(visitor ? 'cases' : 'find');
+  const [tab, setTab] = useState<Tab>('find');
   const [filter, setFilter] = useState<CaseFilter>(NO_FILTER);
   const [ask, setAsk] = useState<Partial<NewRequest> | null>(null);
   const me = useMyUserId();
@@ -126,6 +131,16 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Their shared scores, with the reader's own log held against them. It is read here, above the branches, so the
+  // page knows whether the side column has anything in it before it decides how many columns to draw.
+  const theirs = state.status === 'ready' ? state.shared : NO_SHARED;
+  const theirId = state.status === 'ready' ? state.person?.userId : undefined;
+  const performance = useMemo(
+    // Nobody is paired with themselves: on your own page the card is the scores you share and nothing else.
+    () => (mine ? giveNextView(theirs, theirId === me ? null : mine) : null),
+    [theirs, theirId, mine, me],
+  );
 
   const back = (
     <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-text hover:underline">
@@ -181,8 +196,8 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
   const onThePage = sharingShown(person.sharing, shared, visitor ? 'visitor' : 'member');
   const summary = visitor ? publicSharingSummary(onThePage) : sharingSummary(onThePage);
 
-  const casesPanel = (
-    <div className="space-y-4" role={visitor ? undefined : 'tabpanel'}>
+  const casesBody = (
+    <>
       {shared.length === 0 ? (
         <Card>
           <EmptyState title="No shared cases" compact>
@@ -212,8 +227,34 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
           </div>
         </>
       )}
-    </div>
+    </>
   );
+
+  const side = visitor ? (
+    <>
+      {/* A visitor has no log, so pairing is out of reach: this is the nearest honest answer to "what should I give them?",
+          and it is the view the page opens on, because it is the reason someone opens a link five minutes before casing
+          them. Members keep "Find a case for them", which is the better answer once there is a log to compare with. */}
+      <GiveThemNext person={person} shared={shared} />
+
+      {/* The skill summary is its own choice: sharing a score beside each case is one thing, a line about what someone
+          is weaker at, on a page anyone with the link can open, is another. It appears only while the member's own
+          "What I'm sharpening" switch is on, and they see the same card in their preview before they choose. */}
+      {person.sharing.sharpening && <SharpeningCard name={firstName(person.displayName)} shared={shared} />}
+    </>
+  ) : (
+    <>
+      {/* A visitor reads the scores inside "What to give them next", where they sit beside the practice they came for.
+          A member reads them here, with the two directions of the pairing under them: their own log is already in the
+          browser, so the card can answer "is this worth it, and which way round" instead of leaving them to do it. */}
+      {performance && <SharedPerformance view={performance} name={firstName(person.displayName)} />}
+      <InterviewedCard name={firstName(person.displayName)} items={interviewed} />
+    </>
+  );
+  // Whether there is anything to put beside the cases. With nothing in it the page is one column at every width, and a
+  // visitor is offered no tab to an empty view.
+  const beside = visitor ? shared.length > 0 : hasSharedScores(performance) || interviewed.length > 0;
+  const prompt = visitor ? signInPrompt?.(person) : null;
 
   return (
     <div className="space-y-5">
@@ -252,38 +293,32 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
         </div>
       </div>
 
-      {/* A visitor has no log, so pairing is out of reach: this is the nearest honest answer to "what should I give them?",
-          and it goes first because it is the reason someone opens a link five minutes before casing them. Members keep
-          "Find a case for them", which is the better answer once there is a log to compare with. */}
-      {visitor && <GiveThemNext person={person} shared={shared} />}
+      {visitor && (
+        // A link is the only way in without an account, so a visitor here may never have heard of CaseLab. The two
+        // invitations sit under the member's own card and above everything about their practice, and read general then
+        // particular: what you can do here, then what you get with this person. Side by side where there is room.
+        <div className="grid gap-5 lg:grid-cols-3">
+          <div className={prompt ? 'lg:col-span-2' : 'lg:col-span-3'}>
+            <LiveCaseTeaser />
+          </div>
+          {prompt}
+        </div>
+      )}
 
-      {/* The skill summary is its own choice: sharing a score beside each case is one thing, a line about what someone
-          is weaker at, on a page anyone with the link can open, is another. It appears only while the member's own
-          "What I'm sharpening" switch is on, and they see the same card in their preview before they choose. */}
-      {visitor && person.sharing.sharpening && <SharpeningCard name={firstName(person.displayName)} shared={shared} />}
-
-      {/* A visitor reads the scores inside "What to give them next", where they sit beside the practice they came for.
-          A member reads them here, with the two directions of the pairing under them: their own log is already in the
-          browser, so the card can answer "is this worth it, and which way round" instead of leaving them to do it.
-          Nobody is paired with themselves: on your own page the card is the scores you share and nothing else. */}
-      {mine && <SharedPerformance shared={shared} mine={person.userId === me ? null : mine} name={firstName(person.displayName)} />}
-      <InterviewedCard name={firstName(person.displayName)} items={interviewed} />
-
-      {visitor ? (
-        <>
-          {/* A link is the only way in without an account, so a visitor here may never have heard of CaseLab. The band goes
-              under everything the member shares about themselves and above their case list: the page opens as theirs, and the
-              two invitations read general then particular — what you can do here, then what you get with this person. */}
-          <LiveCaseTeaser />
-          {signInPrompt?.(person)}
-          {casesPanel}
-        </>
-      ) : (
-        <>
-          <SlideRow role="tablist" aria-label="Profile sections" activeKey={tab} markClass={splitMarkClass} className={splitTabsClass}>
+      {/* What this person is like, beside their cases from `lg` and stacked below it. A visitor switches between the two
+          with the tabs; a member keeps their scores in view and switches the other column between the two answers. */}
+      <div className="grid gap-5 lg:grid-cols-12">
+        {visitor && beside && (
+          <SlideRow
+            role="tablist"
+            aria-label="Profile sections"
+            activeKey={tab}
+            markClass={splitMarkClass}
+            className={`${splitTabsClass} lg:hidden`}
+          >
             {(
               [
-                ['find', 'Find a case for them'],
+                ['find', `What to give ${firstName(person.displayName)} next`],
                 ['cases', `Shared cases (${shared.length})`],
               ] as const
             ).map(([id, label]) => (
@@ -291,6 +326,8 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
                 key={id}
                 type="button"
                 role="tab"
+                id={`profile-tab-${id}`}
+                aria-controls={`profile-panel-${id}`}
                 aria-selected={tab === id}
                 data-slide-active={tab === id ? 'true' : undefined}
                 onClick={() => setTab(id)}
@@ -300,18 +337,69 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
               </button>
             ))}
           </SlideRow>
-          {tab === 'find' ? (
-            <FindCase
-              person={person}
-              theirs={shared}
-              mine={mine}
-              onPropose={person.userId !== me ? (c) => setAsk({ caseTitle: c.title, caseBook: c.source }) : undefined}
-            />
+        )}
+
+        {beside && (
+          <div
+            id={visitor ? 'profile-panel-find' : undefined}
+            role={visitor ? 'tabpanel' : undefined}
+            aria-labelledby={visitor ? 'profile-tab-find' : undefined}
+            className={`space-y-5 lg:block ${visitor ? 'lg:col-span-7' : 'lg:col-span-5'} ${visitor && tab !== 'find' ? 'hidden' : ''}`}
+          >
+            {side}
+          </div>
+        )}
+
+        <div className={`space-y-5 ${beside ? (visitor ? 'lg:col-span-5' : 'lg:col-span-7') : 'lg:col-span-12'}`}>
+          {visitor ? (
+            <div
+              id="profile-panel-cases"
+              role={beside ? 'tabpanel' : undefined}
+              aria-labelledby={beside ? 'profile-tab-cases' : undefined}
+              className={`space-y-4 lg:block ${beside && tab !== 'cases' ? 'hidden' : ''}`}
+            >
+              {casesBody}
+            </div>
           ) : (
-            casesPanel
+            <>
+              <SlideRow role="tablist" aria-label="Profile sections" activeKey={tab} markClass={splitMarkClass} className={splitTabsClass}>
+                {(
+                  [
+                    ['find', 'Find a case for them'],
+                    ['cases', `Shared cases (${shared.length})`],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === id}
+                    data-slide-active={tab === id ? 'true' : undefined}
+                    onClick={() => setTab(id)}
+                    className={splitTabClass(tab === id)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </SlideRow>
+              {tab === 'find' ? (
+                <div role="tabpanel">
+                  <FindCase
+                    person={person}
+                    theirs={shared}
+                    mine={mine}
+                    onPropose={person.userId !== me ? (c) => setAsk({ caseTitle: c.title, caseBook: c.source }) : undefined}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-4" role="tabpanel">
+                  {casesBody}
+                </div>
+              )}
+            </>
           )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

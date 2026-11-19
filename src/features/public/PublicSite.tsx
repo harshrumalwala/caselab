@@ -423,7 +423,8 @@ export function PublicSite({ reader }: { reader: PublicReader }) {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-4 px-4 sm:px-6">
+        {/* The top bar lines up with whatever is under it: the front page's column, or the wider profile. */}
+        <div className={`mx-auto flex h-16 items-center justify-between gap-4 px-4 sm:px-6 ${view.kind === 'person' ? 'max-w-7xl' : 'max-w-5xl'}`}>
           <Logo />
           <nav aria-label="Account" className="flex items-center gap-2">
             {view.kind === 'home' && (
@@ -455,7 +456,8 @@ export function PublicSite({ reader }: { reader: PublicReader }) {
           <Landing />
         </main>
       ) : (
-        <main className="mx-auto w-full max-w-4xl flex-1 px-4 pb-16 pt-8 sm:px-6 sm:pt-12">
+        // A profile opened from a link is the one page here that has two columns to spread into, so it gets the room.
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16 pt-8 sm:px-6 sm:pt-12">
           <PersonProfile
             key={view.id}
             reader={reader}
