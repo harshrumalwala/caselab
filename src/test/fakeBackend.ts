@@ -149,6 +149,8 @@ export interface FakeEnv {
   meeting: ReturnType<typeof createMemoryMeeting>;
   /** Practice times between all the fake members; `as(userId)` is that member's view. */
   scheduling: ReturnType<typeof createMemoryScheduling> & { mine: ReturnType<ReturnType<typeof createMemoryScheduling>['as']> };
+  /** How the *other* members like to meet, which scheduling reads: set a link or a time zone by member id. */
+  othersMeeting: Record<string, { link?: string; timeZone?: string }>;
   /** The member's Warm-up record, as the "database" holds it. */
   warmup: ReturnType<typeof createMemoryWarmup>;
   /** The cases the member ran as the interviewer, as the "database" holds them. */
@@ -272,13 +274,14 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
   });
   const meeting = createMemoryMeeting();
   // The member's own link comes from the meeting-prefs twin; other members have none unless a test gives them one.
+  const othersMeeting: Record<string, { link?: string; timeZone?: string }> = {};
   const scheduling = createMemoryScheduling({
     members: () =>
       community.profiles.map((p) => ({
         userId: p.userId,
         name: p.displayName,
-        link: p.userId === TEST_USER.userId ? meeting.saved.link : undefined,
-        timeZone: p.userId === TEST_USER.userId ? meeting.saved.timeZone : undefined,
+        link: p.userId === TEST_USER.userId ? meeting.saved.link : othersMeeting[p.userId]?.link,
+        timeZone: p.userId === TEST_USER.userId ? meeting.saved.timeZone : othersMeeting[p.userId]?.timeZone,
       })),
     requests: () => practice.rows.map((r) => ({ from: r.from, to: r.to, status: r.status, createdAt: r.createdAt })),
     blocks: () => practice.blocks,
@@ -316,6 +319,7 @@ export function createFakeEnv({ signedIn = true, profile = MY_PROFILE, members =
     chat: Object.assign(chat, { mine: myChat }),
     meeting,
     scheduling: Object.assign(scheduling, { mine: myScheduling }),
+    othersMeeting,
     live,
     publicReader,
     calls: flaky.calls,

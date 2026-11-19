@@ -15,7 +15,8 @@ export interface BlockedMember {
 export interface PracticeRepository {
   /** Your requests, sent and received, newest first (the latest 100). */
   list(): Promise<PracticeRequest[]>;
-  send(to: string, request: NewRequest): Promise<void>;
+  /** Asks someone to case, and resolves with the new request's id (what a proposed time is attached to). */
+  send(to: string, request: NewRequest): Promise<string>;
   /** Accept or decline a request someone sent you. Declining can also stop them asking again. */
   respond(id: string, accept: boolean, reply: string, blockAsker?: boolean): Promise<void>;
   cancel(id: string): Promise<void>;
@@ -77,7 +78,7 @@ export class SupabasePractice implements PracticeRepository {
     return ((data ?? []) as RequestRow[]).map(rowToRequest);
   }
 
-  async send(to: string, request: NewRequest): Promise<void> {
+  async send(to: string, request: NewRequest): Promise<string> {
     const r = cleanRequest(request);
     const { data, error } = await this.client.rpc('send_practice_request', {
       p_to: to,
@@ -88,6 +89,7 @@ export class SupabasePractice implements PracticeRepository {
     });
     if (error) fail(error);
     this.notify('sent', data as string);
+    return data as string;
   }
 
   /**
@@ -223,6 +225,7 @@ export function createMemoryPractice(members: () => MemoryMember[]) {
         const id = `req-${next++}`;
         rows.push({ id, from: me, to, caseTitle: c.caseTitle, caseBook: c.caseBook, when: c.when, message: c.message, status: 'pending', reply: '', createdAt: new Date().toISOString(), respondedAt: null, fromSeen: false });
         tell(to, 'sent', id);
+        return id;
       },
       async respond(id, accept, reply, blockAsker = false) {
         guard();

@@ -136,11 +136,12 @@ describe('emailing the other member', () => {
 
   it('never lets a problem with the email get in the way of the request', async () => {
     const down = clientWithFunction({ invokeFails: true });
-    await expect(new SupabasePractice(down.client).send('bob', ask)).resolves.toBeUndefined();
+    // The request's own id comes back either way: times proposed with it are attached to it.
+    await expect(new SupabasePractice(down.client).send('bob', ask)).resolves.toBe('req-1');
     await down.settle();
     expect(down.calls).toHaveLength(1);
     // And a deployment without the function at all (or an old client) is fine too.
-    await expect(new SupabasePractice(fakeClient({ send_practice_request: { data: 'req-1', error: null } }).client).send('bob', ask)).resolves.toBeUndefined();
+    await expect(new SupabasePractice(fakeClient({ send_practice_request: { data: 'req-1', error: null } }).client).send('bob', ask)).resolves.toBe('req-1');
   });
 
   it('reads the setting as on when you never chose, and saves your choice on your own row', async () => {

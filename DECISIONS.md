@@ -958,6 +958,14 @@ Two live pilot runs on 2026-11-18, in different modes and different books, both 
 - **#98, #99 and #100 are built; #101 and #102 are held**, because KNOWN_ISSUES recorded that nobody had watched a `notify-request` email land. The evidence above moves that to "the app and Resend's API both work, delivery unconfirmed", which unblocks them on the app side and leaves the one inbox check with the owner.
 - **ROADMAP R1, the "free this week" badge, is retired.** It existed so people would stop negotiating times in messages, which is what this chain does properly.
 
+## A block does not trap a settled time (PM, 2026-11-18, on PR #216)
+
+Issue #99's criterion 5 said a block refuses every scheduling function in both directions, matching how practice requests behave. Built literally, that left two people who had blocked each other holding a confirmed practice time that neither could call off until the block was lifted: the block made the commitment permanent, which is the opposite of what blocking is for.
+
+**`cancel_practice_meeting` is therefore allowed in both directions whatever block stands.** Proposing, confirming, countering, declining and moving a time are all still refused both ways. Cancelling sends nothing, reveals nothing and only removes an obligation, so there is no contact and no harassment surface in it; the record stays visible to both with no meeting link, as it already did.
+
+This narrowing is the **PM's**, not the owner's — the owner approved #99 with the broader criterion in it, and this was decided while the migration was still unapplied and therefore still cheap to change. It is one argument in the database (`_my_meeting(p_id, p_allow_blocked)`, passed `true` by the one function) and one flag in the in-memory twin, so reversing it is a small, single-place change if the owner would rather have the literal rule.
+
 ## Spending the window: Sonnet for mechanical work, Opus for judgment (owner, 2026-11-17)
 
 The owner asked that simple sub-agents run on a cheaper model so more work fits in a usage window, and that briefs be tightened so a developer is not rediscovering context the PM already holds.

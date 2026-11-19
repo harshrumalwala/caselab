@@ -161,7 +161,7 @@ move whenever the file does, so the quoted words are the reliable part):
   the book match exactly. So the #132, #139, #143, #149, #151 and #157 rewrites are live and **#159's five prompts are the only
   library change waiting on a reload**. Re-run that comparison after the next load rather than trusting this paragraph.
 
-## Scheduling: the rules are in the repo, not in the database (issue #99, 2026-11-18)
+## Scheduling: the screens are built, the database is not (issues #99 and #100, 2026-11-18)
 
 - **The migration `supabase/migrations/20261127120000_practice_meetings.sql` is written and tested but NOT applied.** Applying it is
   the owner's call (`npx supabase db push`). Until then `npm run test:e2e` **is expected to fail** on
@@ -169,16 +169,27 @@ move whenever the file does, so the quoted words are the reliable part):
   `practice_meeting_confirmations` among the tables that must exist and stay closed, and the seven scheduling functions among those
   the app calls. That is the file doing its job (the live database does not yet match the code), not a new defect. The PGlite tests
   (`src/data/practiceMeetings.db.test.ts`) run the same migration in process and pass today.
-- **Nothing on screen uses it yet.** `SupabaseScheduling` and `useScheduling()` are wired into the backend and the provider tree, but
-  the screens are issue #100, so in production the code is reachable only through the console. The in-memory twin and the PGlite
-  tests are what exercise it until then.
+- **The screens are built (issue #100) and have never run against the real database.** Proposing from the ask dialog, answering on
+  a request card, and the whole panel in a conversation are covered by `src/Scheduling.test.tsx` against the in-memory twin, which
+  enforces the same rules. Everything from `SupabaseScheduling` outwards — the seven RPCs, the shapes they return, the error codes
+  the screens translate — is unverified until the migration is applied and `npm run test:e2e` can run.
+- **The other member's time zone is only known inside a record the two of you share.** `my_practice_meetings()` returns it, and
+  nothing else does (`meeting_prefs` is readable by its owner alone). So the *first* time you ever propose to someone, the preview
+  under the picker can only read the time back in your own zone; from their first answer onwards both zones show everywhere.
+  `zoneOfMember()` in `src/domain/scheduling.ts` reads it off any record with that member, including a cancelled one, so this is
+  really only the first contact. Showing it earlier would need a new function that hands one member's zone to another.
 - **Criterion 5 was narrowed for one function, on the PM's ruling of 2026-11-18**: `cancel_practice_meeting` is allowed in both
   directions whatever block stands, because a block that left a settled time between two people who can no longer talk would make
   the commitment permanent, and cancelling sends nothing and reveals nothing. Every other scheduling function is still refused both
   ways. `_my_meeting(p_id, p_allow_blocked)` is where the exception lives, and four pairings of who blocked and who cancels are
   tested.
-- **`practice_requests.when_text` is still there.** The free-text "when" on a request now overlaps with real scheduling. Dropping it
-  was put out of scope for #99 and left for the screens issue to decide.
+- **`practice_requests.when_text` is still there, and is no longer written.** The PM's answer to #100's open question 1 was to leave
+  the column (no migration for no gain). The ask dialog has no "When" box; `cleanRequest` still carries the field, `send` still
+  passes it as an empty string, and a row that already has one still reads it back on the card and in the first message of the
+  conversation. Nothing in the screens, `src/data/practiceRequests.ts` or `notify-request` cares either way.
+- **No calendar file and no email.** A settled time lives in the app only: issue #101 owns the `.ics` file and the invite emails,
+  and owes them the stable UID and sequence number that `practice_meetings.id` and `revision` were built for. The screens
+  deliberately offer no download in the meantime.
 - **The race is proved by replay, not by two real connections.** PGlite is a single in-process connection, so
   `practiceMeetings.db.test.ts` proves single-confirmation three ways that do not need concurrency: a second call refused, the two
   racers' writes replayed from the state they both read (conditional update, compare-and-set on the revision, primary key on the

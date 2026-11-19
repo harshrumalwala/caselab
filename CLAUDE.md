@@ -58,8 +58,8 @@ src/data/        persistence and I/O behind small interfaces: CaseLabRepository 
                  AuthApi; Excel import/export (read-excel-file, fflate), backup, CSV, live case, messages, requests, library.
                  Most *.db.test.ts files run the real migrations in PGlite (in-process Postgres).
 src/state/       React context: auth, data (the only writer), toasts, theme, routing, game (levels).
-src/features/    screens: dashboard, caselog, improvement, live, warmup, people, community, inbox, messages, requests, public (front
-                 page), auth, logcase, settings, import, progress, help, tour.
+src/features/    screens: dashboard, caselog, improvement, live, warmup, people, community, inbox, messages, requests, scheduling
+                 (settling a practice time), public (front page), auth, logcase, settings, import, progress, help, tour.
 src/components/  shared UI, layout, chart colours; ExhibitChart lives in src/features/caselog/ExhibitChart.tsx.
 supabase/migrations/   schema, one timestamped file per change (20261019... to 20261123120000_live_case.sql so far)
 supabase/functions/    Edge Functions: analyze-feedback (Bucket), compare-case, live-case, notify-request; _shared/ holds each

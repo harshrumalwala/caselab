@@ -39,6 +39,8 @@ const BOB_CASE: SharedCase = {
   notes: null,
 };
 
+// A request as it arrives from the database. `when` is the free text the ask dialog no longer collects: rows that
+// already have one still read it back.
 const ask = { caseTitle: 'Airline profit', caseBook: 'Cosentino', when: 'tonight 8pm', message: 'Up for it?' };
 
 /** The app, signed in, opened at a screen. */
@@ -139,7 +141,6 @@ describe('asking someone to case', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Case with Bob?' });
     await user.type(within(dialog).getByLabelText('Case to try'), ask.caseTitle);
     await user.type(within(dialog).getByLabelText('Casebook'), ask.caseBook);
-    await user.type(within(dialog).getByLabelText('When'), ask.when);
     await user.type(within(dialog).getByLabelText('Note'), ask.message);
     expect(within(dialog).getByText((_, el) => el?.tagName === 'P' && el.textContent === '10 / 280')).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Send request' }));
@@ -147,7 +148,7 @@ describe('asking someone to case', () => {
     expect(await screen.findByText('Request sent to Bob')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(env.practice.rows).toHaveLength(1);
-    expect(env.practice.rows[0]).toMatchObject({ from: ME, to: 'bob', status: 'pending', caseTitle: 'Airline profit', caseBook: 'Cosentino', when: 'tonight 8pm', message: 'Up for it?' });
+    expect(env.practice.rows[0]).toMatchObject({ from: ME, to: 'bob', status: 'pending', caseTitle: 'Airline profit', caseBook: 'Cosentino', when: '', message: 'Up for it?' });
     expect(await screen.findByRole('button', { name: 'Request waiting' })).toBeDisabled();
   });
 
