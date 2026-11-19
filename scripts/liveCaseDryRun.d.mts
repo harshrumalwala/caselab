@@ -277,4 +277,4 @@ export function openByDesign(run: DryRun): boolean;
 export function failedTheBar(run: DryRun): boolean;
 export function summarise(result: DryRunResult): DryRunSummary;
 export function formatSummary(summary: DryRunSummary, result: DryRunResult): string;
-export function formatReport(result: DryRunResult, meta: { dir: string; files: number; at: string; seconds: number }): string;
+export function formatReport(result: DryRunResult, meta: { dir: string; files: number; at: string; seconds: number; commit?: string }): string;

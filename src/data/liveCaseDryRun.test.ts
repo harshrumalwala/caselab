@@ -7,6 +7,7 @@ import * as coach from '../../supabase/functions/_shared/liveCaseCoach';
 import { handleLive, heldResults, isFullSolution, readSolution } from '../../supabase/functions/_shared/liveCaseCoach';
 import { PLANNED_MS, isInterviewerSideExhibit, nudgeLevel, timeInStages } from '../../supabase/functions/_shared/liveCase';
 import { createMemoryLiveDeps } from '../test/memoryLiveDeps';
+import { describeCommit } from '../../scripts/liveCaseAudit.mjs';
 import {
   CANDIDATES,
   CANDIDATE_SPECS,
@@ -342,6 +343,29 @@ describe('what the report may contain', () => {
     const report = formatReport(r, { dir: 'private-data/solutions', files: 1, at: '2026-11-16T00:00:00.000Z', seconds: 1 });
     expect(report).toContain('None: every case reached stage done in every timed mode, for every candidate');
     expect(report).toContain('## Open by design (0)');
+  });
+});
+
+// Issue #214: a report that cannot say which commit it was produced on cannot be told apart from one measured on a tree where the rule
+// did not exist yet. The sha goes on the Run: line the diffs already exclude.
+describe('the commit the report was produced on', () => {
+  it('sits on the Run: line, beside the timestamp and the seconds', async () => {
+    const r = await playAll([writeUp()], engine, { modes: ['interview'], candidates: ['brisk'] });
+    const report = formatReport(r, { dir: 'private-data/solutions', files: 1, at: '2026-11-16T00:00:00.000Z', seconds: 1, commit: 'abc1234 (uncommitted changes)' });
+    expect(report).toContain('Run: 2026-11-16T00:00:00.000Z (1s) — commit abc1234 (uncommitted changes)');
+    expect(report.split('\n').filter((line) => line.startsWith('Run:'))).toHaveLength(1);
+    expect(report.split('\n').filter((line) => line.includes('commit abc1234'))).toHaveLength(1);
+  });
+
+  it('says unknown when git cannot answer, rather than leaving the field out', async () => {
+    const r = await playAll([writeUp()], engine, { modes: ['interview'], candidates: ['brisk'] });
+    expect(formatReport(r, { dir: 'x', files: 1, at: 'now', seconds: 1 })).toContain('Run: now (1s) — commit unknown');
+    expect(describeCommit(() => null)).toBe('unknown');
+    expect(
+      describeCommit(() => {
+        throw new Error('no repository here');
+      }),
+    ).toBe('unknown');
   });
 });
 

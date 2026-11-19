@@ -208,5 +208,6 @@ export function auditCase(raw: unknown, rules: AuditRules, caps: Caps): CaseAudi
 export function audit(entries: unknown[], rules: AuditRules, caps?: Caps): AuditResult;
 export function summarise(result: AuditResult): AuditSummary;
 export function formatSummary(summary: AuditSummary): string;
-export function formatReport(result: AuditResult, meta: { dir: string; files: number; at: string }): string;
+export function describeCommit(ask?: (args: string[]) => string | null): string;
+export function formatReport(result: AuditResult, meta: { dir: string; files: number; at: string; commit?: string }): string;
 export function readSolutionFiles(dir: string): { files: string[]; entries: Record<string, unknown>[]; broken: string[] };
