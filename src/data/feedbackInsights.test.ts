@@ -215,6 +215,14 @@ describe('one request, start to finish', () => {
     const { deps, log } = setup({ rows: [...many(MIN_CASES - 1), row(), row()] });
     expect(await handleAnalyze('recent', deps)).toEqual({ status: 'not_enough', caseCount: MIN_CASES - 1, needed: MIN_CASES });
     expect(log.asked).toBe(0);
+
+    // The count it reports is how many cases had writing, zero included: the live check (e2e/coach.e2e.test.ts) asks a member with
+    // nothing written for a read and expects that number back.
+    const nothing = setup({ rows: [] });
+    expect(await handleAnalyze('recent', nothing.deps)).toEqual({ status: 'not_enough', caseCount: 0, needed: MIN_CASES });
+    const unwritten = setup({ rows: [row(), row(), row(), row()] });
+    expect(await handleAnalyze('recent', unwritten.deps)).toEqual({ status: 'not_enough', caseCount: 0, needed: MIN_CASES });
+    expect(nothing.log.asked + unwritten.log.asked).toBe(0);
   });
 
   it('returns the stored answer, without asking, when nothing has changed (so a second click costs nothing, whenever it is)', async () => {

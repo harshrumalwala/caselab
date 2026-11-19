@@ -1036,6 +1036,9 @@ Bucket's read is checked on account A too (`e2e/coach.e2e.test.ts`): four cases 
 every case on the account that has writing, so the test counts those first and expects that number plus its own four; cases already on the
 account are left untouched. A run costs a few cents the first time and nothing while the account's writing is unchanged. If the account
 holds more than six cases with written feedback, a recent read (ten cases) cannot cover all four and the test says so and stops.
+The last check in that file asks account B, which has too little written for a read, and expects the "not enough yet" answer with the
+number of cases it saw. Account B is counted the same way before the check runs: if someone has left three or more cases with written
+feedback on it, a read is what the function should give, so the check steps aside and prints the count and the reason instead.
 
 Use throwaway accounts for A and B: the tests create their profiles and flip their sharing switches, then leave them **unlisted** with
 nothing shared, so they never appear in the Community list or search for real members. They are listed only while the suite runs (the
