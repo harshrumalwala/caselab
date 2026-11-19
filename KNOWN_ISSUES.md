@@ -376,6 +376,10 @@ move whenever the file does, so the quoted words are the reliable part):
   `.env.e2e.local`. It creates and removes rows titled `ZZ CaseLab e2e ...`. It is not part of CI. It broke once because
   `e2e/app.e2e.test.tsx` looked for the old front-page headline ("Case smarter"); fixed in PR #78 to look for "Case with Bucket".
   Tests that match on marketing copy will break when copy changes.
+- **The live e2e suite is rationed (owner, 2026-11-19).** `npm run test:e2e` is a deliberate spend, not a routine gate: it runs against
+  production, takes a few minutes, and lists the throwaway accounts while it runs. In the owner's words: "we can run it once/twice
+  depending on when it's needed but not everytime." Run it when something actually needs proving; it is not part of a normal pull
+  request, and an agent should not reach for it by default. `npm test` and `npm run typecheck` are the routine checks.
 - **The coach live check still has two assumptions about the shared throwaway accounts** (`e2e/coach.e2e.test.ts`, after issue #205,
   2026-11-18). (1) The baseline count of account A's cases with written feedback is read just before the four test cases go in, and
   `analyze-feedback` is called after them, so a case logged on account A between those two moments would still fail the count. The
