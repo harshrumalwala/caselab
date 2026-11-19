@@ -632,6 +632,42 @@ export function formatSummary(s) {
   ].join('\n');
 }
 
+// ---------------------------------------------------------------------------------------------------------------------------
+// Which commit the numbers were measured on
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/** What `git` answers, trimmed, or null when it cannot be asked at all: no git on the machine, no repository, a command that errored. */
+const askGit = (args) => {
+  try {
+    const run = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+    if (run.error || run.status !== 0 || typeof run.stdout !== 'string') return null;
+    return run.stdout.trim();
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The commit the run was made on, for the report header: the short sha, and whether anything was uncommitted while it ran. On
+ * 2026-11-18 an audit run from a checkout 45 commits behind main printed a clean `0` for a rule whose detector did not exist on that
+ * commit, and the 0 was published: a rule that does not exist must not read like a rule that passed. It never throws and never stops
+ * the report being written — `unknown` is an honest answer, a missing report is not. `ask` is injected so the shape can be tested
+ * without a repository.
+ */
+export function describeCommit(ask = askGit) {
+  let sha = null;
+  let changes = null;
+  try {
+    sha = ask(['rev-parse', '--short', 'HEAD']);
+    if (sha) changes = ask(['status', '--porcelain']);
+  } catch {
+    return 'unknown';
+  }
+  if (!sha) return 'unknown';
+  if (changes === null) return sha;
+  return changes === '' ? sha : `${sha} (uncommitted changes)`;
+}
+
 /** One exhibit whose render is not the whole of the write-up: what is gone, and on which screen. */
 const cutLines = (f) => [
   ...f.live.cut.map((cut) => `  NOT WHOLE ${f.index}. ${f.title || '(no title)'} — live case — ${cut}`),
@@ -668,7 +704,7 @@ function caseLines(c) {
   return lines.join('\n');
 }
 
-export function formatReport(result, { dir, files, at }) {
+export function formatReport(result, { dir, files, at, commit = 'unknown' }) {
   const s = summarise(result);
   const flagged = result.cases.filter((c) => c.flags.length > 0);
   const notWhole = result.cases.filter((c) => c.flags.includes(BREACH));
@@ -678,7 +714,8 @@ export function formatReport(result, { dir, files, at }) {
   return [
     '# Live-case suitability report',
     '',
-    `Run: ${at}`,
+    // The sha rides on the Run: line on purpose: two runs are diffed with this one line excluded, and one exclusion covers both.
+    `Run: ${at} — commit ${commit}`,
     `Source: ${dir} (${files} file(s))`,
     'Rules: imported from supabase/functions/_shared/liveCase.ts, liveCaseCoach.ts, src/domain/bookSolution.ts and',
     'src/domain/exhibitFidelity.ts, never copied.',
@@ -816,7 +853,7 @@ async function main(argv) {
   const { files, entries, broken } = readSolutionFiles(dir);
   const rules = await loadRules();
   const result = audit(entries, rules);
-  const report = formatReport(result, { dir, files: files.length, at: new Date().toISOString() });
+  const report = formatReport(result, { dir, files: files.length, at: new Date().toISOString(), commit: describeCommit() });
   const target = resolve(ROOT, out);
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, report);

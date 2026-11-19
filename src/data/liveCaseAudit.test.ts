@@ -10,7 +10,7 @@ import { buildPlan, isInterviewerSideExhibit } from '../../supabase/functions/_s
 import { givenOnRequest, hasTell, interviewerVoice, isFullSolution, planFor, readSolution } from '../../supabase/functions/_shared/liveCaseCoach';
 import { LIVE_EXHIBIT_LIMITS, SOLUTION_EXHIBIT_LIMITS, parseBookSolution, parseSolutionExhibit } from '../domain/bookSolution';
 import { exhibitLoss } from '../domain/exhibitFidelity';
-import { DROPPED_RULES, FLAGS, INTERVIEWER_RULES, PROMPT_BREACH, PROMPT_RULES, audit, auditCase, formatReport, formatSummary, lossKind, measureCaps, promptAsides, readSolutionFiles, summarise, type AuditRules } from '../../scripts/liveCaseAudit.mjs';
+import { DROPPED_RULES, FLAGS, INTERVIEWER_RULES, PROMPT_BREACH, PROMPT_RULES, audit, auditCase, describeCommit, formatReport, formatSummary, lossKind, measureCaps, promptAsides, readSolutionFiles, summarise, type AuditRules } from '../../scripts/liveCaseAudit.mjs';
 
 const rules: AuditRules = {
   isInterviewerSideExhibit,
@@ -558,5 +558,40 @@ describe('reading the write-ups', () => {
 
   it('says plainly when the write-ups are not on this machine', () => {
     expect(() => readSolutionFiles(join(dir, 'missing'))).toThrow(/does not exist/);
+  });
+});
+
+// Issue #214: an audit run on 2026-11-18 from a checkout 45 commits behind main printed a clean 0 for a rule whose detector did not
+// exist on that commit, and the 0 was published. The header has to say which commit the numbers were measured on.
+describe('the commit the report was produced on', () => {
+  const fakeGit = (sha: string | null, status: string | null) => (args: string[]) =>
+    args[0] === 'rev-parse' ? sha : args[0] === 'status' ? status : null;
+
+  it('is the short sha when the tree is clean', () => {
+    expect(describeCommit(fakeGit('abc1234', ''))).toBe('abc1234');
+  });
+
+  it('says so when the tree was dirty', () => {
+    expect(describeCommit(fakeGit('abc1234', ' M scripts/liveCaseAudit.mjs'))).toBe('abc1234 (uncommitted changes)');
+  });
+
+  it('is one word when git cannot answer, and never throws', () => {
+    expect(describeCommit(fakeGit(null, null))).toBe('unknown');
+    expect(
+      describeCommit(() => {
+        throw new Error('git is not on this machine');
+      }),
+    ).toBe('unknown');
+  });
+
+  it('sits on the Run: line, so one exclusion still covers both when two runs are diffed', () => {
+    const report = formatReport(audit([writeUp()], rules), { dir: 'x', files: 1, at: '2026-11-16T00:00:00.000Z', commit: 'abc1234 (uncommitted changes)' });
+    expect(report).toContain('Run: 2026-11-16T00:00:00.000Z — commit abc1234 (uncommitted changes)');
+    expect(report.split('\n').filter((line) => line.startsWith('Run:'))).toHaveLength(1);
+    expect(report.split('\n').filter((line) => line.includes('commit abc1234'))).toHaveLength(1);
+  });
+
+  it('says unknown rather than nothing when the caller could not find out', () => {
+    expect(formatReport(audit([writeUp()], rules), { dir: 'x', files: 1, at: 'now' })).toContain('Run: now — commit unknown');
   });
 });

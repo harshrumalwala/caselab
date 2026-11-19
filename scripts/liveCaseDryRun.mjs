@@ -26,7 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { nameKey } from './librarySeed.mjs';
-import { readSolutionFiles } from './liveCaseAudit.mjs';
+import { describeCommit, readSolutionFiles } from './liveCaseAudit.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_DIR = 'private-data/solutions';
@@ -1148,7 +1148,7 @@ const causeBlocks = (grouped, verb) =>
     '',
   ]);
 
-export function formatReport(result, { dir, files, at, seconds }) {
+export function formatReport(result, { dir, files, at, seconds, commit = 'unknown' }) {
   const s = summarise(result);
   const failures = groupByCause(result, failedTheBar);
   const byDesign = groupByCause(result, openByDesign);
@@ -1156,7 +1156,8 @@ export function formatReport(result, { dir, files, at, seconds }) {
   return [
     '# Live-case dry run',
     '',
-    `Run: ${at} (${seconds}s)`,
+    // The sha rides on the Run: line on purpose: two runs are diffed with this one line excluded, and one exclusion covers both.
+    `Run: ${at} (${seconds}s) — commit ${commit}`,
     `Source: ${dir} (${files} file(s))`,
     `Modes: ${result.modes.join(', ')}. Candidates: ${result.candidates.map((c) => `${c} (${CANDIDATE_SPECS[c].what})`).join('; ')}.`,
     `Exhibits handed to the member: ${s.exhibitsDelivered}. Runs where an interviewer-side exhibit reached them: ${s.leaked} (must be 0).`,
@@ -1262,7 +1263,7 @@ async function main(argv) {
   });
   process.stderr.write('\n');
   const seconds = Math.round((Date.now() - began) / 1000);
-  const report = formatReport(result, { dir, files: files.length, at: new Date().toISOString(), seconds });
+  const report = formatReport(result, { dir, files: files.length, at: new Date().toISOString(), seconds, commit: describeCommit() });
   const target = resolve(ROOT, out);
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, report);
