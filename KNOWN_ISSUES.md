@@ -363,6 +363,12 @@ move whenever the file does, so the quoted words are the reliable part):
   machine. One full run reported 10 failed tests and 3 errors; a second full run passed all 1,226. The failures were not investigated;
   load-related timeouts are suspected, not confirmed. Heavy work running at the same time (a render test, other test runs) may have
   contributed. Use `npx vitest run <file>` for single files.
+- **A flaky test reached `main` and went unnoticed (#225, fixed).** `SupabaseScheduling > reads the times waiting for an answer as a
+  proposal` in `src/data/scheduling.test.ts` called `inHours(-2)` twice for one instant (the fake row and the expectation), so it failed
+  whenever the millisecond ticked between the two calls (about 2 runs in 5, in about 15 ms, also alone). This is one deterministic-logic
+  defect in one test, separate from the load-related timeouts above. It was not noticed because a green PR check does not mean `main` is
+  green, and nobody watches `main`'s own run after a merge: the PRs merged on green checks, and the red run was the post-merge run on
+  `main` at `a5d785e`. `main` is green again and no product behaviour was affected.
 - **No linter** exists (`package.json` has no `lint` script); CI (`.github/workflows/ci.yml`) runs typecheck, tests and build only.
 - **The #121 column is in production, so the live check that watched for it passes again.** "has every column the migrations add"
   in `e2e/deployed.e2e.test.ts` reads the `add column` statements straight out of `supabase/migrations/`, so it expected
