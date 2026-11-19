@@ -73,14 +73,15 @@ describe('SupabaseScheduling', () => {
 
   it('reads the times waiting for an answer as a proposal', async () => {
     const slots = [inHours(24), inHours(48)];
+    const at = inHours(-2);
     const f = fakeClient({
       my_practice_meetings: {
-        data: [{ ...ROW, state: 'proposed', starts_at: null, revision: 0, meeting_link: null, meeting_link_from: null, proposal_id: 'p1', proposed_by: 'bob', proposed_slots: slots, proposed_duration: 45, proposed_is_change: true, proposed_at: inHours(-2), my_turn: true }],
+        data: [{ ...ROW, state: 'proposed', starts_at: null, revision: 0, meeting_link: null, meeting_link_from: null, proposal_id: 'p1', proposed_by: 'bob', proposed_slots: slots, proposed_duration: 45, proposed_is_change: true, proposed_at: at, my_turn: true }],
         error: null,
       },
     });
     const [meeting] = await new SupabaseScheduling(f.client).list();
-    expect(meeting.proposal).toEqual({ id: 'p1', by: 'bob', slots, durationMinutes: 45, isChange: true, at: inHours(-2) });
+    expect(meeting.proposal).toEqual({ id: 'p1', by: 'bob', slots, durationMinutes: 45, isChange: true, at });
     expect(meeting.myTurn).toBe(true);
   });
 
