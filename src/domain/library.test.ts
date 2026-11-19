@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { rowToLibraryCase } from '../data/caseLibrary';
-import { libraryLabel, libraryPrefill, searchLibrary, type LibraryCase } from './library';
+import { libraryLabel, libraryPrefill, libraryPrefillWithoutLink, searchLibrary, type LibraryCase } from './library';
 
 const c = (name: string, over: Partial<LibraryCase> = {}): LibraryCase => ({
   id: `id-${name}`,
@@ -64,6 +64,13 @@ describe('picking a library case', () => {
     expect(libraryPrefill(hotel)).toEqual({ title: 'Army Hotel', source: 'Booth MCG 2026-2027', caseType: 'Market Entry', industry: 'Travel / Hospitality', libraryId: 'id-Army Hotel' });
     expect(libraryLabel(hotel)).toBe('Army Hotel (Booth MCG 2026-2027)');
   });
+
+  // A form with nowhere to keep the link (a case you interviewed) takes the same four fields without it.
+  it('fills in the same four fields and no link for a form that cannot keep one', () => {
+    const hotel = c('Army Hotel', { caseType: 'Market Entry' });
+    expect(libraryPrefillWithoutLink(hotel)).toEqual({ title: 'Army Hotel', source: 'Booth MCG 2026-2027', caseType: 'Market Entry', industry: 'Travel / Hospitality' });
+    expect('libraryId' in libraryPrefillWithoutLink(hotel)).toBe(false);
+  });
 });
 
 describe('a case that is only listed', () => {
@@ -71,6 +78,7 @@ describe('a case that is only listed', () => {
 
   it('fills in the title, the book and the link, and leaves the case type and industry for the member to choose', () => {
     expect(libraryPrefill(listed)).toEqual({ title: 'Rural Broadband Rollout', source: 'Haas Case Book', libraryId: 'id-Rural Broadband Rollout' });
+    expect(libraryPrefillWithoutLink(listed)).toEqual({ title: 'Rural Broadband Rollout', source: 'Haas Case Book' });
   });
 
   it('is found like any other, but a case with its details known comes before it', () => {

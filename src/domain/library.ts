@@ -33,6 +33,16 @@ export function libraryPrefill(c: LibraryCase): Partial<Pick<CaseInput, 'title' 
 }
 
 /**
+ * The same fill-in for a form that has nowhere to keep the link: a case you interviewed is stored without one, so picking a casebook
+ * case there is typing saved and nothing more. Derived from `libraryPrefill` so the four fields have one definition.
+ */
+export function libraryPrefillWithoutLink(c: LibraryCase): Partial<Pick<CaseInput, 'title' | 'source' | 'caseType' | 'industry'>> {
+  const { libraryId: _link, ...fields } = libraryPrefill(c);
+  void _link;
+  return fields;
+}
+
+/**
  * The same search as the database function, for tests and the in-memory backend: every word you type must appear in the name, book
  * (or another book the case is also in), school or year; exact and starting matches first, then the co-chairs' picks, then newer books.
  */

@@ -8,7 +8,8 @@ const WAIT_MS = 200;
 
 /**
  * The case title, which suggests casebook cases as you type it. Pick one and the title, the book (as the source), the case type and
- * the industry fill themselves in, and the form remembers which casebook case it was. Only what any member may know about a case is
+ * the industry fill themselves in; whether the form keeps the casebook case afterwards is the form's own business (Log case keeps the
+ * link on the case; a case you interviewed has nowhere to keep one and only shows the chip). Only what any member may know about a case is
  * shown (never anything about the case itself). Suggestions are a convenience: they can fail or find nothing without a word, and a
  * title that is not in any book is typed exactly as before.
  */
