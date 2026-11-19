@@ -112,15 +112,16 @@ Learning mode) is unchanged; the 25 partial write-ups stay excluded.
 ## Front page and scheduling (proposed 2026-11-16)
 
 **Order, set by the owner on 2026-11-17: engine fixes first.** The live-case defects the pilot found (#128, #130, #129) touch members
-today; scheduling is capability they do not have yet. The whole chain below waits behind that work.
+today; scheduling was capability they did not have yet. That order has now run its course: the engine fixes shipped, and #98, #99 and
+#100 shipped behind them, so a member can agree a practice time in the app as of 2026-11-19. What is left of the chain is #101 and #102.
 
 | Issue | Item | Status | Needs |
 |---|---|---|---|
-| #96 | Remove the front-page member search; revoke `anon` reads of the public tables; one "people with my link" switch | `proposed` | A migration (owner approves); merge first, then apply |
+| #96 | Remove the front-page member search; revoke `anon` reads of the public tables; one "people with my link" switch | done — merged 2026-11-17 (PR #116); migration 20261124120000 applied with the owner's approval. Detail in the PRODUCT.md feature table | A migration (owner approves); merge first, then apply |
 | #97 | Reset my link (random share token) | **closed, not planned** (owner, 2026-11-17). One permanent link per member, no reset and no revoke; the cost the project is accepting is in DECISIONS.md | — |
-| #98 | Preferred meeting link and time zone in Profile | `proposed`; the migration **shape is approved to be written** (owner, 2026-11-17), queued behind the engine fixes. Applying it is still a separate yes | A migration |
+| #98 | Preferred meeting link and time zone in Profile | done — merged (PR #182); migration 20261126120000 applied by the owner on 2026-11-18 at 02:51 UTC. Nothing further is waiting on the owner for this row | A migration |
 | #99 | Database rules for proposing, confirming, countering and cancelling a practice time | built and merged (PR #216); migration 20261127120000 applied by the owner on 2026-11-18 and verified in production | A migration |
-| #100 | Screens: pick a time inside a request and a conversation; retire `when_text` | in review (PR #218) | App only (a migration only if `when_text` is dropped) |
+| #100 | Screens: pick a time inside a request and a conversation; retire `when_text` | done — merged 2026-11-19 (PR #218), closed COMPLETED. No migration: `when_text` is kept and simply no longer written, and rows that still have one show it read-only. `npm run test:e2e` has never run against these screens, so the seven RPCs are proved against the in-memory twin and jsdom only | App only (a migration only if `when_text` is dropped) |
 | #101 | Invite emails with `.ics` (stable UID, sequence number) on confirm, change, cancel | `proposed`; after #100 | `functions deploy notify-request`; possibly a migration |
 | #102 | Optional reminder email shortly before | `proposed`; after #101; owner to decide it is worth a scheduled job | A scheduler, a migration, possibly a secret |
 
