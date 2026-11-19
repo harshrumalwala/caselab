@@ -260,6 +260,17 @@ describe('People', () => {
     expect(screen.queryByRole('region', { name: /What to give Bob next/ })).not.toBeInTheDocument();
   }, 20000); // may pay for loading the whole app when the full suite is running
 
+  it('pitches no account to a member who has one: no live case band on a profile they open from inside', async () => {
+    const env = createFakeEnv(people);
+    await openApp(env);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await goTo('#/people/bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    // The band is the visitor's introduction to CaseLab; a member has the Live case tab instead.
+    expect(screen.queryByRole('region', { name: 'Practise a whole case with Bucket' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Create an account/ })).not.toBeInTheDocument();
+  }, 20000); // may pay for loading the whole app when the full suite is running
+
   it('reads the scores a member shares as bars, strongest first, holding back the ones one case carries', async () => {
     const rated = [
       ...Array.from({ length: 3 }, (_, i) => shared({ caseId: `r${i}`, title: `Rated case ${i}`, skillScores: { framework: 4, quant: 3 } })),

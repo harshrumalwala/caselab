@@ -406,6 +406,12 @@ move whenever the file does, so the quoted words are the reliable part):
 
 ## Production, security and operations
 
+- **No per-member spend limit on live case, while the feature is marketed publicly (2026-11-19, issue #231).** `live_case_sessions`
+  records `actions` and `llm_calls`; it has no cost column, there is no per-member spend cap and no per-day cost limit. What limits
+  use is the function's own 4 starts per member per day. Issue #231 adds a band to every public profile link explaining live case and
+  offering a sign-up, so the number of accounts able to start a case is meant to grow. The PM raised the missing cap with the owner
+  before the issue was specced; the owner decided to grow first and handle cost later ("It's fine we are penetrating the market first
+  before figuring cost for now").
 - **`live-case` and `notify-request` run with `verify_jwt = false`** (`supabase/config.toml`) and check the sign-in inside the function.
   If that check were removed, the functions would be open. Read back from production on 2026-11-17: `live-case` is version 23
   (deployed 19:06 UTC) and `notify-request` version 4, both still with `verify_jwt` off.
