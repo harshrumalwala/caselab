@@ -1059,6 +1059,7 @@ What that changes:
   how the thing records what it did") is not weakened by the owner confirming the rest; it is the reason the remaining question was as
   small as one glance at an inbox.
 
-The caveat that survives: this is the owner's own inbox and the owner's own sending domain. Deliverability to a classmate's school
-address, to Gmail's spam folder or to a tenant with strict filtering is a different question and nobody has tested it. That is worth
-knowing before the first email goes to someone who is not the owner, but it is not a reason to hold #101.
+The caveat that survives: the sending domain is the owner's own, and **which inbox was checked was not recorded** — the owner was asked
+which of the two emails they had seen arrive, not where, so whether it was their own address, a throwaway or a classmate's is not known.
+Deliverability to a school address, to Gmail's spam folder or to a tenant with strict filtering is therefore still an open question. That
+is worth knowing before the first email goes to someone who is not the owner, but it is not a reason to hold #101.
