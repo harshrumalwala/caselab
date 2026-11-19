@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { ArrowLeft, Hand, Loader2, MessageCircle, Mic, UserRound } from 'lucide-react';
 import type { PublicReader } from '../../data/community';
 import { describeError } from '../../data/errors';
-import { publicSharingSummary, sharedToRecords, sharingSummary, type Profile, type SharedCase } from '../../domain/community';
+import { publicSharingSummary, sharingSummary, type Profile, type SharedCase } from '../../domain/community';
+import { giveNextView } from '../../domain/giveNext';
 import { distinctValues, matchesFilter, NO_FILTER, type CaseFilter } from '../../domain/pairing';
-import { round1, skillStats } from '../../domain/stats';
 import type { CaseRecord } from '../../domain/types';
-import { Badge, RatingBadge } from '../../components/ui/Badge';
+import { Badge } from '../../components/ui/Badge';
 import { chipClass } from '../../components/ui/chips';
 import { splitMarkClass, splitTabClass, splitTabsClass } from '../../components/ui/splitTab';
 import { SlideRow } from '../../components/ui/useSlidingMark';
@@ -25,6 +25,7 @@ import { CaseFilterBar } from '../community/CaseFilterBar';
 import { SharedCaseRow } from '../community/SharedCaseRow';
 import { FindCase } from './FindCase';
 import { GiveThemNext } from './GiveThemNext';
+import { SharedScores } from './SharedScores';
 import { sharingShown } from '../../domain/sharpening';
 import { SharpeningCard } from './SharpeningCard';
 import { LevelTag } from '../progress/LevelTag';
@@ -64,25 +65,12 @@ function AskButton({ person, onAsk }: { person: Profile; onAsk: () => void }) {
 
 /** What the person shares, as averages. Only appears when they share scores. */
 function SharedPerformance({ shared }: { shared: SharedCase[] }) {
-  const stats = useMemo(() => skillStats(sharedToRecords(shared)).filter((s) => s.count > 0), [shared]);
-  if (stats.length === 0) return null;
+  const view = useMemo(() => giveNextView(shared), [shared]);
+  if (view.scores.length === 0 && view.thinScores.length === 0) return null;
   return (
     <Card strip="sky" aria-labelledby="shared-perf">
-      <CardHeader
-        titleId="shared-perf"
-        title="Shared performance"
-        subtitle={`Averages across the ${shared.length} case${shared.length === 1 ? '' : 's'} they've shared, counting only the scores they share`}
-      />
-      <ul className="grid gap-x-8 gap-y-2.5 sm:grid-cols-2">
-        {stats.map((s) => (
-          <li key={s.key} className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-ink-2">
-              {s.label} <span className="num text-xs text-muted">n={s.count}</span>
-            </span>
-            <RatingBadge value={s.average === null ? null : round1(s.average)} />
-          </li>
-        ))}
-      </ul>
+      <CardHeader titleId="shared-perf" title="Shared performance" />
+      <SharedScores scores={view.scores} thin={view.thinScores} label="Shared performance" />
     </Card>
   );
 }
@@ -268,7 +256,8 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
           "What I'm sharpening" switch is on, and they see the same card in their preview before they choose. */}
       {visitor && person.sharing.sharpening && <SharpeningCard name={firstName(person.displayName)} shared={shared} />}
 
-      <SharedPerformance shared={shared} />
+      {/* A visitor reads the scores inside "What to give them next", where they sit beside the practice they came for. */}
+      {!visitor && <SharedPerformance shared={shared} />}
       <InterviewedCard name={firstName(person.displayName)} items={interviewed} />
 
       {visitor ? (

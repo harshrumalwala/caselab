@@ -260,6 +260,26 @@ describe('People', () => {
     expect(screen.queryByRole('region', { name: /What to give Bob next/ })).not.toBeInTheDocument();
   }, 20000); // may pay for loading the whole app when the full suite is running
 
+  it('reads the scores a member shares as bars, strongest first, holding back the ones one case carries', async () => {
+    const rated = [
+      ...Array.from({ length: 3 }, (_, i) => shared({ caseId: `r${i}`, title: `Rated case ${i}`, skillScores: { framework: 4, quant: 3 } })),
+      shared({ caseId: 'r-one', title: 'One behavioral case', skillScores: { behavioral1: 2 } }),
+    ];
+    const env = createFakeEnv({ members: [{ ...BOB, sharing: { ...BOB.sharing, skills: true } }], shared: rated });
+    await openApp(env);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await goTo('#/people/bob');
+    const card = within(await screen.findByRole('region', { name: 'Shared performance' }));
+    expect(
+      within(card.getByRole('list', { name: 'Shared performance' }))
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['Framework: 4.0 out of 5, from 3 cases', 'Quant / Math: 3.0 out of 5, from 3 cases']);
+    expect(card.getByText('Only a case or two so far:').parentElement).toHaveTextContent('Only a case or two so far: Behavioral 2.0');
+    // The card shows what it has and stops: no line telling the reader how to read it.
+    expect(card.queryByText(/counting only the scores|Averages across/i)).not.toBeInTheDocument();
+  }, 20000); // may pay for loading the whole app when the full suite is running
+
   it("says what their page holds: a member's page carries no sharpening summary, so the line never offers one", async () => {
     // Bob has the summary switched on and four rated cases: it rides on his link, and a member's page is not his link.
     const sharpener: Profile = { ...BOB, sharing: { ...BOB.sharing, skills: true, sharpening: true } };
