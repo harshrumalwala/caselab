@@ -312,9 +312,16 @@ traditional". The page is now two views instead of one stack, for a visitor as w
   pair — the best answer to "what do I give them" first, their cases second — and the case list is now one tap away instead of a
   scroll past every card. A member who shares no case history has nothing to put in the first view, so their page carries no control
   at all and the case list stands alone.
-- **From `lg` the two views are columns side by side** and the control steps out of the way (it is `lg:hidden`, and neither panel is
-  hidden): what to give them on the left, their cases on the right. Below `lg` nothing changed about the shape of the page — the app
-  is installable with a bottom nav, so the columns are a wide-screen addition, never the baseline.
+- **From `lg` the two views are columns side by side**: what to give them on the left, their cases on the right. Below `lg` nothing
+  changed about the shape of the page — the app is installable with a bottom nav, so the columns are a wide-screen addition, never the
+  baseline.
+- **Where both views are on screen there are no tabs at all**, in the markup as well as on the page. A `tabpanel` whose tablist is
+  not reachable is invalid ARIA and would describe a page the reader is not on, so the roles follow the layout: `useWideScreen()`
+  (`src/state/screen.ts`, the `matchMedia` pattern of `src/state/motion.ts`, reading `(min-width: 64rem)` — Tailwind's own `lg`)
+  decides whether the two are a tablist with two panels or two plain columns, the second of which keeps its name as a region because
+  a case list has no heading of its own. Where the browser cannot answer — older browsers, and the test environment — the answer is
+  **narrow**: a switch that works at any width, never a pair of panels with nothing to belong to. The columns themselves are still
+  drawn by the stylesheet (`lg:col-span-7` / `lg:col-span-5`); the breakpoint is in JavaScript only for the roles.
 - **A signed-in member gets the columns too**, with the same two tabs they already had in the right-hand column and **Shared
   performance** and **Interviewed cases** in the left one, where they stay in view while the member switches between "Find a case for
   them" and "Shared cases". Nothing about a member's page diverges from the rest of the app.
@@ -1027,9 +1034,11 @@ There is no group administration, group chat or social feed: members, profiles, 
   **What I'm sharpening** switch read for a line that says what it writes rather than what it leaves out
 - **The two views of a profile** (issue #235): a visitor gets a working tablist with the member's own pair of labels, opening on
   "What to give *name* next" with the case list one tap away, `aria-selected` and the sliding mark moving together as the member's
-  tabs do, the classes that lay the two out as columns from `lg` and take the control away there, the member's card, the live case
-  band and the invitation outside both views whichever is open, and no control at all for a member who shares no case history; for a
-  signed-in member, the existing pair unchanged and **Shared performance** staying in view beside either of them
+  tabs do, the classes that lay the two out as columns from `lg`, no `tab`, `tablist` or `tabpanel` role anywhere on the page once
+  both views are on screen (with the case list still named as a region) and the tabs back again where the browser cannot say how wide
+  the window is, the member's card, the live case band and the invitation outside both views whichever is open, and no control at all
+  for a member who shares no case history; for a signed-in member, the existing pair unchanged and **Shared performance** staying in
+  view beside either of them
 - **The live case band on a profile link**: a visitor gets it with what a live case is, 23 to 40 minutes and a **Create an account**
   link to sign-up, below the member's own heading and with none of their name, class or cases in it; the coach is Bucket with an "AI"
   tag and neither Claude nor Anthropic reaches the page; a signed-in member opening the same profile gets neither the band nor a

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { NO_SHARING, type Profile, type SharedCase } from './domain/community';
 import { createFakeEnv, MY_PROFILE, TEST_PASSWORD, TEST_USER, type FakeEnv } from './test/fakeBackend';
@@ -366,6 +366,44 @@ describe('the two views of a member a visitor gets', () => {
         expect(panels.some((p) => p.contains(el))).toBe(false);
       }
     }
+  });
+
+  /** Pretend to be a window wide enough for the columns (Tailwind's `lg`), or one that is not. */
+  const setWide = (wide: boolean) =>
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: wide && query.includes('64rem'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is two views and no tabs where both are on screen: nothing to switch, and nothing saying there is', async () => {
+    setWide(true);
+    const env = visitor();
+    await openLink(env, 'bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+
+    // Columns, so the tab interface is not there at all: a tabpanel with no reachable tablist describes a page nobody is on.
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('tab')).toEqual([]);
+    expect(screen.queryAllByRole('tabpanel')).toEqual([]);
+
+    // Both views are simply on the page, and the case list still says what it is.
+    expect(screen.getByRole('region', { name: /What to give Bob next/ })).toBeInTheDocument();
+    const cases = screen.getByRole('region', { name: 'Shared cases (2)' });
+    expect(within(cases).getByText('Airline profitability')).toBeInTheDocument();
+  });
+
+  it('falls back to the tabs where the browser cannot say how wide the window is', async () => {
+    vi.stubGlobal('matchMedia', undefined);
+    const env = visitor();
+    await openLink(env, 'bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    // A working switch is the safe answer at any width; two orphaned panels are not.
+    expect(screen.getByRole('tablist', { name: 'Profile sections' })).toBeInTheDocument();
+    expect(screen.getAllByRole('tabpanel')).toHaveLength(2);
   });
 
   it('offers no switch to a member who shares no case history: their page is the one view', async () => {

@@ -874,15 +874,6 @@ move whenever the file does, so the quoted words are the reliable part):
   filter it is nearly the page colour; the continuation mark and the darker text are what separate it from `ahead` there. The pair the
   issue ranked first, `done` against `ahead`, separates on fill, border and mark at once.
 
-## Two tabpanels with no reachable tablist on a wide profile (issue #235, PR #236, 2026-11-19)
-
-Above the `lg` breakpoint the public profile renders two `role="tabpanel"` elements whose tablist is `display:none`
-(`lg:hidden` in `src/features/people/PersonProfile.tsx`), so a screen-reader user on a wide window gets two named regions and no
-tabs: a tabpanel without a reachable tablist is invalid ARIA. It is like that because both panels really are on screen as columns
-at that width, which leaves the tabs nothing to do, and the alternatives were rendering the panels twice or switching the roles
-from a JS media query — which would have made every existing visitor test see a hidden case list. Not fixed; the honest fix is
-probably a role that changes with the breakpoint without a JS query.
-
 ## Asking outright for the answer (issue #142, 2026-11-17)
 
 - **Unverified against a real model.** `refusedTurn` in `supabase/functions/_shared/liveCaseCoach.ts` turns a `refusal` stop reason

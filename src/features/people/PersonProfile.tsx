@@ -17,6 +17,7 @@ import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useMyUserId } from '../../state/CommunityProvider';
+import { useWideScreen } from '../../state/screen';
 import { useConversationWith, useMessages } from '../../state/MessagesProvider';
 import { usePractice } from '../../state/PracticeProvider';
 import type { NewRequest } from '../../domain/requests';
@@ -113,6 +114,10 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
   const [filter, setFilter] = useState<CaseFilter>(NO_FILTER);
   const [ask, setAsk] = useState<Partial<NewRequest> | null>(null);
   const me = useMyUserId();
+  // A visitor's two views are tabs on a narrow screen and columns from `lg`. Which one is on screen decides the markup
+  // and not only the look: tabs nobody can reach would describe a page the reader is not on. False where the browser
+  // can't say, so the answer there is the tabs, which work at any width.
+  const wide = useWideScreen();
 
   const load = useCallback(async () => {
     setState({ status: 'loading' });
@@ -254,6 +259,12 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
   // Whether there is anything to put beside the cases. With nothing in it the page is one column at every width, and a
   // visitor is offered no tab to an empty view.
   const beside = visitor ? shared.length > 0 : hasSharedScores(performance) || interviewed.length > 0;
+  // A visitor switches between the two views until they are columns; from then on both are on screen, so the page says
+  // so and drops the tabs rather than leaving panels pointing at a control nobody can reach.
+  const switching = visitor && beside && !wide;
+  // The case list carries no heading of its own, so it keeps a name wherever it has company: the tab's while it is one
+  // of two views, its own while it is a column beside them. Alone on the page it is the page, and names nothing.
+  const casesRole = !visitor ? undefined : switching ? 'tabpanel' : beside ? 'region' : undefined;
   const prompt = visitor ? signInPrompt?.(person) : null;
 
   return (
@@ -308,7 +319,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
       {/* What this person is like, beside their cases from `lg` and stacked below it. A visitor switches between the two
           with the tabs; a member keeps their scores in view and switches the other column between the two answers. */}
       <div className="grid gap-5 lg:grid-cols-12">
-        {visitor && beside && (
+        {switching && (
           <SlideRow
             role="tablist"
             aria-label="Profile sections"
@@ -340,10 +351,12 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
         )}
 
         {beside && (
+          // Every card in this column names itself, so as a column it needs no wrapper of its own; as a view it is
+          // the panel the first tab opens.
           <div
-            id={visitor ? 'profile-panel-find' : undefined}
-            role={visitor ? 'tabpanel' : undefined}
-            aria-labelledby={visitor ? 'profile-tab-find' : undefined}
+            id={switching ? 'profile-panel-find' : undefined}
+            role={switching ? 'tabpanel' : undefined}
+            aria-labelledby={switching ? 'profile-tab-find' : undefined}
             className={`space-y-5 lg:block ${visitor ? 'lg:col-span-7' : 'lg:col-span-5'} ${visitor && tab !== 'find' ? 'hidden' : ''}`}
           >
             {side}
@@ -353,9 +366,10 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
         <div className={`space-y-5 ${beside ? (visitor ? 'lg:col-span-5' : 'lg:col-span-7') : 'lg:col-span-12'}`}>
           {visitor ? (
             <div
-              id="profile-panel-cases"
-              role={beside ? 'tabpanel' : undefined}
-              aria-labelledby={beside ? 'profile-tab-cases' : undefined}
+              id={switching ? 'profile-panel-cases' : undefined}
+              role={casesRole}
+              aria-labelledby={switching ? 'profile-tab-cases' : undefined}
+              aria-label={casesRole === 'region' ? `Shared cases (${shared.length})` : undefined}
               className={`space-y-4 lg:block ${beside && tab !== 'cases' ? 'hidden' : ''}`}
             >
               {casesBody}
