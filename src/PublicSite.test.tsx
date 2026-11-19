@@ -276,6 +276,35 @@ describe('the public front page', () => {
   });
 });
 
+describe('the live case band a visitor meets on a profile', () => {
+  const band = () => screen.getByRole('region', { name: 'Practise a whole case with Bucket' });
+
+  it('says what a live case is and offers an account, without a word about the member whose page it is', async () => {
+    const env = visitor();
+    await openLink(env, 'bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+
+    expect(band()).toHaveTextContent(/Bucket plays the interviewer on a real casebook case/);
+    expect(band()).toHaveTextContent(/23 to 40 minutes/);
+    expect(within(band()).getByRole('link', { name: /Create an account/ })).toHaveAttribute('href', '#/signup');
+
+    // The same band on every profile: it carries nothing of the member, and the page still opens as theirs.
+    expect(band().textContent).not.toMatch(/Bob|Class of 2027|Airline profitability/);
+    const after = screen.getByRole('heading', { name: 'Bob Brown' }).compareDocumentPosition(band()) & Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(after).toBeTruthy();
+    // Nor a line telling the reader how to read it.
+    expect(band().textContent).not.toMatch(/what this means|in other words|keep in mind|don't worry|no need to/i);
+  });
+
+  it('calls the coach Bucket and tags it AI, and names no model or model maker', async () => {
+    const env = visitor();
+    await openLink(env, 'bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    expect(within(band()).getByText('AI')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/Claude|Anthropic/i);
+  });
+});
+
 describe('turning your profile link on', () => {
   const openProfile = async (env: FakeEnv) => {
     const { user } = await open(env);

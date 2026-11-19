@@ -25,6 +25,7 @@ import { CaseFilterBar } from '../community/CaseFilterBar';
 import { SharedCaseRow } from '../community/SharedCaseRow';
 import { FindCase } from './FindCase';
 import { GiveThemNext } from './GiveThemNext';
+import { LiveCaseTeaser } from './LiveCaseTeaser';
 import { SharedScores } from './SharedScores';
 import { sharingShown } from '../../domain/sharpening';
 import { SharpeningCard } from './SharpeningCard';
@@ -262,6 +263,10 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
 
       {visitor ? (
         <>
+          {/* A link is the only way in without an account, so a visitor here may never have heard of CaseLab. The band goes
+              under everything the member shares about themselves and above their case list: the page opens as theirs, and the
+              two invitations read general then particular — what you can do here, then what you get with this person. */}
+          <LiveCaseTeaser />
           {signInPrompt?.(person)}
           {casesPanel}
         </>

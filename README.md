@@ -112,7 +112,8 @@ Press **N** anywhere in the app (outside a text field) to open the Log Case form
 
 **A profile link needs no account.** The front page itself shows nothing about anybody: there is no member list and no search for
 people who aren't signed in. A member who switches their link on can hand it out, and anyone holding it opens that one profile and
-sees what that member shares (see below). Finding people, and being found by them, happens inside Community, which needs an account.
+sees what that member shares, plus a band about practising a whole case with Bucket and a way to sign up (see below). Finding
+people, and being found by them, happens inside Community, which needs an account.
 **Creating an account** takes four steps: email and password, verify the emailed link, choose a name (and optionally your MBA
 class) and sharing preferences, then start logging. **Signing in** is unchanged. **Forgot password?** emails a reset link that
 asks for a new password. The forms never reveal whether an email already has an account.
@@ -305,6 +306,20 @@ up-to-five ratings) for the second — worked out in the browser from the `skill
 - **The usual exclusions.** Burned and interviewed cases are not part of a case log, so they reach none of it; the two behavioral fields
   are read as one skill, as everywhere else; nothing is read out of written feedback; and no model is involved. The rules are plain
   functions in `src/domain/sharpening.ts` with unit tests.
+
+### Live case on a profile opened by link
+
+A member's own link is the only way into CaseLab without an account, so a profile is where most people meet the product. Below
+everything the member shares about themselves, and above their case list, a visitor reads one compact band: **Practise a whole case
+with Bucket**, what a live case is (the prompt, clarifying questions, the exhibits, the recommendation, typed, 23 to 40 minutes, then
+feedback on what they wrote), a small **AI** tag, and **Create an account**, which goes to sign-up. Under it sits the existing
+**Casing *name*?** prompt about pairing with this particular member.
+
+- **The same band on every profile.** It takes no props (`LiveCaseTeaser` in `src/features/people/LiveCaseTeaser.tsx`): it carries
+  nothing of the member whose page it is on, and nothing about who is reading.
+- **Visitors only.** `PersonProfile` already knows who is reading — `mine` is `null` for a visitor — and the band goes with that.
+  A signed-in member opening a profile sees no band and no sign-up call: they have the Live case tab and the Dashboard banner.
+- **Bucket, and no further names.** The coach is Bucket with an "AI" tag, here as everywhere else on screen.
 
 ### How I like to meet (your own, not a sharing switch)
 
@@ -954,6 +969,10 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **The profile link's register**: both cards read for sentences that interpret, hedge or restate what is already on them (the
   removed caveat, "chose to show this", "no numbers, no ranking", the removed "Averages across the N cases ..." subtitle), and the
   **What I'm sharpening** switch read for a line that says what it writes rather than what it leaves out
+- **The live case band on a profile link**: a visitor gets it with what a live case is, 23 to 40 minutes and a **Create an account**
+  link to sign-up, below the member's own heading and with none of their name, class or cases in it; the coach is Bucket with an "AI"
+  tag and neither Claude nor Anthropic reaches the page; a signed-in member opening the same profile gets neither the band nor a
+  sign-up call
 - **How I like to meet** (the meeting link and time zone, issue #98): the rule (`meeting.test.ts`: an https address kept exactly as
   it will be passed on, the three rooms named and everything else called a link, a phone number with spaces, dashes and an optional
   `+`, both fields optional, and a refusal with a sentence worth showing for `javascript:`, `data:`, `vbscript:`, `file:`, `tel:`,
