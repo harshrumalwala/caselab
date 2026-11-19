@@ -120,7 +120,8 @@ Key mechanics worth knowing:
 ## Operations cheat sheet (all need owner approval first)
 
 ```bash
-npx supabase db push                                     # apply new migrations (the CLI is already linked to production)
+npx supabase db push --remote                            # apply new migrations to production. Bare `db push` targets the local stack
+                                                         # (127.0.0.1:54322) and fails with DbConnectError; `--linked` works but warns it goes in v4
 npx supabase functions deploy <name>                     # analyze-feedback | compare-case | live-case | notify-request
 npx supabase secrets set ANTHROPIC_API_KEY=...           # also ANTHROPIC_MODEL, ANTHROPIC_COACH_MODEL, ANTHROPIC_FEEDBACK_MODEL,
                                                          # RESEND_API_KEY, EMAIL_FROM, APP_URL
