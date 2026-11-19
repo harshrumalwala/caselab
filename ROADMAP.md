@@ -1,13 +1,14 @@
 # ROADMAP.md
 
-## Waiting for the owner (as of 2026-11-18)
+## Waiting for the owner (as of 2026-11-19)
 
-Two things need the owner. Neither blocks the other, and neither blocks any work in progress.
+One thing needs the owner, and it blocks no work in progress.
 
 | # | What | Why it needs you | What happens when you say yes |
 |---|---|---|---|
 | 1 | **#149's remaining 28 sentences** — a decision, not an approval | A judgement about how far to go | 44 of the 72 interviewer facts that named the book are fixed. The other 28 are left because the engine's voice filter already strips them before the member sees anything. Leaving them is defensible and is what the issue asked for; rewriting them too is 28 more sentences on the same reload. Your call |
-| 2 | **Confirming email delivery** | No agent can see the Resend dashboard or a real inbox | Production holds three `notify-request` sends from 2026-10-31 that all returned 2xx from Resend, through code unchanged since. Resend accepting is not Resend delivering: a bounce, a spam placement or a suppression all happen after the 2xx. Open the Resend dashboard or a real inbox and look; #101 (calendar invites) and #102 (reminder emails) stay `proposed` until then. Detail in DECISIONS.md |
+
+**Email delivery is confirmed, and this table is one row shorter for it (owner, 2026-11-19).** The second row used to read "Confirming email delivery", because no agent can see the Resend dashboard or a real inbox and Resend accepting a message is not Resend delivering it. Asked which of the two `notify-request` emails they had seen arrive, the owner answered **both**: the "asked you to case" email and the "said yes" acceptance email have each landed in a real inbox. That was the last unanswered question behind **#101** (calendar invites) and **#102** (reminder emails), so both are unblocked — which is not the same as started, and neither has been. The evidence that preceded it, and what it does and does not settle, is in DECISIONS.md.
 
 **Both scheduling migrations are now applied.** `20261126120000_meeting_prefs.sql` (#98) went in on 2026-11-18 at 02:51 UTC and `20261127120000_practice_meetings.sql` (#99) later the same day, each with the owner's explicit approval. #99's was verified in production by query rather than by the CLI's word: three tables present, RLS on all three, **zero policies**, `information_schema.role_table_grants` returning no rows for `anon`, `authenticated` or `public`, all seven internal helpers not executable by either role, all seven member functions executable by `authenticated` only, and the migration row present in `supabase_migrations.schema_migrations`. `e2e/deployed.e2e.test.ts` then passed 12 of 12 against the live database — that file exists to catch the live schema disagreeing with the code, and it was red by design until the apply.
 
@@ -121,9 +122,9 @@ today; scheduling was capability they did not have yet. That order has now run i
 | #97 | Reset my link (random share token) | **closed, not planned** (owner, 2026-11-17). One permanent link per member, no reset and no revoke; the cost the project is accepting is in DECISIONS.md | — |
 | #98 | Preferred meeting link and time zone in Profile | done — merged (PR #182); migration 20261126120000 applied by the owner on 2026-11-18 at 02:51 UTC. Nothing further is waiting on the owner for this row | A migration |
 | #99 | Database rules for proposing, confirming, countering and cancelling a practice time | built and merged (PR #216); migration 20261127120000 applied by the owner on 2026-11-18 and verified in production | A migration |
-| #100 | Screens: pick a time inside a request and a conversation; retire `when_text` | done — merged 2026-11-19 (PR #218), closed COMPLETED. No migration: `when_text` is kept and simply no longer written, and rows that still have one show it read-only. `npm run test:e2e` has never run against these screens, so the seven RPCs are proved against the in-memory twin and jsdom only | App only (a migration only if `when_text` is dropped) |
-| #101 | Invite emails with `.ics` (stable UID, sequence number) on confirm, change, cancel | `proposed`; after #100 | `functions deploy notify-request`; possibly a migration |
-| #102 | Optional reminder email shortly before | `proposed`; after #101; owner to decide it is worth a scheduled job | A scheduler, a migration, possibly a secret |
+| #100 | Screens: pick a time inside a request and a conversation; retire `when_text` | done — merged 2026-11-19 (PR #218), closed COMPLETED. No migration: `when_text` is kept and simply no longer written, and rows that still have one show it read-only. The screens themselves are proved against the in-memory twin and jsdom only. A live `npm run test:e2e` on 2026-11-19 (`main` at `5da170a`, 60 passed / 10 skipped, exit 0) confirms the seven RPCs exist in production, are callable by `authenticated` and refuse bad input, and that the three tables stay closed — but it calls them only with a non-existent meeting or empty slots, so a real propose → confirm → counter → cancel round trip, and the row shapes the screens read, are **still unproven** | App only (a migration only if `when_text` is dropped) |
+| #101 | Invite emails with `.ics` (stable UID, sequence number) on confirm, change, cancel | `proposed`; after #100. **Unblocked on 2026-11-19**: the email-delivery question it was held behind is answered, so no owner decision stands between this and being started. Not started, and if it turns out to need a migration that apply is still the owner's call | `functions deploy notify-request`; possibly a migration |
+| #102 | Optional reminder email shortly before | `proposed`; after #101. **Unblocked on 2026-11-19** for the same reason; the owner still has to decide it is worth a scheduled job. Not started | A scheduler, a migration, possibly a secret |
 
 | # | Item | Source | Notes |
 |---|---|---|---|
