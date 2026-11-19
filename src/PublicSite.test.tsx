@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { NO_SHARING, type Profile, type SharedCase } from './domain/community';
 import { createFakeEnv, MY_PROFILE, TEST_PASSWORD, TEST_USER, type FakeEnv } from './test/fakeBackend';
@@ -302,6 +302,117 @@ describe('the live case band a visitor meets on a profile', () => {
     await screen.findByRole('heading', { name: 'Bob Brown' });
     expect(within(band()).getByText('AI')).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Claude|Anthropic/i);
+  });
+});
+
+describe('the two views of a member a visitor gets', () => {
+  const tabs = () => screen.getByRole('tablist', { name: 'Profile sections' });
+  const tab = (name: RegExp) => screen.getByRole('tab', { name });
+  /**
+   * Which view is on screen on a phone. Both are in the document at every width — from `lg` they sit side by side —
+   * and which one a narrow screen shows is a class, because the stylesheet is not loaded in these tests.
+   */
+  const shown = (panel: HTMLElement) => !panel.classList.contains('hidden');
+  const panel = (name: RegExp) => screen.getByRole('tabpanel', { name });
+
+  it('switches between what to give them and their cases, the way a member switches between theirs', async () => {
+    const env = visitor();
+    const { user } = await openLink(env, 'bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+
+    // The pair reads like the member's: the best answer to "what do I give them" first, their cases second.
+    expect(within(tabs()).getAllByRole('tab').map((t) => t.textContent)).toEqual(['What to give Bob next', 'Shared cases (2)']);
+    expect(tab(/What to give Bob next/)).toHaveAttribute('aria-selected', 'true');
+    expect(tab(/What to give Bob next/)).toHaveAttribute('data-slide-active', 'true');
+    expect(tab(/Shared cases/)).toHaveAttribute('aria-selected', 'false');
+    expect(tab(/Shared cases/)).not.toHaveAttribute('data-slide-active');
+    expect(shown(panel(/What to give Bob next/))).toBe(true);
+    expect(shown(panel(/Shared cases/))).toBe(false);
+
+    await user.click(tab(/Shared cases/));
+    expect(tab(/Shared cases/)).toHaveAttribute('aria-selected', 'true');
+    expect(tab(/Shared cases/)).toHaveAttribute('data-slide-active', 'true');
+    expect(tab(/What to give Bob next/)).toHaveAttribute('aria-selected', 'false');
+    expect(shown(panel(/Shared cases/))).toBe(true);
+    expect(shown(panel(/What to give Bob next/))).toBe(false);
+    expect(within(panel(/Shared cases/)).getByText('Airline profitability')).toBeInTheDocument();
+
+    await user.click(tab(/What to give Bob next/));
+    expect(shown(panel(/What to give Bob next/))).toBe(true);
+    expect(within(panel(/What to give Bob next/)).getByRole('region', { name: /What to give Bob next/ })).toBeInTheDocument();
+  });
+
+  it('puts both views on screen at once where there is room for them, and the switch away', async () => {
+    const env = visitor();
+    await openLink(env, 'bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    // From `lg` the two are columns, so neither is hidden and there is nothing left to switch.
+    expect(panel(/What to give Bob next/)).toHaveClass('lg:block', 'lg:col-span-7');
+    expect(panel(/Shared cases/)).toHaveClass('lg:block');
+    expect(tabs()).toHaveClass('lg:hidden');
+  });
+
+  it('keeps the person, the live case band and the invitation in front of a visitor whichever view is open', async () => {
+    const env = visitor();
+    const { user } = await openLink(env, 'bob');
+    const heading = await screen.findByRole('heading', { name: 'Bob Brown' });
+    const outside = [heading, screen.getByRole('region', { name: 'Practise a whole case with Bucket' }), screen.getByText('Casing Bob?')];
+
+    for (const view of [/Shared cases/, /What to give Bob next/]) {
+      await user.click(tab(view));
+      const panels = screen.getAllByRole('tabpanel');
+      for (const el of outside) {
+        expect(el).toBeInTheDocument();
+        expect(panels.some((p) => p.contains(el))).toBe(false);
+      }
+    }
+  });
+
+  /** Pretend to be a window wide enough for the columns (Tailwind's `lg`), or one that is not. */
+  const setWide = (wide: boolean) =>
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: wide && query.includes('64rem'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is two views and no tabs where both are on screen: nothing to switch, and nothing saying there is', async () => {
+    setWide(true);
+    const env = visitor();
+    await openLink(env, 'bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+
+    // Columns, so the tab interface is not there at all: a tabpanel with no reachable tablist describes a page nobody is on.
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('tab')).toEqual([]);
+    expect(screen.queryAllByRole('tabpanel')).toEqual([]);
+
+    // Both views are simply on the page, and the case list still says what it is.
+    expect(screen.getByRole('region', { name: /What to give Bob next/ })).toBeInTheDocument();
+    const cases = screen.getByRole('region', { name: 'Shared cases (2)' });
+    expect(within(cases).getByText('Airline profitability')).toBeInTheDocument();
+  });
+
+  it('falls back to the tabs where the browser cannot say how wide the window is', async () => {
+    vi.stubGlobal('matchMedia', undefined);
+    const env = visitor();
+    await openLink(env, 'bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    // A working switch is the safe answer at any width; two orphaned panels are not.
+    expect(screen.getByRole('tablist', { name: 'Profile sections' })).toBeInTheDocument();
+    expect(screen.getAllByRole('tabpanel')).toHaveLength(2);
+  });
+
+  it('offers no switch to a member who shares no case history: their page is the one view', async () => {
+    const env = visitor({ members: [{ ...BOB, sharing: { ...NO_SHARING } }], shared: [] });
+    await openLink(env, 'bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.getByText('No shared cases')).toBeInTheDocument();
   });
 });
 

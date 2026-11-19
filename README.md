@@ -241,8 +241,8 @@ sources, industry, type); it doesn't host casebook content, exhibits or answer k
 ### What to give someone next (opening a profile by its link)
 
 "Find a case for them" is built from **your own** log, so it is no use to someone without an account. A profile opened by its link
-therefore leads with **What to give *name* next**, a short section above the case list, worked out in the browser from the rows the
-link already hands out. Nothing new is released: no extra column, function, grant or switch, and no request that opening the profile
+therefore leads with **What to give *name* next**, one of the page's two views (the other is their case list; see "Two views on one
+profile" below), worked out in the browser from the rows the link already hands out. Nothing new is released: no extra column, function, grant or switch, and no request that opening the profile
 didn't already make.
 
 Since issue #229 (2026-11-19) it is one card with three parts, drawn as sorted bars rather than chips, after the owner opened their
@@ -301,6 +301,37 @@ else. A visitor's card is untouched — a link holder has no log, so there is no
   derives a weakness band for the profiled member — that stays their own **What I'm sharpening** switch.
 - **Nobody is paired with themselves.** On your own page the card is the scores you share and nothing else, which matters because
   the cases you share are a subset of your log and would otherwise produce a gap against yourself.
+
+#### Two views on one profile (issue #235, 2026-11-19)
+
+The owner read their own link after the card redesign landed and said the cases were "pushing too much in the bottom … too plain and
+traditional". The page is now two views instead of one stack, for a visitor as well as for a member.
+
+- **A visitor gets the same split control a member has** (`SlideRow` with the `splitTab` classes, the yellow mark sliding between the
+  parts): **What to give *name* next** and **Shared cases (n)**. It opens on "What to give *name* next", which mirrors a member's own
+  pair — the best answer to "what do I give them" first, their cases second — and the case list is now one tap away instead of a
+  scroll past every card. A member who shares no case history has nothing to put in the first view, so their page carries no control
+  at all and the case list stands alone.
+- **From `lg` the two views are columns side by side**: what to give them on the left, their cases on the right. Below `lg` nothing
+  changed about the shape of the page — the app is installable with a bottom nav, so the columns are a wide-screen addition, never the
+  baseline.
+- **Where both views are on screen there are no tabs at all**, in the markup as well as on the page. A `tabpanel` whose tablist is
+  not reachable is invalid ARIA and would describe a page the reader is not on, so the roles follow the layout: `useWideScreen()`
+  (`src/state/screen.ts`, the `matchMedia` pattern of `src/state/motion.ts`, reading `(min-width: 64rem)` — Tailwind's own `lg`)
+  decides whether the two are a tablist with two panels or two plain columns, the second of which keeps its name as a region because
+  a case list has no heading of its own. Where the browser cannot answer — older browsers, and the test environment — the answer is
+  **narrow**: a switch that works at any width, never a pair of panels with nothing to belong to. The columns themselves are still
+  drawn by the stylesheet (`lg:col-span-7` / `lg:col-span-5`); the breakpoint is in JavaScript only for the roles.
+- **A signed-in member gets the columns too**, with the same two tabs they already had in the right-hand column and **Shared
+  performance** and **Interviewed cases** in the left one, where they stay in view while the member switches between "Find a case for
+  them" and "Shared cases". Nothing about a member's page diverges from the rest of the app.
+- **What is never behind a view:** the member's own card at the top, the live case band and the "Casing *name*?" invitation. A link is
+  the only public way in, so the band and the invitation stay on screen whichever view is open; on a wide screen they sit side by side
+  under the member's card.
+- **Width.** The signed-out profile is the one page in CaseLab with two columns to spread into, so its container (the `<main>` of the
+  profile branch in `src/features/public/PublicSite.tsx`, which belongs to that view alone) is `max-w-7xl` instead of `max-w-4xl`, and
+  the top bar lines up with it. No other screen changed width: the signed-in profile stays inside the app's shared `max-w-6xl`
+  (`src/App.tsx`) and uses it as two columns, so there is no per-route escape from the app's layout anywhere in the code.
 
 ### What I'm sharpening (a switch of its own, off by default)
 
@@ -1001,6 +1032,13 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **The profile link's register**: both cards read for sentences that interpret, hedge or restate what is already on them (the
   removed caveat, "chose to show this", "no numbers, no ranking", the removed "Averages across the N cases ..." subtitle), and the
   **What I'm sharpening** switch read for a line that says what it writes rather than what it leaves out
+- **The two views of a profile** (issue #235): a visitor gets a working tablist with the member's own pair of labels, opening on
+  "What to give *name* next" with the case list one tap away, `aria-selected` and the sliding mark moving together as the member's
+  tabs do, the classes that lay the two out as columns from `lg`, no `tab`, `tablist` or `tabpanel` role anywhere on the page once
+  both views are on screen (with the case list still named as a region) and the tabs back again where the browser cannot say how wide
+  the window is, the member's card, the live case band and the invitation outside both views whichever is open, and no control at all
+  for a member who shares no case history; for a signed-in member, the existing pair unchanged and **Shared performance** staying in
+  view beside either of them
 - **The live case band on a profile link**: a visitor gets it with what a live case is, 23 to 40 minutes and a **Create an account**
   link to sign-up, below the member's own heading and with none of their name, class or cases in it; the coach is Bucket with an "AI"
   tag and neither Claude nor Anthropic reaches the page; a signed-in member opening the same profile gets neither the band nor a
