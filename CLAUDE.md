@@ -200,6 +200,11 @@ Each of these came from something the owner said or a mistake that happened.
   ticked, then put `CASELAB_E2E_EMAIL_A`, `CASELAB_E2E_PASSWORD_A`, `CASELAB_E2E_EMAIL_B`, `CASELAB_E2E_PASSWORD_B` (and optionally
   `CASELAB_E2E_EMAIL` / `CASELAB_E2E_PASSWORD` for the owner's own account) in git-ignored `.env.e2e.local`. If anyone signs in to the real
   app with them, untick "Let other members find me by name".
+- **Worktrees: never link `node_modules` into a worktree; run `npm ci` inside each worktree.** On 2026-11-16 the main checkout's `node_modules`
+  was found half deleted (about 80 packages left; `.bin`, `@types`, `@testing-library` and others gone) after several agents had shared it
+  through directory junctions and removed their worktrees; the main session repaired it with `npm ci`. Removing a junction safely needs
+  `cmd /c rmdir <junction>` (which deletes only the link), and a recursive delete or `git worktree remove` that reaches the target first deletes the
+  real packages. Who or what caused it was not established. A worktree with its own `npm ci` has no such risk (about 45 seconds).
 - **Windows quirks**: PowerShell blocks `npm.ps1` by default (use `cmd.exe` or relax the policy); Python on this machine defaults to a
   legacy console encoding, so always pass `encoding="utf-8"` when reading or writing files and set `PYTHONIOENCODING=utf8` when printing
   non-ASCII (a `UnicodeEncodeError` on `→` happened more than once). Git warns "LF will be replaced by CRLF" on new files; harmless.

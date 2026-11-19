@@ -1028,6 +1028,10 @@ move whenever the file does, so the quoted words are the reliable part):
 
 ## Process
 
+- **Shared `node_modules` through junctions was destroyed once** (2026-11-16): the main checkout was left with about 80 of its packages after
+  agents linked it into their worktrees and later removed the worktrees. It was restored with `npm ci`. Cause not established; the rule in
+  CLAUDE.md is now to run `npm ci` inside each worktree instead of linking.
+
 - **The PM and developer agent files are converted to GitHub** (`gh`, pull requests) and saved in `.claude/agents/pm.md` and
   `.claude/agents/developer.md`, but `.claude/` is git-ignored (`.gitignore` line 29), so they exist only on the owner's machine and are
   not in the repository.
