@@ -267,9 +267,17 @@ own link and said the text "doesn't help with figuring what next case should be 
   Dashboard's grey unpracticed industries — and the bands describe practice, never the person. No sentence underneath explains any of
   it (the owner's instruction of 2026-11-17: a card that tells the reader how to read itself reads as machine-written). Burned cases
   and interviewed cases are not part of a case log, so they can't reach any of these counts.
-- **The chart is never the only carrier.** Every bar is also a line of text for a screen reader ("Market Entry: 1 case", "Framework:
-  4.0 out of 5, from 18 cases"), the bars take their colours from the shared palette in `src/components/charts/colors.ts` in both
-  themes, and the chart module (`ProfileBars.tsx`) is lazy-loaded like the Dashboard's trend.
+- **The bars are never the only carrier.** Every bar is also a line of text for a screen reader ("Market Entry: 1 case", "Framework:
+  4.0 out of 5, from 18 cases"), and the bars take their colours from the shared palette in `src/components/charts/colors.ts` in both
+  themes.
+- **The bars are ordinary DOM, so no name is ever cut off** (issue #237, 2026-11-19). `ProfileBars.tsx` is a CSS grid of rows — name,
+  track, figure — whose name column is `auto`: the browser sizes it to the longest name in the block and wraps the name when the card
+  is narrower than that, and each bar's own length is a percentage of its row. These rows were a Recharts bar chart until then, with
+  the name in a fixed pixel gutter (`nameWidth`, 142 in the lanes and 132 in the scores) handed to a `YAxis` inside an SVG with
+  `overflow: hidden`, so every name longer than the gutter lost its first letters at every window width and "Healthcare /
+  Pharmaceuticals" read as "lthcare / Pharmaceuticals". No pixel count is left to get wrong, and with no charting library in these
+  rows the module is no longer lazy-loaded. Recharts stays where there is a real chart: the Dashboard's trend and the casebook
+  exhibits.
 
 A visitor reads the averages inside this card: the **Shared performance** card below it is the same bars for a signed-in member, who
 does not see "What to give them next" at all. **Find a case for them** stays a member's first tab, because overlap with a real log is
@@ -349,6 +357,10 @@ up-to-five ratings) for the second — worked out in the browser from the `skill
   the per-case scores, and the averages in **What to give *name* next** (in **Shared performance** for a member), belong to **Skill
   scores**, which the member switched on separately. Since 2026-11-17 the switch's own line says what it writes ("Whether CaseLab sums up the skill scores you already
   share ...") instead of promising "no numbers, no ranking", which was true of the card and false of the page below it.
+- **The card is its title, its subtitle and the two lists.** Nothing else. The line that used to close it ("A useful case to give
+  *name* asks for what they're sharpening and leans on what's already strong.") was cut on 2026-11-19 (issue #237) under the owner's
+  rule of 2026-11-17: it told the reader how to use the two lists directly above it, which already say **Sharpening now** and
+  **Strong already**.
 - **The line at the top says what the page carries.** The "Shares ..." sentence under a member's name reads the summary the same way
   the card does (`sharingShown` in `src/domain/sharpening.ts`), so it offers "what they're sharpening" only where the summary is
   really there: not below the minimum, not without shared skill scores, and not on the page another member sees, which never carries
@@ -1029,9 +1041,15 @@ There is no group administration, group chat or social feed: members, profiles, 
   descriptive card draws unchanged by the extra argument; and on the screens, a member seeing both directions under **Shared
   performance**, nothing claimed while either side is one or two cases, nobody paired with themselves on their own page, and a link
   holder getting no pairing and no sentence about a reader
+- **The bars on a profile link** (`ProfileBars.test.tsx`, issue #237): the whole of each long name from the real industry list is
+  text inside the drawn block, not only in the `sr-only` list beside it; a score's name carries its `n=` figure and its average
+  there too; nothing in the block is sized in pixels; and the `sr-only` list and the block's `aria-hidden` are untouched. **What no
+  test here can prove**: jsdom has no layout engine, so nothing in the suite can tell a clipped label from a drawn one, which is why
+  every test was green while the fixed gutter shipped. The widths in the issue were measured in a browser
 - **The profile link's register**: both cards read for sentences that interpret, hedge or restate what is already on them (the
-  removed caveat, "chose to show this", "no numbers, no ranking", the removed "Averages across the N cases ..." subtitle), and the
-  **What I'm sharpening** switch read for a line that says what it writes rather than what it leaves out
+  removed caveat, "chose to show this", "no numbers, no ranking", the removed "Averages across the N cases ..." subtitle, and the
+  removed "A useful case to give *name* ..." line), and the **What I'm sharpening** switch read for a line that says what it writes
+  rather than what it leaves out
 - **The two views of a profile** (issue #235): a visitor gets a working tablist with the member's own pair of labels, opening on
   "What to give *name* next" with the case list one tap away, `aria-selected` and the sliding mark moving together as the member's
   tabs do, the classes that lay the two out as columns from `lg`, no `tab`, `tablist` or `tabpanel` role anywhere on the page once
