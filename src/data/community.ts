@@ -24,6 +24,8 @@ export interface CommunityReader extends PublicReader {
 export interface CommunityRepository extends CommunityReader {
   /** What visitors WITHOUT an account see of one member (for "preview"), read as a real anonymous request would. */
   getPublicView(ownerId: string): Promise<SharedCase[]>;
+  /** Whether a visitor's request for this member's profile finds a row (`public_person`): null means nothing is published. */
+  getPublicPerson(ownerId: string): Promise<Profile | null>;
   /** Your own profile, or null if you haven't set one up yet (shows the onboarding screen). */
   getMyProfile(): Promise<Profile | null>;
   /** Create or update your profile and sharing switches. Takes effect for other members immediately. */

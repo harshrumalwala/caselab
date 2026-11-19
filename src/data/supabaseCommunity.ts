@@ -139,6 +139,10 @@ export class SupabaseCommunity implements CommunityRepository {
   getPublicView(ownerId: string): Promise<SharedCase[]> {
     return this.publicView.getSharedCases(ownerId);
   }
+
+  getPublicPerson(ownerId: string): Promise<Profile | null> {
+    return this.publicView.getPerson(ownerId);
+  }
 }
 
 interface InterviewedRow {
