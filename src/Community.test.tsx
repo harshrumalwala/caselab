@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { App } from './App';
 import { NO_SHARING, type Profile, type SharedCase } from './domain/community';
-import { createFakeEnv, TEST_PASSWORD, TEST_USER, type FakeEnv } from './test/fakeBackend';
-import { makeCase } from './test/builders';
+import { createFakeEnv, MY_PROFILE, TEST_PASSWORD, TEST_USER, type FakeEnv } from './test/fakeBackend';
+import { makeCase, type CaseOverrides } from './test/builders';
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -289,6 +289,61 @@ describe('People', () => {
     expect(card.getByText('Only a case or two so far:').parentElement).toHaveTextContent('Only a case or two so far: Behavioral 2.0');
     // The card shows what it has and stops: no line telling the reader how to read it.
     expect(card.queryByText(/counting only the scores|Averages across/i)).not.toBeInTheDocument();
+    // Nothing to pair on: this member has no log of their own, so neither direction can be claimed.
+    expect(screen.queryByRole('group', { name: 'Casing together' })).not.toBeInTheDocument();
+  }, 20000); // may pay for loading the whole app when the full suite is running
+
+  /** Bob shares `n` cases carrying `scores`; the member reading the page has `n` of their own carrying `skills`. */
+  async function openBobWithScores(n: number, scores: Record<string, number>, mine: number, skills: Record<string, number>) {
+    const theirs = Array.from({ length: n }, (_, i) => shared({ caseId: `p${i}`, title: `Their rated case ${i}`, skillScores: scores as SharedCase['skillScores'] }));
+    const env = createFakeEnv({ members: [{ ...BOB, sharing: { ...BOB.sharing, skills: true } }], shared: theirs });
+    for (let i = 0; i < mine; i += 1) {
+      await env.repo.insertCase(makeCase({ title: `My rated case ${i}`, skills: skills as CaseOverrides['skills'] }));
+    }
+    await openApp(env);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await goTo('#/people/bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+    return env;
+  }
+
+  it('tells a signed-in member which way round the pairing goes, in both directions', async () => {
+    await openBobWithScores(3, { framework: 5, quant: 2 }, 3, { framework: 2, quant: 5 });
+    const pairing = within(await screen.findByRole('group', { name: 'Casing together' }));
+    expect(
+      within(pairing.getByRole('list', { name: 'Bob can help you with' }))
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['Framework']);
+    expect(
+      within(pairing.getByRole('list', { name: 'You can help Bob with' }))
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['Quant / Math']);
+    // Their own numbers are still the only ones on the page: nothing of the reader's is printed on it.
+    expect(pairing.queryByText(/5\.0|2\.0/)).not.toBeInTheDocument();
+  }, 20000); // may pay for loading the whole app when the full suite is running
+
+  it('claims nothing in either direction while one side is only a case or two', async () => {
+    await openBobWithScores(3, { framework: 5, quant: 2 }, 2, { framework: 2, quant: 5 });
+    expect(await screen.findByRole('region', { name: 'Shared performance' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Casing together' })).not.toBeInTheDocument();
+  }, 20000); // may pay for loading the whole app when the full suite is running
+
+  it('pairs nobody with themselves: your own page is the scores you share and nothing else', async () => {
+    // Only the best three of this member's own cases are shared, so a comparison would find a gap to print.
+    const mineShared = Array.from({ length: 3 }, (_, i) =>
+      shared({ caseId: `m${i}`, title: `My shared case ${i}`, ownerId: TEST_USER.userId, skillScores: { framework: 5 } }),
+    );
+    const env = createFakeEnv({ profile: { ...MY_PROFILE, sharing: { ...NO_SHARING, cases: true, skills: true } }, shared: mineShared });
+    for (let i = 0; i < 3; i += 1) {
+      await env.repo.insertCase(makeCase({ title: `My logged case ${i}`, skills: { framework: 2 } }));
+    }
+    await openApp(env);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await goTo(`#/people/${TEST_USER.userId}`);
+    expect(await screen.findByRole('region', { name: 'Shared performance' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Casing together' })).not.toBeInTheDocument();
   }, 20000); // may pay for loading the whole app when the full suite is running
 
   it("says what their page holds: a member's page carries no sharpening summary, so the line never offers one", async () => {
