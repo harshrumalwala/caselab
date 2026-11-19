@@ -2,10 +2,13 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { CASE_TYPES, INDUSTRIES } from '../../domain/constants';
 import { describeError } from '../../data/errors';
 import { cleanInterviewed, INTERVIEWED_LIMITS, type InterviewedCase, type InterviewedInput } from '../../domain/interviewed';
+import { libraryPrefillWithoutLink, type LibraryCase } from '../../domain/library';
 import { toISODate } from '../../domain/dates';
 import { Button } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
+import { CaseTitleInput } from '../logcase/CaseTitleInput';
 import { useMemberSuggestions } from '../community/useMemberSuggestions';
+import { useData } from '../../state/DataProvider';
 import { useInterviewed } from '../../state/InterviewedProvider';
 import { useToast } from '../../state/ToastProvider';
 
@@ -24,6 +27,7 @@ function Field({ label, htmlFor, children, hint }: { label: string; htmlFor: str
 /** Log a case you ran as the interviewer, or change one you logged. Only a title is needed. */
 export function InterviewedDialog({ editing, onClose }: { editing: InterviewedCase | null; onClose: () => void }) {
   const { add, update, items } = useInterviewed();
+  const { mode } = useData();
   const toast = useToast();
   const [form, setForm] = useState<InterviewedInput>(() =>
     editing
@@ -33,6 +37,12 @@ export function InterviewedDialog({ editing, onClose }: { editing: InterviewedCa
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof InterviewedInput>(key: K, value: InterviewedInput[K]) => setForm((f) => ({ ...f, [key]: value }));
+  // The casebook case picked from the search, for this visit to the form only: an interviewed case is stored without a link to one.
+  const [linked, setLinked] = useState<LibraryCase | null>(null);
+  const pickLibrary = (c: LibraryCase) => {
+    setLinked(c);
+    setForm((f) => ({ ...f, ...libraryPrefillWithoutLink(c) }));
+  };
   const members = useMemberSuggestions(form.partner);
   // People you interviewed before, then community members who match what you are typing. Anyone else can still be typed in.
   const people = useMemo(() => {
@@ -82,7 +92,17 @@ export function InterviewedDialog({ editing, onClose }: { editing: InterviewedCa
       <form id="interviewed-form" onSubmit={(e) => void submit(e)} className="space-y-4" noValidate>
         <div className="grid gap-4 sm:grid-cols-[1fr_11rem]">
           <Field label="Case title" htmlFor="int-title">
-            <input id="int-title" className="field" value={form.title} maxLength={INTERVIEWED_LIMITS.title} onChange={(e) => set('title', e.target.value)} autoFocus />
+            <CaseTitleInput
+              id="int-title"
+              value={form.title}
+              onChange={(text) => set('title', text)}
+              onPick={pickLibrary}
+              linked={linked}
+              onClear={() => setLinked(null)}
+              suggest={!editing && mode === 'real'}
+              invalid={Boolean(error) && form.title.trim() === ''}
+              autoFocus
+            />
           </Field>
           <Field label="Date" htmlFor="int-date">
             <input id="int-date" type="date" className="field" value={form.date} onChange={(e) => set('date', e.target.value)} />
