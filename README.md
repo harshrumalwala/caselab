@@ -210,8 +210,9 @@ there is no copy of the data to go stale.
 
 **Open everything** is one switch for people who want to show their whole log: every case you share (one that follows your profile,
 or is set to "share in full") shows its scores, improvement focus, written feedback, learning notes and Other notes, to members and, if
-your profile link is on, to anyone holding it. They see the usual card first; a case that has detail gets a **See more
-details** button that opens it. Turning it on while your link is on asks you to confirm, because it changes what people without an
+your profile link is on, to anyone holding it. They see the headline first: on a card, a case that has detail gets a **See more
+details** button that opens it, and in the table a visitor reads on a wide screen the row's own control opens it underneath the row.
+Turning it on while your link is on asks you to confirm, because it changes what people without an
 account read. "Name only" and private cases stay as they were, "Who cased me" stays its own switch, and long text is cut to 2000
 characters in the public copy.
 
@@ -242,8 +243,8 @@ sources, industry, type); it doesn't host casebook content, exhibits or answer k
 ### What to give someone next (opening a profile by its link)
 
 "Find a case for them" is built from **your own** log, so it is no use to someone without an account. A profile opened by its link
-therefore leads with **What to give *name* next**, one of the page's two views (the other is their case list; see "Two views on one
-profile" below), worked out in the browser from the rows the link already hands out. Nothing new is released: no extra column, function, grant or switch, and no request that opening the profile
+therefore leads with **What to give *name* next** — a tab on a narrow screen and the block above the case history on a wide one (see
+"Two views on one profile" below) — worked out in the browser from the rows the link already hands out. Nothing new is released: no extra column, function, grant or switch, and no request that opening the profile
 didn't already make.
 
 Since issue #229 (2026-11-19) it is one card with three parts, drawn as sorted bars rather than chips, after the owner opened their
@@ -321,26 +322,57 @@ traditional". The page is now two views instead of one stack, for a visitor as w
   pair — the best answer to "what do I give them" first, their cases second — and the case list is now one tap away instead of a
   scroll past every card. A member who shares no case history has nothing to put in the first view, so their page carries no control
   at all and the case list stands alone.
-- **From `lg` the two views are columns side by side**: what to give them on the left, their cases on the right. Below `lg` nothing
-  changed about the shape of the page — the app is installable with a bottom nav, so the columns are a wide-screen addition, never the
-  baseline.
+- **From `lg` both views are on screen at once**, so there is nothing left to switch. For a member they are columns side by side:
+  **Shared performance** and **Interviewed cases** on the left, the two answers on the right. For a visitor they were columns too
+  until issue #238 (below) made that page one full-width column instead. Below `lg` nothing changed about the shape of the page —
+  the app is installable with a bottom nav, so the wide layouts are an addition, never the baseline.
 - **Where both views are on screen there are no tabs at all**, in the markup as well as on the page. A `tabpanel` whose tablist is
   not reachable is invalid ARIA and would describe a page the reader is not on, so the roles follow the layout: `useWideScreen()`
   (`src/state/screen.ts`, the `matchMedia` pattern of `src/state/motion.ts`, reading `(min-width: 64rem)` — Tailwind's own `lg`)
-  decides whether the two are a tablist with two panels or two plain columns, the second of which keeps its name as a region because
+  decides whether the two are a tablist with two panels or two plain blocks, the second of which keeps its name as a region because
   a case list has no heading of its own. Where the browser cannot answer — older browsers, and the test environment — the answer is
-  **narrow**: a switch that works at any width, never a pair of panels with nothing to belong to. The columns themselves are still
-  drawn by the stylesheet (`lg:col-span-7` / `lg:col-span-5`); the breakpoint is in JavaScript only for the roles.
+  **narrow**: a switch that works at any width, never a pair of panels with nothing to belong to. The member's columns themselves are
+  still drawn by the stylesheet (`lg:col-span-7` / `lg:col-span-5`).
 - **A signed-in member gets the columns too**, with the same two tabs they already had in the right-hand column and **Shared
   performance** and **Interviewed cases** in the left one, where they stay in view while the member switches between "Find a case for
   them" and "Shared cases". Nothing about a member's page diverges from the rest of the app.
 - **What is never behind a view:** the member's own card at the top, the live case band and the "Casing *name*?" invitation. A link is
   the only public way in, so the band and the invitation stay on screen whichever view is open; on a wide screen they sit side by side
   under the member's card.
-- **Width.** The signed-out profile is the one page in CaseLab with two columns to spread into, so its container (the `<main>` of the
+- **Width.** The signed-out profile is the one page in CaseLab with room to spread into, so its container (the `<main>` of the
   profile branch in `src/features/public/PublicSite.tsx`, which belongs to that view alone) is `max-w-7xl` instead of `max-w-4xl`, and
   the top bar lines up with it. No other screen changed width: the signed-in profile stays inside the app's shared `max-w-6xl`
   (`src/App.tsx`) and uses it as two columns, so there is no per-route escape from the app's layout anywhere in the code.
+
+#### One full-width column, and the case history as a table (issue #238, 2026-11-19)
+
+The owner read the two-column page of #235 the day it shipped and rejected it: *"we just put cases on the right and that comes with
+lot of free space and only half screen occupied for halff of the vertical page"*. Measured signed out at 1440px with 14 shared cases,
+the page was 3,968px tall and **2,176px of it — 55% — was blank gutter** beside the case column, with about 236px of page per case.
+A gutter is what a short column beside a long one always produces, so the fix was to stop having two.
+
+- **Above `lg` a visitor's page is one full-width column**, stacked in reading order: the member's card, the live case band and the
+  "Casing *name*?" invitation, **What to give *name* next** (with **What *name* is sharpening** under it where it is on), then their
+  case history. The width is used inside each block instead of being divided between a list and empty space: the two practice lanes
+  sit side by side with 571px each at 1280, and the table spans the whole 1,213px.
+- **The case history is a table there, not a stack of cards**: date, case (title with casebook and who cased them under it), type,
+  industry, overall score, and a control at the end of a row that has anything more. Picking a case to give someone is a comparison
+  across rows, which is what a table is for; a card grid is for browsing things with pictures, and a shared case has none. It is the
+  same table the member's own case log uses (`sticker` frame, `bg-sun-soft` head, chip-coloured case types, `RatingBadge` scores,
+  the display font on a title), so the density arrives in CaseLab's own language rather than as a grey spreadsheet.
+- **Sortable on date and on overall score** (`sortShared` / `nextSharedSort` in `src/domain/pairing.ts`, with `aria-sort` on the
+  heading). A column opens at the end people look for first — newest, highest — and flips on a second click; an unrated case sinks to
+  the bottom either way, the rule the member's own log follows. The page still opens on the order the rows arrive in. The filter bar
+  and the "*n* of *m* shared cases" line are unchanged and still count the whole filtered set.
+- **The per-skill scores, the "Working on" tag and anything written open under the row.** They are noise while the job is comparison,
+  and one click away when it is not. Nothing new is visible and nothing visible before is gone.
+- **Below `lg` nothing changed at all**: the two tabs, the card list and the roles are exactly the narrow page of #235.
+  `useWideScreen()` decides which, so the markup matches what is on screen; where the browser cannot say, the answer is the cards.
+- **The member's view is untouched** — two columns and the card list, in a container too narrow for five columns to be worth it, which
+  is also why the table never has to scroll sideways: it is only ever drawn in the full-width column, and its cells wrap.
+- **Measured in Chrome afterwards** (1440×950, signed out, 14 fabricated cases, every switch on; `window.fetch` stubbed in the page,
+  no repository code changed): page **2,459px** (from 3,968), no blank run beside content over 20px (the back link), **14 of 14 cases
+  on screen at once** in a 950px viewport (from about 4), and no horizontal scroll at 375, 900, 1024, 1100, 1280 or 1440.
 
 ### What I'm sharpening (a switch of its own, off by default)
 
@@ -1053,11 +1085,19 @@ There is no group administration, group chat or social feed: members, profiles, 
   rather than what it leaves out
 - **The two views of a profile** (issue #235): a visitor gets a working tablist with the member's own pair of labels, opening on
   "What to give *name* next" with the case list one tap away, `aria-selected` and the sliding mark moving together as the member's
-  tabs do, the classes that lay the two out as columns from `lg`, no `tab`, `tablist` or `tabpanel` role anywhere on the page once
+  tabs do, the classes that stack the two down one column from `lg`, no `tab`, `tablist` or `tabpanel` role anywhere on the page once
   both views are on screen (with the case list still named as a region) and the tabs back again where the browser cannot say how wide
   the window is, the member's card, the live case band and the invitation outside both views whichever is open, and no control at all
   for a member who shares no case history; for a signed-in member, the existing pair unchanged and **Shared performance** staying in
   view beside either of them
+- **The full-width column and the case table** (issue #238): the blocks of a visitor's page in reading order with no twelve-column
+  split and no column span on either of them; the table's six headings, one row per case and the cells of a row; sorting by date and
+  by score both ways from the opening order, with `aria-sort` following and an unrated case sinking either way (`sortShared` and
+  `nextSharedSort` in `pairing.test.ts`); the skills, the tag and the writing absent from the row and present under it after one
+  click; the filters and the "*n* of *m*" line agreeing with what the table holds; the card list, the tabs and the hidden panel
+  unchanged below the breakpoint; and, in `Community.test.tsx`, a member's page on a wide screen still two columns of cards.
+  **What no test here can prove**: the page height, the gutter and how many rows fit a viewport are layout, and jsdom has none —
+  those figures come from the Chrome measurements quoted above, taken by hand
 - **The live case band on a profile link**: a visitor gets it with what a live case is, 23 to 40 minutes and a **Create an account**
   link to sign-up, below the member's own heading and with none of their name, class or cases in it; the coach is Bucket with an "AI"
   tag and neither Claude nor Anthropic reaches the page; a signed-in member opening the same profile gets neither the band nor a

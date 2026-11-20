@@ -378,6 +378,17 @@ move whenever the file does, so the quoted words are the reliable part):
   pixel count is left in it — and deliberately does **not** pretend to measure the clipping. **The new rendering has not been opened
   in a browser**: `.env.local` is git-ignored, so `npm run dev` does not start in a worktree, and the session that wrote it had no
   browser to check it in. Someone should look at a real profile link at 375px and at a desktop width, in both themes.
+  **Partly answered on 2026-11-19 by issue #238**: that session copied `.env.local` in from the primary checkout, ran `npm run dev`
+  in the worktree and drove headless Chrome over CDP (`--remote-debugging-port`, Node 22's own `WebSocket`, no new dependency), with
+  `window.fetch` stubbed inside the page to answer `public_person` / `public_person_cases`. The bars were seen drawn, with whole
+  names, at 375, 900, 1024, 1100, 1280 and 1440px, and in both themes at 1440. **Still unchecked: a real profile link against the
+  real database, and every width in dark.** The harness (`measure.mjs`, `shot.mjs`) lives in that session's scratch folder, not in
+  the repo, so the next person pays for it again; it is about 120 lines.
+- **A profile page measurement is only as good as the rows it was taken on (issue #238, 2026-11-19).** The page height, the gutter
+  and the "how many cases fit a screen" figures in the README were taken against 14 *fabricated* cases with every share switch on —
+  the same shape the defect was measured on, deliberately — not against a real member. A member with longer titles, more casebooks
+  or wrapping industries gets taller rows; nothing automated re-measures any of this, and nothing in the unit suite can
+  (jsdom reports every box as zero, the bullet above). Re-measure if the row content changes shape.
 - **The #121 column is in production, so the live check that watched for it passes again.** "has every column the migrations add"
   in `e2e/deployed.e2e.test.ts` reads the `add column` statements straight out of `supabase/migrations/`, so it expected
   `profiles.share_sharpening` from the moment the migration file was committed and reported it missing until the owner applied it on

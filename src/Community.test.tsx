@@ -1,6 +1,6 @@
 ﻿import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { NO_SHARING, type Profile, type SharedCase } from './domain/community';
 import { createFakeEnv, MY_PROFILE, TEST_PASSWORD, TEST_USER, type FakeEnv } from './test/fakeBackend';
@@ -198,6 +198,7 @@ describe('password recovery', () => {
 
 describe('People', () => {
   const people = { members: [BOB, CAROL, HIDDEN], shared: BOB_CASES };
+  afterEach(() => vi.unstubAllGlobals());
 
   it('lists listed members (not me, not unlisted ones) and finds them by name', async () => {
     const env = createFakeEnv(people);
@@ -282,6 +283,23 @@ describe('People', () => {
     await user.click(screen.getByRole('tab', { name: /Find a case for them/ }));
     expect(screen.getByRole('region', { name: /Cases you've done/ })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Shared performance' })).toBeInTheDocument();
+  }, 20000); // may pay for loading the whole app when the full suite is running
+
+  it('reads a profile the same way on a wide screen as it always has: cards beside the scores, no table', async () => {
+    // The table and the full-width stack are the visitor's page. A member's view keeps its two columns and its cards,
+    // which is what this issue left alone.
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('64rem'), media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+    const env = createFakeEnv(people);
+    const { user } = await openApp(env);
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await goTo('#/people/bob');
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+
+    await user.click(screen.getByRole('tab', { name: /Shared cases/ }));
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByText('Airline profitability').closest('li')).toHaveClass('sticker');
+    expect(screen.getByRole('tabpanel').className).toMatch(/space-y/);
+    expect(document.querySelector('[class*="lg:grid-cols-12"]')).toBeInTheDocument();
   }, 20000); // may pay for loading the whole app when the full suite is running
 
   it('pitches no account to a member who has one: no live case band on a profile they open from inside', async () => {

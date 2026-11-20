@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeBurnedBooks, normalizeBurnedCases, parseBurnedTitles, type SharedCase } from './community';
-import { compareTitles, distinctValues, matchesFilter, NO_FILTER, pairCases, sameBook, titleTokens } from './pairing';
+import { compareTitles, distinctValues, matchesFilter, nextSharedSort, NO_FILTER, pairCases, sameBook, sortShared, titleTokens } from './pairing';
 import { makeCase } from '../test/builders';
 
 const theirs = (title: string, over: Partial<SharedCase> = {}): SharedCase => ({
@@ -230,5 +230,39 @@ describe('the burned cases list', () => {
     ]);
     expect(normalizeBurnedCases([{ title: 'x'.repeat(300), book: 'y'.repeat(200) }])[0]).toEqual({ title: 'x'.repeat(200), book: 'y'.repeat(100) });
     expect(normalizeBurnedCases(Array.from({ length: 400 }, (_, i) => ({ title: `Case ${i}`, book: '' })))).toHaveLength(300);
+  });
+});
+
+describe('ordering a shared case list', () => {
+  const rows = [
+    theirs('Newest unrated', { date: '2026-10-05', overall: null }),
+    theirs('Middle four', { date: '2026-10-03', overall: 4 }),
+    theirs('Oldest two', { date: '2026-10-01', overall: 2 }),
+    theirs('Also four', { date: '2026-10-02', overall: 4 }),
+  ];
+  const titles = (sort: Parameters<typeof sortShared>[1]) => sortShared(rows, sort).map((r) => r.title);
+
+  it('hands the rows back untouched when nothing is sorted, and never reorders the caller’s array', () => {
+    expect(sortShared(rows, null)).toBe(rows);
+    const by = sortShared(rows, { key: 'date', dir: 'asc' });
+    expect(by).not.toBe(rows);
+    expect(rows.map((r) => r.title)).toEqual(['Newest unrated', 'Middle four', 'Oldest two', 'Also four']);
+  });
+
+  it('sorts by date both ways', () => {
+    expect(titles({ key: 'date', dir: 'desc' })).toEqual(['Newest unrated', 'Middle four', 'Also four', 'Oldest two']);
+    expect(titles({ key: 'date', dir: 'asc' })).toEqual(['Oldest two', 'Also four', 'Middle four', 'Newest unrated']);
+  });
+
+  it('sorts by score both ways, keeps the handed-in order where scores tie, and sinks the unrated either way', () => {
+    expect(titles({ key: 'overall', dir: 'desc' })).toEqual(['Middle four', 'Also four', 'Oldest two', 'Newest unrated']);
+    expect(titles({ key: 'overall', dir: 'asc' })).toEqual(['Oldest two', 'Middle four', 'Also four', 'Newest unrated']);
+  });
+
+  it('opens a column at the end people look for first, then flips it', () => {
+    expect(nextSharedSort(null, 'date')).toEqual({ key: 'date', dir: 'desc' });
+    expect(nextSharedSort({ key: 'date', dir: 'desc' }, 'date')).toEqual({ key: 'date', dir: 'asc' });
+    expect(nextSharedSort({ key: 'date', dir: 'asc' }, 'date')).toEqual({ key: 'date', dir: 'desc' });
+    expect(nextSharedSort({ key: 'date', dir: 'asc' }, 'overall')).toEqual({ key: 'overall', dir: 'desc' });
   });
 });

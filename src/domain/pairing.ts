@@ -208,3 +208,36 @@ export function distinctValues(items: { source: string; industry: string }[], ke
   }
   return [...seen.values()].sort((a, b) => a.localeCompare(b));
 }
+
+// ---------------------------------------------------------------------------------------
+// Ordering a shared case list: the table of someone's case history reads as a comparison,
+// so it is sortable on the two fields the comparison turns on.
+// ---------------------------------------------------------------------------------------
+
+/** The two columns worth ordering by: when the case was done, and how it went. */
+export type SharedSortKey = 'date' | 'overall';
+
+export interface SharedSort {
+  key: SharedSortKey;
+  dir: 'asc' | 'desc';
+}
+
+/** Where a click on a heading goes: a new column opens at the end people look for first, the same column flips. */
+export function nextSharedSort(current: SharedSort | null, key: SharedSortKey): SharedSort {
+  return current?.key === key ? { key, dir: current.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' };
+}
+
+/**
+ * Shared cases in the order asked for. `null` hands them straight back, which is the order the page opens on.
+ * Unrated cases sink to the bottom whichever way the score is sorted — the rule the member's own log follows —
+ * and the sort is stable, so cases that tie keep the order they arrived in.
+ */
+export function sortShared<T extends { date: string; overall: number | null }>(rows: T[], sort: SharedSort | null): T[] {
+  if (!sort) return rows;
+  const dir = sort.dir === 'asc' ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    if (sort.key === 'date') return dir * (a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
+    if (a.overall === null || b.overall === null) return a.overall === b.overall ? 0 : a.overall === null ? 1 : -1;
+    return dir * (b.overall - a.overall);
+  });
+}
