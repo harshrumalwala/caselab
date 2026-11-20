@@ -7,8 +7,21 @@ One thing needs the owner, and it blocks no work in progress.
 | # | What | Why it needs you | What happens when you say yes |
 |---|---|---|---|
 | 1 | **#149's remaining 28 sentences** — a decision, not an approval | A judgement about how far to go | 44 of the 72 interviewer facts that named the book are fixed. The other 28 are left because the engine's voice filter already strips them before the member sees anything. Leaving them is defensible and is what the issue asked for; rewriting them too is 28 more sentences on the same reload. Your call |
+| 2 | **Should your profile link depend on "Appear in People search"?** — a decision that would need a migration | Decoupling them changes `sync_public_profile`, and migrations are yours every time | They are two different audiences: classmates browsing People, and a named person holding your link. Today the second is impossible without the first, which is the likeliest reason `public_person` returns nothing for your own profile. **PR #240 has already made the rule visible** — the switch says why it is unavailable, turning People search off now warns that it takes the link with it, and the preview asks `public_person` itself instead of trusting the switches — so nothing is broken while this waits. Say the word and it becomes an issue with a migration attached |
 
 **Email delivery is confirmed, and this table is one row shorter for it (owner, 2026-11-19).** The second row used to read "Confirming email delivery", because no agent can see the Resend dashboard or a real inbox and Resend accepting a message is not Resend delivering it. Asked which of the two `notify-request` emails they had seen arrive, the owner answered **both**: the "asked you to case" email and the "said yes" acceptance email have each landed in a real inbox. That was the last unanswered question behind **#101** (calendar invites) and **#102** (reminder emails), so both are unblocked — which is not the same as started, and neither has been. The evidence that preceded it, and what it does and does not settle, is in DECISIONS.md.
+
+**The profile link was opened in a browser for the first time on 2026-11-19, and three real defects came out of it.** Five PRs had
+rebuilt that page the same day (#228, #232, #233, #234, #236), every one merged on a green suite, and **none of the three was visible
+to any test** — jsdom reports every width and every box as zero, so the suite cannot see a clipped label, a blank gutter or a page
+height. What shipped since: **#241** (issue #237) replaced the profile bars with plain DOM, because a fixed pixel gutter inside an
+`overflow: hidden` SVG cut the first letters off six of the real industry names at *every* window width, and cut one line of copy that
+told the reader how to read the card above it; verified afterwards in a real browser at 375 and 1440 in both themes, 0 clipped
+elements. **#240** (issue #239) made the privacy dialog say why the profile-link switch is unavailable, warn before People search
+takes a live link with it, and check `public_person` itself rather than trusting the local switches. **#242** (issue #238) is the
+restructure the owner asked for twice — one full-width column above 1024 px with the case history as a dense sortable table — and it
+is the one with numbers: page 4,004 px → 2,459, blank gutter 2,331 px → 20, cases on one screen about 4 → 14. The reasoning for all
+three, and the pattern research behind the table with its caveats, is in DECISIONS.md.
 
 **Both scheduling migrations are now applied.** `20261126120000_meeting_prefs.sql` (#98) went in on 2026-11-18 at 02:51 UTC and `20261127120000_practice_meetings.sql` (#99) later the same day, each with the owner's explicit approval. #99's was verified in production by query rather than by the CLI's word: three tables present, RLS on all three, **zero policies**, `information_schema.role_table_grants` returning no rows for `anon`, `authenticated` or `public`, all seven internal helpers not executable by either role, all seven member functions executable by `authenticated` only, and the migration row present in `supabase_migrations.schema_migrations`. `e2e/deployed.e2e.test.ts` then passed 12 of 12 against the live database — that file exists to catch the live schema disagreeing with the code, and it was red by design until the apply.
 
