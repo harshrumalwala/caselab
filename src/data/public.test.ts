@@ -125,14 +125,22 @@ describe('public visibility is opt-in', () => {
     expect(await visitorSees()).toEqual([]);
   });
 
-  it('requires a public profile to be listed', async () => {
-    await createProfile(ALICE, 'Alice', [], { isPublic: true });
+  it('does not need People search: a link opens for a member who is not listed', async () => {
+    // Until 20261128120000 the check constraint `profiles_public_requires_listed` refused this pair outright;
+    // they are two audiences now (issue #244). `profileLink.db.test.ts` is where the whole rule is proved.
+    await createProfile(ALICE, 'Alice Adams', ['share_cases'], { isPublic: true });
+    await addCase(ALICE);
     await as(db, 'authenticated', ALICE);
-    expect(await fails('update public.profiles set listed = false where user_id = $1', [ALICE])).toMatch(/check constraint/);
-    await db.query('update public.profiles set listed = false, public_profile = false where user_id = $1', [ALICE]);
+    expect(await fails('update public.profiles set listed = false where user_id = $1', [ALICE])).toBe('');
+    expect((await visitorProfiles()).map((p) => p.display_name)).toEqual(['Alice Adams']);
+    expect((await visitorSees()).map((r) => r.title)).toEqual(['Airline profitability']);
+    expect(await membersSee()).toEqual([]); // and other members lose her entirely
+
+    await update(ALICE, 'public_profile = false');
     expect(await visitorProfiles()).toEqual([]);
+    expect(await visitorSees()).toEqual([]);
     await as(db, 'authenticated', BOB);
-    expect(await fails(`insert into public.profiles (user_id, display_name, listed, public_profile) values ($1, 'Bob', false, true)`, [BOB])).toMatch(/check constraint/);
+    expect(await fails(`insert into public.profiles (user_id, display_name, listed, public_profile) values ($1, 'Bob', false, true)`, [BOB])).toBe('');
   });
 });
 
