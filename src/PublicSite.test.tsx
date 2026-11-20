@@ -622,39 +622,43 @@ describe('turning your profile link on', () => {
     await waitFor(() => expect(mine(env)?.publicProfile).toBe(false));
   });
 
-  it('is withdrawn when you stop appearing in People, and cannot be set while unlisted', async () => {
+  // Deliberate reversal (#245): this used to assert that unlisting withdrew the link and disabled its switch. The database
+  // rule changed in #244, so the two switches are independent, and the tests read the stored row.
+  it('leaves the link as it was when you stop appearing in People, and asks nothing', async () => {
     const env = createFakeEnv({ profile: { ...MY_PROFILE, publicProfile: true } });
     const { user, dialog } = await openProfile(env);
     await user.click(within(dialog).getByRole('switch', { name: 'Appear in People search' }));
-    await user.click(within(await screen.findByRole('dialog', { name: 'Take yourself out of People search?' })).getByRole('button', { name: 'Turn it off' }));
-    await waitFor(() => expect(mine(env)).toMatchObject({ listed: false, publicProfile: false }));
-    expect(within(dialog).getByRole('switch', { name: 'People with my link can see my profile' })).toBeDisabled();
+    await waitFor(() => expect(mine(env)).toMatchObject({ listed: false, publicProfile: true }));
+    expect(mine(env)).toMatchObject({ listed: false, publicProfile: true });
+    expect(screen.queryByRole('dialog', { name: 'Take yourself out of People search?' })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('switch', { name: 'People with my link can see my profile' })).toBeEnabled();
   });
 
-  it('names People search as the reason while the link switch is unavailable, and only then', async () => {
+  it('keeps the link switch available, with no line about People search, while not listed', async () => {
     const env = createFakeEnv({ profile: { ...MY_PROFILE, listed: false } });
     const { dialog } = await openProfile(env);
-    expect(within(dialog).getByText('Turn on Appear in People search to use this.')).toBeInTheDocument();
-    await userEvent.click(within(dialog).getByRole('switch', { name: 'Appear in People search' }));
-    await waitFor(() => expect(within(dialog).queryByText('Turn on Appear in People search to use this.')).not.toBeInTheDocument());
+    expect(within(dialog).getByRole('switch', { name: 'People with my link can see my profile' })).toBeEnabled();
+    expect(dialog.textContent).not.toContain('Turn on Appear in People search to use this.');
+    expect(dialog.textContent).not.toContain('disappear completely');
   });
 
-  it('asks before People search takes a live link with it, and not when the link is off', async () => {
-    const live = createFakeEnv({ profile: { ...MY_PROFILE, publicProfile: true } });
-    const first = await openProfile(live);
-    await first.user.click(within(first.dialog).getByRole('switch', { name: 'Appear in People search' }));
-    const ask = await screen.findByRole('dialog', { name: 'Take yourself out of People search?' });
-    expect(ask).toHaveTextContent(/link goes off with it/i);
-    await first.user.click(within(ask).getByRole('button', { name: 'Cancel' }));
-    expect(mine(live)).toMatchObject({ listed: true, publicProfile: true }); // cancelling changes nothing
-  });
-
-  it('turns People search off with no question when the link is off', async () => {
-    const env = createFakeEnv({ profile: { ...MY_PROFILE, publicProfile: false } });
+  it('turns the link on while not listed, without listing the member', async () => {
+    const env = createFakeEnv({ profile: { ...MY_PROFILE, listed: false, publicProfile: false } });
     const { user, dialog } = await openProfile(env);
-    await user.click(within(dialog).getByRole('switch', { name: 'Appear in People search' }));
-    await waitFor(() => expect(mine(env)).toMatchObject({ listed: false }));
-    expect(screen.queryByRole('dialog', { name: 'Take yourself out of People search?' })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('switch', { name: 'People with my link can see my profile' }));
+    await user.click(within(await screen.findByRole('dialog', { name: 'Let people with your link see your profile?' })).getByRole('button', { name: 'Turn my link on' }));
+    await waitFor(() => expect(mine(env)).toMatchObject({ listed: false, publicProfile: true }));
+    expect(mine(env)).toMatchObject({ listed: false, publicProfile: true });
+  });
+
+  it('keeps the sharing switches reachable for a link-only member, and not for one with both off', async () => {
+    const linkOnly = createFakeEnv({ profile: { ...MY_PROFILE, listed: false, publicProfile: true } });
+    const first = await openProfile(linkOnly);
+    expect(within(first.dialog).getByRole('switch', { name: 'Case history' })).toBeEnabled();
+    cleanup();
+    const neither = createFakeEnv({ profile: { ...MY_PROFILE, listed: false, publicProfile: false } });
+    const second = await openProfile(neither);
+    expect(within(second.dialog).getByRole('switch', { name: 'Case history' })).toBeDisabled();
   });
 
   describe('the visitor preview of a link that is on', () => {
@@ -741,17 +745,26 @@ describe('profile setup and the audience', () => {
     expect(env.community.profiles.find((p) => p.displayName === 'Pat Public')).toMatchObject({ listed: true, publicProfile: true });
   });
 
-  it('can not be chosen while not appearing in People', async () => {
+  it('offers every combination of the two switches, with neither reaching over to the other', async () => {
     const env = createFakeEnv({ profile: null });
     const { user } = await open(env);
     await user.type(await screen.findByRole('textbox', { name: /^Your name/ }), 'Quiet Quinn');
-    await user.click(screen.getByRole('switch', { name: 'People with my link can see my profile' }));
-    await user.click(screen.getByRole('checkbox', { name: /Let other members find me by name/ }));
-    expect(screen.getByRole('switch', { name: 'People with my link can see my profile' })).toBeDisabled();
-    expect(screen.getByRole('switch', { name: 'People with my link can see my profile' })).toHaveAttribute('aria-checked', 'false');
+    const link = () => screen.getByRole('switch', { name: 'People with my link can see my profile' });
+    const find = screen.getByRole('checkbox', { name: /Let other members find me by name/ });
+    const history = () => screen.getByRole('switch', { name: 'Case history' });
+
+    await user.click(link()); // link on, listed on
+    await user.click(find); // listed off: the link stays on and stays available
+    expect(link()).toBeEnabled();
+    expect(link()).toHaveAttribute('aria-checked', 'true');
+    expect(history()).toBeEnabled(); // a link-only member can still choose what the link shows
+    await user.click(link()); // both off
+    expect(history()).toBeDisabled();
+    await user.click(link()); // link on again, still not listed
     await user.click(screen.getByRole('button', { name: 'Start casing' }));
     await screen.findByRole('heading', { name: 'Dashboard' });
-    expect(env.community.profiles.find((p) => p.displayName === 'Quiet Quinn')).toMatchObject({ listed: false, publicProfile: false });
+    expect(env.community.profiles.find((p) => p.displayName === 'Quiet Quinn')).toMatchObject({ listed: false, publicProfile: true });
+    expect(screen.queryByText(/Only signed-in, verified members can see what you share/)).not.toBeInTheDocument();
   });
 });
 

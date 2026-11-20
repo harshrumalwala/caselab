@@ -30,7 +30,7 @@ export function Onboarding() {
     setBusy(true);
     setError(null);
     try {
-      await saveProfile({ displayName: name, mbaClass, listed, publicProfile: listed && publicProfile, burnedBooks: [], burnedCases: [], sharing });
+      await saveProfile({ displayName: name, mbaClass, listed, publicProfile, burnedBooks: [], burnedCases: [], sharing });
       // The community provider now has a profile, so the app takes over.
     } catch (err) {
       setError(describeError(err));
@@ -94,10 +94,7 @@ export function Onboarding() {
               type="checkbox"
               className="mt-0.5 size-4 accent-[var(--accent)]"
               checked={listed}
-              onChange={(e) => {
-                setListed(e.target.checked);
-                if (!e.target.checked) setPublicProfile(false);
-              }}
+              onChange={(e) => setListed(e.target.checked)}
             />
             <span>
               <span className="font-medium text-ink">Let other members find me by name</span>
@@ -107,15 +104,15 @@ export function Onboarding() {
             </span>
           </label>
 
-          <AudienceSwitch checked={publicProfile} disabled={!listed} onChange={setPublicProfile} />
+          <AudienceSwitch checked={publicProfile} onChange={setPublicProfile} />
 
           <div>
             <h2 className="mb-1 text-sm font-semibold text-ink">What would you like to share?</h2>
             <p className="mb-3 text-xs text-muted">
-              Only signed-in, verified members can see what you share. Everything is off by default except your level (a small badge with your job title, nothing more), you can change any of
+              Everything is off by default except your level (a small badge with your job title, nothing more), you can change any of
               it at any time, and you can keep individual cases private.
             </p>
-            <SharingSwitches value={sharing} onChange={setSharing} disabled={!listed} />
+            <SharingSwitches value={sharing} onChange={setSharing} disabled={!(listed || publicProfile)} />
           </div>
 
           {error && (

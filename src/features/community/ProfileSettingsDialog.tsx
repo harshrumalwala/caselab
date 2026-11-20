@@ -229,7 +229,6 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [confirmPublic, setConfirmPublic] = useState(false);
-  const [confirmUnlist, setConfirmUnlist] = useState(false);
 
   // Arriving from "Burn cases" on the Case Log, or from scheduling: bring that part of the page into view.
   useEffect(() => {
@@ -248,8 +247,7 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
     setSaving(true);
     try {
       const listed = next.listed ?? profile.listed;
-      // Letting people with your link in needs being listed, so unlisting also withdraws it.
-      const publicProfile = listed && (next.publicProfile ?? profile.publicProfile);
+      const publicProfile = next.publicProfile ?? profile.publicProfile;
       await saveProfile({
         displayName: next.displayName ?? profile.displayName,
         mbaClass: next.mbaClass ?? profile.mbaClass,
@@ -332,16 +330,15 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
               <div className="min-w-0">
                 <p className="text-sm font-medium text-ink">Appear in People search</p>
                 <p className="text-xs text-muted">
-                  Verified members can find your name and class. Your email is never shown. Turn this off to disappear completely.
+                  Verified members can find your name and class. Your email is never shown.
                 </p>
               </div>
-              <Switch label="Appear in People search" checked={profile.listed} disabled={saving} onChange={(listed) => (!listed && profile.publicProfile ? setConfirmUnlist(true) : void save({ listed }))} />
+              <Switch label="Appear in People search" checked={profile.listed} disabled={saving} onChange={(listed) => void save({ listed })} />
             </div>
 
             <AudienceSwitch
               checked={profile.publicProfile}
-              disabled={saving || !profile.listed}
-              needsListing={!profile.listed}
+              disabled={saving}
               onChange={(on) => (on ? setConfirmPublic(true) : void save({ publicProfile: false }))}
               profileLink={profileAddress(profile.userId)}
             />
@@ -350,7 +347,7 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
               What to share. Everything starts off, and each change applies immediately. These choices apply to the audiences
               above.
             </p>
-            <SharingSwitches value={profile.sharing} onChange={setSharing} disabled={saving || !profile.listed} />
+            <SharingSwitches value={profile.sharing} onChange={setSharing} disabled={saving || !(profile.listed || profile.publicProfile)} />
             <p className="text-xs text-muted">
               You can override any single case when you log or edit it: keep it private, share only its name, or share it in
               full. "Other notes" stay private unless you turn on "Open everything", and your practice partner's name only appears if you turn on "Who cased me".
@@ -416,19 +413,6 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
         ) : (
           <p>Written feedback, learning notes and other notes are not shown to visitors unless you turn on Open everything. You can switch this off again at any time.</p>
         )}
-      </ConfirmDialog>
-
-      <ConfirmDialog
-        open={confirmUnlist}
-        title="Take yourself out of People search?"
-        confirmLabel="Turn it off"
-        onCancel={() => setConfirmUnlist(false)}
-        onConfirm={() => {
-          setConfirmUnlist(false);
-          void save({ listed: false });
-        }}
-      >
-        <p>Your profile link goes off with it, and anyone you gave it to will no longer be able to open your profile.</p>
       </ConfirmDialog>
 
       <ConfirmDialog
