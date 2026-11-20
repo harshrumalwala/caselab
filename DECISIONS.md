@@ -1180,3 +1180,62 @@ rather than left as a habit. And **summary before table** was kept after both we
 the ordering the issue happened to suggest: the summary block is 985 px, so leading with the table would push "what to give them next"
 past the first screen and demote the marketing #233 exists to protect, and the table is the only block whose height grows with the
 member.
+
+## The profile link stops depending on People search (owner, 2026-11-19; applied 2026-11-20)
+
+The owner was asked whether "People with my link can see my profile" should depend on "Appear in People search" at all, and answered **"Yes, decouple"**. They are two audiences — classmates browsing the member directory, and one named person holding a link — and until now the second was impossible without the first, which is why the owner's own `public_person(…)` returned nothing.
+
+**The owner approved the change, not the apply.** Those are separate every time: the migration went to the owner for approval as its own question, and the coordinating session ran it. The PM's standing authority to merge does not reach a PR that is inert until somebody applies a migration, so #246 sat green and unmerged until production was on the new rule.
+
+### The rule lived in six places, and a four-place sweep of the SQL still missed two
+
+The brief that reached the PM named one. Reading the migrations found four. **The last two were application reads, and no amount of reading the SQL would have found them**, because the policies they go through were already correct for the old rule:
+
+1. `profiles_public_requires_listed` — `check (not public_profile or listed)`. **The database physically refused the new state.** Nothing else mattered until it was dropped.
+2. `sync_public_profile(uuid)` — the headline guard.
+3. `refresh_shared_case(uuid)` — **two** gates, and missing the first was the trap. One decides whether a row exists in `shared_cases` at all; the other gates the link-visible copy. The public copy is built by selecting *from* `shared_cases`, and `public_shared_cases.case_id` is a foreign key onto it `on delete cascade`, so fixing only the second ships a link-only member whose link opens their profile and shows **zero cases**.
+4. `refresh_all_shared()`, to re-project.
+5. `SupabaseCommunity.getPerson` reads `profiles` directly, under a policy requiring `listed`.
+6. `SupabaseCommunity.getSharedCases` pages `shared_cases`, likewise.
+
+5 and 6 together meant a link-only member would have been **visible to anonymous strangers and invisible to their own classmates, following the identical link**. The lesson: *a rule enforced in the database is not only in the database, because which code path reads it decides whether the rule applies at all.* Grepping the migrations finds the rule; it does not find the readers.
+
+### Why the member path falls back instead of the policies widening
+
+The obvious fix for 5 and 6 — widen the two policies to `listed or public_profile` — was rejected. **Row level security cannot distinguish `where user_id = $1` from an unfiltered scan**, so there is no way to widen a policy only for someone who already holds the link. Any verified member could then list every link-only profile in one query, leaving People search protected by the client-side `.eq('listed', true)` alone. That turns a database-enforced privacy rule into a screen-enforced one, and the link's whole value is that you need the link.
+
+So a signed-in member reading a link-only profile **reads the link view**, through the anonymous reader the app already holds. The cost, accepted: a classmate with the link sees the public projection, not the richer member view. They published a link view; a link holder gets the link view. It needed no migration, no grant and no policy change, which is also why the migration did not have to be re-opened after the asymmetry was found.
+
+The decision is carried on the profile as `viaLink` rather than as `listed`, because **whether that member is in People search is genuinely unknowable from `public_person`** — a screen asking `listed` would be asking a question the data cannot answer.
+
+### What the shape of the fix cost, stated rather than buried
+
+`refresh_shared_case`'s first gate became `not (p.listed or p.public_profile)`, so **an unlisted member's rows now exist in `shared_cases`**, where their absence used to be the belt and the policy `"shared_cases: members read"` the braces. Only the braces hold now. That policy's own comment anticipated it — *"even if a stale row were ever left behind, it could not be served"* — and every other reference to that table across all 34 migrations is a projection function, one of the two policies, or a column grant, so the policy really is the only path.
+
+**The PM's stated reason for choosing that shape was wrong and the developer overturned it.** The alternative was framed as belt-versus-drift; it is in fact a schema change, because the `on delete cascade` makes a public row without a member-side row unrepresentable and `public_shared_cases.share_id` comes off a `gen_random_uuid()` default that lives on the member-side table alone. The conclusion survived; the argument did not. **The header records which argument is load-bearing**, so whoever re-opens this starts from the foreign key rather than from the PM's taste. Asking for evidence and then losing to it is the point of asking.
+
+### Three operational things learned on the way
+
+- **`npx supabase migration new` stamps the real clock**, which in this repo produces a filename sorting *before* four existing migrations — it would have been applied before the two that last define `sync_public_profile()` and `public_person()` and then silently overwritten by them. The file was renamed into the repo's own sequence. Anyone running that command here hits the same trap.
+- **`npx supabase db push --remote` now refuses from an agent session** with `HostedMutationConsentRequiredError`, because it cannot show a confirmation prompt, and asks to be re-run with `--yes`. The operations cheat sheet in CLAUDE.md is therefore wrong as written. **`--yes` is how a specific approval is expressed, never a default**: nobody adds it to a documented command, and it is only ever used for a run the owner has already approved.
+- **A migration header should not claim more than its guard checks.** This one asserts no row holds the new state before it runs, which is a check on *rows*; a constraint dropped by hand would pass that guard and then fail at the drop. Failing loudly on a hand-edited database is right, but the header must not be read as covering it. For the same reason it does not claim to be safe to run again: after it runs, a member may legitimately hold the state the guard refuses.
+
+### Your own profile page when you are link-only (issue #250, 2026-11-20)
+
+A member who leaves People search and keeps their link, opening **their own** profile, saw "No shared cases". Their own `profiles` row is readable on the member path — the policy's `auth.uid() = user_id` half always matches — so the page pages `shared_cases`, which still requires `listed`, and gets nothing.
+
+The empty list is **accurate**: that page shows what other members see, and other members see nothing, which is what the member asked for. The defect is that there was no way to tell an accurate empty list from a broken link — and the obvious moment to open your own profile is to check the link works before handing it to a second-year, so this was the view most likely to be used as that check, failing it for the wrong reason. A member would then go and change sharing settings to repair something that was never broken: **the same failure #239 and #240 had just closed in the privacy dialog, reappearing one screen over.**
+
+**Fix the silence, not the projection.** Serving the link view on your own page would assert something false in the other direction — that members can see those cases. And Profile & privacy → "What others see" already answers "what does my link show", from live `public_person` data since #240; a second answer on the profile page is a second thing that can disagree with the first.
+
+So the empty state says one line and offers the way through to that preview. **The route is the half that actually answers the question the member came with**, and is the part most at risk of being trimmed as scope — a line explaining the emptiness without a way to *see* the link view is half a fix.
+
+Two details worth keeping. The line is "You're not in People search, so members see nothing here. Your link is unaffected." — deliberately **not** "your link still shows your cases", which would be false for a member whose link is on and who shares nothing. And the preview opens on the visitors' tab, because the members' tab would only repeat what they have just read.
+
+### Where the test double still disagrees with the database
+
+Two gaps found in `src/data/memoryCommunity.ts` during this batch, both worth knowing because a twin that quietly disagrees with the database is how a green suite stops meaning anything.
+
+**One was a real bug and is fixed.** `saveProfile` was still coercing `publicProfile = input.listed && input.publicProfile` — the pre-#244 rule, living on in the twin after production had moved. Left in, every test running against the twin would have disagreed with the real database about a state the owner had just asked for. Both developers working that day flagged it as the other's file rather than reaching across, which is why it was fixed once and properly rather than twice.
+
+**One is recorded, not fixed:** the twin returns shared rows for your *own* unlisted profile, where the real `"shared_cases: members read"` policy returns none. Making the twin model that could move existing tests that rely on reading your own shared cases while unlisted, and nobody has checked which. #250's tests are honest in spite of it because they use the empty list production returns, but a future test written against the twin could pass while the same code shows an empty page in production.
