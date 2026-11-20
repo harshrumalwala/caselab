@@ -402,9 +402,18 @@ move whenever the file does, so the quoted words are the reliable part):
   path; dark contrast `rgb(244,242,239)` on `rgb(27,26,24)`. (2) The #238 session, which copied `.env.local` in from the primary
   checkout, ran `npm run dev` in the worktree and drove headless Chrome over CDP (`--remote-debugging-port`, Node 22's own
   `WebSocket`, no new dependency), seeing the bars drawn with whole names at 375, 900, 1024, 1100, 1280 and 1440px and in both
-  themes at 1440. **What is still unchecked: a real profile link against the real database** (every reading above is on stubbed
-  rows). Neither harness is in the repo — they live in those sessions' scratch folders (#238's are `measure.mjs` and `shot.mjs`,
-  about 120 lines) — so the next person writes one again.
+  themes at 1440. **The real-link check was then run and passed (2026-11-20).** The owner pasted their actual profile link and it was
+  opened **signed out, in a real browser, against the production database**. At 1440 and at 375 the profile resolved (19 cases),
+  with 0 clipped elements, 0 boxes escaping an `overflow: hidden` ancestor and no horizontal scroll. Page height was 2,593px at 1440
+  and 2,323px at 375. Width in use, sampled every 350px down the page at 1440, was 96, 96, 96, 96, 96. The case history was a table
+  of 19 rows at 53px (17 fit a 910px screen) at 1440 and a list with its tabs at 375. **#237's fix is now proven on real data at the
+  narrowest width:** "Consumer Products / Retail" and "Prompt / Pre-framework n=18" both render in full at 375px, which is
+  exactly the case the old fixed pixel gutter cut. It also exercised a sharing combination no fixture had: real per-skill counts
+  differing from each other, `n=16` beside `n=18`, and a case whose practice partner is "Bucket (AI coach)", with nothing breaking.
+  **What it does not cover:** it was **one** profile, opened **signed out**, through the **dev server** against the production
+  database. Nobody has opened the deployed Vercel build itself, and **no signed-in member has followed a link**, which is the path
+  #249 built and the one least like anything a fixture tested. Neither measurement harness is in the repo — they live in those
+  sessions' scratch folders (#238's are `measure.mjs` and `shot.mjs`, about 120 lines) — so the next person writes one again.
 - **Toggling the `dark` class in devtools makes any `useTheme()` inline colour look broken (found 2026-11-19, not a defect).** The
   coordinator's first dark pass reported the bar labels as `rgb(28,26,24)` on `rgb(27,26,24)`, black on black, and it was the method
   rather than the page: adding `dark` to `documentElement` by hand flips Tailwind's `dark:` CSS but never touches React state, so

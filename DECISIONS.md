@@ -1243,13 +1243,23 @@ Two gaps found in `src/data/memoryCommunity.ts` during this batch, both worth kn
 
 **One is recorded, not fixed:** the twin returns shared rows for your *own* unlisted profile, where the real `"shared_cases: members read"` policy returns none. Making the twin model that could move existing tests that rely on reading your own shared cases while unlisted, and nobody has checked which. #250's tests are honest in spite of it because they use the empty list production returns, but a future test written against the twin could pass while the same code shows an empty page in production.
 
-### Correction: the link that "returned nothing" was a member id that does not exist (2026-11-20)
+### Correction: the link that "returned nothing" was one mistyped hex digit (2026-11-20)
 
 For two days this file and two issue bodies — **#239** (its opening line and its Source note) and **#244** (its Problem section) — carried a statement of fact: the owner's profile link returns nothing,
 `public_person(92dc76c1-78b3-464b-bd1e-ddbfdc4a4d6b)` gives `[]`. It was used as the opening symptom of #239, as the reason the browser
 checks had to run on stubbed rows, and as supporting colour in the decoupling decision.
 
-**It was false.** Counts queried against production on 2026-11-20, no personal rows read:
+**It was false, and the reason is one character.** When the owner pasted their actual link, their id and the one in use differed at exactly one position:
+
+```
+theirs : 92dc76c1-78b3-464b-bd1e-ddbfdc4a7d6b
+used   : 92dc76c1-78b3-464b-bd1e-ddbfdc4a4d6b
+                                       ^ position 32: 7 against 4
+```
+
+A single mistyped hex digit, which is why nothing ever looked wrong: the result is a **well-formed UUID**, so the API took it, answered `200 OK`, and returned `[]` — the identical response a real member with their link switched off would produce. Nothing in the call looked like a failure, because nothing about it *was* a failure.
+
+Counts queried against production on 2026-11-20, no personal rows read:
 
 | query | result |
 |---|---|
@@ -1262,7 +1272,7 @@ checks had to run on stubbed rows, and as supporting colour in the decoupling de
 **Three real links resolve in production**, and the projection is exactly consistent — the count of members with `public_profile` equals
 the number of rows in `public_profiles`, which is `sync_public_profile` behaving correctly. The id everything rested on **matches no
 profile**. It was carried forward from earlier in a session and never validated, so every "the owner's link is dark" reading was loading
-a member who does not exist, and the page was correctly saying so.
+a member who does not exist, and the page was correctly saying so — **the owner's link worked the whole time.**
 
 **What this does and does not change.**
 
@@ -1270,16 +1280,73 @@ a member who does not exist, and the page was correctly saying so.
   independent. That argument never depended on the symptom, and the migration is applied and correct.
 - **It changes nothing about #239 and #240.** The two silent gates were real: they were found by **reading the dialog and
   `sync_public_profile`**, not by reproducing the symptom. A bad symptom pointed at a real defect, which is luck, not method.
-- **It does not mean the real-link check is done.** The counts prove the database side only. **Nobody has opened a profile link in a
-  browser and looked at the rendered page against real data**; every rendering reading we have is still on stubbed rows, and that entry
-  in KNOWN_ISSUES stays open. Do not let this correction overshoot into "verified".
+- **It did not, on its own, mean the real-link check was done** — the counts prove the database side only. That check has since been
+  run properly, with the owner's pasted link, and is recorded below.
 - **Nobody is in the decoupled state yet**: `public_profile and not listed` is 0. Whatever the owner changed on their own account, it did
   not produce an unlisted-with-link row.
 
-**The lesson, which is the reason this is written down rather than quietly edited out.** An identifier nobody validated travelled through
-three documents, an issue body and a work item, and at every step it was repeated as a measurement because the thing it was attached to —
-an RPC call with a real result — looked like evidence. `public_person` returning `[]` for an id that does not exist is indistinguishable
+**The lesson, which is the reason this is written down rather than quietly edited out.** A mistyped identifier travelled through this
+document, two issue bodies and a work item, and at every step it was repeated as a measurement because the thing it was attached to —
+an RPC call with a real result — looked like evidence. **A one-character typo is the likely version of this, not a fabricated id**: it
+survives every check a UUID normally gets, which is exactly what makes it dangerous. `public_person` returning `[]` for an id that does not exist is indistinguishable
 from `public_person` returning `[]` for a member whose link is off. **A query that cannot fail tells you nothing**: the check that was
 missing all along is one row, `select count(*) from profiles where user_id = …`, which separates "this member's link is off" from "this
 is not a member". The same shape as the audit that reported a rule at 0 because the rule did not exist yet (see "A number this file and
 #196 both carried was wrong"): both times an instrument answered confidently about something that was not there.
+
+### The real-link check, finally run (2026-11-20)
+
+For two days every browser measurement of the profile link was taken on **stubbed rows** — `window.fetch` patched in the page to answer
+`public_person` and `public_person_cases` with a fabricated member — because no valid id was to hand. That limit is now lifted. The
+owner pasted their actual link, and it was opened signed out, in a real browser, against the **production** database.
+
+| | 1440 | 375 |
+|---|---|---|
+| profile resolves | yes — 19 cases | yes |
+| clipped elements | 0 | 0 |
+| boxes escaping an `overflow: hidden` ancestor | 0 | 0 |
+| horizontal scroll | none | none |
+| page height | 2,593 px | 2,323 px |
+| width in use, sampled every 350 px down the page | 96, 96, 96, 96, 96 | — |
+| case history | table, 19 rows at 53 px (17 fit a 910 px screen) | list, tabs present |
+
+**No blank gutter anywhere** — 96% of the available width in use at every sample, against the 2,331 px of empty column the redesign was
+written to remove — and all 19 cases reachable in one screen. **#237's fix is now proven on real data at the narrowest width**:
+"Consumer Products / Retail" and "Prompt / Pre-framework n=18" both render in full at 375 px, which is the case the fixed pixel gutter
+used to cut.
+
+It also exercised a sharing combination no fixture had: real per-skill counts that differ from each other (`n=16` beside `n=18`) and a
+case whose practice partner is "Bucket (AI coach)". Nothing broke on any of it.
+
+**What it still does not cover, and the KNOWN_ISSUES entry says so rather than being deleted outright:** this was **one** profile,
+**signed out**, through the **dev server** against the production database. Nobody has opened the deployed Vercel build itself, and no
+signed-in member has followed a link — which is the path #249 built and the one least like anything a fixture tested.
+
+### A third overturned reason, and the pattern across all three (2026-11-20)
+
+The flake that turned `main` red on a documentation-only commit was diagnosed in issue #253, by the PM, as two judges reading the clock
+at different moments and flipping a boundary-sensitive sample. **The developer pulled the failing run's log instead of implementing
+it, and it was wrong.** Both disagreements read "You already have times waiting with this member.", on samples four minutes and a day
+clear of the nearest rule — and clock drift only ever moves a time *closer* to now, so it can never make a too-far-ahead time
+acceptable. The stated cause could not have produced the observed message.
+
+The real mechanism: `my_practice_meetings()` orders by `updated_at desc` with **no tiebreaker**, PGlite's `now()` is millisecond
+resolution, and a round trip is about a millisecond — so a cancel and the next insert could share a timestamp, the cancelled record
+sorted first, the cancel cleared nothing, and the one-open-proposal-per-pair rule then refused every later sample. Five of fifteen
+samples are accepted, so a tie at the third gives **exactly two** disagreements. That constant had been flagged in the issue as the
+clue to start from, and then explained with a theory that could not account for it. The fix names records by the id the database
+returned and makes the test's `one()` throw when ambiguous, which immediately surfaced three more instances of the same trap nobody had
+asked for (PR #254). The underlying ordering question is #255, `proposed`, because it needs a migration.
+
+**That is three times in two days a PM reason was overturned by someone who went and looked**: the migration's rejected alternative
+being a schema change rather than a trade-off, the owner's link "returning nothing" being a mistyped hex digit, and this. The
+conclusion survived all three; the argument survived none. Two things worth keeping from that.
+
+**Each was caught by reading a primary source** — the schema, a count query, a CI log — rather than by thinking harder about the claim.
+In every case the PM had reasoned from a plausible model and the model was wrong in a way no amount of further reasoning would have
+exposed.
+
+**And a brief should therefore state its reasoning as reasoning, so it can be contradicted.** All three issues said which argument was
+the PM's and invited evidence against it; all three developers took the invitation. A brief that stated the same conclusions as fact
+would have got the same code and a worse record — and in the flake's case, probably a fix for the wrong thing, since a widened
+tolerance would have hidden the tie rather than removed it.
