@@ -2,7 +2,7 @@
 
 ## Waiting for the owner (as of 2026-11-20)
 
-One thing needs the owner, and it blocks no work in progress.
+Two things need the owner, and neither blocks work in progress.
 
 | # | What | Why it needs you | What happens when you say yes |
 |---|---|---|---|

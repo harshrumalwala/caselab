@@ -1071,8 +1071,9 @@ somebody opened the page. **Three of the four findings were invisible to 1,226 t
 layout engine, so every width, box and clip it reports is zero. That is now in KNOWN_ISSUES as a standing limit rather than a surprise,
 and each issue below says in its own body what its tests can and cannot prove.
 
-How it was checked, because the method is reusable and the fixtures were not real: the owner's own profile could not be used — the
-`public_person` RPC returns nothing for it — so `window.fetch` was patched in a `npm run dev` page to stub `public_person` and
+How it was checked, because the method is reusable and the fixtures were not real: no real profile was to hand — the id being used at
+the time was believed to be the owner's and was later found to match no profile at all (see the correction below) — so `window.fetch`
+was patched in a `npm run dev` page to stub `public_person` and
 `public_person_cases` with a fabricated member, and `#/people/<id>` was read signed out. **The data was invented; the rendering, the CSS
 and the pixel measurements were real**, and no repository code was changed to take them.
 
@@ -1094,8 +1095,10 @@ Worth recording: a test was asserting that the line existed, added when an earli
 **A positive assertion on copy pins a judgement, not a behaviour**, so it has to be re-decided rather than obeyed; the negative
 assertion beside it — the list of phrases the cards must never contain — is the one that was left untouched.
 
-**What the switch pair does not say (issue #239, PR #240).** The owner reported their sharing was on while `public_person` returned
-nothing for them. There are two gates and the dialog showed neither: "People with my link can see my profile" is unusable unless
+**What the switch pair does not say (issue #239, PR #240).** What sent anyone to look was a report that the owner's sharing was on
+while `public_person` returned nothing for them — which turned out to rest on an id that matches no profile (see the correction
+below), so it was never evidence of anything. **The two gates it led to are real all the same**, because they were found by reading
+the code rather than by reproducing the symptom, and the dialog showed neither: "People with my link can see my profile" is unusable unless
 "Appear in People search" is on, and turning People search off **silently withdraws a link already given to people**; and
 `sync_public_profile` writes nothing unless `is_member_id()` is also true, which needs a verified email. Worse, the preview built to
 catch exactly this decided "nobody can open your profile" from the *local switches* rather than from the RPC, so a published-but-empty
@@ -1183,7 +1186,7 @@ member.
 
 ## The profile link stops depending on People search (owner, 2026-11-19; applied 2026-11-20)
 
-The owner was asked whether "People with my link can see my profile" should depend on "Appear in People search" at all, and answered **"Yes, decouple"**. They are two audiences — classmates browsing the member directory, and one named person holding a link — and until now the second was impossible without the first, which is why the owner's own `public_person(…)` returned nothing.
+The owner was asked whether "People with my link can see my profile" should depend on "Appear in People search" at all, and answered **"Yes, decouple"**. They are two audiences — classmates browsing the member directory, and one named person holding a link — and until now the second was impossible without the first. (An earlier draft of this entry gave the owner's own link returning nothing as the symptom; that was wrong, and the correction is at the end of this section. The decision rests on the two audiences, not on that symptom.)
 
 **The owner approved the change, not the apply.** Those are separate every time: the migration went to the owner for approval as its own question, and the coordinating session ran it. The PM's standing authority to merge does not reach a PR that is inert until somebody applies a migration, so #246 sat green and unmerged until production was on the new rule.
 
@@ -1210,7 +1213,7 @@ The decision is carried on the profile as `viaLink` rather than as `listed`, bec
 
 ### What the shape of the fix cost, stated rather than buried
 
-`refresh_shared_case`'s first gate became `not (p.listed or p.public_profile)`, so **an unlisted member's rows now exist in `shared_cases`**, where their absence used to be the belt and the policy `"shared_cases: members read"` the braces. Only the braces hold now. That policy's own comment anticipated it — *"even if a stale row were ever left behind, it could not be served"* — and every other reference to that table across all 34 migrations is a projection function, one of the two policies, or a column grant, so the policy really is the only path.
+`refresh_shared_case`'s first gate became `not (p.listed or p.public_profile)`, so **an unlisted member's rows now exist in `shared_cases`**, where their absence used to be the belt and the policy `"shared_cases: members read"` the braces. Only the braces hold now. That policy's own comment anticipated it — *"even if a stale row were ever left behind, it could not be served"* — and every other reference to that table across every migration in the repo is a projection function, one of the two policies, or a column grant, so the policy really is the only path.
 
 **The PM's stated reason for choosing that shape was wrong and the developer overturned it.** The alternative was framed as belt-versus-drift; it is in fact a schema change, because the `on delete cascade` makes a public row without a member-side row unrepresentable and `public_shared_cases.share_id` comes off a `gen_random_uuid()` default that lives on the member-side table alone. The conclusion survived; the argument did not. **The header records which argument is load-bearing**, so whoever re-opens this starts from the foreign key rather than from the PM's taste. Asking for evidence and then losing to it is the point of asking.
 
@@ -1239,3 +1242,44 @@ Two gaps found in `src/data/memoryCommunity.ts` during this batch, both worth kn
 **One was a real bug and is fixed.** `saveProfile` was still coercing `publicProfile = input.listed && input.publicProfile` — the pre-#244 rule, living on in the twin after production had moved. Left in, every test running against the twin would have disagreed with the real database about a state the owner had just asked for. Both developers working that day flagged it as the other's file rather than reaching across, which is why it was fixed once and properly rather than twice.
 
 **One is recorded, not fixed:** the twin returns shared rows for your *own* unlisted profile, where the real `"shared_cases: members read"` policy returns none. Making the twin model that could move existing tests that rely on reading your own shared cases while unlisted, and nobody has checked which. #250's tests are honest in spite of it because they use the empty list production returns, but a future test written against the twin could pass while the same code shows an empty page in production.
+
+### Correction: the link that "returned nothing" was a member id that does not exist (2026-11-20)
+
+For two days this file, KNOWN_ISSUES and several issue bodies carried a statement of fact: the owner's profile link returns nothing,
+`public_person(92dc76c1-78b3-464b-bd1e-ddbfdc4a4d6b)` gives `[]`. It was used as the opening symptom of #239, as the reason the browser
+checks had to run on stubbed rows, and as supporting colour in the decoupling decision.
+
+**It was false.** Counts queried against production on 2026-11-20, no personal rows read:
+
+| query | result |
+|---|---|
+| `profiles where public_profile` | **3** |
+| rows in `public_profiles` | **3** |
+| `profiles where public_profile and not listed` | 0 |
+| `profiles where public_profile and not is_member_id(user_id)` | 0 |
+| `profiles where user_id = '92dc76c1-…'` | **0** |
+
+**Three real links resolve in production**, and the projection is exactly consistent — the count of members with `public_profile` equals
+the number of rows in `public_profiles`, which is `sync_public_profile` behaving correctly. The id everything rested on **matches no
+profile**. It was carried forward from earlier in a session and never validated, so every "the owner's link is dark" reading was loading
+a member who does not exist, and the page was correctly saying so.
+
+**What this does and does not change.**
+
+- **It changes nothing about the decoupling.** The owner decided People search and the profile link are two audiences and should be
+  independent. That argument never depended on the symptom, and the migration is applied and correct.
+- **It changes nothing about #239 and #240.** The two silent gates were real: they were found by **reading the dialog and
+  `sync_public_profile`**, not by reproducing the symptom. A bad symptom pointed at a real defect, which is luck, not method.
+- **It does not mean the real-link check is done.** The counts prove the database side only. **Nobody has opened a profile link in a
+  browser and looked at the rendered page against real data**; every rendering reading we have is still on stubbed rows, and that entry
+  in KNOWN_ISSUES stays open. Do not let this correction overshoot into "verified".
+- **Nobody is in the decoupled state yet**: `public_profile and not listed` is 0. Whatever the owner changed on their own account, it did
+  not produce an unlisted-with-link row.
+
+**The lesson, which is the reason this is written down rather than quietly edited out.** An identifier nobody validated travelled through
+three documents, an issue body and a work item, and at every step it was repeated as a measurement because the thing it was attached to —
+an RPC call with a real result — looked like evidence. `public_person` returning `[]` for an id that does not exist is indistinguishable
+from `public_person` returning `[]` for a member whose link is off. **A query that cannot fail tells you nothing**: the check that was
+missing all along is one row, `select count(*) from profiles where user_id = …`, which separates "this member's link is off" from "this
+is not a member". The same shape as the audit that reported a rule at 0 because the rule did not exist yet (see "A number this file and
+#196 both carried was wrong"): both times an instrument answered confidently about something that was not there.
