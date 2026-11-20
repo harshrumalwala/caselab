@@ -1077,6 +1077,29 @@ move whenever the file does, so the quoted words are the reliable part):
   itself, so the limit is per member, survives clearing the fields, and leaves no history of what was saved when (by design: the
   values are the member's own and we keep no older copies).
 
+## Reading a profile that only the link opens (issue #247, 2026-11-20)
+
+The fix for #247 routes a signed-in member to the public projection when the member tables cannot see the member they are opening.
+Four things it leaves rough, all in `src/data/supabaseCommunity.ts` unless said otherwise:
+
+- **Which path answers is asked twice, once per call.** `getPerson` reads `profiles` and `getSharedCases` asks the same question
+  again through `readableAsMember()` (`select user_id ... maybeSingle()`), so opening a profile costs one extra single-row read, and
+  so does every save in **Profile & privacy** (the dialog re-reads what members see after each switch). The alternative was a
+  repository that remembered the answer between two calls, which would serve a stale one and was rejected for that. If the two reads
+  ever disagree — the member switches People search off in the milliseconds between them — the page mixes the two paths for that one
+  load; a reload is coherent again.
+- **`rowToPublicProfile` still reports `listed: true` and `publicProfile: true`** (`src/data/community.ts`). Neither is knowable from
+  `public_person`, and after #244 `listed: true` is false for exactly the member this issue is about. Nothing reads either field on
+  that path today, and the screen asks `viaLink` instead, so it costs nothing yet; it is a trap for whoever reads `listed` next.
+- **A link-only member's own profile page shows them no cases.** Their own id answers on the member path (the owner always reads
+  their own `profiles` row), but `shared_cases: members read` requires `listed`, so the page says "No shared cases" while their link
+  publishes them to everyone else. That is the same answer as "what other members see", which is what the member path means, and the
+  Visitors preview in **Profile & privacy** reads the link separately — but the profile page itself does not say which it is showing.
+- **The in-memory twin's member-side `getSharedCases` returns every row for that owner**, ignoring the sharing switches the
+  projection applies, so the screen tests cannot tell a member-path answer from a link-path one by its contents alone (they tell them
+  apart by the free text the link drops). The "an empty member-side list must not fall through" rule is therefore proved only at the
+  repository layer, in `src/data/communityFallback.test.ts`.
+
 ## Unverified user-side checks left open
 
 - Whether the "someone said yes" notification email arrives (the owner confirmed the sign-up email flow; whether the "asked you" request email was checked is not known).

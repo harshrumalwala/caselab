@@ -69,7 +69,8 @@ export class PublicCommunity implements PublicReader {
 /**
  * Community access for a signed-in member through Supabase. Row level security decides what comes back:
  * members only ever receive listed profiles and the `shared_cases` projection, never another member's
- * `cases` rows.
+ * `cases` rows. A member who publishes a profile link without appearing in People search is served by that
+ * link instead, through the same anonymous reader a visitor uses (`getPerson` / `getSharedCases` below).
  */
 export class SupabaseCommunity implements CommunityRepository {
   private readonly publicView: PublicCommunity;
@@ -113,14 +114,35 @@ export class SupabaseCommunity implements CommunityRepository {
     return ((data ?? []) as ProfileRow[]).map(rowToProfile);
   }
 
+  /**
+   * Whether this member answers on the member path at all. Their row comes back only while they appear in People
+   * search (the policy `profiles: members read listed, owner reads own`), so this is also the question "is there a
+   * member-side view of them to read?" — the one thing that decides which path serves the whole page, asked the
+   * same way for the profile and for the cases. It is asked again rather than remembered: a repository that
+   * cached the answer between two calls would serve a stale one, and the cost is a single row by primary key.
+   */
+  private async readableAsMember(userId: string): Promise<boolean> {
+    const { data, error } = await this.client.from('profiles').select('user_id').eq('user_id', userId).maybeSingle();
+    if (error) throw error;
+    return !!data;
+  }
+
+  /**
+   * A member who has left People search is invisible on the member path, and the same link that opens their
+   * profile for a stranger would then say they aren't available to their own classmates. So when the member path
+   * has nothing, this falls back to what their link publishes — the link view, exactly as a visitor reads it, and
+   * marked `viaLink` so the screen offers nothing the database would refuse them.
+   */
   async getPerson(userId: string): Promise<Profile | null> {
     const { data, error } = await this.client.from('profiles').select('*').eq('user_id', userId).maybeSingle();
     if (error) throw error;
-    return data ? rowToProfile(data as ProfileRow) : null;
+    if (data) return rowToProfile(data as ProfileRow);
+    return this.publicView.getPerson(userId);
   }
 
-  getSharedCases(ownerId: string): Promise<SharedCase[]> {
-    return pageShared(this.client, ownerId);
+  /** The cases come from whichever path answered for the profile, never a mixture of the two. */
+  async getSharedCases(ownerId: string): Promise<SharedCase[]> {
+    return (await this.readableAsMember(ownerId)) ? pageShared(this.client, ownerId) : this.publicView.getSharedCases(ownerId);
   }
 
   async getInterviewed(ownerId: string): Promise<SharedInterviewed[]> {

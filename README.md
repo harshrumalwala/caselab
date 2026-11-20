@@ -224,6 +224,16 @@ permanent and a link can be passed on, so the only way to cut it off is to switc
 database: no API role can read the public tables at all, with any filter, order, count or range, and the only way in is two functions
 that answer on one exact ID.
 
+**A signed-in member who opens that link** (issue #247, 2026-11-20). Appearing in People search and publishing a profile link are
+two separate switches, so a member can be out of People search and still have a link. The member tables say nothing about such a
+member — the policies behind `profiles` and `shared_cases` both require `listed` — so for those profiles the app reads the link
+instead, through the same two functions a visitor's browser calls, and a classmate following the address sees the page the link
+publishes rather than "This member isn't available". The profile and the case list always come from the same side: never a
+member-side profile with a link-side case list or the reverse. What the link does not carry is not on the page: their level, the
+cases they interviewed, and anything written unless they opened everything. **Case with *name*?** is not offered either, because
+`send_practice_request` still requires People search; the page says in one line that they can't be asked. A conversation the two of
+you already have is untouched, because messaging asks for a verified member and no block, not a listing.
+
 **Never shared, whatever you choose:** your email address. Your Other notes stay private unless you turn on Open everything.
 
 ### Find a case for someone
@@ -761,7 +771,7 @@ can accept by tapping one. Everything lives in **Community → Inbox**, and the 
 you (requests waiting for your answer, answers you haven't seen yet, or times somebody proposed; it refreshes when you come back
 to the tab and once a minute while the app is open), and so does a "Needs you" strip at the top of the Dashboard. **Find a case for them** also offers "Ask to case this" on each case you could give them.
 
-- **Open to every member, with no switch.** Any signed-in, verified member can ask any other verified member who appears in People. Members who turn off "Appear in People search" can't be asked: unlisting means disappearing. To stop someone, decline with "don't let them ask again", or block them from a conversation.
+- **Open to every member, with no switch.** Any signed-in, verified member can ask any other verified member who appears in People. Members who turn off "Appear in People search" can't be asked; if you reach one of them by their profile link, the page says so in a line where the button would be, rather than offering a request the database would refuse. To stop someone, decline with "don't let them ask again", or block them from a conversation.
 - **Private to the two people.** The tables have no direct access for the API roles at all; reads and writes go through database functions that act only on your own requests. Nobody else, and no visitor, can read one. No email address is stored or shown anywhere.
 - **Limits.** One waiting request per person, at most 5 waiting at a time and 20 sent in 24 hours. Declining can also stop that person asking again; their next request is refused with the same message as any other refusal, so they can't tell. You can undo that under "Blocked members".
 - **Once you're connected, asking again is a message.** After a request is accepted you have a conversation, so "Case with …?" becomes **Case again with …?** and sends the new case details (case, book, time and note) into that conversation as a message. There is nothing to accept: it shows up as new in their inbox and they reply in the conversation. The database enforces it too: a new request between two connected members is refused ("You're already connected with this member. Send them a message instead."). Requests already waiting are unaffected.
@@ -1102,6 +1112,16 @@ There is no group administration, group chat or social feed: members, profiles, 
   link to sign-up, below the member's own heading and with none of their name, class or cases in it; the coach is Bucket with an "AI"
   tag and neither Claude nor Anthropic reaches the page; a signed-in member opening the same profile gets neither the band nor a
   sign-up call
+- **A member following a link-only profile** (issue #247): `communityFallback.test.ts` runs `SupabaseCommunity` over a fake client
+  that applies the two policies and the two visitor functions, and pins which path answers — the link for a member who left People
+  search (profile, cases, and the free text the link drops), the member tables for a listed member (their level, their interviewed
+  switch, their written feedback), your own rows whether you are listed or not, and nothing at all for a member who publishes no
+  link or whose email is unverified. The case that matters most is the one that must *not* move: a listed member who shares nothing
+  gets an empty list from the member path and no second read, because falling back on an empty answer would hand a member the link
+  copy of someone they can already read and would hide a real defect. `LinkOnlyProfile.test.tsx` reads the screen over the
+  in-memory twin: the profile opens, the written feedback is absent, **Case with *name*?** and "Ask to case this" are gone and one
+  line says why, the level pill and the interviewed card are absent (and `getInterviewed` is not even called), an existing
+  conversation still offers **Message *name***, and a listed member's page is unchanged
 - **How I like to meet** (the meeting link and time zone, issue #98): the rule (`meeting.test.ts`: an https address kept exactly as
   it will be passed on, the three rooms named and everything else called a link, a phone number with spaces, dashes and an optional
   `+`, both fields optional, and a refusal with a sentence worth showing for `javascript:`, `data:`, `vbscript:`, `file:`, `tel:`,

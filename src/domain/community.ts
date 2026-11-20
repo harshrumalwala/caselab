@@ -111,9 +111,16 @@ export interface Profile {
    * up to date from their cases, not something they type, so it is not part of what the profile form saves.
    */
   level?: number | null;
+  /**
+   * This profile was read through the member's own profile link rather than from the member tables, which is what
+   * happens when they have left People search but still publish a link. It carries exactly what a link holder is
+   * shown, so the member-only facts (their level, the cases they interviewed, whether they can be asked to case)
+   * are not in it and are not knowable from it.
+   */
+  viaLink?: boolean;
 }
 
-export type ProfileInput = Omit<Profile, 'userId' | 'level'>;
+export type ProfileInput = Omit<Profile, 'userId' | 'level' | 'viaLink'>;
 
 /** One case as another member sees it: exactly the row the database serves, nothing derived from private data. */
 export interface SharedCase {

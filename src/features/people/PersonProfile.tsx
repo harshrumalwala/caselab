@@ -206,6 +206,9 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
   const asTable = visitor && wide;
   const industries = distinctValues(shared, 'industry');
   const sources = distinctValues(shared, 'source');
+  // A member reading someone who has left People search is reading their link, the same page a visitor gets. The
+  // member-to-member actions are refused by the database for exactly those members, so the page doesn't offer them.
+  const linkView = !visitor && person.viaLink === true;
   // What the top line promises is read from what the page carries, not from the switches: the sharpening summary
   // also needs scores it can name a skill from, and it belongs to the link, so a member's page never carries it.
   const onThePage = sharingShown(person.sharing, shared, visitor ? 'visitor' : 'member');
@@ -308,12 +311,14 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
         </div>
         {/* One row: the main action first, then the conversation. On a phone the buttons share the card's full width, or stack at full width; no space when there is neither. */}
         <div className="mt-4 flex flex-wrap gap-2 empty:hidden">
-          {!visitor && person.userId !== me && (
+          {!visitor && person.userId !== me && !linkView && (
             <>
               <AskButton person={person} onAsk={() => setAsk({})} />
               {ask && <AskDialog person={person} prefill={ask} onClose={() => setAsk(null)} />}
             </>
           )}
+          {linkView && person.userId !== me && <p className="self-center text-sm text-ink-2">{firstName(person.displayName)} can't be asked to case right now.</p>}
+          {/* A conversation the two of you already have outlives People search, so this stays wherever there is one. */}
           {!visitor && <MessageButton person={person} />}
         </div>
       </div>
@@ -417,7 +422,7 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
                   person={person}
                   theirs={shared}
                   mine={mine}
-                  onPropose={person.userId !== me ? (c) => setAsk({ caseTitle: c.title, caseBook: c.source }) : undefined}
+                  onPropose={person.userId !== me && !linkView ? (c) => setAsk({ caseTitle: c.title, caseBook: c.source }) : undefined}
                 />
               </div>
             ) : (
