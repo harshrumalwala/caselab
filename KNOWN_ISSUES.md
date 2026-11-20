@@ -1098,7 +1098,7 @@ move whenever the file does, so the quoted words are the reliable part):
 ## Reading a profile that only the link opens (issue #247, 2026-11-20)
 
 The fix for #247 routes a signed-in member to the public projection when the member tables cannot see the member they are opening.
-Four things it leaves rough, all in `src/data/supabaseCommunity.ts` unless said otherwise:
+Four things it leaves rough, and a fifth kept as a note because it is resolved; all in `src/data/supabaseCommunity.ts` unless said otherwise:
 
 - **Which path answers is asked twice, once per call.** `getPerson` reads `profiles` and `getSharedCases` asks the same question
   again through `readableAsMember()` (`select user_id ... maybeSingle()`), so opening a profile costs one extra single-row read, and
@@ -1109,10 +1109,13 @@ Four things it leaves rough, all in `src/data/supabaseCommunity.ts` unless said 
 - **`rowToPublicProfile` still reports `listed: true` and `publicProfile: true`** (`src/data/community.ts`). Neither is knowable from
   `public_person`, and after #244 `listed: true` is false for exactly the member this issue is about. Nothing reads either field on
   that path today, and the screen asks `viaLink` instead, so it costs nothing yet; it is a trap for whoever reads `listed` next.
-- **A link-only member's own profile page shows them no cases.** Their own id answers on the member path (the owner always reads
-  their own `profiles` row), but `shared_cases: members read` requires `listed`, so the page says "No shared cases" while their link
-  publishes them to everyone else. That is the same answer as "what other members see", which is what the member path means, and the
-  Visitors preview in **Profile & privacy** reads the link separately — but the profile page itself does not say which it is showing.
+- **A link-only member's own profile page has an empty case list, and that is correct (resolved by #251, issue #250, 2026-11-20;
+  kept as a note on how the page behaves, not an open problem).** Their own id answers on the member path (the owner always reads
+  their own `profiles` row), but `shared_cases: members read` still requires `listed`, so the member-side list is genuinely empty
+  for a link-only member. The emptiness is right: the member path means "what other members see", and they asked to be left out of
+  it. Before #251 the page said only "No shared cases" while their link published them to everyone else, with nothing to say which
+  view it was. Since #251 the page says so and offers "See what your link shows", which opens **Profile & privacy** → "What others
+  see" on the visitors' tab. Nothing remains to fix here; the entry stays because the mechanism is easy to mistake for a bug.
 - **The in-memory twin's member-side `getSharedCases` returns every row for that owner**, ignoring the sharing switches the
   projection applies, so the screen tests cannot tell a member-path answer from a link-path one by its contents alone (they tell them
   apart by the free text the link drops). The "an empty member-side list must not fall through" rule is therefore proved only at the
