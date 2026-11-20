@@ -439,6 +439,24 @@ move whenever the file does, so the quoted words are the reliable part):
 
 ## Production, security and operations
 
+- **The profile-link decoupling migration is written but NOT applied (issue #244, 2026-11-20).**
+  `supabase/migrations/20261128120000_decouple_profile_link_from_listing.sql` drops `profiles_public_requires_listed` and takes
+  `listed` out of `sync_public_profile()` and out of both of `refresh_shared_case()`'s gates. Applying it is the owner's call and
+  is run by the coordinating session. Nothing breaks while it waits: no column is added, so `e2e/deployed.e2e.test.ts` (which reads
+  the `add column` statements out of the migrations) does not watch for it, and the app still forces the old coupling, so no member
+  can reach the new state. The order is the only safe one and matters: **migration first, app second**. The app half is issue #245
+  and must not merge until production is on the new rule — merged first, a member turning People search off would have their link
+  closed by the un-migrated `sync_public_profile()` (in practice the check constraint would refuse the save first, loudly, but
+  nothing is built on that).
+- **An unlisted member's shared rows now exist in `shared_cases`, with only row level security holding them (issue #244, the PM's
+  option (a), taken on evidence).** Before this migration a member who was not `listed` had no row in that table at all, so
+  row-absence was the belt and the policy `"shared_cases: members read"` the braces. A member reachable by link alone now has rows
+  there, and only the policy (which still requires the owner to be `listed`) keeps another member from reading them. The
+  alternative — building `public_shared_cases` from `public.cases` instead — was rejected because
+  `public_shared_cases.case_id` is a foreign key onto `shared_cases (case_id) on delete cascade` and `share_id` is generated on
+  the member-side table, so it would have meant dropping the cascade and re-inventing the public handle. `profileLink.db.test.ts`
+  attacks the policy directly (filtered, counted, sorted, aggregated, as another member and as a visitor), which is the only thing
+  standing there now; if that policy is ever edited, read this entry first.
 - **No per-member spend limit on live case, while the feature is marketed publicly (2026-11-19, issue #231).** `live_case_sessions`
   records `actions` and `llm_calls`; it has no cost column, there is no per-member spend cap and no per-day cost limit. What limits
   use is the function's own 4 starts per member per day. Issue #231 adds a band to every public profile link explaining live case and

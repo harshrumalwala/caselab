@@ -138,7 +138,7 @@ need no account.
 
 | Setting | Shares |
 | --- | --- |
-| **Appear in People search** | Your name and MBA class. Turn it off to disappear completely |
+| **Appear in People search** | Your name and MBA class, to other members. Turn it off to disappear from every member-to-member feature: the member list, Find a case, practice requests, your shared case history and your interviewed cases. It does not close your profile link (see below) |
 | **Case history** | Case name, source (casebook), industry, case type and date |
 | **Overall scores** | The overall 1-5 rating of each shared case |
 | **Skill scores** | The framework, quant, exhibits, brainstorm and other skill ratings |
@@ -160,9 +160,20 @@ The same switches decide what is shown: **written feedback, learning notes and o
 everything** (below). A case set to "keep this case private" is hidden from everyone; a case set to "share the case name only" or
 "share this case in full" is shown through your link too (a "full" case shows its scores and improvement focus, and its text only if
 you opened everything). Profile & privacy previews each audience separately and shows the address with a **Copy link** button while
-the switch is on. Turning it off, or no longer appearing in People, closes the link at once. Each switch saves the
+the switch is on. Turning it off closes the link at once. Each switch saves the
 moment you flip it, and **"What other members see"** at the bottom shows exactly what the database is serving about you.
 While Appear in People search is off the link switch is unavailable and says so in one line; turning People search off while your link is on asks first, because it takes the link with it. In the Visitors preview, the profile is read the way a visitor's request reads it (`public_person`): when that finds no row while both switches say on, the preview says the link doesn't open a profile right now. A preview that is still loading or fails to load says nothing of the kind.
+
+**The two switches are separate rules in the database** (issue #244, migration
+`20261128120000_decouple_profile_link_from_listing.sql`). They are two audiences — classmates browsing the member list, and
+one named person holding a link — and the link no longer asks for People search. `profiles_public_requires_listed`, the check
+that refused `listed = false, public_profile = true`, is dropped; `sync_public_profile()` keeps `public_profile` and
+`is_member_id()` and drops `listed`; `refresh_shared_case()` drops it at both of its gates, so an unlisted member's link
+opens their profile **and** serves their shared cases. Unlisting still removes them from everything member-to-member:
+the policies on `profiles` and `shared_cases` both still require `listed`, as do practice requests, interviewed cases and
+`revoke_nonmembers()`. Two things to know about where this stands: the migration is **written but not applied**, and the
+screens above still tie the two switches together until the app half (issue #245) ships, which is the only safe order —
+the database becomes permissive first, so nothing changes for anybody until the app can save the new state.
 
 **One-click private.** Any case can be hidden from every other member, whatever your profile shares: switch on **Keep this case
 private** when you log or edit it, or click the lock on its row in the Case Log (or **Make private** in the case detail). A private case
@@ -465,6 +476,11 @@ Privacy is enforced in the database, not in the screens:
 - They read a separate **`shared_cases`** table. It contains only the fields you chose to share, and database triggers keep it
   up to date in the same transaction as any change to a case or a switch. Private values aren't hidden there: they aren't in it
   at all, so no query, filter, sort or count can leak them. Turning a switch off removes the data immediately.
+- A row is in `shared_cases` for anyone with an audience: in People search, reachable by their profile link, or both. It is the
+  one source the link-visible copy is built from (`public_shared_cases.case_id` is a foreign key onto it). **Who may read it is
+  a separate rule**: the policy `"shared_cases: members read"` serves a row only while its owner is `listed`, so a member who
+  is reachable by link alone has rows there that no other member can read, in any shape — filtered, counted, sorted or
+  aggregated.
 - It's read-only for members, internal functions can't be called through the API, and signed-in users get only the privileges
   they need.
 - **People without an account** (the database's `anon` role) have **no privilege at all** on `cases`, `profiles`,
@@ -495,7 +511,7 @@ These rules are tested directly against a real Postgres (see Tests), including a
 | `warmup_best` | Your best Warm-up score and streak for each round length (one row per member and length: 30, 60 or 120 seconds). Read-only for you; changed only by `record_warmup_best()`, which can only raise it | Only you |
 | `interviewed_cases` | Cases you ran as the interviewer: date, title, book, type, industry, who you interviewed, what you told them and what you learned. Same case-type list as `cases`, with length limits. Never joined to `cases`, so it can't reach a total, rating, trend or the weekly goal | Only you |
 | `weekly_goal` | Your weekly goal in cases (one row per member, 1 to 14; no row means no goal). Progress and streak are worked out from your cases, so nothing else is stored | Only you |
-| `shared_cases` | The owner-approved projection of cases (see above). Written only by triggers | Verified members |
+| `shared_cases` | The owner-approved projection of cases (see above). Written only by triggers | Verified members, and only for an owner who is listed |
 | `public_profiles`, `public_shared_cases` | Copies for members who switched their profile link on (free text only if they opened everything). Written only by triggers | No API role at all: only `public_person(id)` / `public_person_cases(id)`, by exact member ID |
 
 Averages, coverage, trends, suggestions, learning history and custom industries are calculated in the browser from your own
@@ -1055,6 +1071,7 @@ There is no group administration, group chat or social feed: members, profiles, 
 - **Database**: the real migrations run in Postgres (PGlite): required vs optional columns, rating and case-type rules, and row level security for personal data (own rows only, no cross-user read/update/delete/insert, no anonymous access, signed-out writes refused, cascade on user delete)
 - **People without an account**: the `anon` role tried as a scraper would, and the `authenticated` role tried the same way: the two public tables refuse every direct read (select, column select, count, order, limit, offset, filter and planner estimate), hold no column grant for either role and have no policy left, so nothing can be listed, searched, counted or paged; the only way in is `public_person(id)` / `public_person_cases(id)` with an exact member ID, which returns the same fields as before, nothing for an unknown ID, nothing for a member who never switched their link on and nothing the moment one switches it off; every old visibility combination keeps the meaning it had and nobody becomes more visible; nothing public by default, opt-in only, free text only for members who opened everything (cut to 2000 characters), private cases hidden, no access to any member or personal table, no writes or function calls, length and skill-name limits, and former members removed by `revoke_nonmembers()`
 - **Privacy**: three verified members and one unverified, tried as an attacker would with direct queries: nothing shared by default; each switch reveals only its own field; scores need case history; per-case overrides (private, name only, full); changes apply immediately and leave no stale data; unlisted members vanish; `other_notes` never appears and the partner only with its own switch; another member can't read, edit or delete your cases or profile, write the shared table, or call the internal functions; filters, sorting and counts can't reveal hidden values; unverified and anonymous users get nothing; least-privilege table grants
+- **The profile link on its own** (`profileLink.db.test.ts`, issue #244): the dropped constraint, a member saving `listed = false, public_profile = true`, their link opening their profile **and** serving their shared cases (the half that catches a one-gate fix), the link surviving People search being switched off, and both halves disappearing when the link is switched off. Attacked from three positions: another verified member (absent from the `listed` query and from `profiles` with no filter at all; their rows present in `shared_cases` but unreadable however the read is shaped; the visitor functions and public tables refused; still unaskable and their interviewed cases still closed), a visitor holding the link (the functions answer, both public tables and all three member tables refuse every shape), and a signed-out caller (nothing from any table, neither function callable). Plus the negative: an unverified email gets nothing through the link, and `revoke_nonmembers()` still closes it
 - **Community logic**: loose case-title matching, pairing (what to offer, what to avoid, thin areas) and the filters
 - **What I'm sharpening** (the link holder's skill summary): the rules (`sharpening.test.ts`: weak and strong sides, the middle on
   neither, at most three a side, names with no number in them, silence below the minimum rated cases and for a skill scored on too few,
