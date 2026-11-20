@@ -1098,7 +1098,7 @@ move whenever the file does, so the quoted words are the reliable part):
 ## Reading a profile that only the link opens (issue #247, 2026-11-20)
 
 The fix for #247 routes a signed-in member to the public projection when the member tables cannot see the member they are opening.
-Four things it leaves rough, all in `src/data/supabaseCommunity.ts` unless said otherwise:
+Four things it leaves rough, and a fifth kept as a note because it is resolved; all in `src/data/supabaseCommunity.ts` unless said otherwise:
 
 - **Which path answers is asked twice, once per call.** `getPerson` reads `profiles` and `getSharedCases` asks the same question
   again through `readableAsMember()` (`select user_id ... maybeSingle()`), so opening a profile costs one extra single-row read, and
