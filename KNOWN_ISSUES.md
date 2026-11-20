@@ -370,6 +370,14 @@ move whenever the file does, so the quoted words are the reliable part):
   green, and nobody watches `main`'s own run after a merge: the PRs merged on green checks, and the red run was the post-merge run on
   `main` at `a5d785e`. `main` is green again and no product behaviour was affected.
 - **No linter** exists (`package.json` has no `lint` script); CI (`.github/workflows/ci.yml`) runs typecheck, tests and build only.
+- **Nothing in the unit suite can see a layout defect, and the profile bars are the worked example (issue #237, 2026-11-19).**
+  jsdom has no layout engine: every width, every box and every clip it reports is zero. The bars on a profile link were drawn by
+  Recharts with the name in a fixed pixel gutter inside an SVG with `overflow: hidden`, so every name longer than the gutter lost its
+  first letters at **every** window width, and all 1,226 tests were green the whole time. The fix (plain DOM, a CSS grid whose name
+  column is `auto`) is covered by `src/ProfileBars.test.tsx`, which pins what is real — the whole name is text in the drawn block, no
+  pixel count is left in it — and deliberately does **not** pretend to measure the clipping. **The new rendering has not been opened
+  in a browser**: `.env.local` is git-ignored, so `npm run dev` does not start in a worktree, and the session that wrote it had no
+  browser to check it in. Someone should look at a real profile link at 375px and at a desktop width, in both themes.
 - **The #121 column is in production, so the live check that watched for it passes again.** "has every column the migrations add"
   in `e2e/deployed.e2e.test.ts` reads the `add column` statements straight out of `supabase/migrations/`, so it expected
   `profiles.share_sharpening` from the moment the migration file was committed and reported it missing until the owner applied it on

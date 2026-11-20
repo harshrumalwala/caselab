@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Compass } from 'lucide-react';
 import { barColors } from '../../components/charts/colors';
 import type { Profile, SharedCase } from '../../domain/community';
@@ -7,10 +7,8 @@ import type { Exposure } from '../../domain/stats';
 import { useTheme } from '../../state/theme';
 import { Badge } from '../../components/ui/Badge';
 import { Card, CardHeader } from '../../components/ui/Card';
-import type { BarRow } from './ProfileBars';
+import { ProfileBars, type BarRow } from './ProfileBars';
 import { SharedScores } from './SharedScores';
-
-const ProfileBars = lazy(() => import('./ProfileBars'));
 
 /** The three bands a case type or industry can be in, in the order the lanes read them. */
 const BANDS: Exposure[] = ['none', 'once', 'multiple'];
@@ -64,9 +62,7 @@ function Lane({ title, areas }: { title: string; areas: PracticeArea[] }) {
               </li>
             ))}
           </ul>
-          <Suspense fallback={<div style={{ height: rows.length * 26 + 12 }} className="animate-pulse rounded-xl bg-surface-2" aria-hidden />}>
-            <ProfileBars rows={rows} max={max} />
-          </Suspense>
+          <ProfileBars rows={rows} max={max} />
           <ul className="sr-only" aria-label={`${title}: cased`}>
             {cased.map((a) => (
               <li key={a.name}>{`${a.name}: ${plural(a.count, 'case')}`}</li>

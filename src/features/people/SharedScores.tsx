@@ -1,10 +1,7 @@
-import { lazy, Suspense } from 'react';
 import { barColors } from '../../components/charts/colors';
 import type { SharedScore } from '../../domain/giveNext';
 import { useTheme } from '../../state/theme';
-import type { BarRow } from './ProfileBars';
-
-const ProfileBars = lazy(() => import('./ProfileBars'));
+import { ProfileBars, type BarRow } from './ProfileBars';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const score = (n: number) => n.toFixed(1);
@@ -30,9 +27,7 @@ export function SharedScores({ scores, thin, label }: { scores: SharedScore[]; t
     <div className="space-y-3">
       {rows.length > 0 && (
         <>
-          <Suspense fallback={<div style={{ height: rows.length * 26 + 12 }} className="animate-pulse rounded-xl bg-surface-2" aria-hidden />}>
-            <ProfileBars rows={rows} max={5} nameWidth={132} />
-          </Suspense>
+          <ProfileBars rows={rows} max={5} />
           <ul className="sr-only" aria-label={label}>
             {scores.map((s) => (
               <li key={s.key}>{`${s.label}: ${score(s.average)} out of 5, from ${plural(s.count, 'case')}`}</li>
