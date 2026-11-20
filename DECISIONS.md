@@ -1245,7 +1245,7 @@ Two gaps found in `src/data/memoryCommunity.ts` during this batch, both worth kn
 
 ### Correction: the link that "returned nothing" was a member id that does not exist (2026-11-20)
 
-For two days this file, KNOWN_ISSUES and several issue bodies carried a statement of fact: the owner's profile link returns nothing,
+For two days this file and two issue bodies — **#239** (its opening line and its Source note) and **#244** (its Problem section) — carried a statement of fact: the owner's profile link returns nothing,
 `public_person(92dc76c1-78b3-464b-bd1e-ddbfdc4a4d6b)` gives `[]`. It was used as the opening symptom of #239, as the reason the browser
 checks had to run on stubbed rows, and as supporting colour in the decoupling decision.
 
