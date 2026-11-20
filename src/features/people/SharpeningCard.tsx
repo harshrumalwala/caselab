@@ -50,9 +50,6 @@ export function SharpeningCard({ name, shared, note }: { name: string; shared: S
         <Skills label="Strong already" names={view.strengths.map((s) => s.label)} />
       </div>
 
-      <p className="mt-4 text-xs text-muted">
-        A useful case to give {name} asks for what they're sharpening and leans on what's already strong.
-      </p>
       {note}
     </Card>
   );

@@ -831,10 +831,11 @@ describe('the profile link says its piece and stops', () => {
         /not a verdict|isn't a weakness|this is exposure|too few to read|only what Bob chose to share|chose to show this|no numbers|no ranking|what this means|in other words|keep in mind|bear in mind|which means that/i,
       );
     }
-    // What is left on each: the lists, and one line about the case to give them.
+    // What is left on each: its subtitle and its lists. The line about the case to give them was itself one of
+    // these (issue #237): it told the reader how to use the two lists above it, so it was cut rather than reworded.
     expect(give.textContent).toMatch(/From the 4 cases Bob shares\./);
     expect(sharpening.textContent).toMatch(/From the skill scores on the 4 cases Bob shares\./);
-    expect(sharpening.textContent).toMatch(/A useful case to give Bob asks for what they're sharpening/);
+    expect(sharpening.textContent).not.toMatch(/A useful case to give Bob asks for what they're sharpening/);
   });
 });
 
