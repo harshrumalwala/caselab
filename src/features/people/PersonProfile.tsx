@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ArrowLeft, Hand, Loader2, MessageCircle, Mic, UserRound } from 'lucide-react';
+import { ArrowLeft, Eye, Hand, Loader2, MessageCircle, Mic, UserRound } from 'lucide-react';
 import type { PublicReader } from '../../data/community';
 import { describeError } from '../../data/errors';
 import { publicSharingSummary, sharingSummary, type Profile, type SharedCase } from '../../domain/community';
@@ -17,6 +17,7 @@ import { Button } from '../../components/ui/Button';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useMyUserId } from '../../state/CommunityProvider';
+import { useUI } from '../../state/ui';
 import { useWideScreen } from '../../state/screen';
 import { useConversationWith, useMessages } from '../../state/MessagesProvider';
 import { usePractice } from '../../state/PracticeProvider';
@@ -64,6 +65,28 @@ function AskButton({ person, onAsk }: { person: Profile; onAsk: () => void }) {
     <Button variant="primary" className="grow sm:grow-0" onClick={onAsk} disabled={waiting || unsure}>
       <Hand className="size-4" /> {waiting ? 'Request waiting' : conversation ? `Case again with ${name}?` : `Case with ${name}?`}
     </Button>
+  );
+}
+
+/**
+ * Your own page when you have left People search and kept your link on. The member list is empty, correctly: it is
+ * what other members see, and they asked to be left out of it. The link is a different audience and is unaffected, so
+ * the page says that and sends you to "What others see", which reads the link live, rather than guessing at it here.
+ */
+function OwnPageLinkOnly() {
+  const { openPreview } = useUI();
+  return (
+    <EmptyState
+      title="No shared cases"
+      compact
+      actions={
+        <Button onClick={openPreview}>
+          <Eye className="size-4" /> See what your link shows
+        </Button>
+      }
+    >
+      You're not in People search, so members see nothing here. Your link is unaffected.
+    </EmptyState>
   );
 }
 
@@ -214,13 +237,21 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
   const onThePage = sharingShown(person.sharing, shared, visitor ? 'visitor' : 'member');
   const summary = visitor ? publicSharingSummary(onThePage) : sharingSummary(onThePage);
 
+  // Your own page, read as members read it, while you are out of People search and your link is on: the empty list is
+  // right, and without a word it looks like a link that has stopped working.
+  const ownLinkOnly = !visitor && person.userId === me && !person.listed && person.publicProfile;
+
   const casesBody = (
     <>
       {shared.length === 0 ? (
         <Card>
-          <EmptyState title="No shared cases" compact>
-            {person.displayName} hasn't shared any case history{visitor ? ' with visitors' : ' with other members'}.
-          </EmptyState>
+          {ownLinkOnly ? (
+            <OwnPageLinkOnly />
+          ) : (
+            <EmptyState title="No shared cases" compact>
+              {person.displayName} hasn't shared any case history{visitor ? ' with visitors' : ' with other members'}.
+            </EmptyState>
+          )}
         </Card>
       ) : (
         <>

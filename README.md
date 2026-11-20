@@ -246,6 +246,13 @@ cases they interviewed, and anything written unless they opened everything. **Ca
 `send_practice_request` still requires People search; the page says in one line that they can't be asked. A conversation the two of
 you already have is untouched, because messaging asks for a verified member and no block, not a listing.
 
+**Your own page while you are out of People search with your link on** (issue #250, 2026-11-20). Your own profile is read the way
+other members read it, and for someone who has left People search that is an empty case list, correctly. The empty state there says
+so in one line (*You're not in People search, so members see nothing here. Your link is unaffected.*) and offers **See what your
+link shows**, which opens Profile & privacy at **What others see**, already on the visitors' tab. The page does not serve the link
+view to you, and it does not preview the link itself: the answer comes from the one place that reads it live. Nothing changes for a
+listed member, for a member with both switches off (the plain "No shared cases"), or on anyone else's profile.
+
 **Never shared, whatever you choose:** your email address. Your Other notes stay private unless you turn on Open everything.
 
 ### Find a case for someone
@@ -1139,7 +1146,7 @@ There is no group administration, group chat or social feed: members, profiles, 
   copy of someone they can already read and would hide a real defect. `LinkOnlyProfile.test.tsx` reads the screen over the
   in-memory twin: the profile opens, the written feedback is absent, **Case with *name*?** and "Ask to case this" are gone and one
   line says why, the level pill and the interviewed card are absent (and `getInterviewed` is not even called), an existing
-  conversation still offers **Message *name***, and a listed member's page is unchanged
+  conversation still offers **Message *name***, and a listed member's page is unchanged; the same file pins your own page (issue #250): the line and **See what your link shows** for `listed = false` with the link on, that button opening "What others see" on the visitors' tab, and neither on a listed member's own page, with both switches off, or on someone else's
 - **How I like to meet** (the meeting link and time zone, issue #98): the rule (`meeting.test.ts`: an https address kept exactly as
   it will be passed on, the three rooms named and everything else called a link, a phone number with spaces, dashes and an optional
   `+`, both fields optional, and a refusal with a sentence worth showing for `javascript:`, `data:`, `vbscript:`, `file:`, `tel:`,

@@ -136,3 +136,51 @@ describe('a member who is in People search', () => {
     expect(screen.getByText('Crisp structure')).toBeInTheDocument(); // the written feedback a link would hold back
   });
 });
+
+describe('your own page when you have left People search and kept your link on', () => {
+  const ME_LINK_ONLY: Profile = { ...EVA, userId: ME, displayName: 'Test User', listed: false, publicProfile: true };
+  const LINE = "You're not in People search, so members see nothing here. Your link is unaffected.";
+
+  const openOwn = async (profile: Profile) => {
+    const env = createFakeEnv({ profile, members: [EVA, BOB], shared: CASES });
+    const user = await openProfile(env, ME, 'Test User');
+    await user.click(screen.getByRole('tab', { name: /^Shared cases/ }));
+    return { env, user };
+  };
+
+  it('says the member list is empty on purpose and the link is fine', async () => {
+    await openOwn(ME_LINK_ONLY);
+    expect(screen.getByText(LINE)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'See what your link shows' })).toBeInTheDocument();
+  });
+
+  it('opens Profile & privacy at "What others see", on what a visitor reads', async () => {
+    const { user } = await openOwn(ME_LINK_ONLY);
+    await user.click(screen.getByRole('button', { name: 'See what your link shows' }));
+    expect(await screen.findByRole('heading', { name: 'What others see' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Visitors without an account', selected: true })).toBeInTheDocument();
+  });
+
+  it('is not there for a listed member, whose page is unchanged', async () => {
+    await openOwn({ ...ME_LINK_ONLY, listed: true });
+    expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+    expect(screen.getByText('No shared cases')).toBeInTheDocument();
+    expect(screen.getByText("Test User hasn't shared any case history with other members.")).toBeInTheDocument();
+  });
+
+  it('is not there for a member with both switches off, who sees the plain empty state', async () => {
+    await openOwn({ ...ME_LINK_ONLY, publicProfile: false });
+    expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'See what your link shows' })).not.toBeInTheDocument();
+    expect(screen.getByText("Test User hasn't shared any case history with other members.")).toBeInTheDocument();
+  });
+
+  it("is not on someone else's page, link view or not", async () => {
+    const env = createFakeEnv({ members: [EVA, { ...BOB, listed: true }], shared: [] });
+    const user = await openProfile(env, 'eva', 'Eva Ernst');
+    await user.click(screen.getByRole('tab', { name: /^Shared cases/ }));
+    expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'See what your link shows' })).not.toBeInTheDocument();
+    expect(screen.getByText("Eva Ernst hasn't shared any case history with other members.")).toBeInTheDocument();
+  });
+});

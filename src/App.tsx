@@ -75,7 +75,7 @@ function Shell() {
   useShareLevel(level, status === 'ready' && mode !== 'demo');
   // A brand-new account gets the tour once: not people who already have cases, and not after it was finished or skipped.
   const [tourPending] = useState(() => !hasSeenTour(session.userId));
-  const [profileFocus, setProfileFocus] = useState<'burned' | 'meeting' | null>(null);
+  const [profileFocus, setProfileFocus] = useState<'burned' | 'meeting' | 'preview' | null>(null);
   const counter = useRef(0);
 
   // Arriving from the sign-in or sign-up page: drop that address and show the dashboard.
@@ -106,6 +106,10 @@ function Shell() {
       openShortcuts: () => setShortcutsOpen(true),
       openBurned: () => {
         setProfileFocus('burned');
+        setProfileOpen(true);
+      },
+      openPreview: () => {
+        setProfileFocus('preview');
         setProfileOpen(true);
       },
       openMeetingPrefs: () => {

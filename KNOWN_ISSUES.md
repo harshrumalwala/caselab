@@ -1117,6 +1117,13 @@ Four things it leaves rough, all in `src/data/supabaseCommunity.ts` unless said 
   projection applies, so the screen tests cannot tell a member-path answer from a link-path one by its contents alone (they tell them
   apart by the free text the link drops). The "an empty member-side list must not fall through" rule is therefore proved only at the
   repository layer, in `src/data/communityFallback.test.ts`.
+- **The in-memory twin returns shared rows for your own unlisted profile; production returns none** (found building #250,
+  2026-11-20). `src/data/memoryCommunity.ts` answers member-side `getSharedCases` for your own id with every row you share, whether or
+  not you are listed. The real policy `"shared_cases: members read"` requires `listed`, so for an unlisted member production returns
+  an empty list. The tests for #250 are honest in spite of it: they use an empty case list, which is what production returns. A future
+  test written against the twin could pass while the same code shows an empty page in production. Recorded rather than fixed because
+  making the twin model the `listed` requirement could move existing tests that read your own shared cases while unlisted, and nobody
+  has checked which.
 
 ## Unverified user-side checks left open
 
