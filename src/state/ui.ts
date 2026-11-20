@@ -20,6 +20,8 @@ export interface UIContextValue {
   openBurned(): void;
   /** Profile & privacy, scrolled to how you like to meet (your meeting link and time zone). */
   openMeetingPrefs(): void;
+  /** Profile & privacy, scrolled to "What others see" and opened on what a visitor with your link reads. */
+  openPreview(): void;
   /** The list of keyboard shortcuts. */
   openShortcuts(): void;
 }

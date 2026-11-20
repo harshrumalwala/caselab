@@ -30,10 +30,10 @@ type Audience = 'members' | 'visitors';
 /** Distinct casebook names from your own cases, to suggest as you type. */
 const distinctSources = (cases: { source: string }[]) => [...new Set(cases.map((c) => c.source.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 
-function Preview({ profile }: { profile: Profile }) {
+function Preview({ profile, initialAudience = 'members' }: { profile: Profile; initialAudience?: Audience }) {
   const { community } = useCommunity();
   const { cases } = useData();
-  const [audience, setAudience] = useState<Audience>('members');
+  const [audience, setAudience] = useState<Audience>(initialAudience);
   const [state, setState] = useState<{ status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; shared: SharedCase[]; published: boolean }>({
     status: 'loading',
   });
@@ -218,7 +218,7 @@ function EmailSwitch() {
   );
 }
 
-export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () => void; focus?: 'burned' | 'meeting' | null }) {
+export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () => void; focus?: 'burned' | 'meeting' | 'preview' | null }) {
   const profile = useMyProfile();
   const { saveProfile } = useCommunity();
   const { cases, mode } = useData();
@@ -233,7 +233,7 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
   // Arriving from "Burn cases" on the Case Log, or from scheduling: bring that part of the page into view.
   useEffect(() => {
     if (!focus) return;
-    const target = focus === 'burned' ? 'burned-cases-title' : 'meeting-title';
+    const target = focus === 'burned' ? 'burned-cases-title' : focus === 'preview' ? 'preview-title' : 'meeting-title';
     const timer = window.setTimeout(() => document.getElementById(target)?.scrollIntoView?.({ block: 'start' }), 150);
     return () => window.clearTimeout(timer);
   }, [focus]);
@@ -373,7 +373,7 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
             onChange={(burnedCases) => void save({ burnedCases })}
           />
 
-          <Preview profile={profile} />
+          <Preview profile={profile} initialAudience={focus === 'preview' ? 'visitors' : 'members'} />
           {profile.listed && <Badge tone="neutral">Changes apply as soon as they're saved.</Badge>}
         </div>
       </Dialog>
