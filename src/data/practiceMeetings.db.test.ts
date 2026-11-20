@@ -61,16 +61,38 @@ const mine = async (uid: string) => {
   await as(db, 'authenticated', uid);
   return (await db.query<Meeting>('select * from public.my_practice_meetings()')).rows;
 };
-const one = async (uid: string) => (await mine(uid))[0];
+/**
+ * The caller's one record. `my_practice_meetings()` sorts by `updated_at desc`, and two writes a millisecond apart
+ * tie, so a test with more than one record must name the one it means: `record(uid, id)`, not whichever sorted first.
+ */
+const one = async (uid: string) => {
+  const rows = await mine(uid);
+  if (rows.length !== 1) throw new Error(`one(${uid}) found ${rows.length} records; say which one with record(uid, id)`);
+  return rows[0];
+};
+/** One named record of the caller's, whatever order the list came back in. */
+const record = async (uid: string, id: string) => {
+  const found = (await mine(uid)).find((m) => m.id === id);
+  if (!found) throw new Error(`record(${uid}, ${id}) is not readable by them`);
+  return found;
+};
 
+/** Proposing: the id of the record the database made, or the sentence it refused with. */
+const proposed = async (uid: string, other: string, slots = at(24), duration = 60): Promise<{ id: string | null; error: string }> => {
+  await as(db, 'authenticated', uid);
+  try {
+    const { rows } = await db.query<{ id: string }>('select public.propose_practice_meeting($1, $2::timestamptz[], $3) as id', [other, slots, duration]);
+    return { id: rows[0].id, error: '' };
+  } catch (e) {
+    return { id: null, error: (e as Error).message };
+  }
+};
 const propose = async (uid: string, other: string, slots = at(24, 48, 72), duration = 60) => {
-  await as(db, 'authenticated', uid);
-  return (await db.query<{ id: string }>('select public.propose_practice_meeting($1, $2::timestamptz[], $3) as id', [other, slots, duration])).rows[0].id;
+  const { id, error } = await proposed(uid, other, slots, duration);
+  if (id === null) throw new Error(`propose(${uid}, ${other}) was refused: ${error}`);
+  return id;
 };
-const proposeFails = async (uid: string, other: string, slots = at(24), duration = 60) => {
-  await as(db, 'authenticated', uid);
-  return fails('select public.propose_practice_meeting($1, $2::timestamptz[], $3)', [other, slots, duration]);
-};
+const proposeFails = async (uid: string, other: string, slots = at(24), duration = 60) => (await proposed(uid, other, slots, duration)).error;
 const confirm = async (uid: string, id: string, slot: string) => {
   await as(db, 'authenticated', uid);
   return fails('select public.confirm_practice_meeting($1, $2)', [id, slot]);
@@ -152,8 +174,8 @@ describe('proposing a time', () => {
     expect(await cancel(ALICE, id)).toBe('');
 
     // Alice proposing changes nothing: she asked, so she hosts.
-    await propose(ALICE, BOB);
-    expect(await one(ALICE)).toMatchObject({ host_id: ALICE, i_host: true });
+    const hers = await propose(ALICE, BOB);
+    expect(await record(ALICE, hers)).toMatchObject({ host_id: ALICE, i_host: true });
   });
 
   it('refuses a member there is no request or conversation with, and says nothing about why', async () => {
@@ -246,8 +268,8 @@ describe('the time rules', () => {
     }
     for (const good of [30, 45, 60, 90]) {
       const id = await propose(ALICE, BOB, at(24), good);
-      expect((await one(ALICE)).duration_minutes, String(good)).toBe(good);
-      await cancel(ALICE, id);
+      expect((await record(ALICE, id)).duration_minutes, String(good)).toBe(good);
+      expect(await cancel(ALICE, id), String(good)).toBe('');
     }
   });
 
@@ -258,7 +280,7 @@ describe('the time rules', () => {
     // A proposed time that passed while they were deciding: one of the two is still live, so the record is not lapsed.
     await as(db, 'postgres');
     await db.query(`update public.practice_meeting_proposals set slots = array[now() - interval '1 hour', now() + interval '3 days']::timestamptz[]`);
-    const [gone] = (await mine(ALICE))[0].proposed_slots!;
+    const [gone] = (await one(ALICE)).proposed_slots!;
     expect(await confirm(ALICE, id, gone.toISOString())).toMatch(/That time has passed\./);
     expect(await one(ALICE)).toMatchObject({ state: 'proposed' });
   });
@@ -281,7 +303,8 @@ describe('the time rules', () => {
 
 describe('the database enforces the screen’s rule, not a weaker one', () => {
   // The same times through the plain function in src/domain/scheduling.ts and through the database. If the two ever
-  // disagree about one of them, this fails and says which.
+  // disagree about one of them, this fails and says which. The two judges read their own clocks a round trip apart
+  // and the database's cannot be frozen, so every sample stays minutes away from the rule it probes (#253).
   beforeEach(connectAliceAndBob);
 
   const samples: { slots: number[]; duration: number }[] = [
@@ -305,15 +328,16 @@ describe('the database enforces the screen’s rule, not a weaker one', () => {
   it('accepts and refuses exactly the same times, with the same sentence', async () => {
     const disagreed: string[] = [];
     for (const sample of samples) {
-      const iso = sample.slots.map((h) => new Date(Date.now() + h * HOUR).toISOString());
-      const screen = checkMeetingTimes({ slots: iso, durationMinutes: sample.duration });
-      const database = await proposeFails(ALICE, BOB, `{${iso.join(',')}}`, sample.duration);
+      // One reading of the clock builds the times and judges them, so the screen judges exactly what it was given.
+      const now = Date.now();
+      const iso = sample.slots.map((h) => new Date(now + h * HOUR).toISOString());
+      const screen = checkMeetingTimes({ slots: iso, durationMinutes: sample.duration }, new Date(now));
+      // The accepted record is cleared by its own id: one pair can only have one proposal open, and reading back
+      // "the newest record" would pick whichever of two writes in the same millisecond happened to sort first.
+      const { id, error: database } = await proposed(ALICE, BOB, `{${iso.join(',')}}`, sample.duration);
       const agreed = screen.ok ? database === '' : database.includes(screen.message);
       if (!agreed) disagreed.push(`${JSON.stringify(sample)}: screen ${JSON.stringify(screen)}, database ${JSON.stringify(database)}`);
-      if (database === '') {
-        const [made] = await mine(ALICE);
-        await cancel(ALICE, made.id);
-      }
+      if (id !== null) expect(await cancel(ALICE, id), `clearing the record ${JSON.stringify(sample)} made`).toBe('');
     }
     expect(disagreed).toEqual([]);
   });
@@ -339,10 +363,11 @@ describe('a proposal nobody answered lapses when its last time passes', () => {
     // Nothing sweeps it: it is still open until somebody writes again, and reads already call it lapsed.
     expect(await rowCount('practice_meeting_proposals', 'where answered_at is null')).toBe(1);
     // And it no longer holds the one-open-proposal-per-pair place.
-    expect(await proposeFails(ALICE, BOB, at(24))).toBe('');
+    const { id: next, error } = await proposed(ALICE, BOB, at(24));
+    expect(error).toBe('');
     expect(await rowCount('practice_meeting_proposals', `where outcome = 'lapsed'`)).toBe(1);
     expect(await rowCount('practice_meetings')).toBe(2);
-    expect(await one(ALICE)).toMatchObject({ state: 'proposed', my_turn: false });
+    expect(await record(ALICE, next!)).toMatchObject({ state: 'proposed', my_turn: false });
   });
 });
 

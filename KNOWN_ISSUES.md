@@ -369,6 +369,21 @@ move whenever the file does, so the quoted words are the reliable part):
   defect in one test, separate from the load-related timeouts above. It was not noticed because a green PR check does not mean `main` is
   green, and nobody watches `main`'s own run after a merge: the PRs merged on green checks, and the red run was the post-merge run on
   `main` at `a5d785e`. `main` is green again and no product behaviour was affected.
+- **A second scheduling flake, and it was the row order rather than the slot times (#253, fixed 2026-11-20).**
+  `the database enforces the screen's rule, not a weaker one > accepts and refuses exactly the same times, with the same sentence` in
+  `src/data/practiceMeetings.db.test.ts` turned `main` red at `aa98c09`, the squashed merge of a four-markdown-file PR, and had failed
+  the same way on that PR's own run. The reported cause (the screen and the database reading the clock milliseconds apart on a
+  boundary) was not the mechanism: the nearest sample sits four minutes from a boundary, so no round trip could flip one. The failing
+  log named the two samples, and both were refused with **"You already have times waiting with this member."** — the test cleared the
+  record it had just made by taking the first row of `my_practice_meetings()`, which sorts by `updated_at desc`. PGlite's `now()` has
+  millisecond resolution and a CI round trip was about 1 ms, so a cancel and the next insert could share a timestamp, the tie could
+  sort the already-cancelled record first, the cancel then cleared nothing, and every later accepted sample hit the one-open-proposal
+  rule. The test now clears by the id the database returned, `one(uid)` refuses to guess when a caller has more than one record, and
+  three other tests in the file that were reading "the newest record" the same way were changed to name theirs.
+  **What is still not deterministic, and cannot be here:** the screen judges with the Node clock and the database with its own `now()`,
+  which PGlite cannot be made to freeze, so the two judges are always one round trip apart. That is bounded by milliseconds while every
+  sample is minutes from the rule it is testing, so it is not a source of flakes today; a sample placed within seconds of the ten-minute
+  or sixty-day edge would be, and should not be added.
 - **No linter** exists (`package.json` has no `lint` script); CI (`.github/workflows/ci.yml`) runs typecheck, tests and build only.
 - **Nothing in the unit suite can see a layout defect, and the profile bars are the worked example (issue #237, 2026-11-19).**
   jsdom has no layout engine: every width, every box and every clip it reports is zero. The bars on a profile link were drawn by
