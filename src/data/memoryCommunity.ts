@@ -9,7 +9,10 @@ const asVisitorsSee = (p: Profile): Profile => ({
   ...p,
   // The level is for members only.
   level: null,
-  sharing: { ...p.sharing, feedback: p.sharing.details, notes: p.sharing.details, level: false },
+  // Read through the link: what follows is all there is of them on this path.
+  viaLink: true,
+  // Interviewed cases and the level are for members only, and `public_person` carries neither switch.
+  sharing: { ...p.sharing, feedback: p.sharing.details, notes: p.sharing.details, interviewed: false, level: false },
   // Burned books and cases only reach visitors when the member switched that on.
   burnedBooks: p.sharing.burned ? p.burnedBooks : [],
   burnedCases: p.sharing.burned ? p.burnedCases : [],
@@ -24,13 +27,13 @@ const forVisitors = (s: SharedCase, owner: Profile | undefined): SharedCase =>
 
 /**
  * In-memory read access for people without an account: one member at a time, by exact id (the id in that member's
- * profile link), only if they are listed AND visible without an account, and no free text. There is no search or
- * list, exactly as the database has none for them.
+ * profile link), only if they publish one, and no free text. There is no search or list, exactly as the database
+ * has none for them. Appearing in People search has nothing to do with it, as in `public_person` itself.
  * `profiles` is read live so tests can change a member's settings after creating the reader.
  */
 export function createMemoryPublic(opts: { profiles: () => Profile[]; shared?: SharedCase[] }): PublicReader & { calls: string[] } {
   const calls: string[] = [];
-  const isPublic = (p: Profile) => p.listed && p.publicProfile;
+  const isPublic = (p: Profile) => p.publicProfile;
   return {
     calls,
     async getPerson(userId: string) {
@@ -74,6 +77,9 @@ export function createMemoryCommunity(opts: {
     if (failing.has(name)) throw failing.get(name);
   };
 
+  /** This member as the member tables hold them, which is nothing at all once they leave People search. */
+  const memberSide = (userId: string) => profiles.find((p) => p.userId === userId && (p.listed || userId === opts.me)) ?? null;
+
   return {
     calls,
     profiles,
@@ -113,10 +119,13 @@ export function createMemoryCommunity(opts: {
     },
     async getPerson(userId: string) {
       enter('getPerson');
-      return profiles.find((p) => p.userId === userId && (p.listed || userId === opts.me)) ?? null;
+      // A member who has left People search is gone from the member path; their link answers for them instead.
+      return memberSide(userId) ?? (await visitors.getPerson(userId));
     },
     async getSharedCases(ownerId: string): Promise<SharedCase[]> {
       enter('getSharedCases');
+      // Whichever path answers for the profile answers for the cases: never one of each.
+      if (!memberSide(ownerId)) return visitors.getSharedCases(ownerId);
       return (opts.shared ?? []).filter((s) => s.ownerId === ownerId);
     },
     async getInterviewed(ownerId: string): Promise<SharedInterviewed[]> {

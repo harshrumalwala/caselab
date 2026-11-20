@@ -157,6 +157,8 @@ export function rowToPublicProfile(r: PublicProfileRow): Profile {
     mbaClass: r.mba_class ?? '',
     listed: true,
     publicProfile: true,
+    // Read through the link, so the page knows not to offer what only a listed member can be offered.
+    viaLink: true,
     // Empty unless the member also switched on showing them to visitors.
     burnedBooks: r.burned_books ?? [],
     burnedCases: parseBurnedCases(r.burned_cases),
