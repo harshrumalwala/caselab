@@ -1063,3 +1063,120 @@ The caveat that survives: the sending domain is the owner's own, and **which inb
 which of the two emails they had seen arrive, not where, so whether it was their own address, a throwaway or a classmate's is not known.
 Deliverability to a school address, to Gmail's spam folder or to a tenant with strict filtering is therefore still an open question. That
 is worth knowing before the first email goes to someone who is not the owner, but it is not a reason to hold #101.
+
+## The profile link, looked at in a browser for the first time (2026-11-19)
+
+Five PRs rebuilt the public profile page on 2026-11-19 (#228, #232, #233, #234, #236) and every one merged on a green suite. Then
+somebody opened the page. **Three of the four findings were invisible to 1,226 tests**, and the reason is one sentence: jsdom has no
+layout engine, so every width, box and clip it reports is zero. That is now in KNOWN_ISSUES as a standing limit rather than a surprise,
+and each issue below says in its own body what its tests can and cannot prove.
+
+How it was checked, because the method is reusable and the fixtures were not real: the owner's own profile could not be used — the
+`public_person` RPC returns nothing for it — so `window.fetch` was patched in a `npm run dev` page to stub `public_person` and
+`public_person_cases` with a fabricated member, and `#/people/<id>` was read signed out. **The data was invented; the rendering, the CSS
+and the pixel measurements were real**, and no repository code was changed to take them.
+
+**The bars stopped being a chart (issue #237, PR #241).** Every name longer than the gutter was cut off on the left at *every* window
+width — "Healthcare / Pharmaceuticals" read as "lthcare / Pharmaceuticals" — because `ProfileBars` handed Recharts' `YAxis` a fixed
+pixel `nameWidth` (142 in the lanes, 132 in the scores) inside an SVG with `overflow: hidden`. Measured identically at 375, 900, 1200,
+1440 and 1600 px, and six of the real industry names are long enough to hit it, so it was the common case and not an edge case.
+
+A wider gutter was rejected, and so was measuring the text at runtime: **at 375 px the card is about 343 px wide and one of those names
+is about 155 px before its `n=` note, so any number big enough swallows half a phone screen and still fails on the next long name
+anyone adds**. The rows are now plain DOM — a CSS grid whose name column is `auto`, so the browser measures the names and wraps them.
+No pixel count is left in the file to be wrong. Recharts stays where there is a real chart; here it was being used as a layout engine,
+and its `overflow: hidden` is precisely what turned a long name into a typo. There was no accessibility cost, because the block was
+already `aria-hidden` with a correct `sr-only` list beside it.
+
+**One line was cut rather than rewritten.** "A useful case to give *name* asks for what they're sharpening and leans on what's already
+strong." was a garden-path sentence *and* a line telling the reader how to use two lists headed "Sharpening now" and "Strong already".
+Worth recording: a test was asserting that the line existed, added when an earlier review called it the one line the card was allowed.
+**A positive assertion on copy pins a judgement, not a behaviour**, so it has to be re-decided rather than obeyed; the negative
+assertion beside it — the list of phrases the cards must never contain — is the one that was left untouched.
+
+**What the switch pair does not say (issue #239, PR #240).** The owner reported their sharing was on while `public_person` returned
+nothing for them. There are two gates and the dialog showed neither: "People with my link can see my profile" is unusable unless
+"Appear in People search" is on, and turning People search off **silently withdraws a link already given to people**; and
+`sync_public_profile` writes nothing unless `is_member_id()` is also true, which needs a verified email. Worse, the preview built to
+catch exactly this decided "nobody can open your profile" from the *local switches* rather than from the RPC, so a published-but-empty
+profile fell through to "No cases are visible to visitors. Your N cases are private." — **sending the member to fix the per-case
+switches for a profile that was never published**. The preview now asks `public_person` itself, and only a successful answer of "no
+row" counts; a pending or failed request stays a loading or error state, because telling someone their link is broken when it is fine
+is worse than the original defect.
+
+**Whether the link should depend on People search at all was left to the owner.** They are two audiences — classmates browsing, and a
+named person holding a link — and someone may reasonably want the second without the first. The condition lives in
+`sync_public_profile` as well as in the dialog, so decoupling needs a migration, and migrations are the owner's call every time. The PR
+makes the existing rule visible and changes nothing about it.
+
+## The second rejection of the profile page, and what replaces the layout (2026-11-19)
+
+The owner, on the page #236 had just shipped: *"the design on the public profile page is not good at alllll.... it seems worse than the
+intial one too, we just put cases on the right and that comes with lot of free space and only half screen occupied for halff of the
+vertical page which seems weird ... currently you are not doing a good work."*
+
+Measured at 1440, signed out, 14 shared cases: the summary column (`lg:col-span-7`, 710 px) ended at y=1672, the case list
+(`lg:col-span-5`, 502 px) at y=3848, the page was 3968 px tall, and **2,176 px — 55% of it — was blank left gutter**. About 236 px per
+case, so roughly 4 of 14 cases were on screen at once.
+
+**The PM's first answer was wrong and is recorded as such.** #238 originally asked for the list to be capped with a "show all" control.
+A cap shortens the page while keeping the shape the owner was objecting to, and "worse than the initial one" says the shape is the
+complaint. The cap is superseded and the issue was rewritten.
+
+**What replaces it: one full-width column above 1024 px, with the case history as a dense table.** The reasoning, in order:
+
+- **A gutter is what you get whenever a short column sits beside a long one.** No cap, reorder or swap removes it; they move it. One
+  column makes it structurally impossible.
+- **This is not a revert of #236.** That PR's instruction was to use the width, and the width still gets used — *inside* each block,
+  with the practice lanes two-across and the table spanning 1280 px, rather than by slicing the page into a thin list and an empty half.
+  The sidebar was never the villain: GitHub's profile is a sidebar too, with pinned repos two-across and the contribution graph full
+  width. **Fourteen comparable records stacked single-file in 502 px** was the villain.
+- **The sources say table for this job.** Two pattern guides, read in full, rate card grids *weak* on cross-item comparison and on
+  sorting and tables *strong* on both with high density; cards are for when visuals do decision-making work, and a shared case has no
+  image. The visitor's job on this page is comparison — which case do I give this person. Mobile keeps the list, which the same guides
+  rate strong there and tables weak, and the existing 1024 px tab seam is already where that switch lives.
+- **The limits of that evidence, kept with it:** neither guide gives a numeric density threshold, so nothing here says "14 rows means a
+  table"; neither says where summary content belongs relative to detail records, and the one article that does is a single practitioner
+  post used as a reason, not a citation. Where the summary sits is therefore an open question in the issue rather than a ruling.
+
+**The owner's two complaints pull against each other, and the issue says so.** "Weird empty space" and "too plain and traditional" have
+opposite fixes: a table is *more* traditional than a card, not less. The ruling is that **the empty space is the defect and density is
+the fix**, and the plainness is answered with the visual language the app already has — the `sticker` treatment, the score tone colours,
+the chip colours — so the rows read as a compact colourful roster rather than a grey spreadsheet. Not with a second design system:
+#235's rule against forking `Card`, `sticker` and the strip colours still stands.
+
+The eight per-skill badges leave the default row for an expander. That is a deliberate trade — they are noise when the job is
+comparison — and the criterion is that nothing visible today becomes unreachable, not that everything stays where it was.
+
+### What the browser checks actually found, and one false alarm worth keeping
+
+**#241 was verified in a real browser** on `1a59819`, signed out with the stubbed-RPC method, at 375 and 1440 in both themes: a
+whole-document scan for any visible leaf element whose `scrollWidth` exceeds its `clientWidth`, plus a scan for painted boxes escaping
+an `overflow: hidden` ancestor, returned **0 clipped elements and no horizontal scroll in all four combinations**. Five of the long
+names render in full on one line at both widths, there are three `[data-profile-bars]` blocks and no SVG over 100 px, so Recharts is
+genuinely out of that path.
+
+**The false alarm is the part to remember.** The first dark-mode pass reported the labels as `rgb(28,26,24)` on `rgb(27,26,24)` —
+black on black, invisible. It was the method, not the code: adding the `dark` class to `documentElement` in devtools flips Tailwind's
+`dark:` CSS but never updates React state, so `useTheme()` still returned `isDark: false` and the inline `style={{ color: c.ink }}`
+correctly used the light ink. A genuine dark load (set `caselab:v1:theme`, then reload so `index.html` applies it before paint) renders
+correctly. **Any component that colours itself from `useTheme()` through inline styles will look broken to a reviewer who toggles the
+class in devtools**, and the checker caught their own instrument before reporting it, which is the behaviour the three rules about
+evidence ask for.
+
+**The baseline moved while the work was in flight, and the direction is instructive.** Re-measured at 1440 on `1a59819`, the page was
+**4,004 px** with a **2,331 px** gutter, not 3,968 and 2,176: cutting the explaining line in #241 took 120 px off the *short* column,
+and a gutter is the difference between the two. **Anything that shortens the short column lengthens the gap** — the clearest available
+demonstration that a cap on the long one was the wrong instrument.
+
+**What the redesign measured (PR #242, 1440×950, 14 fabricated cases, every switch on):** page **2,459 px** against a 2,500 bar,
+largest blank run beside content **20 px** against a 200 bar, and **14 of 14 cases on one screen** against a floor of 10 — from about
+4. No horizontal scroll at 375, 900, 1024, 1100, 1280 or 1440. At 1024 the page is 2,513 px rather than 2,459; the criterion was
+written at 1440 and 13 px over a bar that was chosen as a bar, not a cliff, was not worth trading row density for.
+
+Two findings from that work worth keeping. **The table is only used where the page is one full-width column** (`visitor && wide`):
+at the member's 727 px it is where five columns start wrapping badly, so the cards stay there, and that rule is pinned by a test
+rather than left as a habit. And **summary before table** was kept after both were on screen together, on a measurement rather than on
+the ordering the issue happened to suggest: the summary block is 985 px, so leading with the table would push "what to give them next"
+past the first screen and demote the marketing #233 exists to protect, and the table is the only block whose height grows with the
+member.
