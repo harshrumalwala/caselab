@@ -375,9 +375,34 @@ move whenever the file does, so the quoted words are the reliable part):
   Recharts with the name in a fixed pixel gutter inside an SVG with `overflow: hidden`, so every name longer than the gutter lost its
   first letters at **every** window width, and all 1,226 tests were green the whole time. The fix (plain DOM, a CSS grid whose name
   column is `auto`) is covered by `src/ProfileBars.test.tsx`, which pins what is real — the whole name is text in the drawn block, no
-  pixel count is left in it — and deliberately does **not** pretend to measure the clipping. **The new rendering has not been opened
-  in a browser**: `.env.local` is git-ignored, so `npm run dev` does not start in a worktree, and the session that wrote it had no
-  browser to check it in. Someone should look at a real profile link at 375px and at a desktop width, in both themes.
+  pixel count is left in it — and deliberately does **not** pretend to measure the clipping. The suite is still blind to it; a
+  browser is the only place the fix could be confirmed, and it has now been.
+  **Checked in a browser on 2026-11-19, after the fix merged.** Two independent passes, both with `window.fetch` stubbed in the page
+  to answer `public_person` / `public_person_cases` with 14 cases, signed out, no repository code changed. (1) The coordinating
+  session, on `1a59819`, at **375 and 1440 in both themes**: a whole-document scan for a visible leaf whose `scrollWidth` exceeds its
+  `clientWidth`, plus a scan for painted boxes escaping an `overflow: hidden` ancestor, returned **0 clipped elements and no
+  horizontal scroll in all four combinations**; "Healthcare / Pharmaceuticals" (153px), "Consumer Products / Retail" (153px),
+  "Prompt / Pre-framework n=14" (156px), "Transportation / Logistics" (189px) and "Real Estate / Construction" (191px) each render
+  in full on one line at both widths; three `[data-profile-bars]` blocks and no SVG over 100px, so Recharts is genuinely off this
+  path; dark contrast `rgb(244,242,239)` on `rgb(27,26,24)`. (2) The #238 session, which copied `.env.local` in from the primary
+  checkout, ran `npm run dev` in the worktree and drove headless Chrome over CDP (`--remote-debugging-port`, Node 22's own
+  `WebSocket`, no new dependency), seeing the bars drawn with whole names at 375, 900, 1024, 1100, 1280 and 1440px and in both
+  themes at 1440. **What is still unchecked: a real profile link against the real database** (every reading above is on stubbed
+  rows). Neither harness is in the repo — they live in those sessions' scratch folders (#238's are `measure.mjs` and `shot.mjs`,
+  about 120 lines) — so the next person writes one again.
+- **Toggling the `dark` class in devtools makes any `useTheme()` inline colour look broken (found 2026-11-19, not a defect).** The
+  coordinator's first dark pass reported the bar labels as `rgb(28,26,24)` on `rgb(27,26,24)`, black on black, and it was the method
+  rather than the page: adding `dark` to `documentElement` by hand flips Tailwind's `dark:` CSS but never touches React state, so
+  `useTheme()` still answers `isDark: false` and `ProfileBars`' `style={{ color: c.ink }}` correctly paints the *light* ink onto a
+  dark surface. Anything that colours itself from `useTheme()` through an inline style will mislead a reviewer the same way
+  (`ProfileBars`, `GiveThemNext`'s lane swatches, the chart colours). **The reliable check is a genuine load:** set
+  `localStorage['caselab:v1:theme'] = 'dark'` and reload, so `index.html` applies the theme before paint and the provider starts in
+  it. A contrast figure taken any other way is not evidence.
+- **A profile page measurement is only as good as the rows it was taken on (issue #238, 2026-11-19).** The page height, the gutter
+  and the "how many cases fit a screen" figures in the README were taken against 14 *fabricated* cases with every share switch on —
+  the same shape the defect was measured on, deliberately — not against a real member. A member with longer titles, more casebooks
+  or wrapping industries gets taller rows; nothing automated re-measures any of this, and nothing in the unit suite can
+  (jsdom reports every box as zero, the bullet above). Re-measure if the row content changes shape.
 - **The #121 column is in production, so the live check that watched for it passes again.** "has every column the migrations add"
   in `e2e/deployed.e2e.test.ts` reads the `add column` statements straight out of `supabase/migrations/`, so it expected
   `profiles.share_sharpening` from the moment the migration file was committed and reported it missing until the owner applied it on

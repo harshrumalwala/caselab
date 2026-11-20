@@ -346,9 +346,15 @@ describe('the two views of a member a visitor gets', () => {
     const env = visitor();
     await openLink(env, 'bob');
     await screen.findByRole('heading', { name: 'Bob Brown' });
-    // From `lg` the two are columns, so neither is hidden and there is nothing left to switch.
-    expect(panel(/What to give Bob next/)).toHaveClass('lg:block', 'lg:col-span-7');
-    expect(panel(/Shared cases/)).toHaveClass('lg:block');
+    // From `lg` the two are stacked blocks of one full-width column, so neither is hidden, neither is a column of
+    // its own, and there is nothing left to switch.
+    const find = panel(/What to give Bob next/);
+    const cases = panel(/Shared cases/);
+    expect(find).toHaveClass('lg:block');
+    expect(cases).toHaveClass('lg:block');
+    for (const el of [find, cases]) expect(el.className).not.toMatch(/lg:col-span/);
+    expect(find.parentElement).toBe(cases.parentElement);
+    expect(find.parentElement!.className).not.toMatch(/grid/);
     expect(tabs()).toHaveClass('lg:hidden');
   });
 
@@ -413,6 +419,169 @@ describe('the two views of a member a visitor gets', () => {
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     expect(screen.getByText('No shared cases')).toBeInTheDocument();
+  });
+});
+
+describe('a case history read as a table, where the page is one full-width column', () => {
+  /** Pretend to be a window wide enough for the full-width column (Tailwind's `lg`), or one that is not. */
+  const setWide = (wide: boolean) =>
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: wide && query.includes('64rem'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** A member who opened everything, so the table has every column and a row with something behind it. */
+  const OPEN: Profile = {
+    ...BOB,
+    sharing: { ...NO_SHARING, cases: true, overall: true, skills: true, improvement: true, feedback: true, notes: true, details: true, partner: true },
+  };
+  const ROWS: SharedCase[] = [
+    row({
+      caseId: 'r1',
+      title: 'Airline profitability',
+      date: '2026-10-05',
+      source: 'Booth casebook',
+      partner: 'Dana',
+      caseType: 'Profitability',
+      industry: 'Transportation / Logistics',
+      overall: 3,
+      skillScores: { framework: 4 },
+      improvementArea: 'quant',
+      feedback: { overall: 'OPEN-FEEDBACK' },
+      notes: { concepts: 'OPEN-CONCEPTS' },
+    }),
+    row({ caseId: 'r2', title: 'Bank market entry', date: '2026-09-01', source: 'Case in Point', caseType: 'Market Entry', industry: 'Financial Services', overall: 5 }),
+    row({ caseId: 'r3', title: 'Grocery market sizing', date: '2026-11-02', caseType: 'Market Sizing', industry: 'Consumer Products / Retail', overall: null }),
+  ];
+  const openWide = async (over: Parameters<typeof visitor>[0] = {}) => {
+    setWide(true);
+    return openLink(visitor({ members: [OPEN], shared: ROWS, ...over }), 'bob');
+  };
+
+  /** The title in each body row, top to bottom. */
+  const order = () =>
+    screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((r) => within(r).getAllByRole('cell')[1].textContent?.replace(/(Booth casebook|Case in Point).*/, '').trim());
+
+  it('is one column of blocks in reading order: the person, the invitations, what to give them, then their cases', async () => {
+    await openWide();
+    await screen.findByRole('heading', { name: 'Bob Brown' });
+
+    const inOrder = [
+      screen.getByRole('heading', { name: 'Bob Brown' }),
+      screen.getByRole('region', { name: 'Practise a whole case with Bucket' }),
+      screen.getByText('Casing Bob?'),
+      screen.getByRole('region', { name: /What to give Bob next/ }),
+      screen.getByRole('region', { name: /Shared cases/ }),
+    ];
+    for (let i = 1; i < inOrder.length; i++) {
+      // eslint-disable-next-line no-bitwise -- the DOM's own order comparison
+      expect(inOrder[i - 1].compareDocumentPosition(inOrder[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    // The page is not sliced into a long column and a short one. (The two invitations above still sit two across
+    // inside their own block, which is the width being used rather than divided.)
+    expect(document.querySelectorAll('[class*="lg:grid-cols-12"]')).toHaveLength(0);
+    const summary = screen.getByRole('region', { name: /What to give Bob next/ });
+    const cases = screen.getByRole('region', { name: /Shared cases/ });
+    for (const el of [summary.closest('[class*="space-y"]')!, cases]) expect(el.className).not.toMatch(/lg:col-span/);
+  });
+
+  it('is a table of date, case, type, industry and score, one row per case', async () => {
+    await openWide();
+    await screen.findByRole('table');
+
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Date', 'Case', 'Type', 'Industry', 'Overall', 'Details']);
+    expect(screen.getAllByRole('row')).toHaveLength(1 + ROWS.length);
+
+    const cells = within(screen.getByText('Airline profitability').closest('tr')!).getAllByRole('cell');
+    expect(cells[0]).toHaveTextContent('Oct 5, 2026');
+    expect(cells[1]).toHaveTextContent('Airline profitability');
+    expect(cells[1]).toHaveTextContent('Booth casebook · Cased by Dana');
+    expect(cells[2]).toHaveTextContent('Profitability');
+    expect(cells[3]).toHaveTextContent('Transportation / Logistics');
+    expect(within(cells[4]).getByLabelText('Rated 3 out of 5')).toBeInTheDocument();
+  });
+
+  it('sorts on date and on score, opening on the order the rows arrived in', async () => {
+    const { user } = await openWide();
+    await screen.findByRole('table');
+    const header = (name: string) => screen.getByRole('columnheader', { name });
+
+    expect(order()).toEqual(['Airline profitability', 'Bank market entry', 'Grocery market sizing']);
+    expect(header('Date')).toHaveAttribute('aria-sort', 'none');
+
+    await user.click(within(header('Date')).getByRole('button'));
+    expect(header('Date')).toHaveAttribute('aria-sort', 'descending');
+    expect(order()).toEqual(['Grocery market sizing', 'Airline profitability', 'Bank market entry']);
+
+    await user.click(within(header('Date')).getByRole('button'));
+    expect(header('Date')).toHaveAttribute('aria-sort', 'ascending');
+    expect(order()).toEqual(['Bank market entry', 'Airline profitability', 'Grocery market sizing']);
+
+    await user.click(within(header('Overall')).getByRole('button'));
+    expect(header('Date')).toHaveAttribute('aria-sort', 'none');
+    expect(header('Overall')).toHaveAttribute('aria-sort', 'descending');
+    // An unrated case sinks whichever way the score runs.
+    expect(order()).toEqual(['Bank market entry', 'Airline profitability', 'Grocery market sizing']);
+    await user.click(within(header('Overall')).getByRole('button'));
+    expect(order()).toEqual(['Airline profitability', 'Bank market entry', 'Grocery market sizing']);
+  });
+
+  it('keeps the skills, the tag and anything written one click away, and off the row until then', async () => {
+    const { user } = await openWide();
+    await screen.findByRole('table');
+
+    // The row is the comparison: no skill badges, no tag, nothing written.
+    expect(screen.queryByText('Framework 4')).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('OPEN-FEEDBACK');
+    expect(screen.queryByRole('button', { name: 'Details for Bank market entry' })).not.toBeInTheDocument(); // nothing behind it
+
+    await user.click(screen.getByRole('button', { name: 'Details for Airline profitability' }));
+    expect(screen.getByRole('button', { name: 'Details for Airline profitability' })).toHaveAttribute('aria-expanded', 'true');
+    const detail = screen.getByText('OPEN-FEEDBACK').closest('tr')!;
+    expect(detail).toHaveTextContent('Framework 4');
+    expect(detail).toHaveTextContent('Working on: Quant / Math');
+    expect(detail).toHaveTextContent('OPEN-CONCEPTS');
+
+    await user.click(screen.getByRole('button', { name: 'Details for Airline profitability' }));
+    expect(document.body.textContent).not.toContain('OPEN-FEEDBACK');
+  });
+
+  it('filters the whole set, and the count line counts what the filter left', async () => {
+    const { user } = await openWide();
+    await screen.findByRole('table');
+    expect(screen.getByText('3 of 3 shared cases')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Filter by case type'), 'Market Entry');
+    expect(screen.getByText('1 of 3 shared cases')).toBeInTheDocument();
+    expect(order()).toEqual(['Bank market entry']);
+
+    await user.selectOptions(screen.getByLabelText('Filter by case type'), 'Market Sizing');
+    expect(order()).toEqual(['Grocery market sizing']);
+    await user.type(screen.getByLabelText('Search cases'), 'airline');
+    expect(screen.getByText('No cases match those filters.')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('is the card list again below the breakpoint, with the tabs and the panels exactly as they were', async () => {
+    setWide(false);
+    await openLink(visitor({ members: [OPEN], shared: ROWS }), 'bob');
+    await screen.findByText('Airline profitability');
+
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByText('Airline profitability').closest('li')).toHaveClass('sticker');
+    expect(screen.getByText('See more details')).toBeInTheDocument();
+    // The tabs, their panels and which one is on screen are the narrow page this issue did not touch.
+    const tabs = screen.getByRole('tablist', { name: 'Profile sections' });
+    expect(within(tabs).getAllByRole('tab').map((t) => t.getAttribute('aria-controls'))).toEqual(['profile-panel-find', 'profile-panel-cases']);
+    expect(screen.getAllByRole('tabpanel')).toHaveLength(2);
+    expect(screen.getByRole('tabpanel', { name: /Shared cases/ })).toHaveClass('hidden');
   });
 });
 

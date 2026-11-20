@@ -4,7 +4,7 @@ import type { PublicReader } from '../../data/community';
 import { describeError } from '../../data/errors';
 import { publicSharingSummary, sharingSummary, type Profile, type SharedCase } from '../../domain/community';
 import { giveNextView, type GiveNextView } from '../../domain/giveNext';
-import { distinctValues, matchesFilter, NO_FILTER, type CaseFilter } from '../../domain/pairing';
+import { distinctValues, matchesFilter, NO_FILTER, sortShared, type CaseFilter, type SharedSort } from '../../domain/pairing';
 import type { CaseRecord } from '../../domain/types';
 import { Badge } from '../../components/ui/Badge';
 import { chipClass } from '../../components/ui/chips';
@@ -24,6 +24,7 @@ import type { NewRequest } from '../../domain/requests';
 import { AskDialog } from '../requests/AskDialog';
 import { CaseFilterBar } from '../community/CaseFilterBar';
 import { SharedCaseRow } from '../community/SharedCaseRow';
+import { SharedCaseTable } from './SharedCaseTable';
 import { FindCase } from './FindCase';
 import { GiveThemNext } from './GiveThemNext';
 import { LiveCaseTeaser } from './LiveCaseTeaser';
@@ -112,9 +113,11 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
   >({ status: 'loading' });
   const [tab, setTab] = useState<Tab>('find');
   const [filter, setFilter] = useState<CaseFilter>(NO_FILTER);
+  // Which column the case table is ordered by. Null is the order the rows arrived in, which is the one the page opens on.
+  const [sort, setSort] = useState<SharedSort | null>(null);
   const [ask, setAsk] = useState<Partial<NewRequest> | null>(null);
   const me = useMyUserId();
-  // A visitor's two views are tabs on a narrow screen and columns from `lg`. Which one is on screen decides the markup
+  // A visitor's two views are tabs on a narrow screen and stacked blocks from `lg`. Which one is on screen decides the markup
   // and not only the look: tabs nobody can reach would describe a page the reader is not on. False where the browser
   // can't say, so the answer there is the tabs, which work at any width.
   const wide = useWideScreen();
@@ -193,7 +196,14 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
     );
   }
 
-  const visible = shared.filter((s) => matchesFilter(s, filter));
+  const visible = sortShared(
+    shared.filter((s) => matchesFilter(s, filter)),
+    sort,
+  );
+  // A visitor's page is one full-width column from `lg`, so the case history has the room to be read as a table:
+  // fourteen cases compared down a column rather than scrolled past one card at a time. Narrower than that, and in
+  // the member's own narrower column, the cards are still the list.
+  const asTable = visitor && wide;
   const industries = distinctValues(shared, 'industry');
   const sources = distinctValues(shared, 'source');
   // What the top line promises is read from what the page carries, not from the switches: the sharpening summary
@@ -219,11 +229,15 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
               <p className="text-xs text-muted">
                 {visible.length} of {shared.length} shared case{shared.length === 1 ? '' : 's'}
               </p>
-              <ul className="space-y-3">
-                {visible.map((s) => (
-                  <SharedCaseRow key={s.caseId} shared={s} />
-                ))}
-              </ul>
+              {asTable ? (
+                <SharedCaseTable rows={visible} sort={sort} onSort={setSort} />
+              ) : (
+                <ul className="space-y-3">
+                  {visible.map((s) => (
+                    <SharedCaseRow key={s.caseId} shared={s} />
+                  ))}
+                </ul>
+              )}
             </>
           )}
           <div className="flex flex-wrap gap-1.5">
@@ -256,14 +270,14 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
       <InterviewedCard name={firstName(person.displayName)} items={interviewed} />
     </>
   );
-  // Whether there is anything to put beside the cases. With nothing in it the page is one column at every width, and a
-  // visitor is offered no tab to an empty view.
+  // Whether there is a second view at all: a member's scores beside their cases, or a visitor's "what to give them
+  // next" above them. With nothing in it a visitor is offered no tab to an empty view.
   const beside = visitor ? shared.length > 0 : hasSharedScores(performance) || interviewed.length > 0;
-  // A visitor switches between the two views until they are columns; from then on both are on screen, so the page says
-  // so and drops the tabs rather than leaving panels pointing at a control nobody can reach.
+  // A visitor switches between the two views until the page is wide enough to stack both; from then on both are on
+  // screen, so the page says so and drops the tabs rather than leaving panels pointing at a control nobody can reach.
   const switching = visitor && beside && !wide;
   // The case list carries no heading of its own, so it keeps a name wherever it has company: the tab's while it is one
-  // of two views, its own while it is a column beside them. Alone on the page it is the page, and names nothing.
+  // of two views, its own while it is a block among them. Alone on the page it is the page, and names nothing.
   const casesRole = !visitor ? undefined : switching ? 'tabpanel' : beside ? 'region' : undefined;
   const prompt = visitor ? signInPrompt?.(person) : null;
 
@@ -316,9 +330,11 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
         </div>
       )}
 
-      {/* What this person is like, beside their cases from `lg` and stacked below it. A visitor switches between the two
-          with the tabs; a member keeps their scores in view and switches the other column between the two answers. */}
-      <div className="grid gap-5 lg:grid-cols-12">
+      {/* What this person is like, then their cases. A visitor reads them stacked down one full-width column, each
+          block using the whole width: the practice lanes two across, the case history as a table wide enough to
+          compare down. On a narrow screen the two are tabs. A member keeps their scores in a column beside the
+          cases, and switches that column between the two answers. */}
+      <div className={visitor ? 'space-y-5' : 'grid gap-5 lg:grid-cols-12'}>
         {switching && (
           <SlideRow
             role="tablist"
@@ -351,68 +367,66 @@ export function PersonProfile({ reader, userId, onBack, mine, signInPrompt, back
         )}
 
         {beside && (
-          // Every card in this column names itself, so as a column it needs no wrapper of its own; as a view it is
-          // the panel the first tab opens.
+          // Every card in here names itself, so as a block it needs no wrapper of its own; as a view it is the
+          // panel the first tab opens.
           <div
             id={switching ? 'profile-panel-find' : undefined}
             role={switching ? 'tabpanel' : undefined}
             aria-labelledby={switching ? 'profile-tab-find' : undefined}
-            className={`space-y-5 lg:block ${visitor ? 'lg:col-span-7' : 'lg:col-span-5'} ${visitor && tab !== 'find' ? 'hidden' : ''}`}
+            className={`space-y-5 lg:block ${visitor ? '' : 'lg:col-span-5'} ${visitor && tab !== 'find' ? 'hidden' : ''}`}
           >
             {side}
           </div>
         )}
 
-        <div className={`space-y-5 ${beside ? (visitor ? 'lg:col-span-5' : 'lg:col-span-7') : 'lg:col-span-12'}`}>
-          {visitor ? (
-            <div
-              id={switching ? 'profile-panel-cases' : undefined}
-              role={casesRole}
-              aria-labelledby={switching ? 'profile-tab-cases' : undefined}
-              aria-label={casesRole === 'region' ? `Shared cases (${shared.length})` : undefined}
-              className={`space-y-4 lg:block ${beside && tab !== 'cases' ? 'hidden' : ''}`}
-            >
-              {casesBody}
-            </div>
-          ) : (
-            <>
-              <SlideRow role="tablist" aria-label="Profile sections" activeKey={tab} markClass={splitMarkClass} className={splitTabsClass}>
-                {(
-                  [
-                    ['find', 'Find a case for them'],
-                    ['cases', `Shared cases (${shared.length})`],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === id}
-                    data-slide-active={tab === id ? 'true' : undefined}
-                    onClick={() => setTab(id)}
-                    className={splitTabClass(tab === id)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </SlideRow>
-              {tab === 'find' ? (
-                <div role="tabpanel">
-                  <FindCase
-                    person={person}
-                    theirs={shared}
-                    mine={mine}
-                    onPropose={person.userId !== me ? (c) => setAsk({ caseTitle: c.title, caseBook: c.source }) : undefined}
-                  />
-                </div>
-              ) : (
-                <div className="space-y-4" role="tabpanel">
-                  {casesBody}
-                </div>
-              )}
-            </>
-          )}
-        </div>
+        {visitor ? (
+          <div
+            id={switching ? 'profile-panel-cases' : undefined}
+            role={casesRole}
+            aria-labelledby={switching ? 'profile-tab-cases' : undefined}
+            aria-label={casesRole === 'region' ? `Shared cases (${shared.length})` : undefined}
+            className={`space-y-4 lg:block ${beside && tab !== 'cases' ? 'hidden' : ''}`}
+          >
+            {casesBody}
+          </div>
+        ) : (
+          <div className={`space-y-5 ${beside ? 'lg:col-span-7' : 'lg:col-span-12'}`}>
+            <SlideRow role="tablist" aria-label="Profile sections" activeKey={tab} markClass={splitMarkClass} className={splitTabsClass}>
+              {(
+                [
+                  ['find', 'Find a case for them'],
+                  ['cases', `Shared cases (${shared.length})`],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === id}
+                  data-slide-active={tab === id ? 'true' : undefined}
+                  onClick={() => setTab(id)}
+                  className={splitTabClass(tab === id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </SlideRow>
+            {tab === 'find' ? (
+              <div role="tabpanel">
+                <FindCase
+                  person={person}
+                  theirs={shared}
+                  mine={mine}
+                  onPropose={person.userId !== me ? (c) => setAsk({ caseTitle: c.title, caseBook: c.source }) : undefined}
+                />
+              </div>
+            ) : (
+              <div className="space-y-4" role="tabpanel">
+                {casesBody}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
