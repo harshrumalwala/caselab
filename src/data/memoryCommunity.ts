@@ -129,5 +129,9 @@ export function createMemoryCommunity(opts: {
       enter('getPublicView');
       return visitors.getSharedCases(ownerId);
     },
+    async getPublicPerson(ownerId: string) {
+      enter('getPublicPerson');
+      return visitors.getPerson(ownerId);
+    },
   };
 }

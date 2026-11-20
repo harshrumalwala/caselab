@@ -6,6 +6,8 @@ import { Switch } from '../../components/ui/Switch';
 interface Props {
   checked: boolean;
   disabled?: boolean;
+  /** True while Appear in People search is off, which is what keeps this switch unavailable. */
+  needsListing?: boolean;
   onChange: (checked: boolean) => void;
   /** The address of this member's profile, shown for copying whenever the switch is on. */
   profileLink?: string;
@@ -49,7 +51,7 @@ function CopyLink({ link }: { link: string }) {
  * member: there is no public list or search. Written feedback, learning notes and other notes reach them only if the
  * member has also opened everything.
  */
-export function AudienceSwitch({ checked, disabled, onChange, profileLink }: Props) {
+export function AudienceSwitch({ checked, disabled, needsListing, onChange, profileLink }: Props) {
   return (
     <div className="rounded-2xl border border-line px-4 py-3.5">
       <div className="flex items-center justify-between gap-4">
@@ -63,6 +65,8 @@ export function AudienceSwitch({ checked, disabled, onChange, profileLink }: Pro
         </div>
         <Switch label="People with my link can see my profile" checked={checked} disabled={disabled} onChange={onChange} />
       </div>
+
+      {needsListing && <p className="mt-3 text-xs font-medium text-ink-2">Turn on Appear in People search to use this.</p>}
 
       {checked && profileLink && (
         <div className="mt-4">

@@ -34,16 +34,24 @@ function Preview({ profile }: { profile: Profile }) {
   const { community } = useCommunity();
   const { cases } = useData();
   const [audience, setAudience] = useState<Audience>('members');
-  const [state, setState] = useState<{ status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; shared: SharedCase[] }>({
+  const [state, setState] = useState<{ status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; shared: SharedCase[]; published: boolean }>({
     status: 'loading',
   });
 
   useEffect(() => {
     let current = true;
     setState({ status: 'loading' });
-    const read = audience === 'members' ? community.getSharedCases(profile.userId) : community.getPublicView(profile.userId);
+    // Visitors: ask whether the profile resolves at all, as well as what is on it. Only an answer of "no row" counts
+    // as unpublished; a failed or pending request stays an error or a loading state.
+    const read: Promise<{ shared: SharedCase[]; published: boolean }> =
+      audience === 'members'
+        ? community.getSharedCases(profile.userId).then((shared) => ({ shared, published: true }))
+        : Promise.all([community.getPublicPerson(profile.userId), community.getPublicView(profile.userId)]).then(([person, shared]) => ({
+            shared,
+            published: person !== null,
+          }));
     read
-      .then((shared) => current && setState({ status: 'ready', shared }))
+      .then(({ shared, published }) => current && setState({ status: 'ready', shared, published }))
       .catch((e) => current && setState({ status: 'error', message: describeError(e) }));
     return () => {
       current = false;
@@ -57,7 +65,11 @@ function Preview({ profile }: { profile: Profile }) {
   const hidden =
     audience === 'members'
       ? !profile.listed && "You're not listed in People, so other members can't find you and see nothing about you."
-      : !profile.publicProfile && "You haven't turned your profile link on, so nobody without an account can open your profile.";
+      : state.status === 'ready' &&
+        !state.published &&
+        (profile.publicProfile
+          ? "Your link is on, but it doesn't open a profile right now."
+          : "You haven't turned your profile link on, so nobody without an account can open your profile.");
 
   return (
     <section aria-labelledby="preview-title" className="rounded-2xl border border-line bg-surface-2/50 p-4 sm:p-5">
@@ -217,6 +229,7 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [confirmPublic, setConfirmPublic] = useState(false);
+  const [confirmUnlist, setConfirmUnlist] = useState(false);
 
   // Arriving from "Burn cases" on the Case Log, or from scheduling: bring that part of the page into view.
   useEffect(() => {
@@ -322,12 +335,13 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
                   Verified members can find your name and class. Your email is never shown. Turn this off to disappear completely.
                 </p>
               </div>
-              <Switch label="Appear in People search" checked={profile.listed} disabled={saving} onChange={(listed) => void save({ listed })} />
+              <Switch label="Appear in People search" checked={profile.listed} disabled={saving} onChange={(listed) => (!listed && profile.publicProfile ? setConfirmUnlist(true) : void save({ listed }))} />
             </div>
 
             <AudienceSwitch
               checked={profile.publicProfile}
               disabled={saving || !profile.listed}
+              needsListing={!profile.listed}
               onChange={(on) => (on ? setConfirmPublic(true) : void save({ publicProfile: false }))}
               profileLink={profileAddress(profile.userId)}
             />
@@ -402,6 +416,19 @@ export function ProfileSettingsDialog({ onClose, focus = null }: { onClose: () =
         ) : (
           <p>Written feedback, learning notes and other notes are not shown to visitors unless you turn on Open everything. You can switch this off again at any time.</p>
         )}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={confirmUnlist}
+        title="Take yourself out of People search?"
+        confirmLabel="Turn it off"
+        onCancel={() => setConfirmUnlist(false)}
+        onConfirm={() => {
+          setConfirmUnlist(false);
+          void save({ listed: false });
+        }}
+      >
+        <p>Your profile link goes off with it, and anyone you gave it to will no longer be able to open your profile.</p>
       </ConfirmDialog>
 
       <ConfirmDialog

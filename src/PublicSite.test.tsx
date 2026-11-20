@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -457,8 +457,78 @@ describe('turning your profile link on', () => {
     const env = createFakeEnv({ profile: { ...MY_PROFILE, publicProfile: true } });
     const { user, dialog } = await openProfile(env);
     await user.click(within(dialog).getByRole('switch', { name: 'Appear in People search' }));
+    await user.click(within(await screen.findByRole('dialog', { name: 'Take yourself out of People search?' })).getByRole('button', { name: 'Turn it off' }));
     await waitFor(() => expect(mine(env)).toMatchObject({ listed: false, publicProfile: false }));
     expect(within(dialog).getByRole('switch', { name: 'People with my link can see my profile' })).toBeDisabled();
+  });
+
+  it('names People search as the reason while the link switch is unavailable, and only then', async () => {
+    const env = createFakeEnv({ profile: { ...MY_PROFILE, listed: false } });
+    const { dialog } = await openProfile(env);
+    expect(within(dialog).getByText('Turn on Appear in People search to use this.')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('switch', { name: 'Appear in People search' }));
+    await waitFor(() => expect(within(dialog).queryByText('Turn on Appear in People search to use this.')).not.toBeInTheDocument());
+  });
+
+  it('asks before People search takes a live link with it, and not when the link is off', async () => {
+    const live = createFakeEnv({ profile: { ...MY_PROFILE, publicProfile: true } });
+    const first = await openProfile(live);
+    await first.user.click(within(first.dialog).getByRole('switch', { name: 'Appear in People search' }));
+    const ask = await screen.findByRole('dialog', { name: 'Take yourself out of People search?' });
+    expect(ask).toHaveTextContent(/link goes off with it/i);
+    await first.user.click(within(ask).getByRole('button', { name: 'Cancel' }));
+    expect(mine(live)).toMatchObject({ listed: true, publicProfile: true }); // cancelling changes nothing
+  });
+
+  it('turns People search off with no question when the link is off', async () => {
+    const env = createFakeEnv({ profile: { ...MY_PROFILE, publicProfile: false } });
+    const { user, dialog } = await openProfile(env);
+    await user.click(within(dialog).getByRole('switch', { name: 'Appear in People search' }));
+    await waitFor(() => expect(mine(env)).toMatchObject({ listed: false }));
+    expect(screen.queryByRole('dialog', { name: 'Take yourself out of People search?' })).not.toBeInTheDocument();
+  });
+
+  describe('the visitor preview of a link that is on', () => {
+    const onMe = { ...MY_PROFILE, publicProfile: true, sharing: { ...NO_SHARING, cases: true } };
+    const NOT_OPEN = "Your link is on, but it doesn't open a profile right now.";
+    const openVisitors = async (env: FakeEnv) => {
+      const { user, dialog } = await openProfile(env);
+      await user.click(within(dialog).getByRole('tab', { name: 'Visitors without an account' }));
+      return dialog;
+    };
+
+    it('says so when asking for the profile finds no row while both switches say published', async () => {
+      const env = createFakeEnv({ profile: onMe });
+      vi.spyOn(env.community, 'getPublicPerson').mockResolvedValue(null);
+      const dialog = await openVisitors(env);
+      expect(await within(dialog).findByText(NOT_OPEN)).toBeInTheDocument();
+      expect(dialog.textContent).not.toMatch(/cases are private|case is private/);
+    });
+
+    it('does not say so when the profile resolves', async () => {
+      const env = createFakeEnv({ profile: onMe });
+      const dialog = await openVisitors(env);
+      expect(await within(dialog).findByText(/No cases are visible to visitors/)).toBeInTheDocument();
+      expect(dialog.textContent).not.toContain(NOT_OPEN);
+    });
+
+    it('does not say so while loading, or when the question fails', async () => {
+      const env = createFakeEnv({ profile: onMe });
+      let release: (v: null) => void = () => {};
+      vi.spyOn(env.community, 'getPublicPerson').mockReturnValue(new Promise((r) => (release = r)));
+      const dialog = await openVisitors(env);
+      expect(await within(dialog).findByText(/Checking/)).toBeInTheDocument();
+      expect(dialog.textContent).not.toContain(NOT_OPEN);
+      release(null);
+      await within(dialog).findByText(NOT_OPEN);
+
+      const broken = createFakeEnv({ profile: onMe });
+      broken.community.failOn('getPublicPerson');
+      cleanup();
+      const dialog2 = await openVisitors(broken);
+      expect(await within(dialog2).findByText(/Couldn't load the preview/)).toBeInTheDocument();
+      expect(dialog2.textContent).not.toContain(NOT_OPEN);
+    });
   });
 
   it('previews exactly what visitors would see, separately from what members see', async () => {

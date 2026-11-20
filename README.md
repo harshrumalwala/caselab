@@ -162,6 +162,7 @@ everything** (below). A case set to "keep this case private" is hidden from ever
 you opened everything). Profile & privacy previews each audience separately and shows the address with a **Copy link** button while
 the switch is on. Turning it off, or no longer appearing in People, closes the link at once. Each switch saves the
 moment you flip it, and **"What other members see"** at the bottom shows exactly what the database is serving about you.
+While Appear in People search is off the link switch is unavailable and says so in one line; turning People search off while your link is on asks first, because it takes the link with it. In the Visitors preview, the profile is read the way a visitor's request reads it (`public_person`): when that finds no row while both switches say on, the preview says the link doesn't open a profile right now. A preview that is still loading or fails to load says nothing of the kind.
 
 **One-click private.** Any case can be hidden from every other member, whatever your profile shares: switch on **Keep this case
 private** when you log or edit it, or click the lock on its row in the Case Log (or **Make private** in the case detail). A private case
