@@ -95,11 +95,10 @@ export function createMemoryCommunity(opts: {
     },
     async saveProfile(input: ProfileInput) {
       enter('saveProfile');
-      const publicProfile = input.listed && input.publicProfile;
       const i = profiles.findIndex((p) => p.userId === opts.me);
       // As in the database: no level once sharing is off, and an existing one is kept while it stays on.
       const level = input.sharing.level ? (profiles[i]?.level ?? null) : null;
-      const saved: Profile = { userId: opts.me, ...input, level, publicProfile };
+      const saved: Profile = { userId: opts.me, ...input, level };
       if (i === -1) profiles.push(saved);
       else profiles[i] = saved;
       return saved;

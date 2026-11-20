@@ -623,15 +623,13 @@ describe('turning your profile link on', () => {
   });
 
   // Deliberate reversal (#245): this used to assert that unlisting withdrew the link and disabled its switch. The database
-  // rule changed in #244, so the two switches are independent. The in-memory community still coerces `publicProfile` on
-  // save, so these tests read what the dialog sent, which is what the database is given.
+  // rule changed in #244, so the two switches are independent, and the tests read the stored row.
   it('leaves the link as it was when you stop appearing in People, and asks nothing', async () => {
     const env = createFakeEnv({ profile: { ...MY_PROFILE, publicProfile: true } });
-    const save = vi.spyOn(env.community, 'saveProfile');
     const { user, dialog } = await openProfile(env);
     await user.click(within(dialog).getByRole('switch', { name: 'Appear in People search' }));
-    await waitFor(() => expect(save).toHaveBeenCalled());
-    expect(save.mock.calls.at(-1)![0]).toMatchObject({ listed: false, publicProfile: true });
+    await waitFor(() => expect(mine(env)).toMatchObject({ listed: false, publicProfile: true }));
+    expect(mine(env)).toMatchObject({ listed: false, publicProfile: true });
     expect(screen.queryByRole('dialog', { name: 'Take yourself out of People search?' })).not.toBeInTheDocument();
     expect(within(dialog).getByRole('switch', { name: 'People with my link can see my profile' })).toBeEnabled();
   });
@@ -646,12 +644,11 @@ describe('turning your profile link on', () => {
 
   it('turns the link on while not listed, without listing the member', async () => {
     const env = createFakeEnv({ profile: { ...MY_PROFILE, listed: false, publicProfile: false } });
-    const save = vi.spyOn(env.community, 'saveProfile');
     const { user, dialog } = await openProfile(env);
     await user.click(within(dialog).getByRole('switch', { name: 'People with my link can see my profile' }));
     await user.click(within(await screen.findByRole('dialog', { name: 'Let people with your link see your profile?' })).getByRole('button', { name: 'Turn my link on' }));
-    await waitFor(() => expect(save).toHaveBeenCalled());
-    expect(save.mock.calls.at(-1)![0]).toMatchObject({ listed: false, publicProfile: true });
+    await waitFor(() => expect(mine(env)).toMatchObject({ listed: false, publicProfile: true }));
+    expect(mine(env)).toMatchObject({ listed: false, publicProfile: true });
   });
 
   it('keeps the sharing switches reachable for a link-only member, and not for one with both off', async () => {
@@ -750,7 +747,6 @@ describe('profile setup and the audience', () => {
 
   it('offers every combination of the two switches, with neither reaching over to the other', async () => {
     const env = createFakeEnv({ profile: null });
-    const save = vi.spyOn(env.community, 'saveProfile');
     const { user } = await open(env);
     await user.type(await screen.findByRole('textbox', { name: /^Your name/ }), 'Quiet Quinn');
     const link = () => screen.getByRole('switch', { name: 'People with my link can see my profile' });
@@ -767,7 +763,7 @@ describe('profile setup and the audience', () => {
     await user.click(link()); // link on again, still not listed
     await user.click(screen.getByRole('button', { name: 'Start casing' }));
     await screen.findByRole('heading', { name: 'Dashboard' });
-    expect(save.mock.calls.at(-1)![0]).toMatchObject({ listed: false, publicProfile: true });
+    expect(env.community.profiles.find((p) => p.displayName === 'Quiet Quinn')).toMatchObject({ listed: false, publicProfile: true });
     expect(screen.queryByText(/Only signed-in, verified members can see what you share/)).not.toBeInTheDocument();
   });
 });
